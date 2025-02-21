@@ -17,14 +17,14 @@ The project is structured as follows
 ```
 Project folder
 |-- data
-|   |-- manywells_sol_1     # Files related to the sol_1 dataset  
-|   |-- manywells_nsol_1    # Files related to the nsol_1 dataset
-|   |-- manywells_nscl_1    # Files related to the nscl_1 dataset
+|   |-- manywells_sol       # Files related to the manywells-sol dataset  
+|   |-- manywells_nsol      # Files related to the manywells-nsol dataset
+|   |-- manywells_nscl      # Files related to the manywells-nscl dataset
 |-- docs                    # Documentation
 |-- manywells               # Implementation of simulator
 |   |-- calibration         # Code for calibration to data
 |   |-- closed_loop         # Simulation with closed-loop control
-|-- scripts                 # Various scripts using the simulator
+|-- scripts                 # Various scripts and examples
 ```
 
 ### Python environment
