@@ -166,7 +166,7 @@ class ClosedLoopWellSimulator(SSDFSimulator):
                 ubx[i] = bc.p_r  # Upper bound on pressures
 
             if x_i.name().split('_')[0] == 'T':
-                lbx[i] = bc.T_a  # Lower bound on temperatures
+                lbx[i] = bc.T_s  # Lower bound on temperatures
                 ubx[i] = bc.T_r + 1  # Upper bound on temperatures (slacking bound by adding 1 K)
 
             if x_i.name().split('_')[0] == 'alpha':
