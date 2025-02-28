@@ -14,45 +14,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import manywells.pvt as pvt
-
-
-def load_data(dataset_name, version):
-    """
-    Load synthetic dataset
-    :param dataset_name:
-    :param version:
-    :return:
-    """
-    path = os.path.join('../../data/synth', version + '/' + dataset_name + '.csv')
-    df = pd.read_csv(path)
-    return df
-
-def load_config(dataset_name, version):
-    """
-    Load config for dataset
-    :param dataset_name:
-    :param version:
-    :return:
-    """
-    path = os.path.join('../../data/synth', version + '/' + dataset_name + '_config.csv')
-    df = pd.read_csv(path)
-    return df
-
-cols = ['CHK', 'PBH', 'PWH', 'PDC', 'TBH', 'TWH',
-        'WGL', 'WGAS', 'WLIQ', 'WOIL', 'WWAT', 'WTOT',
-        'QGL', 'QGAS', 'QLIQ', 'QOIL', 'QWAT', 'QTOT',
-        'CHOKED']
-
-
-'''
-rho_g = pvt.gas_density(sim.wp.R_s)
-        q_g = w_g / rho_g  # Including lift gas
-        q_lg = w_lg / rho_g
-        q_l = w_l / sim.wp.rho_l
-        q_o = w_o / well.oil.rho
-        q_w = w_w / well.water.rho
-        q_tot = q_g + q_l
-'''
+from scripts.ml_examples.data_loader import load_data, load_config
 
 
 def add_noise(df, config, percentage_noise=0.1):
@@ -120,8 +82,9 @@ def save_data(df, dataset_name, version):
     :param version:
     :return:
     """
-    path = os.path.join('../../data/synth', version + '/' + dataset_name + '.csv')
+    path = os.path.join('../../data/', version + '/' + dataset_name + '.csv')
     df.to_csv(path, index=False)
+
 
 def add_noise_and_save(dataset_name, version):
     df = load_data(dataset_name, version)
@@ -129,12 +92,13 @@ def add_noise_and_save(dataset_name, version):
     noisy_name = dataset_name + '_noisy'
     save_data(df_noisy, noisy_name, version)
 
+
 def init_noise_df(df, cols):
     id_col = df['ID'].copy()
     zero_df = pd.DataFrame(0, index=id_col.index,columns=cols)
     noise_df = pd.concat([id_col, zero_df], axis=1)
     return noise_df
-#pvt.gas_density(sim.wp.R_s)
+
 
 if __name__=='__main__':
     version = 'v9'
