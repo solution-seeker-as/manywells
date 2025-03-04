@@ -1,6 +1,8 @@
 # Machine learning examples
 The ML examples are found in the following folders:
 
+### ML overview
+```
 Project folder/|
 ├── scripts/ # Script folder
 │ ├── ml_examples/ # Folder containing Scripts relevant to ML
@@ -10,7 +12,7 @@ Project folder/|
 │ │ └── noise.py # Noise script
 │ │ └── base_model.py # Abstract model definition
 │ │ └── utils.py # Functions for data splitting and scaling
-
+```
 
 # Walk-through of ML examples
 The examples exist in the classification.py and regression.py files.
