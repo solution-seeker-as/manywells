@@ -251,8 +251,8 @@ def report(results, n_top=3):
 if __name__ == '__main__':
 
     # Load dataset and dataset config
-    version = 'v9_openloop_nonstationary'
-    dataset_name = 'synth_v9_openloop_nonstationary'
+    version = 'manywells-sol'
+    dataset_name = 'manywells-sol-1'
     df_orig = load_data(version=version, dataset_name=dataset_name)
     config_orig = load_config(version=version, dataset_name=dataset_name)
 
