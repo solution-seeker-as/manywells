@@ -158,8 +158,10 @@ def plot_mse(n_tasks, mse_scores):
 if __name__ == '__main__':
 
     # Load dataset and dataset config
-    df_orig = load_data(version='v9', dataset_name='synth_v9')
-    config_orig = load_config(version='v9', dataset_name='synth_v9')
+    version = 'manywells-sol'
+    dataset_name = 'manywells-sol-1'
+    df_orig = load_data(version=version, dataset_name=dataset_name)
+    config_orig = load_config(version=version, dataset_name=dataset_name)
 
     # Add gaussian noise to the data
     df_noise, _ = add_noise(df_orig,config_orig,percentage_noise=0.5)
