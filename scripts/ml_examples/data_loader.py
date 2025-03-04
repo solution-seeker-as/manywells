@@ -11,10 +11,10 @@ import pandas as pd
 
 
 def load_data(version, dataset_name):
-    df = pd.read_csv(os.path.join('../../data', version + '/' + dataset_name + '.csv'))
+    df = pd.read_csv(os.path.join('../../data', version + '/' + dataset_name + '.zip'), compression='zip')
     return df
 
 
 def load_config(version, dataset_name):
-    df = pd.read_csv(os.path.join('../../data', version + '/' + dataset_name + '_config.csv'))
+    df = pd.read_csv(os.path.join('../../data', version + '/' + dataset_name + '_config.zip'), compression='zip')
     return df
