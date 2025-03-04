@@ -156,17 +156,22 @@ def plot_mse(n_tasks, mse_scores):
 
 
 if __name__ == '__main__':
-
-    # Load dataset and dataset config
+    #-------------------------------
+    # 1. Load dataset and dataset config
+    # -------------------------------
     version = 'manywells-sol'
     dataset_name = 'manywells-sol-1'
     df_orig = load_data(version=version, dataset_name=dataset_name)
     config_orig = load_config(version=version, dataset_name=dataset_name)
 
-    # Add gaussian noise to the data
+    # -------------------------------
+    # 2. Add gaussian noise to the data
+    # -------------------------------
     df_noise, _ = add_noise(df_orig,config_orig,percentage_noise=0.5)
 
-    # Randomly select tasks to be included in experiments
+    # -------------------------------
+    # 3. Randomly select tasks to be included in experiments
+    # -------------------------------
     unique_tasks = df_orig[task_col].unique()
     np.random.shuffle(unique_tasks)
     # Number of tasks that share data, one experiment per element in n_tasks_
@@ -174,19 +179,29 @@ if __name__ == '__main__':
     selected_tasks = unique_tasks[:n_tasks_[-1]]
     df = df_noise[df_noise[task_col].isin(selected_tasks)]
 
-    #Scale data
+    # -------------------------------
+    # 4. Scale data
+    # -------------------------------
     df_scaled = standard_scaler(df, scale_cols)
 
-    #Slit data into train and test
+    # -------------------------------
+    #5. Split data into train and test
+    # -------------------------------
     train_scaled, test_scaled = split_data_by_time_or_random(df_scaled, n1=10, n2=30, task_col='ID', time_col='WEEKS')
 
     # Initialize result lists
     mse = []
     r2 = []
+
+    # -------------------------------
+    # 6. Loop over experiments
+    # -------------------------------
     for i in range(len(n_tasks_)):
         n = n_tasks_[i]
         if n==1:
-            # Single-task learning
+            # -------------------------------
+            # 6.1 Single-task learning
+            # -------------------------------
             SVR_kwargs = {'C': 100.0, 'gamma': 0.4, 'epsilon': 0.1, 'tol': 1e-4, 'cache_size': 1000}
             model = SingleTaskSVR(SVR_kwargs,input_cols,output_cols, task_col)
             model.fit(train_scaled)
@@ -195,7 +210,9 @@ if __name__ == '__main__':
             mse.append(result['mean_squared_error'])
             r2.append(result['r2_score'])
         else:
-            # Multi-task learning
+            # -------------------------------
+            # 6.2 Multi-task learning
+            # -------------------------------
             n_models = int(len(selected_tasks)/n)
             mse_mtl = []
             r2_mtl = []
@@ -217,6 +234,9 @@ if __name__ == '__main__':
             print(f'{n} tasks: mse: {mean_mse}, r2: {mean_r2}')
             r2.append(mean_r2)
 
+    # -------------------------------
+    # 7. Plot and store results
+    # -------------------------------
     fig_mse = plot_mse(n_tasks_, mse)
     store_path = os.path.join(os.getcwd(), 'results')
     if not os.path.exists(store_path):
