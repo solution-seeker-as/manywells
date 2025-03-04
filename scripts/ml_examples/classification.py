@@ -249,23 +249,33 @@ def report(results, n_top=3):
 
 
 if __name__ == '__main__':
-
-    # Load dataset and dataset config
+    #------------------------------
+    #1. Load dataset and dataset config
+    # ------------------------------
     version = 'manywells-sol'
     dataset_name = 'manywells-sol-1'
     df_orig = load_data(version=version, dataset_name=dataset_name)
     config_orig = load_config(version=version, dataset_name=dataset_name)
 
-    #Add gaussian noise to data
+    #------------------------------
+    #2. Add gaussian noise to data
+    # ------------------------------
     df_noise, _ = add_noise(df_orig, config_orig, percentage_noise=0.5)
 
-    #df = create_and_add_mass_fraction_cols(df_noise)
+    #------------------------------
+    #3. df = create_and_add_mass_fraction_cols(df_noise)
+    # ------------------------------
     df_scaled = standard_scaler(df_noise, scale_cols)
 
-    #Define number of tasks to share data.
-    # len(n_tasks_) number of experiments
+    #------------------------------
+    #4. Define number of tasks to share data.
+    #    - len(n_tasks_) number of experiments
+    # ------------------------------
     n_tasks_ = [1, 2, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 
+    #------------------------------
+    #5. Identify and select tasks where all classes are present
+    # ------------------------------
     # Identify all classes in the dataset
     all_classes = df_scaled[output_cols[0]].unique()
 
@@ -281,8 +291,13 @@ if __name__ == '__main__':
     # Initialize results matrices
     acc_mat = np.zeros((n_runs, len(n_tasks_)))
 
-    # Loop over repeated experiments
+    #------------------------------
+    #6. Loop over repeated experiments
+    # ------------------------------
     for k in range(n_runs):
+        # ------------------------------
+        # 6.1 Train-test split
+        # ------------------------------
         # Train-test split including tasks where all classes are present in both train and test
         train, test = split_data_by_time_or_random(df, n1=10, n2=300)
         train_classes = train[output_cols[0]].unique()
@@ -295,17 +310,25 @@ if __name__ == '__main__':
         test = test[test[task_col].isin(selected_tasks)]
 
         acc = []
+        # ------------------------------
+        # 6.2 Loop over list of experiments
+        # ------------------------------
         for i in range(len(n_tasks_)):
             n = n_tasks_[i]
             if n == 1:
-                # Single task learning
+                # ------------------------------
+                # 6.2.1 Single task learning
+                # ------------------------------
                 model = SingleTaskSVC(df=train)
                 model.fit(train)
                 result = accuracy(model, test)
                 print(f'{n} tasks: accuracy: {result}')
                 acc.append(result)
             else:
-                # Multi-task learning
+                # ------------------------------
+                # 6.2.2 Multi-task learning
+                # ------------------------------
+                # Number of multitask learning models per experiment
                 n_models = int(len(selected_tasks) / n)
                 acc_mtl = []
 
@@ -323,6 +346,10 @@ if __name__ == '__main__':
                 acc.append(mean_acc)
         acc_mat[k, :] = acc
     acc_mean = acc_mat.mean(axis=0)
+
+    #--------------------------
+    # 7. Plot and store
+    # --------------------------
     fig = plot_accuracy(acc_mean, n_tasks_)
     store_path = os.path.join(os.getcwd(), 'results')
     if not os.path.exists(store_path):
