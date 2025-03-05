@@ -359,8 +359,8 @@ if __name__ == '__main__':
 
     # Simulation settings
     n_processes = 10    # multiprocessing.cpu_count()
-    n_wells_tot = 2000  # Number of wells to simulate
+    n_wells = 2000  # Number of wells to simulate
     n_sim = 500         # Number of data points to simulate per well
 
     dataset_version = 'manywells-nsol-1'
-    multiprocessing_data_generation_ol(n_wells_tot, n_sim, n_processes, dataset_version)
+    multiprocessing_data_generation_ol(n_wells, n_sim, n_processes, dataset_version)
