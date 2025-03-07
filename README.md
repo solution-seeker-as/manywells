@@ -1,8 +1,8 @@
 [![license](https://img.shields.io/badge/license-CC--BY--NC%204.0-success)]()
 
-# ManyWells: simulation of multi-phase flow in vertical oil and gas wells
+# ManyWells: simulation of multiphase flow in vertical oil and gas wells
 
-This code implements a steady-state drift-flux model for simulating two-phase (liquid and gas) flow in wells.
+This code implements a steady-state drift-flux model for simulating multiphase (liquid and gas) flow in wells.
 Three-phase flow (gas, oil, water) is supported by treating the oil and water as one mixed liquid phase.
 Wells are modelled from the bottomhole pressure to the downstream choke pressure. 
 Boundary conditions are introduced via an inflow model (bottomhole) and a choke model (topside).
