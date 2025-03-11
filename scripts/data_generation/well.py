@@ -123,7 +123,6 @@ def sample_well(alpha = (1.0, 1.0, 0.5)) -> Well:
     wp.f_D = np.random.uniform(0.01, 0.08)
 
     # Mass fractions (gas, oil, water)
-    alpha = (1.0, 1.0, 0.5)  # Concentration parameter: more weight on gas and oil dominant wells
     f_g, f_o, f_w = np.random.dirichlet(alpha=alpha)  # Draw gas, oil, and water mass fraction
 
     if f_g > 0.99:

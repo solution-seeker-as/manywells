@@ -110,7 +110,7 @@ def sample_nonstationary_well(feedback: bool) -> NonStationaryWell:
     # Sample stationary well first
     # This ensures that we reuse the distribution for the well properties
     # Higher concentration of wells with low water fraction and high gas fraction
-    well = sample_well(alpha = (1.0, 1.5, 0.1))
+    well = sample_well(alpha = (1.0, 1.0, 0.5))
 
     wp = well.wp
     bc = well.bc
