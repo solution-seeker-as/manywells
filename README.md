@@ -12,6 +12,9 @@ The simulator has several use cases:
 - Flow prediction by calibrating the model parameters to historical data
 - Investigate sensitivities of variables of interest
 
+The figure below illustrates a well and some model components of the ManyWells simulator.
+![Illustration of a well and some ManyWells simulator components](docs/manywells.svg)
+
 ### Project overview
 The project is structured as follows
 ```
