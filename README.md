@@ -15,7 +15,7 @@ The simulator has several use cases:
 The figure below illustrates a well and some model components of the ManyWells simulator.
 ![Illustration of a well and some ManyWells simulator components](docs/manywells.svg)
 
-### Project overview
+## Project overview
 The project is structured as follows
 ```
 Project folder
@@ -28,17 +28,35 @@ Project folder
 |   |-- calibration         # Code for calibration to data
 |   |-- closed_loop         # Simulation with closed-loop control
 |-- scripts                 # Various scripts and examples
+|   |-- data_generation     # Scripts used to generate the ManyWells datasets
+|   |-- flow_regimes        # Scripts to develop a flow regime classifier
+|   |-- ml_examples         # Machine learning examples in the ManyWells paper
 ```
 
+## Getting started
+
+To start developing with ManyWells, you first need to clone the repository by running the following command:
+```
+GIT_LFS_SKIP_SMUDGE=1 git clone git@github.com:solution-seeker-as/manywells.git
+```
+The environment variable `GIT_LFS_SKIP_SMUDGE=1` is set to avoid downloading the large dataset files in the `data` folder (due to GitHub LFS quotas).
+
+If you wish to download the datasets, you can also find them at the [ManyWells project on HuggingFace](https://huggingface.co/datasets/solution-seeker-as/manywells).
+
 ### Python environment
-The Python environment required to run the scripts in the project is specified in ``environment.yml``. 
-The ``manywells`` environment can be installed using the Conda package manager by running the command: 
+The Python environment required to run the scripts in the project is specified in `environment.yml`. 
+The `manywells` environment can be installed using the Conda package manager by running the command: 
 ```console
 conda env create -f environment.yml
 ``` 
 
+### Installation
+If you do not plan on modifying the ManyWells files, you can optionally install ManyWells as a Python package. 
+See [further instructions here](docs/installation.md). 
+Note that you will only get access to the files in the `manywells` folder if you install the package. 
+
 ### Reference
-If you use ManyWells in a scientific work we kindly ask you to cite it. 
+If you use ManyWells in an academic work, we kindly ask you to cite our paper. 
 You can cite it as shown in the bibtex entry below. 
 ```
 TODO: Add reference to paper
