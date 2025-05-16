@@ -58,8 +58,18 @@ Note that you will only get access to the files in the `manywells` folder if you
 ### Reference
 If you use ManyWells in an academic work, we kindly ask you to cite our paper. 
 You can cite it as shown in the bibtex entry below. 
+Note that the paper is currently in review and that the below reference is to a preprint.
 ```
-TODO: Add reference to paper
+@article{Grimstad2025,
+	title = {{ManyWells: Simulation of Multiphase Flow in Thousands of Wells}},
+	author = {Grimstad, Bjarne and Lundby, Erlend and Andersson, Henrik},
+	journal = {SSRN Electronic Journal},
+	issn = {1556-5068},
+	doi = {10.2139/ssrn.5256125},
+	year = {2025},
+	pages = {1--47},
+	note = {Preprint},
+}
 ```
 
 ### License
