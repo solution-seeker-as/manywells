@@ -44,10 +44,11 @@ The environment variable `GIT_LFS_SKIP_SMUDGE=1` is set to avoid downloading the
 If you wish to download the datasets, you can also find them at the [ManyWells project on HuggingFace](https://huggingface.co/datasets/solution-seeker-as/manywells).
 
 ### Python environment
-The Python environment required to run the scripts in the project is specified in `environment.yml`. 
-The `manywells` environment can be installed using the Conda package manager by running the command: 
+The `manywells` Python environment is defined by `pyproject.toml`, with specific package versions in `uv.lock`. 
+Using the [uv package manager](https://docs.astral.sh/uv/), the environment is installed by running the 
+following command from the project root folder: 
 ```console
-conda env create -f environment.yml
+uv sync
 ``` 
 
 ### Installation
