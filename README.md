@@ -60,12 +60,13 @@ Note that you will only get access to the files in the `manywells` folder if you
 If you use ManyWells in an academic work, we kindly ask you to cite our paper. 
 You can cite it as shown in the bibtex entry below.
 ```
-@article{Grimstad2025,
-	title = {{ManyWells: Simulation of Multiphase Flow in Thousands of Wells}},
+@article{Grimstad2026,
+	title = {{ManyWells: Simulation of multiphase flow in thousands of wells}},
 	author = {Bjarne Grimstad and Erlend Lundby and Henrik Andersson},
 	journal = {Geoenergy Science and Engineering},
+	volume = {257},
 	pages = {214226},
-	year = {2025},
+	year = {2026},
 	issn = {2949-8910},
 	doi = {https://doi.org/10.1016/j.geoen.2025.214226},
 }
