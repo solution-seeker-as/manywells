@@ -51,7 +51,7 @@ def load_well(well_id, df_config) -> Well:
 
 if __name__ == "__main__":
     # Load config
-    df_meta = pd.read_csv('./data/manywells-sol/manywells-sol-1_config.zip')
+    df_meta = pd.read_csv('./data/manywells-sol/manywells-sol-1_config.zip', compression='zip')
 
     # Load specific well
     well = load_well(0, df_meta)  # Load well 0
