@@ -63,8 +63,9 @@ class WellProperties:
         assert self.L > 0, 'Pipe length must be positive'
         assert self.D > 0, 'Pipe diameter must be positive'
 
-        # Initialize choke
-        self.choke = BernoulliChokeModel(K_c=0.1*self.A)
+        # Initialize choke model if not provided
+        if self.choke is None:
+            self.choke = BernoulliChokeModel(K_c=0.1*self.A)
 
 
 @dataclass
