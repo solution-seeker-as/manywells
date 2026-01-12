@@ -64,7 +64,7 @@ North Sea Brent Crude is a sweet and light crude oil with an API gravity of 39.8
 
 In the United States, most of the produced oil has an API gravity above 30.
 
-See api_to_density() and density_from_api() for more details on how to convert between API gravity and density.
+See api_from_density() and density_from_api() for more details on how to convert between API gravity and density.
 """
 
 
