@@ -45,6 +45,28 @@ SEAWATER = LiquidProperties(name='seawater', rho=1025, cp=4000)  # Seawater (sal
 NORTH_SEA_BRENT_CRUDE = LiquidProperties(name='north-sea-brent-crude', rho=826, cp=2000)  # API = 39.8
 METHANE = GasProperties(name='methane', R_s=518.3, cp=2225)
 
+"""
+Petroleum liquids (oils) can be categorized into three types:
+
+Type                API gravity         Density (kg/m^3)
+---------------------------------------------------------
+Heavy               14-22               973-922
+Intermediate        22-31               922-871
+Light               31-40               871-825
+---------------------------------------------------------
+
+From Wikipedia: 
+    "The API gravity is a measure of how heavy or light a petroleum liquid is compared to water: 
+     if its API gravity is greater than 10, it is lighter and floats on water; 
+     if less than 10, it is heavier and sinks."
+
+North Sea Brent Crude is a sweet and light crude oil with an API gravity of 39.8
+
+In the United States, most of the produced oil has an API gravity above 30.
+
+See api_to_density() and density_from_api() for more details on how to convert between API gravity and density.
+"""
+
 
 ################################################
 # COMPUTATION AND CONVERSION METHODS
@@ -109,6 +131,11 @@ def water_liquid_ratio(rho_l, rho_o, rho_w):
 def api_from_density(rho):
     """
     Compute API gravity from density
+
+    API gravity is computed as follows:
+        API = 141.5 / SG - 131.5,
+    where SG is the specific gravity of the oil; SG = density of oil / density of water, computed at standard reference conditions.
+
     :param rho: Oil density at standard reference conditions
     :return: API gravity of oil
     """
@@ -120,6 +147,13 @@ def density_from_api(api):
     """
     Compute oil density at standard reference conditions from API gravity
 
+    Given the API gravity, we can compute the density of the oil (at standard conditions):
+        density of oil = 141.5 * (density of water) / (API + 131.5) 
+
+    Example:
+        API = 40
+        density of oil ~= 141.5 * 1000 / (40 + 131.5) ~= 825 kg/m^3 at standard conditions
+
     :param api: API gravity of oil
     :return: Oil density at standard reference conditions
     """
@@ -128,7 +162,7 @@ def density_from_api(api):
 
 def dead_oil_surface_tension(rho, T):
     """
-    Correlation for dead oil surface tension from paper "Estimation of gas–oil surface tension" by Abdul-Majeed & Al-Soof (2000)
+    Correlation for dead oil surface tension from paper "Estimation of gas-oil surface tension" by Abdul-Majeed & Al-Soof (2000)
 
     The correlation gives surface tension in dyn/cm, which can be converted to SI units as 1 dyn/cm = 0.001 J/m².
 
@@ -140,61 +174,4 @@ def dead_oil_surface_tension(rho, T):
     T_degC = T - 273.15  # From kelvin to degC
     api = api_from_density(rho)
     return cf * (1.11591 - 0.00305 * T_degC) * (38.085 - 0.259 * api)
-
-
-"""
-Petroleum liquids (oils) can be categorized into three types:
-
-Type                API gravity         Density (kg/m^3)
----------------------------------------------------------
-Heavy               14-22               973-922
-Intermediate        22-31               922-871
-Light               31-40               871-825
----------------------------------------------------------
-
-From Wikipedia: 
-    "The API gravity is a measure of how heavy or light a petroleum liquid is compared to water: 
-     if its API gravity is greater than 10, it is lighter and floats on water; 
-     if less than 10, it is heavier and sinks."
-
-API gravity is computed as follows:
-    API = 141.5 / SG - 131.5,
-where SG is the specific gravity of the oil; SG = density of oil / density of water, computed at standard conditions.
-
-Given the API gravity, we can compute the density of the oil (at standard conditions):
-    density of oil = 141.5 * (density of water) / (API + 131.5) 
-
-Example:
-    API = 40
-    density of oil ~= 141.5 * 1000 / (40 + 131.5) ~= 825 kg/m^3 at standard conditions
-
-North Sea Brent Crude is a sweet and light crude oil with an API gravity of 39.8
-
-In the United States, most of the produced oil has an API gravity above 30.
-"""
-
-
-if __name__ == '__main__':
-
-    rho_methane = 0.6798  # kg / m^3 at standard conditions
-    # rho_methane = 0.6785  # kg / m^3
-    R_s_methane = specific_gas_constant(rho_methane)
-    print('Specific gas constant of methane:', R_s_methane)  # Expecting 518.3
-
-    rho_eg = 1.1
-    R_s_eg = specific_gas_constant(rho_eg)
-    print(R_s_eg)
-
-    import numpy as np
-    T_eg = 353  # K
-    v_sound_eg = np.sqrt(R_s_eg * T_eg)
-    print(v_sound_eg)
-
-    # # Specific heat
-    # def specific_heat_capacity(rho):
-    #     return 25389 / (rho ** 0.39)
-    #
-    # print(specific_heat_capacity(1000))
-    # print(specific_heat_capacity(826))
-    # print(specific_heat_capacity(920))
 
