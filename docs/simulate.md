@@ -5,7 +5,7 @@ In order to simulate a single datapoint from single well a set of steps must be 
 the `simulator.py` file found in:
 ```
 Project folder
-├── manywells # Folder containing Basic components of the simulator
+├── src/manywells/  # Package containing basic components of the simulator
 │ └── simulator.py # Implementation of steady-state drift-flux model
 ```
 The steps are as follows:
