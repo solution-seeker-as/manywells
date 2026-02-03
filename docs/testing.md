@@ -49,5 +49,5 @@ There are **65 tests** in total. The one that runs a small simulator solve is ma
 Pytest is configured in `pyproject.toml` under `[tool.pytest.ini_options]`:
 
 - **testpaths**: `["tests"]`
-- **pythonpath**: `["."]` so the `manywells` package is importable
+- **pythonpath**: `["src"]` so the `manywells` package is importable
 - **markers**: `slow` — marks tests as slow (deselect with `-m "not slow"`)
