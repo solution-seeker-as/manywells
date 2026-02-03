@@ -28,5 +28,17 @@ maintainers = [
   {name = "Bjarne Grimstad", email = "bjarne.grimstad@solutionseeker.no"},
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+]
+
 [project.urls]
 Repository = "https://github.com/solution-seeker-as/manywells.git"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
