@@ -20,13 +20,14 @@ The project is structured as follows
 ```
 Project folder
 |-- docs                    # Documentation
-|-- manywells               # Implementation of simulator
+|-- src/manywells           # Implementation of simulator
 |   |-- calibration         # Code for calibration to data
 |   |-- closed_loop         # Simulation with closed-loop control
 |-- scripts                 # Various scripts and examples
 |   |-- data_generation     # Scripts used to generate the ManyWells datasets
 |   |-- flow_regimes        # Scripts to develop a flow regime classifier
 |   |-- ml_examples         # Machine learning examples in the ManyWells paper
+|-- tests					# Tests
 ```
 
 ## Getting started
