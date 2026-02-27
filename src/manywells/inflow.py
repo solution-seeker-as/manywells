@@ -141,7 +141,7 @@ class FixedFlowRate(InflowModel):
 
     def __post_init__(self):
         assert self.w_l_const >= 0, 'Liquid mass flow rate must be non-negative'
-        assert self.w_l_const >= 0, 'Gas mass flow rate must be non-negative'
+        assert self.w_g_const >= 0, 'Gas mass flow rate must be non-negative'
 
     def mass_flow_rates(self, p, p_r):
         """
