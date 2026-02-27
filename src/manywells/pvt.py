@@ -4,12 +4,21 @@ You may use, distribute and modify this code under the
 terms of the CC BY-NC 4.0 International Public License.
 
 Created 09 February 2024
-Bjarne Grimstad, bjarne.grimstad@gmail.no
+Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
 Utilities for doing various PVT (Pressure/Volume/Temperature) calculations
 """
 
 from dataclasses import dataclass
+
+import casadi as ca
+
+
+################################################
+# PHYSICAL CONSTANTS
+################################################
+
+R_UNIVERSAL = 8314.46  # Universal gas constant (J/(kmol·K)), TODO: Convert to SI units (J/(kg·K))
 
 
 ################################################
@@ -174,4 +183,79 @@ def dead_oil_surface_tension(rho, T):
     T_degC = T - 273.15  # From kelvin to degC
     api = api_from_density(rho)
     return cf * (1.11591 - 0.00305 * T_degC) * (38.085 - 0.259 * api)
+
+
+################################################
+# VISCOSITY CORRELATIONS (CasADi-compatible)
+################################################
+
+def molecular_weight(R_s):
+    """
+    Compute gas molecular weight from specific gas constant.
+
+    :param R_s: Specific gas constant (J/(kg·K))
+    :return: Molecular weight (g/mol)
+    """
+    return R_UNIVERSAL / R_s
+
+
+def water_viscosity(T):
+    """
+    Water viscosity using a Vogel-Fulcher-Tammann type correlation.
+    CasADi-compatible.
+
+    :param T: Temperature (K), may be a CasADi symbolic
+    :return: Water viscosity (Pa·s)
+    """
+    return 2.414e-5 * ca.power(10, 247.8 / (T - 140))
+
+
+def gas_viscosity(T, rho_g, M_g):
+    """
+    Gas viscosity using the Lee-Gonzalez-Eakin (1966) correlation.
+    CasADi-compatible.
+
+    Reference: Lee, A.L., Gonzalez, M.H. and Eakin, B.E., "The Viscosity of
+    Natural Gases", J Pet Technol 18 (1966): 997-1000.
+
+    :param T: Temperature (K), may be a CasADi symbolic
+    :param rho_g: Gas density (kg/m³), may be a CasADi symbolic
+    :param M_g: Molecular weight of gas (g/mol), float constant
+    :return: Gas viscosity (Pa·s)
+    """
+    T_R = 1.8 * T  # From Kelvin (K) to degrees Rankine (degR)
+    rho_gcc = rho_g * 1e-3  # From kg/m³ to g/cm³
+    K = (9.4 + 0.02 * M_g) * ca.constpow(T_R, 1.5) / (209 + 19 * M_g + T_R)
+    X = 3.5 + 986 / T_R + 0.01 * M_g
+    Y = 2.4 - 0.2 * X
+    return K * ca.exp(X * ca.constpow(rho_gcc, Y)) * 1e-7  # Unit conversion: 1 micropoise is 1e-7 Pa·s
+
+
+def liquid_mixture_viscosity(mu_o, mu_w, wlr):
+    """
+    Volume-weighted arithmetic mean viscosity for oil-water liquid mixture.
+
+    :param mu_o: Oil viscosity (Pa·s)
+    :param mu_w: Water viscosity (Pa·s)
+    :param wlr: Water-to-liquid volume fraction in [0, 1]
+    :return: Liquid mixture viscosity (Pa·s)
+    """
+    return wlr * mu_w + (1 - wlr) * mu_o
+
+
+def mixture_viscosity(mu_l, mu_g, alpha):
+    """
+    Volume-weighted gas-liquid mixture viscosity.
+    CasADi-compatible.
+    
+    TODO: Consider updating to geometric-weighted viscosity
+
+    :param mu_l: Liquid viscosity (Pa·s)
+    :param mu_g: Gas viscosity (Pa·s)
+    :param alpha: Gas void fraction in [0, 1]
+    :return: Mixture viscosity (Pa·s)
+    """
+    # return ca.constpow(mu_l, 1 - alpha) * ca.constpow(mu_g, alpha)
+    return alpha * mu_g + (1 - alpha) * mu_l
+    
 

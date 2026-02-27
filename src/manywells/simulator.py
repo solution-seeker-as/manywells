@@ -17,7 +17,10 @@ import pandas as pd
 
 from manywells.constants import STD_GRAVITY, CF_PRES
 from manywells.choke import ChokeModel, BernoulliChokeModel, SimpsonChokeModel
+from manywells.friction import friction_factor
 from manywells.inflow import InflowModel, ProductivityIndex, Vogel
+import manywells.pvt as pvt
+from manywells.pvt_dev.dead_oil import dead_oil_viscosity
 from manywells.slip import SlipModel
 
 
@@ -34,13 +37,17 @@ class WellProperties:
     D: float = 0.1554       # Inner diameter of pipe (m). Default value ≃ 6.1 inch.
 
     # Fluid properties
+    # TODO: Consider putting these properties into a fluid object
     rho_l: float = 850      # Liquid density (kg/m³)
+    rho_o: float = 850      # Oil density at standard conditions (kg/m³). Used for viscosity via API gravity.
     R_s: float = 518.3      # Specific gas constant (J/kg/K). Default value is for methane.
     cp_g: float = 2225      # Specific heat capacity of gas (J/kg/K). Default value is for methane.
     cp_l: float = 4180      # Specific heat capacity of liquid (J/kg/K). Default value is for water.
 
     # Friction
-    f_D: float = 0.05       # Darcy friction factor (dimensionless)
+    # Roughness of new/smooth Tubing: 0.0015 to 0.045 mm = 1.5e-6 to 4.5e-5 m
+    # Roughness of commercial/welded steel: 0.045 mm = 4.5e-5 m
+    roughness: float = 4.5e-5  # Pipe wall roughness (m). Default: commercial steel.
 
     # Heat transfer
     h: float = 20.0         # Heat transfer coefficient (W/m²/K)
@@ -62,6 +69,7 @@ class WellProperties:
     def __post_init__(self):
         assert self.L > 0, 'Pipe length must be positive'
         assert self.D > 0, 'Pipe diameter must be positive'
+        assert self.roughness > 0, 'Pipe roughness must be positive'
 
         # Initialize choke model if not provided
         if self.choke is None:
@@ -234,9 +242,23 @@ class SSDFSimulator:
         rho_m = alpha * rho_g + (1 - alpha) * rho_l  # Mixture density
         v_m = alpha * v_g + (1 - alpha) * v_l  # Mixture velocity
 
+        # Dynamic friction factor via viscosity and Reynolds number
+        api = pvt.api_from_density(wp.rho_o)
+        M_g = pvt.molecular_weight(wp.R_s)
+        wlr = (wp.rho_l - wp.rho_o) / (pvt.WATER.rho - wp.rho_o) if wp.rho_o < pvt.WATER.rho else 0.0
+
+        mu_o = dead_oil_viscosity(api, T)
+        mu_w = pvt.water_viscosity(T)
+        mu_l = pvt.liquid_mixture_viscosity(mu_o, mu_w, wlr)
+        mu_g = pvt.gas_viscosity(T, rho_g, M_g)
+        mu_m = pvt.mixture_viscosity(mu_l, mu_g, alpha)
+
+        Re = rho_m * ca.fabs(v_m) * wp.D / mu_m
+        f_D = friction_factor(Re, wp.roughness / wp.D)
+
         acc = alpha * rho_g * v_g ** 2 + (1 - alpha) * rho_l * v_l ** 2
         acc_prev = alpha_prev * rho_g_prev * v_g_prev ** 2 + (1 - alpha_prev) * rho_l_prev * v_l_prev ** 2
-        dp_f = delta_z * (wp.f_D / wp.D / 2) * rho_m * (v_m ** 2)
+        dp_f = delta_z * (f_D / wp.D / 2) * rho_m * (v_m ** 2)
         dp_g = delta_z * STD_GRAVITY * rho_m
 
         T_a = bc.T_r - i * (bc.T_r - bc.T_s) / self.n_cells  # Linear profile for ambient temperature
