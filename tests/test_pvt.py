@@ -5,6 +5,7 @@ import pytest
 from manywells.pvt import (
     P_REF,
     T_REF,
+    R_UNIVERSAL,
     LiquidProperties,
     GasProperties,
     WATER,
@@ -18,7 +19,13 @@ from manywells.pvt import (
     api_from_density,
     density_from_api,
     dead_oil_surface_tension,
+    molecular_weight,
+    water_viscosity,
+    gas_viscosity,
+    liquid_mixture_viscosity,
+    mixture_viscosity,
 )
+from manywells.pvt_dev.dead_oil import dead_oil_viscosity
 
 
 def test_reference_conditions():
@@ -117,3 +124,123 @@ def test_dead_oil_surface_tension_positive():
     T = 273.15 + 20  # 20 °C
     sigma = dead_oil_surface_tension(rho, T)
     assert sigma > 0
+
+
+# ---- Viscosity and molecular weight tests ----
+
+
+def test_molecular_weight_methane():
+    """Molecular weight of methane from its specific gas constant."""
+    M = molecular_weight(METHANE.R_s)
+    assert M == pytest.approx(16.04, rel=0.01)
+
+
+def test_molecular_weight_inverse():
+    """R_UNIVERSAL / M_g recovers R_s."""
+    R_s = 518.3
+    M = molecular_weight(R_s)
+    assert R_UNIVERSAL / M == pytest.approx(R_s)
+
+
+def test_water_viscosity_at_20C():
+    """Water viscosity at 20 degC is approximately 1e-3 Pa-s."""
+    T = 273.15 + 20
+    mu = float(water_viscosity(T))
+    assert mu == pytest.approx(1.0e-3, rel=0.15)
+
+
+def test_water_viscosity_decreases_with_temperature():
+    """Water viscosity decreases as temperature increases."""
+    mu_20 = float(water_viscosity(273.15 + 20))
+    mu_80 = float(water_viscosity(273.15 + 80))
+    assert mu_80 < mu_20
+
+
+def test_gas_viscosity_methane_standard():
+    """Gas viscosity of methane at standard conditions is ~1.1e-5 Pa-s."""
+    T = T_REF
+    rho_g = gas_density(METHANE.R_s)
+    M_g = molecular_weight(METHANE.R_s)
+    mu = float(gas_viscosity(T, rho_g, M_g))
+    assert mu == pytest.approx(1.1e-5, rel=0.15)
+
+
+def test_gas_viscosity_positive():
+    """Gas viscosity is positive for typical well conditions."""
+    T = 273.15 + 100
+    rho_g = 50.0
+    M_g = molecular_weight(METHANE.R_s)
+    mu = float(gas_viscosity(T, rho_g, M_g))
+    assert mu > 0
+
+
+def test_liquid_mixture_viscosity_pure_oil():
+    """With wlr=0, liquid mixture viscosity equals oil viscosity."""
+    mu_o, mu_w = 5e-3, 1e-3
+    assert liquid_mixture_viscosity(mu_o, mu_w, 0.0) == pytest.approx(mu_o)
+
+
+def test_liquid_mixture_viscosity_pure_water():
+    """With wlr=1, liquid mixture viscosity equals water viscosity."""
+    mu_o, mu_w = 5e-3, 1e-3
+    assert liquid_mixture_viscosity(mu_o, mu_w, 1.0) == pytest.approx(mu_w)
+
+
+def test_liquid_mixture_viscosity_between():
+    """Liquid mixture viscosity is between oil and water viscosity."""
+    mu_o, mu_w = 5e-3, 1e-3
+    mu_mix = liquid_mixture_viscosity(mu_o, mu_w, 0.5)
+    assert mu_w < mu_mix < mu_o
+
+
+def test_mixture_viscosity_pure_liquid():
+    """With alpha=0 (no gas), mixture viscosity equals liquid viscosity."""
+    mu_l, mu_g = 1e-3, 1e-5
+    mu = float(mixture_viscosity(mu_l, mu_g, 0.0))
+    assert mu == pytest.approx(mu_l)
+
+
+def test_mixture_viscosity_pure_gas():
+    """With alpha=1 (all gas), mixture viscosity equals gas viscosity."""
+    mu_l, mu_g = 1e-3, 1e-5
+    mu = float(mixture_viscosity(mu_l, mu_g, 1.0))
+    assert mu == pytest.approx(mu_g)
+
+
+def test_mixture_viscosity_between():
+    """Mixture viscosity (Beggs-Brill geometric) is between gas and liquid."""
+    mu_l, mu_g = 1e-3, 1e-5
+    mu = float(mixture_viscosity(mu_l, mu_g, 0.5))
+    assert mu_g < mu < mu_l
+
+
+# ---- Dead oil viscosity tests ----
+
+
+def test_dead_oil_viscosity_typical():
+    """Dead oil viscosity for API 35 at 150 degF (~65.6 degC) is in a reasonable range (1-10 cP)."""
+    T = 273.15 + 65.6
+    mu = float(dead_oil_viscosity(35, T))
+    assert 1e-3 < mu < 10e-3  # 1 to 10 cP in Pa-s
+
+
+def test_dead_oil_viscosity_decreases_with_temperature():
+    """Dead oil viscosity decreases as temperature increases."""
+    api = 30
+    mu_low_T = float(dead_oil_viscosity(api, 273.15 + 40))
+    mu_high_T = float(dead_oil_viscosity(api, 273.15 + 120))
+    assert mu_high_T < mu_low_T
+
+
+def test_dead_oil_viscosity_decreases_with_api():
+    """Lighter oils (higher API) have lower viscosity."""
+    T = 273.15 + 80
+    mu_heavy = float(dead_oil_viscosity(20, T))
+    mu_light = float(dead_oil_viscosity(40, T))
+    assert mu_light < mu_heavy
+
+
+def test_dead_oil_viscosity_positive():
+    """Dead oil viscosity is positive."""
+    mu = float(dead_oil_viscosity(30, 273.15 + 60))
+    assert mu > 0
