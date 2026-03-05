@@ -18,14 +18,13 @@ from manywells.pvt import (
     water_liquid_ratio,
     api_from_density,
     density_from_api,
-    dead_oil_surface_tension,
     molecular_weight,
     water_viscosity,
     gas_viscosity,
     liquid_mixture_viscosity,
     mixture_viscosity,
 )
-from manywells.pvt_dev.dead_oil import dead_oil_viscosity
+from manywells.pvt_dev.dead_oil import dead_oil_viscosity, dead_oil_surface_tension
 
 
 def test_reference_conditions():
