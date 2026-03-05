@@ -169,22 +169,6 @@ def density_from_api(api):
     return 141.5 * WATER.rho / (api + 131.5)
 
 
-def dead_oil_surface_tension(rho, T):
-    """
-    Correlation for dead oil surface tension from paper "Estimation of gas-oil surface tension" by Abdul-Majeed & Al-Soof (2000)
-
-    The correlation gives surface tension in dyn/cm, which can be converted to SI units as 1 dyn/cm = 0.001 J/m².
-
-    :param rho: Density of oil (kg/m³)
-    :param T: Temperature (K)
-    :return: Surface tension of oil (J/m²)
-    """
-    cf = 0.001  # Unit conversion factor (1 dyn/cm = 0.001 J/m²)
-    T_degC = T - 273.15  # From kelvin to degC
-    api = api_from_density(rho)
-    return cf * (1.11591 - 0.00305 * T_degC) * (38.085 - 0.259 * api)
-
-
 ################################################
 # VISCOSITY CORRELATIONS (CasADi-compatible)
 ################################################
