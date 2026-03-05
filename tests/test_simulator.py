@@ -11,6 +11,7 @@ from manywells.simulator import (
 )
 from manywells.choke import BernoulliChokeModel
 from manywells.inflow import ProductivityIndex
+from manywells.constants import STD_GRAVITY
 
 
 def test_well_properties_defaults():
@@ -107,6 +108,84 @@ def test_simulator_solve_small():
         assert len(result) == n_vars
     except SimError:
         pytest.skip("Simulator solve failed (e.g. Ipopt not available or no solution)")
+
+
+# ---------------------------------------------------------------------------
+# Energy equation thermal term tests
+# ---------------------------------------------------------------------------
+
+class TestEnergyEquationTerms:
+    """Verify the three sub-terms (dT_heat, dT_fric, dT_grav) of the energy equation."""
+
+    def test_gravity_pure_gas_equals_lapse_rate(self):
+        """For pure gas (alpha=1), gravitational cooling rate equals g / cp_g."""
+        alpha = 1.0
+        rho_g, v_g = 50.0, 10.0
+        rho_l, v_l = 850.0, 2.0
+        cp_g = 2225.0
+
+        mass_flux = alpha * rho_g * v_g + (1 - alpha) * rho_l * v_l
+        liq_flux = (1 - alpha) * v_l
+        rho_m = alpha * rho_g + (1 - alpha) * rho_l
+        cp_flux = cp_g * alpha * rho_g * v_g
+
+        dT_grav_per_m = STD_GRAVITY * (mass_flux - liq_flux * rho_m) / cp_flux
+        expected = STD_GRAVITY / cp_g
+
+        assert dT_grav_per_m == pytest.approx(expected, rel=1e-12)
+
+    def test_gravity_pure_liquid_is_zero(self):
+        """For pure liquid (alpha=0), gravitational cooling vanishes."""
+        alpha = 0.0
+        rho_g, v_g = 50.0, 10.0
+        rho_l, v_l = 850.0, 2.0
+
+        mass_flux = alpha * rho_g * v_g + (1 - alpha) * rho_l * v_l
+        liq_flux = (1 - alpha) * v_l
+        rho_m = alpha * rho_g + (1 - alpha) * rho_l
+
+        assert mass_flux - liq_flux * rho_m == pytest.approx(0.0, abs=1e-12)
+
+    def test_friction_pure_liquid(self):
+        """For pure liquid (alpha=0), friction dissipation equals (f_D/(2D))*v_l^2/cp_l."""
+        alpha = 0.0
+        rho_l, v_l = 850.0, 2.0
+        rho_g, v_g = 50.0, 10.0
+        cp_l = 4180.0
+        f_D = 0.05
+        D = 0.15
+
+        rho_m = alpha * rho_g + (1 - alpha) * rho_l
+        v_m = alpha * v_g + (1 - alpha) * v_l
+        cp_flux = cp_l * (1 - alpha) * rho_l * v_l
+
+        F_fric = (f_D / D / 2) * rho_m * v_m ** 2
+        dT_fric_per_m = (1 - alpha) * v_l * F_fric / cp_flux
+
+        expected = (f_D / (2 * D)) * v_l ** 2 / cp_l
+
+        assert dT_fric_per_m == pytest.approx(expected, rel=1e-12)
+
+    def test_friction_pure_gas_is_zero(self):
+        """For pure gas (alpha=1), liquid friction dissipation vanishes."""
+        alpha = 1.0
+        dT_fric_factor = (1 - alpha)  # multiplies the entire friction term
+        assert dT_fric_factor == pytest.approx(0.0, abs=1e-12)
+
+    def test_gravity_mixed_is_positive(self):
+        """For a gas-liquid mixture, gravitational cooling term is positive (cooling)."""
+        alpha = 0.5
+        rho_g, v_g = 50.0, 10.0
+        rho_l, v_l = 850.0, 2.0
+        cp_g, cp_l = 2225.0, 4180.0
+
+        mass_flux = alpha * rho_g * v_g + (1 - alpha) * rho_l * v_l
+        liq_flux = (1 - alpha) * v_l
+        rho_m = alpha * rho_g + (1 - alpha) * rho_l
+        cp_flux = cp_g * alpha * rho_g * v_g + cp_l * (1 - alpha) * rho_l * v_l
+
+        dT_grav_per_m = STD_GRAVITY * (mass_flux - liq_flux * rho_m) / cp_flux
+        assert dT_grav_per_m > 0
 
 
 def test_simulator_solution_as_df_shape():

@@ -262,9 +262,23 @@ class SSDFSimulator:
         dp_g = delta_z * STD_GRAVITY * rho_m
 
         T_a = bc.T_r - i * (bc.T_r - bc.T_s) / self.n_cells  # Linear profile for ambient temperature
-        #cp_m = alpha * wp.cp_g + (1 - alpha) * wp.cp_l  # Mixture heat capacity, laminar-bubble-flow
-        #dT = delta_z * 4 * wp.h * (T - T_a) / (wp.D * v_m * rho_m * cp_m)
-        dT = delta_z * 4 * wp.h * (T - T_a) / (wp.D * (wp.cp_g * alpha * rho_g * v_g + wp.cp_l * (1 - alpha) * rho_l * v_l))
+        cp_flux = wp.cp_g * alpha * rho_g * v_g + wp.cp_l * (1 - alpha) * rho_l * v_l
+
+        # Heat loss to surroundings
+        dT_heat = delta_z * 4 * wp.h * (T - T_a) / (wp.D * cp_flux)
+
+        # Frictional dissipation heating of the liquid phase
+        # For ideal gas, friction does not change enthalpy; for incompressible liquid it does
+        F_fric = (f_D / wp.D / 2) * rho_m * v_m ** 2
+        dT_fric = delta_z * (1 - alpha) * v_l * F_fric / cp_flux
+
+        # Gravitational cooling (adiabatic lapse rate effect)
+        # Pure gas cools at g/cp_g; pure liquid: zero effect (hydrostatic pressure balances gravity)
+        mass_flux = alpha * rho_g * v_g + (1 - alpha) * rho_l * v_l
+        liq_flux = (1 - alpha) * v_l
+        dT_grav = delta_z * STD_GRAVITY * (mass_flux - liq_flux * rho_m) / cp_flux
+
+        dT = dT_heat - dT_fric + dT_grav
 
         # Discretized differential equations
         g1 = alpha * rho_g * v_g - alpha_prev * rho_g_prev * v_g_prev                       # Constant flux of gas
