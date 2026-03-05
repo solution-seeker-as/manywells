@@ -245,7 +245,7 @@ class SSDFSimulator:
         # Dynamic friction factor via viscosity and Reynolds number
         api = pvt.api_from_density(wp.rho_o)
         M_g = pvt.molecular_weight(wp.R_s)
-        wlr = (wp.rho_l - wp.rho_o) / (pvt.WATER.rho - wp.rho_o) if wp.rho_o < pvt.WATER.rho else 0.0
+        wlr = (rho_l - wp.rho_o) / (pvt.WATER.rho - wp.rho_o) if wp.rho_o < pvt.WATER.rho else 0.0  # TODO: Update this after adding a fluid object to the class
 
         mu_o = dead_oil_viscosity(api, T)
         mu_w = pvt.water_viscosity(T)
