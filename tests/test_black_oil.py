@@ -4,7 +4,8 @@ import pytest
 import numpy as np
 
 from manywells.pvt import P_REF, T_REF, WATER, density_from_api, api_from_density
-from manywells.pvt.black_oil import BlackOilPVT, CF_PSI, CF_RS, M_AIR
+from manywells.pvt.black_oil import BlackOilPVT
+from manywells.units import CF_PSI, CF_RS, M_AIR
 from manywells.pvt.form_gas import gas_fvf, gas_density_std
 from manywells.pvt.form_wat import water_fvf
 from manywells.pvt.fluid_mix import (
@@ -13,7 +14,7 @@ from manywells.pvt.fluid_mix import (
     free_gas_flux,
     liquid_flux,
 )
-from manywells.constants import CF_PRES
+from manywells.units import CF_BAR
 
 
 # ---------------------------------------------------------------------------

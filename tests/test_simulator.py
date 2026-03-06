@@ -12,7 +12,7 @@ from manywells.simulator import (
 from manywells.choke import BernoulliChokeModel
 from manywells.inflow import ProductivityIndex
 from manywells.pvt.fluid import FluidModel
-from manywells.constants import STD_GRAVITY
+from manywells.units import STD_GRAVITY
 
 
 def test_well_properties_defaults():

@@ -47,13 +47,12 @@ def test_productivity_index_init_invalid_k_l():
         ProductivityIndex(k_l=-0.1)
 
 
-def test_productivity_index_mass_flow_rates():
-    """PI: w_l = k_l*(p_r - p), w_g = (f_g/(1-f_g))*w_l."""
+def test_productivity_index_liquid_mass_flow_rate():
+    """PI: w_l = k_l*(p_r - p)."""
     pi = ProductivityIndex(k_l=1.0)
-    p, p_r, f_g = 80.0, 100.0, 0.25
-    w_l, w_g = pi.mass_flow_rates(p, p_r, f_g)
+    p, p_r = 80.0, 100.0
+    w_l = pi.liquid_mass_flow_rate(p, p_r)
     assert w_l == pytest.approx(20.0)  # 1.0 * (100 - 80)
-    assert w_g == pytest.approx(20.0 * 0.25 / 0.75)
 
 
 def test_vogel_init_valid():
@@ -62,28 +61,25 @@ def test_vogel_init_valid():
     assert v.w_l_max == 10.0
 
 
-def test_vogel_mass_flow_rates():
+def test_vogel_liquid_mass_flow_rate():
     """Vogel: w_l at p=0 is w_l_max, at p=p_r is 0."""
-    f_g = 0.2
     v = Vogel(w_l_max=10.0)
-    _, w_g_zero = v.mass_flow_rates(0.0, 100.0, f_g)
-    w_l_max, _ = v.mass_flow_rates(0.0, 100.0, f_g)
+    w_l_max = v.liquid_mass_flow_rate(0.0, 100.0)
     assert w_l_max == pytest.approx(10.0)
-    w_l_at_pr, _ = v.mass_flow_rates(100.0, 100.0, f_g)
+    w_l_at_pr = v.liquid_mass_flow_rate(100.0, 100.0)
     assert w_l_at_pr == pytest.approx(0.0)
-    # Gas proportional to liquid
-    w_l, w_g = v.mass_flow_rates(50.0, 100.0, f_g)
-    assert w_g == pytest.approx((f_g / (1 - f_g)) * w_l)
+    w_l_mid = v.liquid_mass_flow_rate(50.0, 100.0)
+    assert 0 < w_l_mid < 10.0
 
 
 def test_fixed_flow_rate():
-    """FixedFlowRate returns constant w_l and w_g regardless of f_g."""
+    """FixedFlowRate returns constant w_l regardless of pressure."""
     fix = FixedFlowRate(w_l_const=5.0, w_g_const=1.0)
-    w_l, w_g = fix.mass_flow_rates(80.0, 100.0, 0.2)
+    w_l = fix.liquid_mass_flow_rate(80.0, 100.0)
     assert w_l == 5.0
-    assert w_g == 1.0
-    w_l2, w_g2 = fix.mass_flow_rates(20.0, 50.0, 0.3)
-    assert w_l2 == 5.0 and w_g2 == 1.0
+    w_l2 = fix.liquid_mass_flow_rate(20.0, 50.0)
+    assert w_l2 == 5.0
+    assert fix.w_g_const == 1.0
 
 
 def test_fixed_flow_rate_negative_rejected():
