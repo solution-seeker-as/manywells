@@ -9,6 +9,7 @@ Correlations for dead oil properties (CasADi-compatible)
 import casadi as ca
 
 from manywells.pvt import api_from_density
+from manywells.units import kelvin_to_fahrenheit, kelvin_to_celsius, CF_CP, CF_DYNCM
 
 
 def dead_oil_viscosity(api, T):
@@ -24,11 +25,11 @@ def dead_oil_viscosity(api, T):
     :param T: Temperature (K), may be a CasADi symbolic
     :return: Dead oil viscosity (Pa-s)
     """
-    T_F = 1.8 * (T - 273.15) + 32  # From Kelvin (K) to degrees Fahrenheit (degF)
+    T_F = kelvin_to_fahrenheit(T)
     y = ca.power(10, 3.0324 - 0.02023 * api)
     X = y * ca.constpow(T_F, -1.163)
     mu_cP = ca.power(10, X) - 1
-    return mu_cP * 1e-3  # Unit conversion: 1 centipoise is 1e-3 Pa-s
+    return mu_cP * CF_CP
 
 
 def dead_oil_surface_tension(rho, T):
@@ -41,7 +42,6 @@ def dead_oil_surface_tension(rho, T):
     :param T: Temperature (K)
     :return: Surface tension of oil (J/m²)
     """
-    cf = 0.001  # Unit conversion factor (1 dyn/cm = 0.001 J/m²)
-    T_degC = T - 273.15  # From kelvin to degC
+    T_degC = kelvin_to_celsius(T)
     api = api_from_density(rho)
-    return cf * (1.11591 - 0.00305 * T_degC) * (38.085 - 0.259 * api)
+    return CF_DYNCM * (1.11591 - 0.00305 * T_degC) * (38.085 - 0.259 * api)

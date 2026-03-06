@@ -15,12 +15,8 @@ from math import log as math_log
 import casadi as ca
 
 from manywells.pvt import P_REF, T_REF, R_UNIVERSAL, api_from_density, density_from_api
+from manywells.units import CF_PSI, CF_RS, M_AIR, kelvin_to_fahrenheit
 from manywells.ca_functions import ca_min_approx
-
-# Unit conversion constants
-CF_PSI = 6894.76    # Pa per psi
-CF_RS = 0.178108    # scf/STB to Sm3/Sm3
-M_AIR = 28.97       # Molecular weight of air (g/mol = kg/kmol)
 
 
 @dataclass
@@ -49,7 +45,7 @@ class BlackOilPVT:
 
         # Separator conditions in field units (float constants)
         p_sep_psia = self.p_sep / CF_PSI
-        T_sep_F = 1.8 * (self.T_sep - 273.15) + 32
+        T_sep_F = kelvin_to_fahrenheit(self.T_sep)
 
         # Corrected gas gravity at reference separator (100 psig = 114.7 psia)
         self.sg_gas_corr = self.sg_gas * (
@@ -96,7 +92,7 @@ class BlackOilPVT:
 
     def _to_field(self, p, T):
         """Convert SI pressure/temperature to field units."""
-        return p / CF_PSI, 1.8 * (T - 273.15) + 32
+        return p / CF_PSI, kelvin_to_fahrenheit(T)
 
     def _rs_field_capped(self, p_psia, T_F):
         """Rs in scf/STB, capped at bubble point if set."""
@@ -163,7 +159,7 @@ class BlackOilPVT:
             return self.p_bubble
 
         Rs_scf = Rs_total / CF_RS
-        T_F = 1.8 * (T - 273.15) + 32
+        T_F = kelvin_to_fahrenheit(T)
         yg = (Rs_scf / self.sg_gas) ** 0.83
         p_b_psia = 18.2 * (yg * 10 ** (0.00091 * T_F - 0.0125 * self.api) - 1.4)
         return p_b_psia * CF_PSI

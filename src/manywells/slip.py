@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 import casadi as ca
 from manywells.ca_functions import ca_softmax
-from manywells.constants import STD_GRAVITY
+from manywells.units import STD_GRAVITY
 from manywells.pvt.dead_oil import dead_oil_surface_tension
 
 

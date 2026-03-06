@@ -15,7 +15,7 @@ import casadi as ca
 import numpy as np
 import pandas as pd
 
-from manywells.constants import STD_GRAVITY, CF_PRES
+from manywells.units import STD_GRAVITY, CF_BAR
 from manywells.choke import ChokeModel, BernoulliChokeModel, SimpsonChokeModel
 from manywells.friction import friction_factor
 from manywells.inflow import InflowModel, ProductivityIndex, Vogel
@@ -161,11 +161,11 @@ class SSDFSimulator:
 
         # Closure relations
         g1 = v_g - C_0 * v_m - v_inf                # Slip relation
-        g2 = p - rho_g * fl.R_s * T / CF_PRES       # Equation of state for gas density
+        g2 = p - rho_g * fl.R_s * T / CF_BAR       # Equation of state for gas density
 
         if fl.black_oil is not None:
             bo = fl.black_oil
-            p_Pa = p * CF_PRES
+            p_Pa = p * CF_BAR
             Rs_i = bo.rs(p_Pa, T)
             Bo_i = bo.bo(p_Pa, T)
             rho_l_bo = fluid_mix.liquid_density_bo(
@@ -191,7 +191,8 @@ class SSDFSimulator:
         fl = wp.fluid
 
         # Inflow from reservoir
-        w_l, w_g = wp.inflow.mass_flow_rates(p, bc.p_r, fl.f_g)
+        w_l = wp.inflow.liquid_mass_flow_rate(p, bc.p_r)
+        w_g = fl.gas_mass_flow_rate(w_l)
 
         if fl.black_oil is not None:
             bo = fl.black_oil
@@ -202,7 +203,7 @@ class SSDFSimulator:
             self._w_l_inflow = w_l
 
             # Dissolved gas at bottomhole conditions
-            p_Pa = p * CF_PRES
+            p_Pa = p * CF_BAR
             Rs_0 = bo.rs(p_Pa, T)
             w_g_free = fluid_mix.free_gas_flux(
                 w_g, bc.w_lg, self._w_o, Rs_0, bo.rho_g_sc, bo.rho_o_sc,
@@ -311,7 +312,7 @@ class SSDFSimulator:
         # Discretized differential equations
         if fl.black_oil is not None:
             bo = fl.black_oil
-            p_Pa = p * CF_PRES
+            p_Pa = p * CF_BAR
             Rs_i = bo.rs(p_Pa, T)
             w_g_free_i = fluid_mix.free_gas_flux(
                 self._w_g_total, bc.w_lg, self._w_o, Rs_i, bo.rho_g_sc, bo.rho_o_sc,
@@ -325,7 +326,7 @@ class SSDFSimulator:
             g1 = alpha * rho_g * v_g - alpha_prev * rho_g_prev * v_g_prev                       # Constant flux of gas
             g2 = (1 - alpha) * rho_l * v_l - (1 - alpha_prev) * rho_l_prev * v_l_prev           # Constant flux of liquid
 
-        g3 = acc / CF_PRES + p - (acc_prev / CF_PRES + p_prev) + (dp_f + dp_g) / CF_PRES    # Momentum balance
+        g3 = acc / CF_BAR + p - (acc_prev / CF_BAR + p_prev) + (dp_f + dp_g) / CF_BAR    # Momentum balance
         g4 = T - T_prev + dT                                                                # Energy balance
 
         return [g1, g2, g3, g4]
@@ -342,12 +343,13 @@ class SSDFSimulator:
         bc = self.bc
         fl = wp.fluid
 
-        rho_g = CF_PRES * p_0 / (fl.R_s * T_0)
-        w_l_inflow, w_g_inflow = wp.inflow.mass_flow_rates(p_0, bc.p_r, fl.f_g)
+        rho_g = CF_BAR * p_0 / (fl.R_s * T_0)
+        w_l_inflow = wp.inflow.liquid_mass_flow_rate(p_0, bc.p_r)
+        w_g_inflow = fl.gas_mass_flow_rate(w_l_inflow)
 
         if fl.black_oil is not None:
             bo = fl.black_oil
-            p_Pa = p_0 * CF_PRES
+            p_Pa = p_0 * CF_BAR
 
             # Live oil density at bottomhole
             Rs_0 = float(bo.rs(p_Pa, T_0))

@@ -14,7 +14,8 @@ import matplotlib.pyplot as plt
 
 import manywells.pvt as pvt
 from manywells.inflow import InflowModel, ProductivityIndex, Vogel
-from manywells.closed_loop.cl_simulator import WellProperties, BoundaryConditions, ClosedLoopWellSimulator, STD_GRAVITY, CF_PRES, SimError
+from manywells.closed_loop.cl_simulator import WellProperties, BoundaryConditions, ClosedLoopWellSimulator, SimError
+from manywells.units import STD_GRAVITY
 from manywells.choke import BernoulliChokeModel, SimpsonChokeModel
 from manywells.slip import SlipModel
 from scripts.data_generation.file_utils import save_well_config_and_data

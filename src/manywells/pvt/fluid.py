@@ -14,7 +14,8 @@ from manywells.pvt import (
     water_viscosity, gas_viscosity as _gas_viscosity,
     liquid_mixture_viscosity, molecular_weight,
 )
-from manywells.pvt.black_oil import BlackOilPVT, M_AIR
+from manywells.pvt.black_oil import BlackOilPVT
+from manywells.units import M_AIR
 from manywells.pvt.dead_oil import dead_oil_viscosity
 import manywells.pvt.fluid_mix as fluid_mix
 
@@ -114,9 +115,9 @@ class FluidModel:
         For black oil, uses the live-oil density correlation blended with water.
         """
         if self.black_oil is not None:
-            from manywells.constants import CF_PRES
+            from manywells.units import CF_BAR
             bo = self.black_oil
-            p_Pa = p * CF_PRES
+            p_Pa = p * CF_BAR
             Rs_i = bo.rs(p_Pa, T)
             Bo_i = bo.bo(p_Pa, T)
             return fluid_mix.liquid_density_bo(

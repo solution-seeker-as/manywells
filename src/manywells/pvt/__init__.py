@@ -13,21 +13,11 @@ from dataclasses import dataclass
 
 import casadi as ca
 
-
-################################################
-# PHYSICAL CONSTANTS
-################################################
-
-R_UNIVERSAL = 8314.46  # Universal gas constant (J/(kmol·K)), TODO: Convert to SI units (J/(kg·K))
-
-
-################################################
-# STANDARD REFERENCE CONDITIONS
-################################################
-
-# Standard reference conditions per ISO 13443 (15 degC and 1 atm = 101.325 kPa)
-P_REF = 101_325  # Reference pressure (Pa)
-T_REF = 288.15   # Reference temperature (K)
+from manywells.units import (
+    R_UNIVERSAL, P_REF, T_REF,
+    CF_KGM3_TO_GCC, CF_UP,
+    kelvin_to_rankine,
+)
 
 
 ################################################
@@ -207,12 +197,12 @@ def gas_viscosity(T, rho_g, M_g):
     :param M_g: Molecular weight of gas (g/mol), float constant
     :return: Gas viscosity (Pa·s)
     """
-    T_R = 1.8 * T  # From Kelvin (K) to degrees Rankine (degR)
-    rho_gcc = rho_g * 1e-3  # From kg/m³ to g/cm³
+    T_R = kelvin_to_rankine(T)  # From Kelvin (K) to degrees Rankine (degR)
+    rho_gcc = rho_g * CF_KGM3_TO_GCC  # From kg/m³ to g/cm³
     K = (9.4 + 0.02 * M_g) * ca.constpow(T_R, 1.5) / (209 + 19 * M_g + T_R)
     X = 3.5 + 986 / T_R + 0.01 * M_g
     Y = 2.4 - 0.2 * X
-    return K * ca.exp(X * ca.constpow(rho_gcc, Y)) * 1e-7  # Unit conversion: 1 micropoise is 1e-7 Pa·s
+    return K * ca.exp(X * ca.constpow(rho_gcc, Y)) * CF_UP  # Unit conversion: 1 micropoise is 1e-7 Pa·s
 
 
 def liquid_mixture_viscosity(mu_o, mu_w, wlr):
