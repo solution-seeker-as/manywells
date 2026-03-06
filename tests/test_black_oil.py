@@ -4,10 +4,10 @@ import pytest
 import numpy as np
 
 from manywells.pvt import P_REF, T_REF, WATER, density_from_api, api_from_density
-from manywells.pvt_dev.black_oil import BlackOilPVT, CF_PSI, CF_RS, M_AIR
-from manywells.pvt_dev.form_gas import gas_fvf, gas_density_std
-from manywells.pvt_dev.form_wat import water_fvf
-from manywells.pvt_dev.fluid_mix import (
+from manywells.pvt.black_oil import BlackOilPVT, CF_PSI, CF_RS, M_AIR
+from manywells.pvt.form_gas import gas_fvf, gas_density_std
+from manywells.pvt.form_wat import water_fvf
+from manywells.pvt.fluid_mix import (
     dissolved_gas_mass_ratio,
     liquid_density_bo,
     free_gas_flux,
@@ -346,29 +346,30 @@ class TestFluidMix:
 # Simulator integration tests
 # =========================================================================
 
+from manywells.pvt.fluid import FluidModel
 from manywells.simulator import WellProperties, BoundaryConditions, SSDFSimulator, SimError
 
 
-class TestWellPropertiesBlackOil:
+class TestFluidModelOilFraction:
 
     def test_default_black_oil_is_none(self):
         wp = WellProperties()
-        assert wp.black_oil is None
+        assert wp.fluid.black_oil is None
 
     def test_f_o_in_liquid_pure_oil(self):
-        """When rho_l == rho_o (no water), oil fraction is 1."""
-        wp = WellProperties(rho_l=850, rho_o=850)
-        assert wp.f_o_in_liquid == pytest.approx(1.0)
+        """When water_cut=0, oil fraction is 1."""
+        fl = FluidModel(water_cut=0.0)
+        assert fl.f_o_in_liquid == pytest.approx(1.0)
 
     def test_f_o_in_liquid_with_water(self):
         """Oil fraction is between 0 and 1 for mixed liquid."""
-        wp = WellProperties(rho_l=900, rho_o=850)
-        assert 0 < wp.f_o_in_liquid < 1
+        fl = FluidModel(water_cut=0.3)
+        assert 0 < fl.f_o_in_liquid < 1
 
-    def test_f_o_in_liquid_heavy_oil(self):
-        """Oil heavier than water: f_o_in_liquid returns 0."""
-        wp = WellProperties(rho_l=1050, rho_o=1050)
-        assert wp.f_o_in_liquid == pytest.approx(0.0)
+    def test_f_o_in_liquid_pure_water(self):
+        """Water cut near 1: f_o_in_liquid approaches 0."""
+        fl = FluidModel(water_cut=0.99)
+        assert fl.f_o_in_liquid < 0.02
 
 
 @pytest.mark.slow
@@ -376,7 +377,7 @@ class TestDeadOilRegression:
     """Ensure the dead oil (default) path still works identically."""
 
     def test_dead_oil_solves(self):
-        wp = WellProperties(L=500, D=0.1, rho_l=800)
+        wp = WellProperties(L=500, D=0.1, fluid=FluidModel(api=45.0))
         bc = BoundaryConditions(p_r=120, p_s=30, u=0.8)
         sim = SSDFSimulator(wp, bc, n_cells=2)
         try:
@@ -401,14 +402,16 @@ class TestBlackOilSimulator:
             T_sep=273.15 + 21.1,
             p_bubble=250e5,
         )
-        rho_o = density_from_api(35)
+        fl = FluidModel(
+            api=35,
+            sg_gas=0.65,
+            water_cut=0.0,
+            black_oil=bo,
+        )
         wp = WellProperties(
             L=2000,
             D=0.1554,
-            rho_l=rho_o,    # pure oil (no water for simplicity)
-            rho_o=rho_o,
-            R_s=bo.R_s_gas,
-            black_oil=bo,
+            fluid=fl,
         )
         bc = BoundaryConditions(p_r=200, p_s=30, u=0.8)
         return SSDFSimulator(wp, bc, n_cells=5)

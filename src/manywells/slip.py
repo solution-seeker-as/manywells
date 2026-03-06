@@ -15,7 +15,7 @@ from dataclasses import dataclass
 import casadi as ca
 from manywells.ca_functions import ca_softmax
 from manywells.constants import STD_GRAVITY
-from manywells.pvt_dev.dead_oil import dead_oil_surface_tension
+from manywells.pvt.dead_oil import dead_oil_surface_tension
 
 
 def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, T):

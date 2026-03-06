@@ -24,7 +24,7 @@ from manywells.pvt import (
     liquid_mixture_viscosity,
     mixture_viscosity,
 )
-from manywells.pvt_dev.dead_oil import dead_oil_viscosity, dead_oil_surface_tension
+from manywells.pvt.dead_oil import dead_oil_viscosity, dead_oil_surface_tension
 
 
 def test_reference_conditions():

@@ -42,16 +42,15 @@ def test_calibrate_bernoulli_choke_model_recovers_K_c():
 
 def test_calibrate_inflow_model_vogel_unsupported_data():
     """calibrate_inflow_model with Vogel and valid data runs (no exception)."""
-    # Minimal data that matches Vogel: w_l = w_l_max * (1 - 0.2*r - 0.8*r**2)
-    vogel = Vogel(w_l_max=5.0, f_g=0.2)
+    f_g = 0.2
+    vogel = Vogel(w_l_max=5.0)
     data = pd.DataFrame(
         [
             {"p": 80.0, "p_r": 100.0, "w_l": 3.6, "w_g": 0.9},
             {"p": 50.0, "p_r": 100.0, "w_l": 4.375, "w_g": 1.09375},
         ]
     )
-    # Just check it returns a number (full calibration may be fragile)
-    result = calibrate_inflow_model(data, Vogel(w_l_max=4.0, f_g=0.2))
+    result = calibrate_inflow_model(data, Vogel(w_l_max=4.0), f_g=f_g)
     assert isinstance(result, (int, float))
     assert result >= 0
 
@@ -59,14 +58,15 @@ def test_calibrate_inflow_model_vogel_unsupported_data():
 def test_calibrate_inflow_model_pi_recovers_k_l():
     """Calibration of PI model with synthetic data recovers k_l."""
     k_l_true = 0.8
-    pi = ProductivityIndex(k_l=k_l_true, f_g=0.15)
+    f_g = 0.15
+    pi = ProductivityIndex(k_l=k_l_true)
     data = pd.DataFrame(
         [
-            {"p": 70.0, "p_r": 100.0, "w_l": pi.mass_flow_rates(70, 100)[0], "w_g": pi.mass_flow_rates(70, 100)[1]},
-            {"p": 60.0, "p_r": 100.0, "w_l": pi.mass_flow_rates(60, 100)[0], "w_g": pi.mass_flow_rates(60, 100)[1]},
+            {"p": 70.0, "p_r": 100.0, "w_l": pi.mass_flow_rates(70, 100, f_g)[0], "w_g": pi.mass_flow_rates(70, 100, f_g)[1]},
+            {"p": 60.0, "p_r": 100.0, "w_l": pi.mass_flow_rates(60, 100, f_g)[0], "w_g": pi.mass_flow_rates(60, 100, f_g)[1]},
         ]
     )
-    k_l_opt = calibrate_inflow_model(data, ProductivityIndex(k_l=0.5, f_g=0.15))
+    k_l_opt = calibrate_inflow_model(data, ProductivityIndex(k_l=0.5), f_g=f_g)
     assert k_l_opt == pytest.approx(k_l_true, rel=1e-3)
 
 
@@ -76,4 +76,4 @@ def test_calibrate_inflow_model_unsupported_type():
 
     data = pd.DataFrame([{"p": 80.0, "p_r": 100.0, "w_l": 1.0, "w_g": 0.2}])
     with pytest.raises(ValueError, match="not supported"):
-        calibrate_inflow_model(data, FixedFlowRate(w_l_const=1.0, w_g_const=0.2))
+        calibrate_inflow_model(data, FixedFlowRate(w_l_const=1.0, w_g_const=0.2), f_g=0.1)

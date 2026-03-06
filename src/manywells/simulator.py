@@ -20,9 +20,8 @@ from manywells.choke import ChokeModel, BernoulliChokeModel, SimpsonChokeModel
 from manywells.friction import friction_factor
 from manywells.inflow import InflowModel, ProductivityIndex, Vogel
 import manywells.pvt as pvt
-from manywells.pvt_dev.black_oil import BlackOilPVT
-from manywells.pvt_dev.dead_oil import dead_oil_viscosity
-import manywells.pvt_dev.fluid_mix as fluid_mix
+import manywells.pvt.fluid_mix as fluid_mix
+from manywells.pvt.fluid import FluidModel
 from manywells.slip import SlipModel
 
 
@@ -38,13 +37,8 @@ class WellProperties:
     L: float = 2000         # Length of vertical pipe (m)
     D: float = 0.1554       # Inner diameter of pipe (m). Default value ≃ 6.1 inch.
 
-    # Fluid properties
-    # TODO: Consider putting these properties into a fluid object
-    rho_l: float = 850      # Liquid density (kg/m³)
-    rho_o: float = 850      # Oil density at standard conditions (kg/m³). Used for viscosity via API gravity.
-    R_s: float = 518.3      # Specific gas constant (J/kg/K). Default value is for methane.
-    cp_g: float = 2225      # Specific heat capacity of gas (J/kg/K). Default value is for methane.
-    cp_l: float = 4180      # Specific heat capacity of liquid (J/kg/K). Default value is for water.
+    # Fluid model
+    fluid: FluidModel = field(default_factory=FluidModel.default)
 
     # Friction
     # Roughness of new/smooth Tubing: 0.0015 to 0.045 mm = 1.5e-6 to 4.5e-5 m
@@ -58,26 +52,15 @@ class WellProperties:
     slip: SlipModel = field(default_factory=SlipModel)
 
     # Productivity
-    inflow: InflowModel = field(default_factory=lambda: ProductivityIndex(k_l=0.5, f_g=0.1379))
+    inflow: InflowModel = field(default_factory=lambda: ProductivityIndex(k_l=0.5))
 
     # Choke model
     choke: ChokeModel = None
-
-    # Black oil PVT model (None = dead oil / no mass transfer)
-    black_oil: BlackOilPVT = None
 
     @property
     def A(self) -> float:
         # Compute cross-sectional area of pipe (m²)
         return np.pi * (self.D / 2) ** 2
-
-    @property
-    def f_o_in_liquid(self) -> float:
-        """Oil mass fraction in the liquid phase (oil / (oil + water))."""
-        if self.rho_o >= pvt.WATER.rho:
-            return 0.0
-        wlr = (self.rho_l - self.rho_o) / (pvt.WATER.rho - self.rho_o)
-        return (1 - wlr) * self.rho_o / self.rho_l
 
     def __post_init__(self):
         assert self.L > 0, 'Pipe length must be positive'
@@ -174,22 +157,23 @@ class SSDFSimulator:
         v_m = alpha * v_g + (1 - alpha) * v_l  # Mixture velocity
         C_0, v_inf = wp.slip.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, T, wp.D)  # Slip parameters
 
+        fl = wp.fluid
+
         # Closure relations
         g1 = v_g - C_0 * v_m - v_inf                # Slip relation
-        g2 = p - rho_g * wp.R_s * T / CF_PRES       # Equation of state for gas density
+        g2 = p - rho_g * fl.R_s * T / CF_PRES       # Equation of state for gas density
 
-        if wp.black_oil is not None:
-            bo = wp.black_oil
+        if fl.black_oil is not None:
+            bo = fl.black_oil
             p_Pa = p * CF_PRES
             Rs_i = bo.rs(p_Pa, T)
             Bo_i = bo.bo(p_Pa, T)
-            wlr = pvt.water_liquid_ratio(wp.rho_l, wp.rho_o, pvt.WATER.rho)
             rho_l_bo = fluid_mix.liquid_density_bo(
-                bo.rho_o_sc, bo.rho_g_sc, pvt.WATER.rho, Rs_i, Bo_i, wlr,
+                bo.rho_o_sc, bo.rho_g_sc, fl.rho_w, Rs_i, Bo_i, fl.wlr,
             )
             g3 = rho_l - rho_l_bo
         else:
-            g3 = rho_l - wp.rho_l                   # Liquid density (fixed)
+            g3 = rho_l - fl.rho_l                   # Liquid density (fixed)
 
         return [g1, g2, g3]
 
@@ -204,15 +188,17 @@ class SSDFSimulator:
         wp = self.wp
         bc = self.bc
 
-        # Inflow from reservoir
-        w_l, w_g = wp.inflow.mass_flow_rates(p, bc.p_r)
+        fl = wp.fluid
 
-        if wp.black_oil is not None:
-            bo = wp.black_oil
+        # Inflow from reservoir
+        w_l, w_g = wp.inflow.mass_flow_rates(p, bc.p_r, fl.f_g)
+
+        if fl.black_oil is not None:
+            bo = fl.black_oil
 
             # Decompose liquid inflow into oil and water components (symbolic)
             self._w_g_total = w_g
-            self._w_o = w_l * wp.f_o_in_liquid
+            self._w_o = w_l * fl.f_o_in_liquid
             self._w_l_inflow = w_l
 
             # Dissolved gas at bottomhole conditions
@@ -288,15 +274,11 @@ class SSDFSimulator:
         rho_m = alpha * rho_g + (1 - alpha) * rho_l  # Mixture density
         v_m = alpha * v_g + (1 - alpha) * v_l  # Mixture velocity
 
-        # Dynamic friction factor via viscosity and Reynolds number
-        api = pvt.api_from_density(wp.rho_o)
-        M_g = pvt.molecular_weight(wp.R_s)
-        wlr = (rho_l - wp.rho_o) / (pvt.WATER.rho - wp.rho_o) if wp.rho_o < pvt.WATER.rho else 0.0  # TODO: Update this after adding a fluid object to the class
+        fl = wp.fluid
 
-        mu_o = dead_oil_viscosity(api, T)
-        mu_w = pvt.water_viscosity(T)
-        mu_l = pvt.liquid_mixture_viscosity(mu_o, mu_w, wlr)
-        mu_g = pvt.gas_viscosity(T, rho_g, M_g)
+        # Dynamic friction factor via viscosity and Reynolds number
+        mu_l = fl.liquid_viscosity(T)
+        mu_g = fl.gas_viscosity(T, rho_g)
         mu_m = pvt.mixture_viscosity(mu_l, mu_g, alpha)
 
         Re = rho_m * ca.fabs(v_m) * wp.D / mu_m
@@ -308,7 +290,7 @@ class SSDFSimulator:
         dp_g = delta_z * STD_GRAVITY * rho_m
 
         T_a = bc.T_r - i * (bc.T_r - bc.T_s) / self.n_cells  # Linear profile for ambient temperature
-        cp_flux = wp.cp_g * alpha * rho_g * v_g + wp.cp_l * (1 - alpha) * rho_l * v_l
+        cp_flux = fl.cp_g * alpha * rho_g * v_g + fl.cp_l * (1 - alpha) * rho_l * v_l
 
         # Heat loss to surroundings
         dT_heat = delta_z * 4 * wp.h * (T - T_a) / (wp.D * cp_flux)
@@ -327,8 +309,8 @@ class SSDFSimulator:
         dT = dT_heat - dT_fric + dT_grav
 
         # Discretized differential equations
-        if wp.black_oil is not None:
-            bo = wp.black_oil
+        if fl.black_oil is not None:
+            bo = fl.black_oil
             p_Pa = p * CF_PRES
             Rs_i = bo.rs(p_Pa, T)
             w_g_free_i = fluid_mix.free_gas_flux(
@@ -358,24 +340,24 @@ class SSDFSimulator:
         """
         wp = self.wp
         bc = self.bc
+        fl = wp.fluid
 
-        rho_g = CF_PRES * p_0 / (wp.R_s * T_0)
-        w_l_inflow, w_g_inflow = wp.inflow.mass_flow_rates(p_0, bc.p_r)
+        rho_g = CF_PRES * p_0 / (fl.R_s * T_0)
+        w_l_inflow, w_g_inflow = wp.inflow.mass_flow_rates(p_0, bc.p_r, fl.f_g)
 
-        if wp.black_oil is not None:
-            bo = wp.black_oil
+        if fl.black_oil is not None:
+            bo = fl.black_oil
             p_Pa = p_0 * CF_PRES
 
             # Live oil density at bottomhole
             Rs_0 = float(bo.rs(p_Pa, T_0))
             Bo_0 = float(bo.bo(p_Pa, T_0))
-            wlr = pvt.water_liquid_ratio(wp.rho_l, wp.rho_o, pvt.WATER.rho)
             rho_l = float(fluid_mix.liquid_density_bo(
-                bo.rho_o_sc, bo.rho_g_sc, pvt.WATER.rho, Rs_0, Bo_0, wlr,
+                bo.rho_o_sc, bo.rho_g_sc, fl.rho_w, Rs_0, Bo_0, fl.wlr,
             ))
 
             # Mass-transfer adjusted flows
-            w_o = w_l_inflow * wp.f_o_in_liquid
+            w_o = w_l_inflow * fl.f_o_in_liquid
             r = Rs_0 * bo.rho_g_sc / bo.rho_o_sc
             w_dissolved = min(r * w_o, w_g_inflow)
             w_g = max(w_g_inflow + bc.w_lg - w_dissolved, 0.0)
@@ -386,7 +368,7 @@ class SSDFSimulator:
             self._w_o = w_o
             self._w_l_inflow = w_l_inflow
         else:
-            rho_l = wp.rho_l
+            rho_l = fl.rho_l
             w_g = w_g_inflow + bc.w_lg
             w_l = w_l_inflow
 
