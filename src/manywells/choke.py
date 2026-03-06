@@ -18,7 +18,7 @@ import numpy as np
 import casadi as ca
 
 from manywells.ca_functions import ca_max_approx
-from manywells.constants import CF_PRES
+from manywells.units import CF_BAR
 
 
 @dataclass
@@ -108,7 +108,7 @@ class ChokeModel(abc.ABC):
         """
         chk = self.choke_opening(u)
         p_c = ca_max_approx(self.cpr * p_in, p_out)  # Approximation of max(cpr * p_in, p_out)
-        dp = CF_PRES * (p_in - p_c)  # Pressure difference (Pa)
+        dp = CF_BAR * (p_in - p_c)  # Pressure difference (Pa)
         return self.K_c * chk * ca.sqrt(2 * rho * dp / multiplier)
 
     @abc.abstractmethod

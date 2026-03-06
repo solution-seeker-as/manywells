@@ -15,7 +15,8 @@ from copy import deepcopy
 
 import numpy as np
 
-from manywells.simulator import WellProperties, BoundaryConditions, STD_GRAVITY, CF_PRES
+from manywells.simulator import WellProperties, BoundaryConditions
+from manywells.units import STD_GRAVITY, CF_BAR
 from manywells.inflow import Vogel
 from manywells.choke import BernoulliChokeModel, SimpsonChokeModel
 import manywells.pvt as pvt
@@ -102,7 +103,7 @@ def sample_well(alpha = (1.0, 1.0, 0.5)) -> Well:
     # Reservoir pressure
     p_0 = 1  # Pressure at L = 0 in bar (if L = 0 is above sea level, p_0 = 1 atm ~ 1 bar)
     rho_water = (pvt.SEAWATER.rho + pvt.WATER.rho) / 2
-    bc.p_r = (1 / CF_PRES) * rho_water * STD_GRAVITY * wp.L + p_0  # Reservoir pressure in bar
+    bc.p_r = (1 / CF_BAR) * rho_water * STD_GRAVITY * wp.L + p_0  # Reservoir pressure in bar
 
     # Reservoir temperature
     T_0 = 273.15 + 60   # Reference reservoir temperature (K)

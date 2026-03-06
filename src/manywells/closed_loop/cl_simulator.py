@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from manywells.constants import STD_GRAVITY, CF_PRES
+from manywells.units import STD_GRAVITY, CF_BAR
 from manywells.choke import ChokeModel, BernoulliChokeModel, SimpsonChokeModel
 from manywells.simulator import SSDFSimulator, SimError, WellProperties, BoundaryConditions
 from manywells.ca_functions import ca_min_approx, ca_max_approx
@@ -250,7 +250,7 @@ if __name__ == '__main__':
     well_properties = WellProperties()
     well_properties.L = 2400
     boundary_conditions = BoundaryConditions(u=0.9)
-    boundary_conditions.pr = (1 / CF_PRES) * 1000 * STD_GRAVITY * well_properties.L + 1
+    boundary_conditions.pr = (1 / CF_BAR) * 1000 * STD_GRAVITY * well_properties.L + 1
     boundary_conditions.T_r = 273.15+60 + (well_properties.L - 1500) * 0.03
     print(well_properties.L)
     print(boundary_conditions.pr)
