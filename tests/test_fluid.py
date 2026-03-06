@@ -6,7 +6,7 @@ from manywells.pvt import (
     R_UNIVERSAL, P_REF, T_REF, WATER,
     density_from_api, api_from_density,
 )
-from manywells.pvt.black_oil import M_AIR
+from manywells.units import M_AIR
 from manywells.pvt.fluid import FluidModel
 
 
