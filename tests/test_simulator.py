@@ -11,6 +11,7 @@ from manywells.simulator import (
 )
 from manywells.choke import BernoulliChokeModel
 from manywells.inflow import ProductivityIndex
+from manywells.pvt.fluid import FluidModel
 from manywells.constants import STD_GRAVITY
 
 
@@ -98,7 +99,7 @@ def test_simulator_create_variables():
 @pytest.mark.slow
 def test_simulator_solve_small():
     """Simulator solve runs with minimal grid (may be slow)."""
-    wp = WellProperties(L=500, D=0.1, rho_l=800)
+    wp = WellProperties(L=500, D=0.1, fluid=FluidModel(api=45.0))
     bc = BoundaryConditions(p_r=120, p_s=30, u=0.8)
     sim = SSDFSimulator(wp, bc, n_cells=2)
     try:

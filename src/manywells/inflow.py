@@ -40,12 +40,13 @@ class InflowModel(abc.ABC):
     """
 
     @abc.abstractmethod
-    def mass_flow_rates(self, p, p_r):
+    def mass_flow_rates(self, p, p_r, f_g):
         """
         Compute mass flow rates given bottomhole pressure and reservoir pressure
 
         :param p: Bottomhole flowing pressure (bar)
         :param p_r: Reservoir pressure (bar)
+        :param f_g: Gas mass fraction (dimensionless), provided by FluidModel
         :return: Liquid and gas mass rates, (w_l, w_g)
         """
         pass
@@ -69,22 +70,21 @@ class ProductivityIndex(InflowModel):
     """
 
     k_l: float    # Liquid productivity index (kg/s/bar)
-    f_g: float    # Fraction of gas to total mass flow rate (dimensionless)
 
     def __post_init__(self):
         assert self.k_l >= 0, 'Liquid productivity index must be non-negative'
-        assert 0 < self.f_g < 1, 'Gas mass fraction must be in (0, 1)'
 
-    def mass_flow_rates(self, p, p_r):
+    def mass_flow_rates(self, p, p_r, f_g):
         """
         Compute inflow rates
 
         :param p: Bottomhole flowing pressure (bar)
         :param p_r: Reservoir pressure (bar)
+        :param f_g: Gas mass fraction (dimensionless)
         :return: Liquid and gas mass rates, (w_l, w_g)
         """
         w_l = self.k_l * (p_r - p)
-        w_g = (self.f_g / (1 - self.f_g)) * w_l
+        w_g = (f_g / (1 - f_g)) * w_l
         return w_l, w_g
 
 
@@ -99,30 +99,29 @@ class Vogel(InflowModel):
         w_g is gas mass flow rate (kg/s),
         p is bottomhole flowing pressure (bar),
         p_r is reservoir pressure (bar),
-        k_l is the maximum liquid flow rate (kg/s),
+        w_l_max is the maximum liquid flow rate (kg/s),
         f_g is the fraction of gas to total mass flow rate (dimensionless),
 
     Vogel's IPR is quadratic.
     """
 
     w_l_max: float    # Maximum liquid mass flow rate (kg/s)
-    f_g: float        # Fraction of gas to total mass flow rate (dimensionless)
 
     def __post_init__(self):
         assert self.w_l_max >= 0, 'Maximum liquid mass flow rate must be non-negative'
-        assert 0 < self.f_g < 1, 'Gas mass fraction must be in (0, 1)'
 
-    def mass_flow_rates(self, p, p_r):
+    def mass_flow_rates(self, p, p_r, f_g):
         """
         Compute mass flow rates
 
         :param p: Bottomhole flowing pressure (bar)
         :param p_r: Reservoir pressure (bar)
+        :param f_g: Gas mass fraction (dimensionless)
         :return: Liquid and gas mass flow rates, (w_l, w_g)
         """
         r = p / p_r
         w_l = self.w_l_max * (1 - 0.2 * r - 0.8 * r ** 2)
-        w_g = (self.f_g / (1 - self.f_g)) * w_l
+        w_g = (f_g / (1 - f_g)) * w_l
         return w_l, w_g
 
 
@@ -143,12 +142,13 @@ class FixedFlowRate(InflowModel):
         assert self.w_l_const >= 0, 'Liquid mass flow rate must be non-negative'
         assert self.w_g_const >= 0, 'Gas mass flow rate must be non-negative'
 
-    def mass_flow_rates(self, p, p_r):
+    def mass_flow_rates(self, p, p_r, f_g=None):
         """
         Compute mass flow rates
 
         :param p: Bottomhole flowing pressure (bar)
         :param p_r: Reservoir pressure (bar)
+        :param f_g: Ignored (flow rates are fixed)
         :return: Liquid and gas mass flow rates, (w_l, w_g)
         """
 

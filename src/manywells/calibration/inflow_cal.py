@@ -16,15 +16,14 @@ import casadi as ca
 from manywells.inflow import InflowModel, ProductivityIndex, Vogel
 
 
-def calibrate_inflow_model(data: pd.DataFrame, inflow_model: InflowModel):
+def calibrate_inflow_model(data: pd.DataFrame, inflow_model: InflowModel, f_g: float = 0.1):
     """
     Calibrate inflow model using least squares
 
-    TODO: Add calibration of f_g
-
-    :param data: DataFrame with columns (p, v_g, v_l, alpha, rho_g, rho_l, T, u, p_s)
+    :param data: DataFrame with columns (p, p_r, w_l, w_g)
     :param inflow_model: Inflow model
-    :return: list of equations
+    :param f_g: Gas mass fraction (passed to mass_flow_rates)
+    :return: Optimal parameter value
     """
     inflow_model = deepcopy(inflow_model)
 
@@ -53,7 +52,7 @@ def calibrate_inflow_model(data: pd.DataFrame, inflow_model: InflowModel):
         w_l = float(data_i['w_l'])
         w_g = float(data_i['w_g'])
 
-        w_l_sim, w_g_sim = inflow_model.mass_flow_rates(p, p_r)
+        w_l_sim, w_g_sim = inflow_model.mass_flow_rates(p, p_r, f_g)
 
         ls_objective += (w_l - w_l_sim)**2
 
