@@ -10,7 +10,7 @@ Utilities for doing various PVT (Pressure/Volume/Temperature) calculations
 """
 
 from dataclasses import dataclass
-
+import casadi as ca
 from manywells.units import R_UNIVERSAL, P_REF, T_REF
 
 
@@ -146,19 +146,26 @@ def liquid_mixture_viscosity(mu_o, mu_w, wlr):
     return wlr * mu_w + (1 - wlr) * mu_o
 
 
-def mixture_viscosity(mu_l, mu_g, alpha):
+def mixture_viscosity(mu_l, mu_g, alpha, method='geometric'):
     """
-    Volume-weighted gas-liquid mixture viscosity.
-    CasADi-compatible.
-    
-    TODO: Consider updating to geometric-weighted viscosity
+    Gas-liquid mixture viscosity. CasADi-compatible.
+
+    Supported methods:
+      - 'arithmetic': Volume-weighted arithmetic mean (Dukler et al. 1964).
+      - 'geometric':  Volume-weighted geometric mean (Arrhenius 1887).
 
     :param mu_l: Liquid viscosity (Pa·s)
     :param mu_g: Gas viscosity (Pa·s)
     :param alpha: Gas void fraction in [0, 1]
+    :param method: Mixing rule ('arithmetic' or 'geometric')
     :return: Mixture viscosity (Pa·s)
     """
-    return alpha * mu_g + (1 - alpha) * mu_l
+    if method == 'arithmetic':
+        return alpha * mu_g + (1 - alpha) * mu_l
+    elif method == 'geometric':
+        return ca.exp(alpha * ca.log(mu_g) + (1 - alpha) * ca.log(mu_l))
+    else:
+        raise ValueError(f"Unknown mixture viscosity method: {method}")
 
 
 ################################################
