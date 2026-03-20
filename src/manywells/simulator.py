@@ -285,9 +285,14 @@ class SSDFSimulator:
         Re = rho_m * ca.fabs(v_m) * wp.D / mu_m
         f_D = friction_factor(Re, wp.roughness / wp.D)
 
+        # Acceleration terms
         acc = alpha * rho_g * v_g ** 2 + (1 - alpha) * rho_l * v_l ** 2
         acc_prev = alpha_prev * rho_g_prev * v_g_prev ** 2 + (1 - alpha_prev) * rho_l_prev * v_l_prev ** 2
+        
+        # Frictional pressure drop
         dp_f = delta_z * (f_D / wp.D / 2) * rho_m * (v_m ** 2)
+        
+        # Gravitational pressure drop
         dp_g = delta_z * STD_GRAVITY * rho_m
 
         T_a = bc.T_r - i * (bc.T_r - bc.T_s) / self.n_cells  # Linear profile for ambient temperature
@@ -320,14 +325,14 @@ class SSDFSimulator:
             w_l_total_i = fluid_mix.liquid_flux(
                 self._w_l_inflow, self._w_o, self._w_g_total, Rs_i, bo.rho_g_sc, bo.rho_o_sc,
             )
-            g1 = wp.A * alpha * rho_g * v_g - w_g_free_i
-            g2 = wp.A * (1 - alpha) * rho_l * v_l - w_l_total_i
+            g1 = wp.A * alpha * rho_g * v_g - w_g_free_i                                        # Gas flux (free gas)
+            g2 = wp.A * (1 - alpha) * rho_l * v_l - w_l_total_i                                 # Liquid flux (oil + water + dissolved gas)
         else:
             g1 = alpha * rho_g * v_g - alpha_prev * rho_g_prev * v_g_prev                       # Constant flux of gas
             g2 = (1 - alpha) * rho_l * v_l - (1 - alpha_prev) * rho_l_prev * v_l_prev           # Constant flux of liquid
 
-        g3 = acc / CF_BAR + p - (acc_prev / CF_BAR + p_prev) + (dp_f + dp_g) / CF_BAR    # Momentum balance
-        g4 = T - T_prev + dT                                                                # Energy balance
+        g3 = acc / CF_BAR + p - (acc_prev / CF_BAR + p_prev) + (dp_f + dp_g) / CF_BAR           # Momentum balance
+        g4 = T - T_prev + dT                                                                    # Energy balance
 
         return [g1, g2, g3, g4]
 
@@ -402,23 +407,45 @@ class SSDFSimulator:
         x_vec = ca.vertcat(*[v_g, v_l, alpha])
         g_vec = ca.vertcat(*[g0, g1, g2])
 
-        # Solve system of equations using Ipopt
-        nlp = {'x': x_vec, 'f': 0, 'g': g_vec}
-        solver_config = {'ipopt.print_level': 0, 'print_time': 0}
-        solver = ca.nlpsol('S', 'ipopt', nlp, solver_config)
+        # Solve system of equations using Newton rootfinder
+        F = ca.Function('F_bc', [x_vec], [g_vec])
+        rf = ca.rootfinder('rf_bc', 'newton', F)
         alpha_guess = 0.5
         x_guess = [w_g / (wp.A * alpha_guess * rho_g), w_l / (wp.A * (1 - alpha_guess) * rho_l), alpha_guess]
-        result = solver(x0=x_guess, lbx=[0, 0, 0], ubx=[ca.inf, ca.inf, 1], lbg=[0, 0, 0], ubg=[0, 0, 0])
-        if not solver.stats()['success']:
-            print('Could not solve for alpha')
-            print('Solver status:', solver.stats())
-            raise SimError('compute_left_boundary_state: Could not solve for alpha')
+        try:
+            result = rf(x_guess)
+        except RuntimeError as e:
+            raise SimError(f'compute_left_boundary_state: rootfinder failed: {e}')
 
-        v_g, v_l, alpha = result['x'].full().flatten().tolist()
+        v_g, v_l, alpha = result.full().flatten().tolist()
 
         x_0 = [p_0, v_g, v_l, alpha, rho_g, rho_l, T_0]  # Order is important here!
 
         return x_0
+
+    def _build_cell_rootfinder(self):
+        """
+        Build a parametric Newton rootfinder for one cell step.
+
+        Constructs the symbolic graph once; the returned rootfinder is called
+        N times in _simulate_cellwise with different parameter values.
+
+        :return: CasADi rootfinder  rf(x_guess, params) -> x_solution
+                 where params = [x_prev (dim_x), cell_index (1)]
+        """
+        x_i = self._create_variables(0)
+        x_prev_sym = [ca.SX.sym(f'xp_{j}') for j in range(self.dim_x)]
+        cell_idx_sym = ca.SX.sym('ci')
+
+        g_diff = self._differential_equations(x_i, x_prev_sym, cell_idx_sym)
+        g_clos = self._closure_relations(x_i)
+
+        x_vec = ca.vertcat(*x_i)
+        g_vec = ca.vertcat(*(g_diff + g_clos))
+        p_vec = ca.vertcat(*x_prev_sym, cell_idx_sym)
+
+        F = ca.Function('F_cell', [x_vec, p_vec], [g_vec])
+        return ca.rootfinder('rf_cell', 'newton', F)
 
     def _simulate_cellwise(self, p_0, T_0):
         """
@@ -435,56 +462,21 @@ class SSDFSimulator:
         x_0 = self._compute_left_boundary_state(p_0, T_0)
         x += x_0
 
+        # Build rootfinder once, call it for each cell
+        rf = self._build_cell_rootfinder()
+
         for i in range(1, self.n_cells + 1):
-            # Variables for cell i
-            x_i = self._create_variables(i)
-
-            # Get state in previous cell
             x_i_prev = x[self.dim_x * (i - 1):self.dim_x * i]
+            x_guess = list(x_i_prev)
+            p_val = list(x_i_prev) + [float(i)]  # Parameter vector contains previous cell's state and cell index (these are fixed)
 
-            # Constraint list
-            g_i = list()
+            try:
+                result = rf(x_guess, p_val)  # Call rootfinder with initial guess on variables and vector of fixed parameters
+            except RuntimeError:
+                raise SimError(f'Cell-wise rootfinder failed at cell {i}')
 
-            # Get discretized differential equations
-            g_i += self._differential_equations(x_i, x_i_prev, i)
-
-            # Closure relations
-            g_i += self._closure_relations(x_i)
-
-            # Create variable and constraint vectors
-            x_vec = ca.vertcat(*x_i)
-            g_vec = ca.vertcat(*g_i)
-
-            # Initial guess on solution
-            x_guess = x_i_prev
-
-            # Variable bounds
-            # All variables must be non-negative: x >= 0
-            lbx = [0] * len(x_i)
-            ubx = [ca.inf] * len(x_i)  # We use ca.inf for unbounded variables
-            ubx[3] = 1  # alpha <= 1
-
-            # Constraint bounds
-            # Equality constraints, g(x) = 0, are implemented as: 0 <= g(x) <= 0
-            lbg = [0] * len(g_i)
-            ubg = [0] * len(g_i)
-
-            # Solve system of equations using Ipopt
-            f = 0  # We set the objective function, f, to zero to solve a feasibility problem
-            nlp = {'x': x_vec, 'f': f, 'g': g_vec}
-            solver_config = {'ipopt.print_level': 0, 'print_time': 0}
-            # solver_config = {}
-            solver = ca.nlpsol('S', 'ipopt', nlp, solver_config)
-            result = solver(x0=x_guess, lbx=lbx, ubx=ubx, lbg=lbg, ubg=ubg)
-            # print(result)
-            if not solver.stats()['success']:
-                # print('Failed during cellwise solve')
-                print('Solver status:', solver.stats())
-                raise SimError('Solve was not successful')
-
-            x_opt = result['x']
-            x_opt = x_opt.full().flatten().tolist()  # Convert solution to flat numpy array and then to a list
-            x += x_opt  # Add to list of results
+            x_opt = result.full().flatten().tolist()
+            x += x_opt
 
         return x
 
