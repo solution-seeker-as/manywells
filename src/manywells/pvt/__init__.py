@@ -11,13 +11,7 @@ Utilities for doing various PVT (Pressure/Volume/Temperature) calculations
 
 from dataclasses import dataclass
 
-import casadi as ca
-
-from manywells.units import (
-    R_UNIVERSAL, P_REF, T_REF,
-    CF_KGM3_TO_GCC, CF_UP,
-    kelvin_to_rankine,
-)
+from manywells.units import R_UNIVERSAL, P_REF, T_REF
 
 
 ################################################
@@ -68,31 +62,8 @@ See api_from_density() and density_from_api() for more details on how to convert
 
 
 ################################################
-# COMPUTATION AND CONVERSION METHODS
+# LIQUID UTILITIES AND API CONVERSIONS
 ################################################
-
-def specific_gas_constant(rho):
-    """
-    Compute the specific gas constant, denoted R_s with unit J / (kg K)
-    :param rho: Gas density at standard conditions
-    :return: specific gas constant
-    """
-    return P_REF / (rho * T_REF)
-
-
-def gas_density(R_s: float, p: float = P_REF, T: float = T_REF):
-    """
-    Compute gas density using ideal gas law:
-        density = p / (R_s T),
-    where R_s is the specific gas constant.
-
-    :param R_s: Specific gas constant (J/kg/K)
-    :param p: Pressure (Pa)
-    :param T: Temperature (K)
-    :return: density (kg/m³)
-    """
-    return p / (R_s * T)
-
 
 def liquid_mix(liquid_1: LiquidProperties, liquid_2: LiquidProperties, mass_fraction: float):
     """
@@ -160,50 +131,8 @@ def density_from_api(api):
 
 
 ################################################
-# VISCOSITY CORRELATIONS (CasADi-compatible)
+# MIXTURE VISCOSITY (general mixing rules)
 ################################################
-
-def molecular_weight(R_s):
-    """
-    Compute gas molecular weight from specific gas constant.
-
-    :param R_s: Specific gas constant (J/(kg·K))
-    :return: Molecular weight (g/mol)
-    """
-    return R_UNIVERSAL / R_s
-
-
-def water_viscosity(T):
-    """
-    Water viscosity using a Vogel-Fulcher-Tammann type correlation.
-    CasADi-compatible.
-
-    :param T: Temperature (K), may be a CasADi symbolic
-    :return: Water viscosity (Pa·s)
-    """
-    return 2.414e-5 * ca.power(10, 247.8 / (T - 140))
-
-
-def gas_viscosity(T, rho_g, M_g):
-    """
-    Gas viscosity using the Lee-Gonzalez-Eakin (1966) correlation.
-    CasADi-compatible.
-
-    Reference: Lee, A.L., Gonzalez, M.H. and Eakin, B.E., "The Viscosity of
-    Natural Gases", J Pet Technol 18 (1966): 997-1000.
-
-    :param T: Temperature (K), may be a CasADi symbolic
-    :param rho_g: Gas density (kg/m³), may be a CasADi symbolic
-    :param M_g: Molecular weight of gas (g/mol), float constant
-    :return: Gas viscosity (Pa·s)
-    """
-    T_R = kelvin_to_rankine(T)  # From Kelvin (K) to degrees Rankine (degR)
-    rho_gcc = rho_g * CF_KGM3_TO_GCC  # From kg/m³ to g/cm³
-    K = (9.4 + 0.02 * M_g) * ca.constpow(T_R, 1.5) / (209 + 19 * M_g + T_R)
-    X = 3.5 + 986 / T_R + 0.01 * M_g
-    Y = 2.4 - 0.2 * X
-    return K * ca.exp(X * ca.constpow(rho_gcc, Y)) * CF_UP  # Unit conversion: 1 micropoise is 1e-7 Pa·s
-
 
 def liquid_mixture_viscosity(mu_o, mu_w, wlr):
     """
@@ -229,7 +158,16 @@ def mixture_viscosity(mu_l, mu_g, alpha):
     :param alpha: Gas void fraction in [0, 1]
     :return: Mixture viscosity (Pa·s)
     """
-    # return ca.constpow(mu_l, 1 - alpha) * ca.constpow(mu_g, alpha)
     return alpha * mu_g + (1 - alpha) * mu_l
-    
 
+
+################################################
+# RE-EXPORTS from submodules
+################################################
+
+from manywells.pvt.gas import (  # noqa: E402, F401
+    specific_gas_constant, gas_density, gas_density_std,
+    gas_fvf, molecular_weight, gas_viscosity,
+)
+from manywells.pvt.water import water_fvf, water_viscosity  # noqa: E402, F401
+from manywells.pvt.dead_oil import dead_oil_viscosity, dead_oil_surface_tension  # noqa: E402, F401

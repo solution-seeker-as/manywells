@@ -3,10 +3,14 @@ Copyright (C) 2024 Solution Seeker AS - All Rights Reserved
 You may use, distribute and modify this code under the
 terms of the CC BY-NC 4.0 International Public License.
 
-Water formation volume factor (CasADi-compatible).
+Water thermophysical properties (CasADi-compatible).
+
+Formation volume factor and viscosity.
 """
 
-from manywells.pvt import P_REF
+import casadi as ca
+
+from manywells.units import P_REF
 
 
 def water_fvf(p, T, p_ref=P_REF, c_w=4.5e-10):
@@ -25,3 +29,14 @@ def water_fvf(p, T, p_ref=P_REF, c_w=4.5e-10):
     :return: Bw (dimensionless)
     """
     return 1.0 + c_w * (p - p_ref)
+
+
+def water_viscosity(T):
+    """
+    Water viscosity using a Vogel-Fulcher-Tammann type correlation.
+    CasADi-compatible.
+
+    :param T: Temperature (K), may be a CasADi symbolic
+    :return: Water viscosity (Pa·s)
+    """
+    return 2.414e-5 * ca.power(10, 247.8 / (T - 140))
