@@ -33,7 +33,7 @@ class ChokeModel(abc.ABC):
         sigma(u) is relative choke opening mapping u to [0, 1] (dimensionless)
         Phi is a two-phase correction multiplier (dimensionless)
         rho is a fluid density (kg/m³)
-        p_in and p_out are inlet and outlet pressure (Pa)
+        p_in and p_out are inlet and outlet pressure (bar)
         cpm is the critical pressure ration (dimensionless)
 
     See concrete implementations for different choices of multipliers and densities.
