@@ -44,6 +44,7 @@ class WellProperties:
     # Roughness of new/smooth Tubing: 0.0015 to 0.045 mm = 1.5e-6 to 4.5e-5 m
     # Roughness of commercial/welded steel: 0.045 mm = 4.5e-5 m
     roughness: float = 4.5e-5  # Pipe wall roughness (m). Default: commercial steel.
+    f_D: float = None          # Fixed Darcy friction factor (overrides roughness-based calculation when set)
 
     # Heat transfer
     h: float = 20.0         # Heat transfer coefficient (W/m²/K)
@@ -66,6 +67,8 @@ class WellProperties:
         assert self.L > 0, 'Pipe length must be positive'
         assert self.D > 0, 'Pipe diameter must be positive'
         assert self.roughness > 0, 'Pipe roughness must be positive'
+        if self.f_D is not None:
+            assert self.f_D > 0, 'Friction factor must be positive'
 
         # Initialize choke model if not provided
         if self.choke is None:
@@ -277,13 +280,14 @@ class SSDFSimulator:
 
         fl = wp.fluid
 
-        # Dynamic friction factor via viscosity and Reynolds number
-        mu_l = fl.liquid_viscosity(T)
-        mu_g = fl.gas_viscosity(T, rho_g)
-        mu_m = pvt.mixture_viscosity(mu_l, mu_g, alpha)
-
-        Re = rho_m * ca.fabs(v_m) * wp.D / mu_m
-        f_D = friction_factor(Re, wp.roughness / wp.D)
+        if wp.f_D is not None:
+            f_D = wp.f_D
+        else:
+            mu_l = fl.liquid_viscosity(T)
+            mu_g = fl.gas_viscosity(T, rho_g)
+            mu_m = pvt.mixture_viscosity(mu_l, mu_g, alpha)
+            Re = rho_m * ca.fabs(v_m) * wp.D / mu_m
+            f_D = friction_factor(Re, wp.roughness / wp.D)
 
         # Acceleration terms
         acc = alpha * rho_g * v_g ** 2 + (1 - alpha) * rho_l * v_l ** 2
