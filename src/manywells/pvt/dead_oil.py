@@ -34,9 +34,13 @@ def dead_oil_viscosity(api, T):
 
 def dead_oil_surface_tension(rho, T):
     """
-    Correlation for dead oil surface tension from paper "Estimation of gas-oil surface tension" by Abdul-Majeed & Al-Soof (2000)
+    Correlation for dead oil surface tension.
 
-    The correlation gives surface tension in dyn/cm, which can be converted to SI units as 1 dyn/cm = 0.001 J/m².
+    Reference: Abdul-Majeed, G.H. and Al-Soof, N.B.A., "Estimation of gas-oil
+    surface tension", J Pet Sci Eng 27 (2000): 197-200.
+
+    The correlation gives surface tension in dyn/cm, which can be converted 
+    to SI units as 1 dyn/cm = 0.001 J/m².
 
     :param rho: Density of oil (kg/m³)
     :param T: Temperature (K)
