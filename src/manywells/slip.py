@@ -36,7 +36,7 @@ def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, T):
         C4: alpha >= 0.25
 
     This is a simplified version of the flow regime hierarchy in "Simplified two-phase flow modeling in wellbores" by
-    Hasan, Kabir & Sayarpur (2010). One simplification is that slug and churn flow has been combined into one class.
+    Hasan, Kabir & Sayarpour (2010). One simplification is that slug and churn flow has been combined into one class.
     Condition C1 and C3 are Eq. 19 and Eq. 18 in the paper, respectively.
 
     Above, v_gs and v_ls are the superficial gas and liquid velocities, computed as:
@@ -86,9 +86,9 @@ def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, T):
     annular_boundary = 3.1 * (STD_GRAVITY * sigma * (rho_l - rho_g) / rho_g ** 2) ** (1 / 4)
 
     # Conditions in flow regime hierarchy
-    c_1 = ca.tanh(v_gs - annular_boundary)  # Eq. A-19 in Hasan, Kabir & Sayarpur (2010)
+    c_1 = ca.tanh(v_gs - annular_boundary)  # Eq. A-19 in Hasan, Kabir & Sayarpour (2010)
     c_2 = ca.tanh((alpha - 0.7) * 2)  # Multiplied by 2 to increase sensitivity
-    c_3 = ca.tanh(v_gs - 1.08 * v_ls)  # Eq. A-18 in Hasan, Kabir & Sayarpur (2010)
+    c_3 = ca.tanh(v_gs - 1.08 * v_ls)  # Eq. A-18 in Hasan, Kabir & Sayarpour (2010)
     c_4 = ca.tanh((alpha - 0.25) * 2)  # Multiplied by 2 to increase sensitivity
 
     # Output layer
@@ -111,7 +111,7 @@ class SlipModel:
     where the parameters C_0 and v_inf are determined based on the flow regime (bubbly, slug / churn, or annular flow).
 
     Inspired by the slip model in the paper "Simplified two-phase flow modeling in wellbores"
-    by Hasan, Kabir & Sayarpur (2010).
+    by Hasan, Kabir & Sayarpour (2010).
     """
 
     # Profile parameter for different flow regimes
