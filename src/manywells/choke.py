@@ -168,7 +168,11 @@ class SimpsonChokeModel(ChokeModel):
     @staticmethod
     def simpson_multiplier(x_g, rho_g, rho_l):
         """
-        Compute two-phase correction multiplier of Simpson et al. (1983)
+        Compute two-phase correction multiplier of Simpson et al.
+
+        Reference: Simpson, H.C., Rooney, D.H. and Grattan, E., "Two-phase flow
+        through gate valves and orifice plates", Int. Conf. Physical Modelling of
+        Multi-Phase Flow, Coventry, England (1983): 57-76.
 
         Using Simpson's multiplier with liquid density, is equivalent to using the momentum density
             1 / rho_e = (x_g / rho_g + k * (x_l / rho_l)) * (x_g + x_l / k),
