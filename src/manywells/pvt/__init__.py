@@ -154,6 +154,9 @@ def mixture_viscosity(mu_l, mu_g, alpha, method='geometric'):
       - 'arithmetic': Volume-weighted arithmetic mean (Dukler et al. 1964).
       - 'geometric':  Volume-weighted geometric mean (Arrhenius 1887).
 
+    TODO: Consider using mass-weighted arithmetic mean for mixture viscosity
+          as done in "Simplified two-phase flow modeling in wellbores" by Hasan et al. (2010)
+
     :param mu_l: Liquid viscosity (Pa·s)
     :param mu_g: Gas viscosity (Pa·s)
     :param alpha: Gas void fraction in [0, 1]
