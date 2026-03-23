@@ -116,6 +116,36 @@ def test_simulator_solve_small():
         pytest.skip("Simulator solve failed (e.g. Ipopt not available or no solution)")
 
 
+@pytest.mark.slow
+def test_simulator_solve_l_shaped():
+    """Simulator converges for an L-shaped well (2000 m vertical, gradual build, 1000 m horizontal)."""
+    R = 250.0
+    md_survey = [0.0, 2000.0]
+    tvd_survey = [0.0, 2000.0]
+    for t in np.linspace(0, np.pi / 2, 6)[1:]:
+        md_survey.append(2000.0 + R * t)
+        tvd_survey.append(2000.0 + R * np.sin(t))
+    md_survey.append(md_survey[-1] + 1000.0)
+    tvd_survey.append(tvd_survey[-1])
+
+    geo = WellGeometry(md_survey=md_survey, tvd_survey=tvd_survey, n_cells=50)
+    wp = WellProperties(geometry=geo, fluid=FluidModel(api=35.0))
+    bc = BoundaryConditions(p_r=200, p_s=20, u=0.8)
+    sim = SSDFSimulator(wp, bc)
+    try:
+        result = sim.simulate()
+        assert result is not None
+        n_vars = (sim.n_cells + 1) * sim.dim_x
+        assert len(result) == n_vars
+
+        df = sim.solution_as_df(result)
+        assert df["p"].iloc[0] > df["p"].iloc[-1]  # pressure decreases bottom to top
+        assert all(df["alpha"] >= 0) and all(df["alpha"] <= 1)
+        assert "md" in df.columns and "tvd" in df.columns
+    except SimError:
+        pytest.skip("Simulator solve failed for L-shaped geometry")
+
+
 # ---------------------------------------------------------------------------
 # Energy equation thermal term tests
 # ---------------------------------------------------------------------------
@@ -275,3 +305,46 @@ class TestWellGeometry:
         assert geo.md[-1] == pytest.approx(0.0)
         assert geo.tvd[0] == pytest.approx(2000.0)
         assert geo.tvd[-1] == pytest.approx(0.0)
+
+    def test_l_shaped_geometry(self):
+        """L-shaped well: 2000 m vertical, gradual build, 1000 m horizontal."""
+        R = 250.0  # build-section radius of curvature (m)
+
+        # Survey: vertical → circular arc (vertical to horizontal) → horizontal
+        md_survey = [0.0, 2000.0]
+        tvd_survey = [0.0, 2000.0]
+
+        n_arc = 5
+        theta = np.linspace(0, np.pi / 2, n_arc + 1)[1:]
+        for t in theta:
+            md_survey.append(2000.0 + R * t)
+            tvd_survey.append(2000.0 + R * np.sin(t))
+
+        md_toe = md_survey[-1] + 1000.0
+        tvd_toe = tvd_survey[-1]
+        md_survey.append(md_toe)
+        tvd_survey.append(tvd_toe)
+
+        n_cells = 100
+        geo = WellGeometry(md_survey=md_survey, tvd_survey=tvd_survey, n_cells=n_cells)
+
+        assert geo.L == pytest.approx(md_toe)
+        assert len(geo.cos_incl) == n_cells
+        assert len(geo.md) == n_cells + 1
+
+        # Simulator order: index 0 = toe, index -1 = surface
+        assert geo.md[0] == pytest.approx(md_toe)
+        assert geo.md[-1] == pytest.approx(0.0)
+        assert geo.tvd[0] == pytest.approx(2000.0 + R)
+        assert geo.tvd[-1] == pytest.approx(0.0)
+
+        # cos_incl in vertical section (near-surface cells = high index) ≈ 1
+        for c in geo.cos_incl[-20:]:
+            assert c == pytest.approx(1.0, abs=0.01)
+
+        # cos_incl in horizontal section (near-toe cells = low index) ≈ 0
+        for c in geo.cos_incl[:20]:
+            assert c == pytest.approx(0.0, abs=0.01)
+
+        # All inclinations are physically valid
+        assert all(0 - 1e-9 <= c <= 1 + 1e-9 for c in geo.cos_incl)

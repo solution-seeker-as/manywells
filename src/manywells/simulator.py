@@ -35,7 +35,7 @@ class SimError(Exception):
 class WellProperties:
 
     # Well geometry
-    geometry: WellGeometry = field(default_factory=lambda: WellGeometry.vertical(2000, 100))
+    geometry: WellGeometry = field(default_factory=lambda: WellGeometry.vertical(length=2000, n_cells=100))
 
     # Fluid model
     fluid: FluidModel = field(default_factory=FluidModel.default)
@@ -45,7 +45,6 @@ class WellProperties:
     # Roughness of commercial/welded steel: 0.045 mm = 4.5e-5 m
     roughness: float = 4.5e-5  # Pipe wall roughness (m). Default: commercial steel.
     f_D: float = None          # Fixed Darcy friction factor (overrides roughness-based calculation when set)
-    friction_model: str = 'default'  # 'default' (Haaland + geometric viscosity) or 'hasan2010' (Chen + Cicchitti)
 
     # Heat transfer
     h: float = 20.0         # Heat transfer coefficient (W/m²/K)
