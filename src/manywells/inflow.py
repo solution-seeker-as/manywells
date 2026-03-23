@@ -15,25 +15,6 @@ import abc
 from dataclasses import dataclass
 
 
-def compute_gas_mass_fraction(q_l, q_g, rho_l, rho_g):
-    """
-    Compute gas mass fraction from volumetric flow rates and densities
-        f_g = w_g / (w_l + w_g) = (rho_g * q_g) / (rho_l * q_l + rho_g * q_g)
-
-    Note that q_l, q_g, rho_l, rho_g must be specified for the same conditions (pressure and temperature).
-    For example, all can be specified for standard reference conditions (see pvt.py).
-
-    Note that the gas mass fraction is not the same as the gas volumetric fraction.
-
-    :param q_l: Volumetric flow rate of liquid (m³/s)
-    :param q_g: Volumetric flow rate of gas (m³/s)
-    :param rho_l: Density of liquid (kg/m³)
-    :param rho_g: Density of gas (kg/m³)
-    :return: Gas mass fraction, f_g (dimensionless)
-    """
-    return (rho_g * q_g) / (rho_l * q_l + rho_g * q_g)
-
-
 class InflowModel(abc.ABC):
     """
     Abstract representation of an inflow model.

@@ -37,7 +37,7 @@ uv run pytest tests/ -v -m "not slow"
 | **test_pvt.py** | Reference conditions, fluids, `specific_gas_constant`, `gas_density`, `liquid_mix`, `water_liquid_ratio`, API/density conversions, `dead_oil_surface_tension` |
 | **test_ca_functions.py** | `ca_max_approx`, `ca_min_approx`, `ca_softmax`, `ca_sigmoid`, `ca_double_sigmoid` |
 | **test_choke.py** | `ChokeModel` (critical pressure ratio, choke openings, invalid profile/K_c), `BernoulliChokeModel`, `SimpsonChokeModel`, `is_choked` |
-| **test_inflow.py** | `compute_gas_mass_fraction`, `ProductivityIndex`, `Vogel`, `FixedFlowRate` |
+| **test_inflow.py** | `ProductivityIndex`, `Vogel`, `FixedFlowRate` |
 | **test_slip.py** | `classify_flow_regime`, `SlipModel` (Harmathy, Taylor, `identify_parameters`, `slip_equation`, `flow_regime`) |
 | **test_simulator.py** | `WellProperties`, `BoundaryConditions`, `SSDFSimulator` (construction, variables, `solution_as_df`), optional `@pytest.mark.slow` full solve |
 | **test_calibration.py** | `calibrate_bernoulli_choke_model`, `calibrate_inflow_model` (PI and Vogel), and error cases |

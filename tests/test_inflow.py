@@ -3,36 +3,11 @@
 import pytest
 
 from manywells.inflow import (
-    compute_gas_mass_fraction,
     InflowModel,
     ProductivityIndex,
     Vogel,
     FixedFlowRate,
 )
-
-
-def test_compute_gas_mass_fraction():
-    """Gas mass fraction from volumetric rates and densities."""
-    q_l, q_g = 0.01, 0.005  # m³/s
-    rho_l, rho_g = 800.0, 1.2  # kg/m³
-    f_g = compute_gas_mass_fraction(q_l, q_g, rho_l, rho_g)
-    w_l = rho_l * q_l
-    w_g = rho_g * q_g
-    expected = w_g / (w_l + w_g)
-    assert f_g == pytest.approx(expected)
-    assert 0 < f_g < 1
-
-
-def test_compute_gas_mass_fraction_pure_liquid():
-    """Zero gas flow gives zero gas mass fraction."""
-    f_g = compute_gas_mass_fraction(0.01, 0.0, 800.0, 1.2)
-    assert f_g == 0.0
-
-
-def test_compute_gas_mass_fraction_pure_gas():
-    """Zero liquid flow gives gas mass fraction 1."""
-    f_g = compute_gas_mass_fraction(0.0, 0.01, 800.0, 1.2)
-    assert f_g == 1.0
 
 
 def test_productivity_index_init_valid():
