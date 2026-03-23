@@ -6,7 +6,7 @@ terms of the CC BY-NC 4.0 International Public License.
 Created 08 August 2024
 Erlend Lundby, erlend@solutionseeker.no
 
-Implementation of the steady-state drift flux model for two-phase flow in vertical wells
+Implementation of the steady-state drift flux model for two-phase flow in wellbores
 
 - Mainly based on simulator.py
 - Making control inputs (choke opening and gas lift) symbolic variables   (decision variables)
@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from manywells.geometry import WellGeometry
 from manywells.units import STD_GRAVITY, CF_BAR
 from manywells.choke import ChokeModel, BernoulliChokeModel, SimpsonChokeModel
 from manywells.simulator import SSDFSimulator, SimError, WellProperties, BoundaryConditions
@@ -28,9 +29,8 @@ class ClosedLoopWellSimulator(SSDFSimulator):
     """
     Simulator for wells operating in closed loop
     """
-    def __init__(self, well_properties: WellProperties, boundary_conditions: BoundaryConditions, feedback: bool = True,
-                 n_cells: int = 100):
-        super().__init__(well_properties, boundary_conditions, n_cells)
+    def __init__(self, well_properties: WellProperties, boundary_conditions: BoundaryConditions, feedback: bool = True):
+        super().__init__(well_properties, boundary_conditions)
         self.feedback = feedback
 
     def _compute_left_boundary_state(self, p_0, T_0):
@@ -85,6 +85,7 @@ class ClosedLoopWellSimulator(SSDFSimulator):
         """
         wp = self.wp
         bc = self.bc
+        A = self.geo.A
 
         if self.feedback:
             controller_state = ca.SX.sym('controller_state')
@@ -184,18 +185,18 @@ class ClosedLoopWellSimulator(SSDFSimulator):
             if isinstance(self.wp.choke, BernoulliChokeModel):
                 rho_m = x[-4] * x[-3] + (1 - x[-4]) * x[-2]  # Mixture density alpha*rho_g + (1-alpha)*rho_l
                 w_m = self.wp.choke.mass_flow_rate(self.bc.u, x[-7], bc.p_s, rho_m)  # Used to generate dataset v6
-                w_g = self.wp.A * x[-4] * x[-3] * x[-6]  # A*alpha*rho_g*v_g
+                w_g = A * x[-4] * x[-3] * x[-6]  # A*alpha*rho_g*v_g
                 w_l = w_m - w_g
             elif isinstance(self.wp.choke, SimpsonChokeModel):
-                w_g = self.wp.A * x[-4] * x[-3] * x[-6]  # A*alpha*rho_g*v_g
-                w_l = self.wp.A * (1 - x[-4]) * x[-2] * x[-5]  # A*(1-alpha)*rho_l*v_l
+                w_g = A * x[-4] * x[-3] * x[-6]  # A*alpha*rho_g*v_g
+                w_l = A * (1 - x[-4]) * x[-2] * x[-5]  # A*(1-alpha)*rho_l*v_l
                 x_g = w_g / (w_g + w_l)  # Mass fraction of gas wg/w,
                 w_m = self.wp.choke.mass_flow_rate(self.bc.u, x[-7], self.bc.p_s, x_g, x[-3], x[-2])
                 w_l = w_m - w_g
             else:
                 raise ValueError('Unsupported choke model')
 
-            # w_g = self.wp.A * x[-4] * x[-3] * x[-6]  # A*alpha*rho_g*v_g
+            # w_g = A * x[-4] * x[-3] * x[-6]  # A*alpha*rho_g*v_g
 
             f = (w_m - wtot_ref) ** 2 + self.bc.w_lg ** 2
             if x_gu is None:
@@ -247,14 +248,16 @@ if __name__ == '__main__':
     ###########################################################################
     # Create a new well (using default values)
     ###########################################################################
-    well_properties = WellProperties()
-    well_properties.L = 2400
+    L = 2400
+    n_cells = int(L / 10)
+    geo = WellGeometry.vertical(L, n_cells)
+    well_properties = WellProperties(geometry=geo)
     boundary_conditions = BoundaryConditions(u=0.9)
-    boundary_conditions.pr = (1 / CF_BAR) * 1000 * STD_GRAVITY * well_properties.L + 1
-    boundary_conditions.T_r = 273.15+60 + (well_properties.L - 1500) * 0.03
-    print(well_properties.L)
+    boundary_conditions.pr = (1 / CF_BAR) * 1000 * STD_GRAVITY * geo.L + 1
+    boundary_conditions.T_r = 273.15+60 + (geo.L - 1500) * 0.03
+    print(geo.L)
     print(boundary_conditions.pr)
-    sim = ClosedLoopWellSimulator(well_properties, boundary_conditions, n_cells=int(well_properties.L/10))
+    sim = ClosedLoopWellSimulator(well_properties, boundary_conditions)
     sim.feedback = True
 
     ###########################################################################
@@ -267,7 +270,7 @@ if __name__ == '__main__':
     print('WLG')
     print(ca.fmax(0, x[-1]-1))
     print('---------------')
-    #a =(1 - x[3])*x[5]*x[2]*well_properties.A
+    #a =(1 - x[3])*x[5]*x[2]*geo.A
     #print(a)
     # Convert solution to DataFrame
     df = sim.solution_as_df(x)
@@ -277,9 +280,8 @@ if __name__ == '__main__':
     ###########################################################################
 
     # Plot solution from cell-wise simulation
-    df['w_g'] = well_properties.A * df['alpha'] * df['rho_g'] * df['v_g']  # Gas mass flow rates
-    df['w_l'] = well_properties.A * (1 - df['alpha']) * df['rho_l'] * df['v_l']  # Liquid mass flow rates
-    df['tvd'] = well_properties.L - df['z']  # True vertical depth
+    df['w_g'] = geo.A * df['alpha'] * df['rho_g'] * df['v_g']  # Gas mass flow rates
+    df['w_l'] = geo.A * (1 - df['alpha']) * df['rho_l'] * df['v_l']  # Liquid mass flow rates
     pd.set_option('display.max_columns', None)
     print(df)
 

@@ -3,6 +3,7 @@
 import pytest
 import numpy as np
 
+from manywells.geometry import WellGeometry
 from manywells.simulator import (
     SimError,
     WellProperties,
@@ -16,33 +17,34 @@ from manywells.units import STD_GRAVITY
 
 
 def test_well_properties_defaults():
-    """WellProperties has expected defaults and A property."""
+    """WellProperties has expected defaults via its geometry."""
     wp = WellProperties()
-    assert wp.L == 2000
-    assert wp.D == pytest.approx(0.1554)
-    assert wp.A == pytest.approx(np.pi * (wp.D / 2) ** 2)
+    geo = wp.geometry
+    assert geo.L == 2000
+    assert geo.D == pytest.approx(0.1554)
+    assert geo.A == pytest.approx(np.pi * (geo.D / 2) ** 2)
 
 
-def test_well_properties_invalid_L():
-    """WellProperties rejects non-positive length."""
-    with pytest.raises(AssertionError, match="Pipe length"):
-        WellProperties(L=0)
-    with pytest.raises(AssertionError, match="Pipe length"):
-        WellProperties(L=-1)
+def test_well_geometry_invalid_D():
+    """WellGeometry rejects non-positive diameter."""
+    with pytest.raises(ValueError, match="diameter"):
+        WellGeometry.vertical(2000, 100, D=0)
 
 
-def test_well_properties_invalid_D():
-    """WellProperties rejects non-positive diameter."""
-    with pytest.raises(AssertionError, match="Pipe diameter"):
-        WellProperties(D=0)
+def test_well_geometry_invalid_n_cells():
+    """WellGeometry rejects n_cells < 1."""
+    with pytest.raises(ValueError, match="n_cells"):
+        WellGeometry.vertical(2000, 0)
 
 
 def test_well_properties_choke_default():
-    """WellProperties gets default BernoulliChokeModel when choke is None."""
+    """Choke default is set during SSDFSimulator init using geometry.A."""
     wp = WellProperties()
+    bc = BoundaryConditions()
+    sim = SSDFSimulator(wp, bc)
     assert wp.choke is not None
     assert isinstance(wp.choke, BernoulliChokeModel)
-    assert wp.choke.K_c == pytest.approx(0.1 * wp.A)
+    assert wp.choke.K_c == pytest.approx(0.1 * wp.geometry.A)
 
 
 def test_boundary_conditions_defaults():
@@ -78,9 +80,10 @@ def test_boundary_conditions_negative_lift_gas():
 
 def test_simulator_construction():
     """SSDFSimulator constructs with well and boundary conditions."""
-    wp = WellProperties(L=100, D=0.1)
+    geo = WellGeometry.vertical(100, 5, D=0.1)
+    wp = WellProperties(geometry=geo)
     bc = BoundaryConditions(p_r=150, p_s=25)
-    sim = SSDFSimulator(wp, bc, n_cells=5)
+    sim = SSDFSimulator(wp, bc)
     assert sim.n_cells == 5
     assert sim.dim_x == 7
     assert sim.variable_names == ["p", "v_g", "v_l", "alpha", "rho_g", "rho_l", "T"]
@@ -88,9 +91,10 @@ def test_simulator_construction():
 
 def test_simulator_create_variables():
     """_create_variables returns 7 symbols per cell."""
-    wp = WellProperties(L=100, D=0.1)
+    geo = WellGeometry.vertical(100, 2, D=0.1)
+    wp = WellProperties(geometry=geo)
     bc = BoundaryConditions()
-    sim = SSDFSimulator(wp, bc, n_cells=2)
+    sim = SSDFSimulator(wp, bc)
     x0 = sim._create_variables(0)
     assert len(x0) == 7
     assert all(hasattr(v, "name") for v in x0)
@@ -99,9 +103,10 @@ def test_simulator_create_variables():
 @pytest.mark.slow
 def test_simulator_solve_small():
     """Simulator solve runs with minimal grid (may be slow)."""
-    wp = WellProperties(L=500, D=0.1, fluid=FluidModel(api=45.0))
+    geo = WellGeometry.vertical(500, 2, D=0.1)
+    wp = WellProperties(geometry=geo, fluid=FluidModel(api=45.0))
     bc = BoundaryConditions(p_r=120, p_s=30, u=0.8)
-    sim = SSDFSimulator(wp, bc, n_cells=2)
+    sim = SSDFSimulator(wp, bc)
     try:
         result = sim.simulate()
         assert result is not None
@@ -190,17 +195,83 @@ class TestEnergyEquationTerms:
 
 
 def test_simulator_solution_as_df_shape():
-    """solution_as_df returns DataFrame with expected columns and z when given state list."""
-    wp = WellProperties(L=100, D=0.1)
+    """solution_as_df returns DataFrame with expected columns including md/tvd."""
+    geo = WellGeometry.vertical(100, 3, D=0.1)
+    wp = WellProperties(geometry=geo)
     bc = BoundaryConditions()
-    sim = SSDFSimulator(wp, bc, n_cells=3)
+    sim = SSDFSimulator(wp, bc)
     # Build a physical dummy state [p, v_g, v_l, alpha, rho_g, rho_l, T] per cell (rho_l > rho_g for flow regime)
-    n_cells = sim.n_cells + 1
+    n_nodes = sim.n_cells + 1
     dummy_state = []
-    for _ in range(n_cells):
+    for _ in range(n_nodes):
         dummy_state.extend([50.0, 5.0, 2.0, 0.3, 50.0, 700.0, 300.0])
     df = sim.solution_as_df(dummy_state)
     assert "z" in df.columns
+    assert "md" in df.columns
+    assert "tvd" in df.columns
     for name in sim.variable_names:
         assert name in df.columns
     assert len(df) == sim.n_cells + 1
+
+
+# ---------------------------------------------------------------------------
+# WellGeometry tests
+# ---------------------------------------------------------------------------
+
+
+class TestWellGeometry:
+    """Tests for the WellGeometry dataclass."""
+
+    def test_vertical_geometry(self):
+        """Vertical well: MD == TVD, cos_incl == 1 everywhere."""
+        geo = WellGeometry.vertical(2000, 100)
+        assert geo.L == 2000
+        assert geo.n_cells == 100
+        assert len(geo.md) == 101
+        assert len(geo.tvd) == 101
+        assert len(geo.cos_incl) == 100
+        assert all(c == pytest.approx(1.0) for c in geo.cos_incl)
+
+    def test_deviated_geometry(self):
+        """Deviated well: cos_incl < 1 in deviated sections."""
+        md = [0, 500, 1000, 2000]
+        tvd = [0, 500, 800, 1200]
+        geo = WellGeometry(md_survey=md, tvd_survey=tvd, n_cells=10)
+        assert geo.L == 2000
+        # Not all cos_incl should be 1.0 (deviated sections)
+        assert any(c < 0.99 for c in geo.cos_incl)
+
+    def test_md_geq_tvd_validation(self):
+        """MD must be >= TVD at every survey station."""
+        with pytest.raises(ValueError, match="MD must be >= TVD"):
+            WellGeometry(md_survey=[0, 100], tvd_survey=[0, 200], n_cells=5)
+
+    def test_non_monotonic_md_rejected(self):
+        """Non-monotonic MD is rejected."""
+        with pytest.raises(ValueError, match="strictly increasing"):
+            WellGeometry(md_survey=[0, 100, 50], tvd_survey=[0, 100, 50], n_cells=5)
+
+    def test_origin_validation(self):
+        """Survey must start at (0, 0)."""
+        with pytest.raises(ValueError, match="start at 0"):
+            WellGeometry(md_survey=[10, 100], tvd_survey=[10, 100], n_cells=5)
+
+    def test_frozen(self):
+        """WellGeometry instances are immutable."""
+        geo = WellGeometry.vertical(1000, 10)
+        with pytest.raises(AttributeError):
+            geo.D = 0.2
+
+    def test_tvd_frac_bounds(self):
+        """tvd_frac is 1.0 at the bottom (index 0) and 0.0 at the surface (last index)."""
+        geo = WellGeometry.vertical(2000, 50)
+        assert geo.tvd_frac[0] == pytest.approx(1.0)
+        assert geo.tvd_frac[-1] == pytest.approx(0.0)
+
+    def test_simulator_order(self):
+        """md[0] is the deepest point, md[-1] is the surface."""
+        geo = WellGeometry.vertical(2000, 10)
+        assert geo.md[0] == pytest.approx(2000.0)
+        assert geo.md[-1] == pytest.approx(0.0)
+        assert geo.tvd[0] == pytest.approx(2000.0)
+        assert geo.tvd[-1] == pytest.approx(0.0)

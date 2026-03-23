@@ -6,7 +6,7 @@ terms of the CC BY-NC 4.0 International Public License.
 Created 02 February 2024
 Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
-Implementation of the steady-state drift flux model for two-phase flow in vertical wells
+Implementation of the steady-state drift flux model for two-phase flow in wellbores
 """
 
 from dataclasses import dataclass, field
@@ -15,6 +15,7 @@ import casadi as ca
 import numpy as np
 import pandas as pd
 
+from manywells.geometry import WellGeometry
 from manywells.units import STD_GRAVITY, CF_BAR
 from manywells.choke import ChokeModel, BernoulliChokeModel, SimpsonChokeModel
 from manywells.friction import friction_factor
@@ -34,8 +35,7 @@ class SimError(Exception):
 class WellProperties:
 
     # Well geometry
-    L: float = 2000         # Length of vertical pipe (m)
-    D: float = 0.1554       # Inner diameter of pipe (m). Default value ≃ 6.1 inch.
+    geometry: WellGeometry = field(default_factory=lambda: WellGeometry.vertical(2000, 100))
 
     # Fluid model
     fluid: FluidModel = field(default_factory=FluidModel.default)
@@ -45,6 +45,7 @@ class WellProperties:
     # Roughness of commercial/welded steel: 0.045 mm = 4.5e-5 m
     roughness: float = 4.5e-5  # Pipe wall roughness (m). Default: commercial steel.
     f_D: float = None          # Fixed Darcy friction factor (overrides roughness-based calculation when set)
+    friction_model: str = 'default'  # 'default' (Haaland + geometric viscosity) or 'hasan2010' (Chen + Cicchitti)
 
     # Heat transfer
     h: float = 20.0         # Heat transfer coefficient (W/m²/K)
@@ -58,21 +59,10 @@ class WellProperties:
     # Choke model
     choke: ChokeModel = None
 
-    @property
-    def A(self) -> float:
-        # Compute cross-sectional area of pipe (m²)
-        return np.pi * (self.D / 2) ** 2
-
     def __post_init__(self):
-        assert self.L > 0, 'Pipe length must be positive'
-        assert self.D > 0, 'Pipe diameter must be positive'
         assert self.roughness > 0, 'Pipe roughness must be positive'
         if self.f_D is not None:
             assert self.f_D > 0, 'Friction factor must be positive'
-
-        # Initialize choke model if not provided
-        if self.choke is None:
-            self.choke = BernoulliChokeModel(K_c=0.1*self.A)
 
 
 @dataclass
@@ -101,14 +91,14 @@ class SSDFSimulator:
     Implementation of the steady-state drift-flux model
     """
 
-    def __init__(self, well_properties: WellProperties, boundary_conditions: BoundaryConditions, n_cells: int = 100):
+    def __init__(self, well_properties: WellProperties, boundary_conditions: BoundaryConditions):
         """
         Initialize steady-state drift-flux model simulator
 
-        The pipe is discretized into (n + 1) cells of length L / n, where n = n_cells.
+        The pipe is discretized into (n + 1) cells of length delta_md, where n = n_cells.
         For each cell i in [0, ..., n] we create a state variable, x_i, and equations, g_i.
-        State x_0 represents the left boundary at z=0.
-        State x_n represents the right boundary at z=L.
+        State x_0 represents the left boundary (bottom of the well).
+        State x_n represents the right boundary (top of the well / surface).
         The state holds the following variables (in the given order)
             x = [p, v_g, v_l, alpha, rho_g, rho_l, T],
         where p is pressure, v_g and v_l are gas and liquid velocities, alpha is the volumetric fraction of gas,
@@ -116,15 +106,19 @@ class SSDFSimulator:
 
         :param well_properties: Well properties (object of type WellProperties)
         :param boundary_conditions: Boundary conditions (object of type BoundaryConditions)
-        :param n_cells: Number of cells to use in discretization
         """
         self.wp = well_properties       # Well properties
         self.bc = boundary_conditions   # Boundary conditions
-        self.n_cells = n_cells          # Dimension of state variables
+        self.geo = well_properties.geometry  # Convenience alias
+        self.n_cells = self.geo.n_cells
         self.dim_x = 7                  # Dimension of state variables
         self.x_guess = None             # Initial guess on solution
 
         self.variable_names = ['p', 'v_g', 'v_l', 'alpha', 'rho_g', 'rho_l', 'T']  # Ordering is important
+
+        # Initialize choke model if not provided
+        if self.wp.choke is None:
+            self.wp.choke = BernoulliChokeModel(K_c=0.1 * self.geo.A)
 
     @staticmethod
     def _create_variables(cell_index: int):
@@ -155,10 +149,11 @@ class SSDFSimulator:
         """
         p, v_g, v_l, alpha, rho_g, rho_l, T = x
         wp = self.wp
+        geo = self.geo
 
         # Derivations for slip relation
         v_m = alpha * v_g + (1 - alpha) * v_l  # Mixture velocity
-        C_0, v_inf = wp.slip.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, T, wp.D)  # Slip parameters
+        C_0, v_inf = wp.slip.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, T, geo.D)
 
         fl = wp.fluid
 
@@ -190,6 +185,7 @@ class SSDFSimulator:
         p, v_g, v_l, alpha, rho_g, rho_l, T = x
         wp = self.wp
         bc = self.bc
+        A = self.geo.A
 
         fl = wp.fluid
 
@@ -215,14 +211,14 @@ class SSDFSimulator:
                 w_l, self._w_o, w_g, Rs_0, bo.rho_g_sc, bo.rho_o_sc,
             )
 
-            g1 = wp.A * alpha * rho_g * v_g - w_g_free
-            g2 = wp.A * (1 - alpha) * rho_l * v_l - w_l_total
+            g1 = A * alpha * rho_g * v_g - w_g_free
+            g2 = A * (1 - alpha) * rho_l * v_l - w_l_total
 
         else:
             w_g += bc.w_lg
 
-            g1 = wp.A * alpha * rho_g * v_g - w_g         # Constant flux of gas
-            g2 = wp.A * (1 - alpha) * rho_l * v_l - w_l   # Constant flux of liquid
+            g1 = A * alpha * rho_g * v_g - w_g         # Constant flux of gas
+            g2 = A * (1 - alpha) * rho_l * v_l - w_l   # Constant flux of liquid
 
         g3 = T - bc.T_r  # Inflow fluid temperature (fixed)
 
@@ -238,9 +234,10 @@ class SSDFSimulator:
         p, v_g, v_l, alpha, rho_g, rho_l, T = x
         wp = self.wp
         bc = self.bc
+        A = self.geo.A
 
-        w_g = wp.A * alpha * rho_g * v_g  # Gas mass flow rate
-        w_l = wp.A * (1 - alpha) * rho_l * v_l  # Liquid mass flow rate
+        w_g = A * alpha * rho_g * v_g  # Gas mass flow rate
+        w_l = A * (1 - alpha) * rho_l * v_l  # Liquid mass flow rate
         w_m = w_g + w_l  # Mixture mass flow rate
 
         # Choke equation, where the upstream pressure is p_in = p(z=L) and the downstream pressure is p_out = p_s.
@@ -261,14 +258,19 @@ class SSDFSimulator:
 
         :param x: Variables of cell i
         :param x_prev: Variables of cell i-1
-        :param cell_index: Cell index (i)
+        :param cell_index: Cell index (i), ranging from 1 to n_cells
         :return: List of equations
         """
         wp = self.wp
         bc = self.bc
-        i = cell_index
+        fl = wp.fluid
+        geo = self.geo
+        D = geo.D
+        A = geo.A
 
-        delta_z = wp.L / self.n_cells  # Length of cells in discretization
+        delta_md = geo.delta_md
+        cos_incl = geo.cos_incl[cell_index - 1]
+        delta_tvd = delta_md * cos_incl
 
         # Get variables of current cell (i) and previous cell (i-1)
         p, v_g, v_l, alpha, rho_g, rho_l, T = x
@@ -278,43 +280,44 @@ class SSDFSimulator:
         rho_m = alpha * rho_g + (1 - alpha) * rho_l  # Mixture density
         v_m = alpha * v_g + (1 - alpha) * v_l  # Mixture velocity
 
-        fl = wp.fluid
-
         if wp.f_D is not None:
             f_D = wp.f_D
         else:
             mu_l = fl.liquid_viscosity(T)
             mu_g = fl.gas_viscosity(T, rho_g)
             mu_m = pvt.mixture_viscosity(mu_l, mu_g, alpha)
-            Re = rho_m * ca.fabs(v_m) * wp.D / mu_m
-            f_D = friction_factor(Re, wp.roughness / wp.D)
+            Re = rho_m * ca.fabs(v_m) * D / mu_m
+            f_D = friction_factor(Re, wp.roughness / D)
 
         # Acceleration terms
         acc = alpha * rho_g * v_g ** 2 + (1 - alpha) * rho_l * v_l ** 2
         acc_prev = alpha_prev * rho_g_prev * v_g_prev ** 2 + (1 - alpha_prev) * rho_l_prev * v_l_prev ** 2
-        
-        # Frictional pressure drop
-        dp_f = delta_z * (f_D / wp.D / 2) * rho_m * (v_m ** 2)
-        
-        # Gravitational pressure drop
-        dp_g = delta_z * STD_GRAVITY * rho_m
 
-        T_a = bc.T_r - i * (bc.T_r - bc.T_s) / self.n_cells  # Linear profile for ambient temperature
+        # Frictional pressure drop (acts along the flow path)
+        dp_f = delta_md * (f_D / D / 2) * rho_m * (v_m ** 2)
+
+        # Gravitational pressure drop (only the vertical component contributes)
+        dp_g = delta_tvd * STD_GRAVITY * rho_m
+
+        # Ambient temperature: linear geothermal gradient based on TVD fraction
+        tvd_frac_i = geo.tvd_frac[cell_index]
+        T_a = bc.T_s + (bc.T_r - bc.T_s) * tvd_frac_i
+
         cp_flux = fl.cp_g * alpha * rho_g * v_g + fl.cp_l * (1 - alpha) * rho_l * v_l
 
         # Heat loss to surroundings
-        dT_heat = delta_z * 4 * wp.h * (T - T_a) / (wp.D * cp_flux)
+        dT_heat = delta_md * 4 * wp.h * (T - T_a) / (D * cp_flux)
 
         # Frictional dissipation heating of the liquid phase
         # For ideal gas, friction does not change enthalpy; for incompressible liquid it does
-        F_fric = (f_D / wp.D / 2) * rho_m * v_m ** 2
-        dT_fric = delta_z * (1 - alpha) * v_l * F_fric / cp_flux
+        F_fric = (f_D / D / 2) * rho_m * v_m ** 2
+        dT_fric = delta_md * (1 - alpha) * v_l * F_fric / cp_flux
 
         # Gravitational cooling (adiabatic lapse rate effect)
-        # Pure gas cools at g/cp_g; pure liquid: zero effect (hydrostatic pressure balances gravity)
+        # Only the vertical component of the gravity vector contributes
         mass_flux = alpha * rho_g * v_g + (1 - alpha) * rho_l * v_l
         liq_flux = (1 - alpha) * v_l
-        dT_grav = delta_z * STD_GRAVITY * (mass_flux - liq_flux * rho_m) / cp_flux
+        dT_grav = delta_tvd * STD_GRAVITY * (mass_flux - liq_flux * rho_m) / cp_flux
 
         dT = dT_heat - dT_fric + dT_grav
 
@@ -329,8 +332,8 @@ class SSDFSimulator:
             w_l_total_i = fluid_mix.liquid_flux(
                 self._w_l_inflow, self._w_o, self._w_g_total, Rs_i, bo.rho_g_sc, bo.rho_o_sc,
             )
-            g1 = wp.A * alpha * rho_g * v_g - w_g_free_i                                        # Gas flux (free gas)
-            g2 = wp.A * (1 - alpha) * rho_l * v_l - w_l_total_i                                 # Liquid flux (oil + water + dissolved gas)
+            g1 = A * alpha * rho_g * v_g - w_g_free_i                                        # Gas flux (free gas)
+            g2 = A * (1 - alpha) * rho_l * v_l - w_l_total_i                                 # Liquid flux (oil + water + dissolved gas)
         else:
             g1 = alpha * rho_g * v_g - alpha_prev * rho_g_prev * v_g_prev                       # Constant flux of gas
             g2 = (1 - alpha) * rho_l * v_l - (1 - alpha_prev) * rho_l_prev * v_l_prev           # Constant flux of liquid
@@ -350,7 +353,10 @@ class SSDFSimulator:
         """
         wp = self.wp
         bc = self.bc
+        geo = self.geo
         fl = wp.fluid
+        A = geo.A
+        D = geo.D
 
         rho_g = CF_BAR * p_0 / (fl.R_s * T_0)
         w_l_inflow = wp.inflow.liquid_mass_flow_rate(p_0, bc.p_r)
@@ -385,13 +391,13 @@ class SSDFSimulator:
 
         """
         Solve the following equations for the velocities and void fraction (v_g, v_l, alpha).
-        w_g = wp.A * alpha * rho_g * v_g
-        w_l = wp.A * (1 - alpha) * rho_l * v_l
+        w_g = A * alpha * rho_g * v_g
+        w_l = A * (1 - alpha) * rho_l * v_l
         v_g = C_0 * v_m + v_inf
         
         The parameters C_0 and v_inf are functions of v_g, v_l, and alpha. The mix velocity v_m is known since:
         v_m = alpha * v_g + (1 - alpha) * v_l
-            = w_g / (wp.A * rho_g) + w_l / (wp.A * rho_l)
+            = w_g / (A * rho_g) + w_l / (A * rho_l)
         """
         # Variables
         v_g = ca.SX.sym(f'v_g_0')
@@ -399,13 +405,13 @@ class SSDFSimulator:
         alpha = ca.SX.sym(f'alpha_0')
 
         # Slip model
-        C_0, v_inf = wp.slip.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, T_0, wp.D)  # Slip parameters
-        v_m = w_g / (wp.A * rho_g) + w_l / (wp.A * rho_l)  # Known
+        C_0, v_inf = wp.slip.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, T_0, D)
+        v_m = w_g / (A * rho_g) + w_l / (A * rho_l)  # Known
 
         # Equations
         g0 = v_g - (C_0 * v_m + v_inf)
-        g1 = (wp.A * alpha * rho_g) * v_g - w_g
-        g2 = (wp.A * (1 - alpha) * rho_l) * v_l - w_l
+        g1 = (A * alpha * rho_g) * v_g - w_g
+        g2 = (A * (1 - alpha) * rho_l) * v_l - w_l
 
         # Create variable and constraint vectors
         x_vec = ca.vertcat(*[v_g, v_l, alpha])
@@ -415,7 +421,7 @@ class SSDFSimulator:
         F = ca.Function('F_bc', [x_vec], [g_vec])
         rf = ca.rootfinder('rf_bc', 'newton', F)
         alpha_guess = 0.5
-        x_guess = [w_g / (wp.A * alpha_guess * rho_g), w_l / (wp.A * (1 - alpha_guess) * rho_l), alpha_guess]
+        x_guess = [w_g / (A * alpha_guess * rho_g), w_l / (A * (1 - alpha_guess) * rho_l), alpha_guess]
         try:
             result = rf(x_guess)
         except RuntimeError as e:
@@ -427,37 +433,16 @@ class SSDFSimulator:
 
         return x_0
 
-    def _build_cell_rootfinder(self):
-        """
-        Build a parametric Newton rootfinder for one cell step.
-
-        Constructs the symbolic graph once; the returned rootfinder is called
-        N times in _simulate_cellwise with different parameter values.
-
-        :return: CasADi rootfinder  rf(x_guess, params) -> x_solution
-                 where params = [x_prev (dim_x), cell_index (1)]
-        """
-        x_i = self._create_variables(0)
-        x_prev_sym = [ca.SX.sym(f'xp_{j}') for j in range(self.dim_x)]
-        cell_idx_sym = ca.SX.sym('ci')
-
-        g_diff = self._differential_equations(x_i, x_prev_sym, cell_idx_sym)
-        g_clos = self._closure_relations(x_i)
-
-        x_vec = ca.vertcat(*x_i)
-        g_vec = ca.vertcat(*(g_diff + g_clos))
-        p_vec = ca.vertcat(*x_prev_sym, cell_idx_sym)
-
-        F = ca.Function('F_cell', [x_vec, p_vec], [g_vec])
-        return ca.rootfinder('rf_cell', 'newton', F)
-
     def _simulate_cellwise(self, p_0, T_0):
         """
-        Simulate cellwise given pressure and temperature at the left boundary
+        Simulate cellwise given pressure and temperature at the left boundary.
 
-        :param p_0:
-        :param T_0:
-        :return:
+        Builds a per-cell rootfinder so that _differential_equations receives a
+        concrete cell_index and can look up geometry (cos_incl, tvd_frac) directly.
+
+        :param p_0: Pressure at left boundary (bar)
+        :param T_0: Temperature at left boundary (K)
+        :return: Flat list of state variables for all cells
         """
 
         x = list()  # Variables
@@ -466,16 +451,28 @@ class SSDFSimulator:
         x_0 = self._compute_left_boundary_state(p_0, T_0)
         x += x_0
 
-        # Build rootfinder once, call it for each cell
-        rf = self._build_cell_rootfinder()
-
         for i in range(1, self.n_cells + 1):
+            # Build rootfinder for this cell (concrete cell_index = i)
+            x_i = self._create_variables(0)
+            x_prev_sym = [ca.SX.sym(f'xp_{j}') for j in range(self.dim_x)]
+
+            g_diff = self._differential_equations(x_i, x_prev_sym, i)
+            g_clos = self._closure_relations(x_i)
+
+            # Pack symbolic variables (x_vec), equations (g_vec), and parameters
+            # (p_vec) into CasADi vectors.  F maps (x, p) -> g(x; p) = 0, and
+            # the rootfinder solves for x given p (the previous cell's state).
+            x_vec = ca.vertcat(*x_i)
+            g_vec = ca.vertcat(*(g_diff + g_clos))
+            p_vec = ca.vertcat(*x_prev_sym)
+
+            F = ca.Function(f'F_{i}', [x_vec, p_vec], [g_vec])
+            rf = ca.rootfinder(f'rf_{i}', 'newton', F)
+
             x_i_prev = x[self.dim_x * (i - 1):self.dim_x * i]
-            x_guess = list(x_i_prev)
-            p_val = list(x_i_prev) + [float(i)]  # Parameter vector contains previous cell's state and cell index (these are fixed)
 
             try:
-                result = rf(x_guess, p_val)  # Call rootfinder with initial guess on variables and vector of fixed parameters
+                result = rf(list(x_i_prev), list(x_i_prev))
             except RuntimeError:
                 raise SimError(f'Cell-wise rootfinder failed at cell {i}')
 
@@ -613,14 +610,17 @@ class SSDFSimulator:
         cols = self.variable_names
         df = pd.DataFrame(x_list, columns=cols)
 
-        # Add z variable
-        delta_z = self.wp.L / self.n_cells
-        z = np.array([i*delta_z for i in range(self.n_cells + 1)])
+        # Add geometry columns (simulator order: bottom to top)
+        geo = self.geo
+        z = np.array([i * geo.delta_md for i in range(self.n_cells + 1)])
+        md = np.array(geo.md)    # simulator order (bottom → top)
+        tvd = np.array(geo.tvd)  # simulator order (bottom → top)
+
         df.insert(loc=0, column='z', value=z)
+        df.insert(loc=1, column='md', value=md)
+        df.insert(loc=2, column='tvd', value=tvd)
 
-        # Add slug regime identifier
-        #df['flow-regime'] = df['alpha'].map(lambda a: self.wp.slip.flow_regime(a))
-
+        # Add flow regime identifier
         flow_regime = list()
         for index, row in df.iterrows():
             fr = self.wp.slip.flow_regime(row['v_g'], row['v_l'], row['alpha'], row['rho_g'], row['rho_l'], row['T'])
@@ -653,9 +653,9 @@ if __name__ == '__main__':
     ###########################################################################
 
     # Plot solution from cell-wise simulation
-    df['w_g'] = well_properties.A * df['alpha'] * df['rho_g'] * df['v_g']  # Gas mass flow rates
-    df['w_l'] = well_properties.A * (1 - df['alpha']) * df['rho_l'] * df['v_l']  # Liquid mass flow rates
-    df['tvd'] = well_properties.L - df['z']  # True vertical depth
+    A = well_properties.geometry.A
+    df['w_g'] = A * df['alpha'] * df['rho_g'] * df['v_g']  # Gas mass flow rates
+    df['w_l'] = A * (1 - df['alpha']) * df['rho_l'] * df['v_l']  # Liquid mass flow rates
     pd.set_option('display.max_columns', None)
     print(df)
 

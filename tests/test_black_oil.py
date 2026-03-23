@@ -347,6 +347,7 @@ class TestFluidMix:
 # Simulator integration tests
 # =========================================================================
 
+from manywells.geometry import WellGeometry
 from manywells.pvt.fluid import FluidModel
 from manywells.simulator import WellProperties, BoundaryConditions, SSDFSimulator, SimError
 
@@ -378,9 +379,10 @@ class TestDeadOilRegression:
     """Ensure the dead oil (default) path still works identically."""
 
     def test_dead_oil_solves(self):
-        wp = WellProperties(L=500, D=0.1, fluid=FluidModel(api=45.0))
+        geo = WellGeometry.vertical(500, 2, D=0.1)
+        wp = WellProperties(geometry=geo, fluid=FluidModel(api=45.0))
         bc = BoundaryConditions(p_r=120, p_s=30, u=0.8)
-        sim = SSDFSimulator(wp, bc, n_cells=2)
+        sim = SSDFSimulator(wp, bc)
         try:
             result = sim.simulate()
             assert result is not None
@@ -409,13 +411,13 @@ class TestBlackOilSimulator:
             water_cut=0.0,
             black_oil=bo,
         )
+        geo = WellGeometry.vertical(2000, 5, D=0.1554)
         wp = WellProperties(
-            L=2000,
-            D=0.1554,
+            geometry=geo,
             fluid=fl,
         )
         bc = BoundaryConditions(p_r=200, p_s=30, u=0.8)
-        return SSDFSimulator(wp, bc, n_cells=5)
+        return SSDFSimulator(wp, bc)
 
     def test_black_oil_solves(self, bo_sim):
         """The black oil simulator converges."""
@@ -441,8 +443,8 @@ class TestBlackOilSimulator:
         for i in range(n + 1):
             cell = result[dim * i: dim * (i + 1)]
             p, v_g, v_l, alpha, rho_g, rho_l, T = cell
-            w_g = wp.A * alpha * rho_g * v_g
-            w_l = wp.A * (1 - alpha) * rho_l * v_l
+            w_g = wp.geometry.A * alpha * rho_g * v_g
+            w_l = wp.geometry.A * (1 - alpha) * rho_l * v_l
             total_mass_fluxes.append(w_g + w_l)
 
         # Total mass flux should be approximately constant
@@ -464,8 +466,8 @@ class TestBlackOilSimulator:
         cell_0 = result[0:dim]
         cell_n = result[dim * n: dim * (n + 1)]
 
-        w_g_bottom = wp.A * cell_0[3] * cell_0[4] * cell_0[1]  # alpha*rho_g*v_g
-        w_g_top = wp.A * cell_n[3] * cell_n[4] * cell_n[1]
+        w_g_bottom = wp.geometry.A * cell_0[3] * cell_0[4] * cell_0[1]  # alpha*rho_g*v_g
+        w_g_top = wp.geometry.A * cell_n[3] * cell_n[4] * cell_n[1]
 
         p_bottom = cell_0[0]
         p_top = cell_n[0]
