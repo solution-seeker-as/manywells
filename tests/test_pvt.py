@@ -25,6 +25,7 @@ from manywells.pvt import (
     mixture_viscosity,
 )
 from manywells.pvt.dead_oil import dead_oil_viscosity, dead_oil_surface_tension
+from manywells.pvt.black_oil import live_oil_viscosity
 
 
 def test_reference_conditions():
@@ -195,21 +196,34 @@ def test_liquid_mixture_viscosity_between():
 def test_mixture_viscosity_pure_liquid():
     """With alpha=0 (no gas), mixture viscosity equals liquid viscosity."""
     mu_l, mu_g = 1e-3, 1e-5
-    mu = float(mixture_viscosity(mu_l, mu_g, 0.0))
+    mu = float(mixture_viscosity(mu_l, mu_g, 0.0, rho_l=800.0, rho_g=1.2))
     assert mu == pytest.approx(mu_l)
 
 
 def test_mixture_viscosity_pure_gas():
     """With alpha=1 (all gas), mixture viscosity equals gas viscosity."""
     mu_l, mu_g = 1e-3, 1e-5
-    mu = float(mixture_viscosity(mu_l, mu_g, 1.0))
+    mu = float(mixture_viscosity(mu_l, mu_g, 1.0, rho_l=800.0, rho_g=1.2))
     assert mu == pytest.approx(mu_g)
 
 
 def test_mixture_viscosity_between():
-    """Mixture viscosity (Beggs-Brill geometric) is between gas and liquid."""
+    """Mass-weighted mixture viscosity is between gas and liquid."""
     mu_l, mu_g = 1e-3, 1e-5
-    mu = float(mixture_viscosity(mu_l, mu_g, 0.5))
+    mu = float(mixture_viscosity(mu_l, mu_g, 0.5, rho_l=800.0, rho_g=1.2))
+    assert mu_g < mu < mu_l
+
+
+def test_mixture_viscosity_mass_weighted_requires_densities():
+    """mass_weighted method raises ValueError without densities."""
+    with pytest.raises(ValueError):
+        mixture_viscosity(1e-3, 1e-5, 0.5)
+
+
+def test_mixture_viscosity_geometric():
+    """Geometric (Arrhenius) method still works when explicitly requested."""
+    mu_l, mu_g = 1e-3, 1e-5
+    mu = float(mixture_viscosity(mu_l, mu_g, 0.5, method='geometric'))
     assert mu_g < mu < mu_l
 
 
@@ -243,3 +257,39 @@ def test_dead_oil_viscosity_positive():
     """Dead oil viscosity is positive."""
     mu = float(dead_oil_viscosity(30, 273.15 + 60))
     assert mu > 0
+
+
+# ---- Live oil viscosity tests ----
+
+
+def test_live_oil_viscosity_reduces_dead():
+    """Live oil viscosity is lower than dead oil viscosity when gas is dissolved."""
+    T = 273.15 + 80
+    mu_dead = float(dead_oil_viscosity(30, T))
+    mu_live = float(live_oil_viscosity(mu_dead, 500.0))  # 500 scf/STB
+    assert mu_live < mu_dead
+
+
+def test_live_oil_viscosity_decreases_with_rs():
+    """More dissolved gas reduces oil viscosity further."""
+    T = 273.15 + 80
+    mu_dead = float(dead_oil_viscosity(30, T))
+    mu_low_rs = float(live_oil_viscosity(mu_dead, 200.0))
+    mu_high_rs = float(live_oil_viscosity(mu_dead, 800.0))
+    assert mu_high_rs < mu_low_rs
+
+
+def test_live_oil_viscosity_positive():
+    """Live oil viscosity is always positive."""
+    T = 273.15 + 80
+    mu_dead = float(dead_oil_viscosity(25, T))
+    mu_live = float(live_oil_viscosity(mu_dead, 1000.0))
+    assert mu_live > 0
+
+
+def test_live_oil_viscosity_near_zero_rs():
+    """At very low Rs, live oil viscosity is close to dead oil viscosity."""
+    T = 273.15 + 80
+    mu_dead = float(dead_oil_viscosity(35, T))
+    mu_live = float(live_oil_viscosity(mu_dead, 1.0))
+    assert mu_live == pytest.approx(mu_dead, rel=0.15)

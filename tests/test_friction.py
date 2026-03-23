@@ -3,7 +3,7 @@
 import pytest
 import casadi as ca
 
-from manywells.friction import haaland_friction_factor, friction_factor
+from manywells.friction import haaland_friction_factor, chen_friction_factor, friction_factor
 
 
 def _eval(expr):
@@ -56,10 +56,18 @@ class TestFrictionFactor:
         assert f == pytest.approx(64.0 / Re, rel=0.05)
 
     def test_turbulent_regime(self):
-        """In turbulent regime (Re=1e5), friction factor matches Haaland."""
+        """In turbulent regime (Re=1e5), friction factor matches Chen (default)."""
         Re = 1e5
         eps_D = 0.001
         f = _eval(friction_factor(Re, eps_D))
+        f_chen = _eval(chen_friction_factor(Re, eps_D))
+        assert f == pytest.approx(f_chen, rel=0.01)
+
+    def test_turbulent_regime_haaland(self):
+        """In turbulent regime (Re=1e5), friction factor matches Haaland when requested."""
+        Re = 1e5
+        eps_D = 0.001
+        f = _eval(friction_factor(Re, eps_D, correlation='haaland'))
         f_haaland = _eval(haaland_friction_factor(Re, eps_D))
         assert f == pytest.approx(f_haaland, rel=0.01)
 
@@ -69,7 +77,7 @@ class TestFrictionFactor:
         eps_D = 0.001
         f = _eval(friction_factor(Re, eps_D))
         f_lam = 64.0 / Re
-        f_turb = _eval(haaland_friction_factor(Re, eps_D))
+        f_turb = _eval(chen_friction_factor(Re, eps_D))
         assert min(f_lam, f_turb) <= f <= max(f_lam, f_turb) * 1.1
 
     def test_positive_near_zero_Re(self):

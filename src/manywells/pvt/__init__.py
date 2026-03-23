@@ -146,24 +146,30 @@ def liquid_mixture_viscosity(mu_o, mu_w, wlr):
     return wlr * mu_w + (1 - wlr) * mu_o
 
 
-def mixture_viscosity(mu_l, mu_g, alpha, method='geometric'):
+def mixture_viscosity(mu_l, mu_g, alpha, rho_l=None, rho_g=None, method='mass_weighted'):
     """
     Gas-liquid mixture viscosity. CasADi-compatible.
 
     Supported methods:
+      - 'mass_weighted': Mass-weighted arithmetic mean (Hasan, Kabir &
+        Sayarpour 2010, Eq. A-3).  Requires ``rho_l`` and ``rho_g``.
       - 'arithmetic': Volume-weighted arithmetic mean (Dukler et al. 1964).
       - 'geometric':  Volume-weighted geometric mean (Arrhenius 1887).
-
-    TODO: Consider using mass-weighted arithmetic mean for mixture viscosity
-          as done in "Simplified two-phase flow modeling in wellbores" by Hasan et al. (2010)
 
     :param mu_l: Liquid viscosity (Pa·s)
     :param mu_g: Gas viscosity (Pa·s)
     :param alpha: Gas void fraction in [0, 1]
-    :param method: Mixing rule ('arithmetic' or 'geometric')
+    :param rho_l: Liquid density (kg/m³), required for 'mass_weighted'
+    :param rho_g: Gas density (kg/m³), required for 'mass_weighted'
+    :param method: Mixing rule ('mass_weighted', 'arithmetic', or 'geometric')
     :return: Mixture viscosity (Pa·s)
     """
-    if method == 'arithmetic':
+    if method == 'mass_weighted':
+        if rho_l is None or rho_g is None:
+            raise ValueError("rho_l and rho_g are required for 'mass_weighted' method")
+        x = alpha * rho_g / (alpha * rho_g + (1 - alpha) * rho_l)
+        return mu_g * x + mu_l * (1 - x)
+    elif method == 'arithmetic':
         return alpha * mu_g + (1 - alpha) * mu_l
     elif method == 'geometric':
         return ca.exp(alpha * ca.log(mu_g) + (1 - alpha) * ca.log(mu_l))
@@ -181,3 +187,4 @@ from manywells.pvt.gas import (  # noqa: E402, F401
 )
 from manywells.pvt.water import water_fvf, water_viscosity  # noqa: E402, F401
 from manywells.pvt.dead_oil import dead_oil_viscosity, dead_oil_surface_tension  # noqa: E402, F401
+from manywells.pvt.black_oil import live_oil_viscosity  # noqa: E402, F401

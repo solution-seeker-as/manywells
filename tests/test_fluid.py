@@ -8,6 +8,8 @@ from manywells.pvt import (
 )
 from manywells.units import M_AIR
 from manywells.pvt.fluid import FluidModel
+from manywells.pvt.black_oil import BlackOilPVT
+from manywells.units import CF_BAR, CF_PSI
 
 
 class TestFluidModelDerivedProperties:
@@ -109,10 +111,11 @@ class TestFluidModelMethods:
         assert rho == pytest.approx(fl.rho_l)
 
     def test_liquid_viscosity_positive(self):
-        """Liquid viscosity is positive."""
+        """Liquid viscosity is positive (dead oil path)."""
         fl = FluidModel()
+        p = 100.0  # bar
         T = 273.15 + 60
-        mu = float(fl.liquid_viscosity(T))
+        mu = float(fl.liquid_viscosity(p, T))
         assert mu > 0
 
     def test_gas_viscosity_positive(self):
@@ -146,3 +149,35 @@ class TestFluidModelFactory:
         """Default f_g is close to old default of 0.1379."""
         fl = FluidModel.default()
         assert fl.f_g == pytest.approx(0.1379, rel=0.01)
+
+
+class TestLiveOilViscosity:
+
+    @staticmethod
+    def _make_black_oil_fluid():
+        bo = BlackOilPVT(api=30, sg_gas=0.65, p_sep=200 * CF_PSI, T_sep=333.15)
+        return FluidModel(api=30, sg_gas=0.65, GOR=150.0, water_cut=0.0, black_oil=bo)
+
+    def test_black_oil_viscosity_less_than_dead(self):
+        """With black oil, liquid viscosity is less than dead oil viscosity."""
+        fl_dead = FluidModel(api=30, sg_gas=0.65, GOR=150.0, water_cut=0.0)
+        fl_live = self._make_black_oil_fluid()
+        p = 150.0  # bar (above atmospheric, so Rs > 0)
+        T = 273.15 + 80
+        mu_dead = float(fl_dead.liquid_viscosity(p, T))
+        mu_live = float(fl_live.liquid_viscosity(p, T))
+        assert mu_live < mu_dead
+
+    def test_black_oil_viscosity_positive(self):
+        """Live oil viscosity is positive."""
+        fl = self._make_black_oil_fluid()
+        mu = float(fl.liquid_viscosity(200.0, 273.15 + 80))
+        assert mu > 0
+
+    def test_dead_oil_path_ignores_pressure(self):
+        """Without black_oil, viscosity does not depend on pressure."""
+        fl = FluidModel(api=30, sg_gas=0.65, GOR=150.0, water_cut=0.0)
+        T = 273.15 + 80
+        mu_low_p = float(fl.liquid_viscosity(50.0, T))
+        mu_high_p = float(fl.liquid_viscosity(300.0, T))
+        assert mu_low_p == pytest.approx(mu_high_p)

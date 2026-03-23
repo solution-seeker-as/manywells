@@ -53,7 +53,7 @@ def chen_friction_factor(Re, eps_D):
     return 1.0 / (inv_sqrt_f ** 2)
 
 
-def friction_factor(Re, eps_D, correlation='haaland'):
+def friction_factor(Re, eps_D, correlation='chen'):
     """
     Darcy friction factor with smooth laminar-turbulent transition.
 
@@ -63,14 +63,15 @@ def friction_factor(Re, eps_D, correlation='haaland'):
 
     :param Re: Reynolds number (CasADi symbolic)
     :param eps_D: Relative roughness = roughness / D (float or symbolic)
-    :param correlation: 'haaland' (default) or 'chen'
+    :param correlation: 'chen' (default) or 'haaland'
     :return: Darcy friction factor (dimensionless)
     """
     Re_safe = ca_max_approx(Re, 1.0)
+    Re_turb = ca_max_approx(Re_safe, 1000.0)
     f_lam = 64.0 / Re_safe
     if correlation == 'chen':
-        f_turb = chen_friction_factor(Re_safe, eps_D)
+        f_turb = chen_friction_factor(Re_turb, eps_D)
     else:
-        f_turb = haaland_friction_factor(Re_safe, eps_D)
+        f_turb = haaland_friction_factor(Re_turb, eps_D)
     sigma = ca_sigmoid(Re_safe, 3000, 0.005)
     return (1 - sigma) * f_lam + sigma * f_turb

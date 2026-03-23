@@ -282,9 +282,9 @@ class SSDFSimulator:
         if wp.f_D is not None:
             f_D = wp.f_D
         else:
-            mu_l = fl.liquid_viscosity(T)
+            mu_l = fl.liquid_viscosity(p, T)
             mu_g = fl.gas_viscosity(T, rho_g)
-            mu_m = pvt.mixture_viscosity(mu_l, mu_g, alpha)
+            mu_m = pvt.mixture_viscosity(mu_l, mu_g, alpha, rho_l=rho_l, rho_g=rho_g)
             Re = rho_m * ca.fabs(v_m) * D / mu_m
             f_D = friction_factor(Re, wp.roughness / D)
 

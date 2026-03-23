@@ -15,7 +15,7 @@ from math import log as math_log
 import casadi as ca
 
 from manywells.pvt import P_REF, T_REF, R_UNIVERSAL, api_from_density, density_from_api
-from manywells.units import CF_PSI, CF_RS, M_AIR, kelvin_to_fahrenheit
+from manywells.units import CF_PSI, CF_RS, CF_CP, M_AIR, kelvin_to_fahrenheit
 from manywells.ca_functions import ca_min_approx
 
 
@@ -185,3 +185,25 @@ class BlackOilPVT:
         return BlackOilPVT(
             api=api, sg_gas=sg_gas, p_sep=p_sep, T_sep=T_sep, p_bubble=p_bubble,
         )
+
+
+def live_oil_viscosity(mu_dead, Rs_scf):
+    """
+    Beggs-Robinson (1975) live oil viscosity correction.
+
+    Reduces dead oil viscosity to account for dissolved gas.  The correction
+    is significant: at Rs = 500 scf/STB a typical 5 cP dead oil drops to
+    about 1 cP.
+
+    Reference: Beggs, H.D. and Robinson, J.R., "Estimating the Viscosity of
+    Crude Oil Systems", J Pet Technol 27 (1975): 1140-1141.
+
+    :param mu_dead: Dead oil viscosity (Pa·s), may be CasADi symbolic
+    :param Rs_scf: Solution gas-oil ratio (scf/STB), may be CasADi symbolic
+    :return: Live oil viscosity (Pa·s)
+    """
+    mu_dead_cP = mu_dead / CF_CP
+    a = 10.715 * ca.constpow(Rs_scf + 100, -0.515)
+    b = 5.44 * ca.constpow(Rs_scf + 150, -0.338)
+    mu_live_cP = a * ca.constpow(mu_dead_cP, b)
+    return mu_live_cP * CF_CP

@@ -15,8 +15,9 @@ from manywells.pvt import (
     liquid_mixture_viscosity, molecular_weight,
 )
 from manywells.pvt.black_oil import BlackOilPVT
-from manywells.units import M_AIR, CF_BAR
+from manywells.units import M_AIR, CF_BAR, CF_RS
 from manywells.pvt.dead_oil import dead_oil_viscosity
+from manywells.pvt.black_oil import live_oil_viscosity
 import manywells.pvt.fluid_mix as fluid_mix
 
 
@@ -124,9 +125,23 @@ class FluidModel:
             )
         return self.rho_l
 
-    def liquid_viscosity(self, T):
-        """Liquid mixture viscosity at temperature T (CasADi-compatible)."""
+    def liquid_viscosity(self, p, T):
+        """
+        Liquid mixture viscosity at (p, T) (CasADi-compatible).
+
+        For dead oil, viscosity depends only on temperature.
+        For black oil, the Beggs-Robinson live oil correction reduces
+        viscosity to account for dissolved gas at (p, T).
+
+        :param p: Pressure (bar), may be CasADi symbolic
+        :param T: Temperature (K), may be CasADi symbolic
+        :return: Liquid mixture viscosity (Pa·s)
+        """
         mu_o = dead_oil_viscosity(self.api, T)
+        if self.black_oil is not None:
+            p_Pa = p * CF_BAR
+            Rs_scf = self.black_oil.rs(p_Pa, T) / CF_RS
+            mu_o = live_oil_viscosity(mu_o, Rs_scf)
         mu_w = water_viscosity(T)
         return liquid_mixture_viscosity(mu_o, mu_w, self.wlr)
 
