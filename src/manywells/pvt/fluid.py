@@ -14,6 +14,7 @@ from manywells.pvt import (
     water_viscosity, gas_viscosity as _gas_viscosity,
     liquid_mixture_viscosity, molecular_weight,
 )
+from manywells.pvt.gas import gas_z_factor
 from manywells.pvt.black_oil import BlackOilPVT
 from manywells.units import M_AIR, CF_BAR, CF_RS
 from manywells.pvt.dead_oil import dead_oil_viscosity, dead_oil_surface_tension
@@ -90,7 +91,7 @@ class FluidModel:
 
     @property
     def f_o_in_liquid(self) -> float:
-        """Oil mass fraction in the liquid phase."""
+        """Oil mass fraction in the liquid phase at standard conditions."""
         if self.rho_l == 0:
             return 0.0
         return (1 - self.wlr) * self.rho_o / self.rho_l
@@ -167,6 +168,16 @@ class FluidModel:
     def gas_viscosity(self, T, rho_g):
         """Gas viscosity at (T, rho_g) (CasADi-compatible)."""
         return _gas_viscosity(T, rho_g, self.M_g)
+
+    def z_factor(self, p, T):
+        """
+        Gas compressibility factor at (p, T) using Papay (1968).
+
+        :param p: Pressure (bar), may be CasADi symbolic
+        :param T: Temperature (K), may be CasADi symbolic
+        :return: Z-factor (dimensionless)
+        """
+        return gas_z_factor(p * CF_BAR, T, self.sg_gas)
 
     # ------------------------------------------------------------------
     # Factory

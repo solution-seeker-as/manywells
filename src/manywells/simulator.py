@@ -158,7 +158,8 @@ class SSDFSimulator:
 
         # Closure relations
         g1 = v_g - C_0 * v_m - v_inf                # Slip relation
-        g2 = p - rho_g * fl.R_s * T / CF_BAR       # Equation of state for gas density
+        Z = fl.z_factor(p, T)
+        g2 = p - Z * rho_g * fl.R_s * T / CF_BAR   # Real gas equation of state
 
         if fl.black_oil is not None:
             bo = fl.black_oil
@@ -357,7 +358,8 @@ class SSDFSimulator:
         A = geo.A
         D = geo.D
 
-        rho_g = CF_BAR * p_0 / (fl.R_s * T_0)
+        Z_0 = float(fl.z_factor(p_0, T_0))
+        rho_g = CF_BAR * p_0 / (Z_0 * fl.R_s * T_0)
         w_l_inflow = wp.inflow.liquid_mass_flow_rate(p_0, bc.p_r)
         w_g_inflow = fl.gas_mass_flow_rate(w_l_inflow)
 

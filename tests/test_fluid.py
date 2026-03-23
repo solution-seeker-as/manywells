@@ -227,3 +227,25 @@ class TestSurfaceTension:
         sigma_low_p = float(fl.surface_tension(50.0, T))
         sigma_high_p = float(fl.surface_tension(250.0, T))
         assert sigma_high_p < sigma_low_p
+
+
+class TestFluidModelZFactor:
+
+    def test_z_factor_near_one_at_low_pressure(self):
+        """Z is near 1.0 at atmospheric pressure."""
+        fl = FluidModel(sg_gas=0.65)
+        Z = float(fl.z_factor(1.01325, 288.15))  # ~1 atm in bar
+        assert Z == pytest.approx(1.0, abs=0.05)
+
+    def test_z_factor_below_one_at_high_pressure(self):
+        """Z is noticeably below 1.0 at 200 bar."""
+        fl = FluidModel(sg_gas=0.65)
+        Z = float(fl.z_factor(200.0, 350.0))
+        assert Z < 0.95
+
+    def test_z_factor_positive(self):
+        """Z is positive for typical wellbore conditions."""
+        fl = FluidModel(sg_gas=0.65)
+        for p_bar in [10, 100, 250]:
+            Z = float(fl.z_factor(p_bar, 350.0))
+            assert Z > 0, f"Z={Z} not positive at {p_bar} bar"

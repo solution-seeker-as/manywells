@@ -184,6 +184,7 @@ def mixture_viscosity(mu_l, mu_g, alpha, rho_l=None, rho_g=None, method='mass_we
 from manywells.pvt.gas import (  # noqa: E402, F401
     specific_gas_constant, gas_density, gas_density_std,
     gas_fvf, molecular_weight, gas_viscosity,
+    sutton_pseudo_critical, gas_z_factor,
 )
 from manywells.pvt.water import water_fvf, water_viscosity  # noqa: E402, F401
 from manywells.pvt.dead_oil import dead_oil_viscosity, dead_oil_surface_tension  # noqa: E402, F401

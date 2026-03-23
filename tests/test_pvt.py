@@ -23,6 +23,8 @@ from manywells.pvt import (
     gas_viscosity,
     liquid_mixture_viscosity,
     mixture_viscosity,
+    sutton_pseudo_critical,
+    gas_z_factor,
 )
 from manywells.pvt.dead_oil import dead_oil_viscosity, dead_oil_surface_tension
 from manywells.pvt.black_oil import live_oil_viscosity, live_oil_surface_tension
@@ -346,3 +348,75 @@ def test_live_oil_surface_tension_continuity_at_branch():
     sigma_above = float(live_oil_surface_tension(sigma_dead, Rs_scf_at_50 + 10))
     # Values should be close near the branch point
     assert sigma_below == pytest.approx(sigma_above, rel=0.15)
+
+
+# ---- Sutton pseudo-critical and Z-factor tests ----
+
+
+class TestSuttonPseudoCritical:
+
+    def test_methane_ppc(self):
+        """Pseudo-critical pressure for near-methane gas (sg=0.554)."""
+        from manywells.units import CF_PSI
+        ppc, _ = sutton_pseudo_critical(0.554)
+        ppc_psia = 756.8 - 131.07 * 0.554 - 3.6 * 0.554 ** 2
+        assert ppc == pytest.approx(ppc_psia * CF_PSI)
+
+    def test_methane_tpc(self):
+        """Pseudo-critical temperature for near-methane gas (sg=0.554)."""
+        _, tpc = sutton_pseudo_critical(0.554)
+        tpc_R = 169.2 + 349.5 * 0.554 - 74.0 * 0.554 ** 2
+        assert tpc == pytest.approx(tpc_R / 1.8)
+
+    def test_ppc_positive(self):
+        """Pseudo-critical pressure is positive for typical gas gravities."""
+        for sg in [0.55, 0.65, 0.80, 1.0]:
+            ppc, _ = sutton_pseudo_critical(sg)
+            assert ppc > 0
+
+    def test_tpc_positive(self):
+        """Pseudo-critical temperature is positive for typical gas gravities."""
+        for sg in [0.55, 0.65, 0.80, 1.0]:
+            _, tpc = sutton_pseudo_critical(sg)
+            assert tpc > 0
+
+
+class TestGasZFactor:
+
+    def test_z_near_one_at_standard_conditions(self):
+        """Z is near 1.0 at standard conditions (low pressure)."""
+        Z = float(gas_z_factor(P_REF, T_REF, 0.65))
+        assert Z == pytest.approx(1.0, abs=0.05)
+
+    def test_z_less_than_one_at_high_pressure(self):
+        """Z < 1 at 200 bar for typical natural gas."""
+        Z = float(gas_z_factor(200e5, 350, 0.65))
+        assert Z < 1.0
+
+    def test_z_decreases_with_pressure(self):
+        """Z at 200 bar is lower than Z at 50 bar (typical Tpr)."""
+        T = 350  # K
+        Z_low = float(gas_z_factor(50e5, T, 0.65))
+        Z_high = float(gas_z_factor(200e5, T, 0.65))
+        assert Z_high < Z_low
+
+    def test_z_in_valid_range(self):
+        """Z is in (0.3, 1.1) across typical wellbore conditions."""
+        for p_bar in [10, 50, 100, 200, 300]:
+            for T_K in [300, 340, 380, 420]:
+                Z = float(gas_z_factor(p_bar * 1e5, T_K, 0.65))
+                assert 0.3 < Z < 1.1, f"Z={Z} out of range at {p_bar} bar, {T_K} K"
+
+    def test_z_positive(self):
+        """Z is positive for a range of conditions."""
+        Z = float(gas_z_factor(150e5, 340, 0.80))
+        assert Z > 0
+
+
+def test_gas_density_backward_compat():
+    """gas_density with default Z=1.0 still gives ideal gas result."""
+    R_s = 518.3
+    p = 50e5
+    T = 350
+    rho = gas_density(R_s, p, T)
+    assert rho == pytest.approx(p / (R_s * T))
