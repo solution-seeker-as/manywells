@@ -253,10 +253,10 @@ if __name__ == '__main__':
     geo = WellGeometry.vertical(L, n_cells)
     well_properties = WellProperties(geometry=geo)
     boundary_conditions = BoundaryConditions(u=0.9)
-    boundary_conditions.pr = (1 / CF_BAR) * 1000 * STD_GRAVITY * geo.L + 1
+    boundary_conditions.p_r = (1 / CF_BAR) * 1000 * STD_GRAVITY * geo.L + 1
     boundary_conditions.T_r = 273.15+60 + (geo.L - 1500) * 0.03
     print(geo.L)
-    print(boundary_conditions.pr)
+    print(boundary_conditions.p_r)
     sim = ClosedLoopWellSimulator(well_properties, boundary_conditions)
     sim.feedback = True
 
