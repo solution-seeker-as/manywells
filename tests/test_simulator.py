@@ -12,6 +12,7 @@ from manywells.simulator import (
 )
 from manywells.choke import BernoulliChokeModel
 from manywells.inflow import ProductivityIndex
+from manywells.pvt import density_from_api
 from manywells.pvt.fluid import FluidModel
 from manywells.units import STD_GRAVITY
 
@@ -104,7 +105,7 @@ def test_simulator_create_variables():
 def test_simulator_solve_small():
     """Simulator solve runs with minimal grid (may be slow)."""
     geo = WellGeometry.vertical(500, 2, D=0.1)
-    wp = WellProperties(geometry=geo, fluid=FluidModel(api=45.0))
+    wp = WellProperties(geometry=geo, fluid=FluidModel(rho_o=density_from_api(45.0), oil_model='dead_oil'))
     bc = BoundaryConditions(p_r=120, p_s=30, u=0.8)
     sim = SSDFSimulator(wp, bc)
     try:
@@ -129,7 +130,7 @@ def test_simulator_solve_l_shaped():
     tvd_survey.append(tvd_survey[-1])
 
     geo = WellGeometry(md_survey=md_survey, tvd_survey=tvd_survey, n_cells=50)
-    wp = WellProperties(geometry=geo, fluid=FluidModel(api=35.0))
+    wp = WellProperties(geometry=geo, fluid=FluidModel(rho_o=density_from_api(35.0), oil_model='dead_oil'))
     bc = BoundaryConditions(p_r=200, p_s=20, u=0.8)
     sim = SSDFSimulator(wp, bc)
     try:

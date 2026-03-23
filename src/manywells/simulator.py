@@ -21,7 +21,6 @@ from manywells.choke import ChokeModel, BernoulliChokeModel, SimpsonChokeModel
 from manywells.friction import friction_factor
 from manywells.inflow import InflowModel, ProductivityIndex, Vogel
 import manywells.pvt as pvt
-import manywells.pvt.fluid_mix as fluid_mix
 from manywells.pvt.fluid import FluidModel
 from manywells.slip import SlipModel
 
@@ -38,7 +37,7 @@ class WellProperties:
     geometry: WellGeometry = field(default_factory=lambda: WellGeometry.vertical(length=2000, n_cells=100))
 
     # Fluid model
-    fluid: FluidModel = field(default_factory=FluidModel.default)
+    fluid: FluidModel = field(default_factory=FluidModel)
 
     # Friction
     # Roughness of new/smooth Tubing: 0.0015 to 0.045 mm = 1.5e-6 to 4.5e-5 m
@@ -160,18 +159,7 @@ class SSDFSimulator:
         g1 = v_g - C_0 * v_m - v_inf                # Slip relation
         Z = fl.z_factor(p, T)
         g2 = p - Z * rho_g * fl.R_s * T / CF_BAR   # Real gas equation of state
-
-        if fl.black_oil is not None:
-            bo = fl.black_oil
-            p_Pa = p * CF_BAR
-            Rs_i = bo.rs(p_Pa, T)
-            Bo_i = bo.bo(p_Pa, T)
-            rho_l_bo = fluid_mix.liquid_density_bo(
-                bo.rho_o_sc, bo.rho_g_sc, fl.rho_w, Rs_i, Bo_i, fl.wlr,
-            )
-            g3 = rho_l - rho_l_bo
-        else:
-            g3 = rho_l - fl.rho_l                   # Liquid density (fixed)
+        g3 = rho_l - fl.liquid_density(p, T)        # Liquid density
 
         return [g1, g2, g3]
 
@@ -193,33 +181,16 @@ class SSDFSimulator:
         w_l = wp.inflow.liquid_mass_flow_rate(p, bc.p_r)
         w_g = fl.gas_mass_flow_rate(w_l)
 
-        if fl.black_oil is not None:
-            bo = fl.black_oil
+        self._w_g_total = w_g
+        self._w_o = w_l * fl.f_o_in_liquid
+        self._w_l_inflow = w_l
 
-            # Decompose liquid inflow into oil and water components (symbolic)
-            self._w_g_total = w_g
-            self._w_o = w_l * fl.f_o_in_liquid
-            self._w_l_inflow = w_l
+        Rs_0 = fl.rs(p, T)
+        w_g_free = fl.free_gas_flux(Rs_0, w_g, bc.w_lg, self._w_o)
+        w_l_total = fl.liquid_flux(Rs_0, w_l, self._w_o, w_g)
 
-            # Dissolved gas at bottomhole conditions
-            p_Pa = p * CF_BAR
-            Rs_0 = bo.rs(p_Pa, T)
-            w_g_free = fluid_mix.free_gas_flux(
-                w_g, bc.w_lg, self._w_o, Rs_0, bo.rho_g_sc, bo.rho_o_sc,
-            )
-            w_l_total = fluid_mix.liquid_flux(
-                w_l, self._w_o, w_g, Rs_0, bo.rho_g_sc, bo.rho_o_sc,
-            )
-
-            g1 = A * alpha * rho_g * v_g - w_g_free
-            g2 = A * (1 - alpha) * rho_l * v_l - w_l_total
-
-        else:
-            w_g += bc.w_lg
-
-            g1 = A * alpha * rho_g * v_g - w_g         # Constant flux of gas
-            g2 = A * (1 - alpha) * rho_l * v_l - w_l   # Constant flux of liquid
-
+        g1 = A * alpha * rho_g * v_g - w_g_free
+        g2 = A * (1 - alpha) * rho_l * v_l - w_l_total
         g3 = T - bc.T_r  # Inflow fluid temperature (fixed)
 
         return [g1, g2, g3]
@@ -322,21 +293,11 @@ class SSDFSimulator:
         dT = dT_heat - dT_fric + dT_grav
 
         # Discretized differential equations
-        if fl.black_oil is not None:
-            bo = fl.black_oil
-            p_Pa = p * CF_BAR
-            Rs_i = bo.rs(p_Pa, T)
-            w_g_free_i = fluid_mix.free_gas_flux(
-                self._w_g_total, bc.w_lg, self._w_o, Rs_i, bo.rho_g_sc, bo.rho_o_sc,
-            )
-            w_l_total_i = fluid_mix.liquid_flux(
-                self._w_l_inflow, self._w_o, self._w_g_total, Rs_i, bo.rho_g_sc, bo.rho_o_sc,
-            )
-            g1 = A * alpha * rho_g * v_g - w_g_free_i                                        # Gas flux (free gas)
-            g2 = A * (1 - alpha) * rho_l * v_l - w_l_total_i                                 # Liquid flux (oil + water + dissolved gas)
-        else:
-            g1 = alpha * rho_g * v_g - alpha_prev * rho_g_prev * v_g_prev                       # Constant flux of gas
-            g2 = (1 - alpha) * rho_l * v_l - (1 - alpha_prev) * rho_l_prev * v_l_prev           # Constant flux of liquid
+        Rs_i = fl.rs(p, T)
+        w_g_free_i = fl.free_gas_flux(Rs_i, self._w_g_total, bc.w_lg, self._w_o)
+        w_l_total_i = fl.liquid_flux(Rs_i, self._w_l_inflow, self._w_o, self._w_g_total)
+        g1 = A * alpha * rho_g * v_g - w_g_free_i
+        g2 = A * (1 - alpha) * rho_l * v_l - w_l_total_i
 
         g3 = acc / CF_BAR + p - (acc_prev / CF_BAR + p_prev) + (dp_f + dp_g) / CF_BAR           # Momentum balance
         g4 = T - T_prev + dT                                                                    # Energy balance
@@ -363,32 +324,18 @@ class SSDFSimulator:
         w_l_inflow = wp.inflow.liquid_mass_flow_rate(p_0, bc.p_r)
         w_g_inflow = fl.gas_mass_flow_rate(w_l_inflow)
 
-        if fl.black_oil is not None:
-            bo = fl.black_oil
-            p_Pa = p_0 * CF_BAR
+        rho_l = float(fl.liquid_density(p_0, T_0))
 
-            # Live oil density at bottomhole
-            Rs_0 = float(bo.rs(p_Pa, T_0))
-            Bo_0 = float(bo.bo(p_Pa, T_0))
-            rho_l = float(fluid_mix.liquid_density_bo(
-                bo.rho_o_sc, bo.rho_g_sc, fl.rho_w, Rs_0, Bo_0, fl.wlr,
-            ))
+        w_o = w_l_inflow * fl.f_o_in_liquid
+        Rs_0 = float(fl.rs(p_0, T_0))
+        r = Rs_0 * fl.rho_g / fl.rho_o
+        w_dissolved = min(r * w_o, w_g_inflow)
+        w_g = max(w_g_inflow + bc.w_lg - w_dissolved, 0.0)
+        w_l = w_l_inflow + w_dissolved
 
-            # Mass-transfer adjusted flows
-            w_o = w_l_inflow * fl.f_o_in_liquid
-            r = Rs_0 * bo.rho_g_sc / bo.rho_o_sc
-            w_dissolved = min(r * w_o, w_g_inflow)
-            w_g = max(w_g_inflow + bc.w_lg - w_dissolved, 0.0)
-            w_l = w_l_inflow + w_dissolved
-
-            # Store for the cellwise solver's _differential_equations calls
-            self._w_g_total = w_g_inflow
-            self._w_o = w_o
-            self._w_l_inflow = w_l_inflow
-        else:
-            rho_l = fl.rho_l
-            w_g = w_g_inflow + bc.w_lg
-            w_l = w_l_inflow
+        self._w_g_total = w_g_inflow
+        self._w_o = w_o
+        self._w_l_inflow = w_l_inflow
 
         """
         Solve the following equations for the velocities and void fraction (v_g, v_l, alpha).

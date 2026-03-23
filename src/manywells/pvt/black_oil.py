@@ -164,27 +164,6 @@ class BlackOilPVT:
         p_b_psia = 18.2 * (yg * 10 ** (0.00091 * T_F - 0.0125 * self.api) - 1.4)
         return p_b_psia * CF_PSI
 
-    # ------------------------------------------------------------------
-    # Convenience factory
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def from_well_params(R_s_gas, rho_o, p_sep, T_sep, p_bubble=None):
-        """
-        Construct a BlackOilPVT from the parameters already present on
-        WellProperties / BoundaryConditions.
-
-        :param R_s_gas: Specific gas constant (J/(kg K))
-        :param rho_o: Oil density at standard conditions (kg/m3)
-        :param p_sep: Separator / downstream pressure (Pa)
-        :param T_sep: Separator / surface temperature (K)
-        :param p_bubble: Bubble point pressure (Pa), or None
-        """
-        api = api_from_density(rho_o)
-        sg_gas = R_UNIVERSAL / (M_AIR * R_s_gas)
-        return BlackOilPVT(
-            api=api, sg_gas=sg_gas, p_sep=p_sep, T_sep=T_sep, p_bubble=p_bubble,
-        )
 
 
 def live_oil_viscosity(mu_dead, Rs_scf):

@@ -21,7 +21,6 @@ from manywells.pvt import (
     molecular_weight,
     water_viscosity,
     gas_viscosity,
-    liquid_mixture_viscosity,
     mixture_viscosity,
     sutton_pseudo_critical,
     gas_z_factor,
@@ -176,56 +175,24 @@ def test_gas_viscosity_positive():
     assert mu > 0
 
 
-def test_liquid_mixture_viscosity_pure_oil():
-    """With wlr=0, liquid mixture viscosity equals oil viscosity."""
-    mu_o, mu_w = 5e-3, 1e-3
-    assert liquid_mixture_viscosity(mu_o, mu_w, 0.0) == pytest.approx(mu_o)
-
-
-def test_liquid_mixture_viscosity_pure_water():
-    """With wlr=1, liquid mixture viscosity equals water viscosity."""
-    mu_o, mu_w = 5e-3, 1e-3
-    assert liquid_mixture_viscosity(mu_o, mu_w, 1.0) == pytest.approx(mu_w)
-
-
-def test_liquid_mixture_viscosity_between():
-    """Liquid mixture viscosity is between oil and water viscosity."""
-    mu_o, mu_w = 5e-3, 1e-3
-    mu_mix = liquid_mixture_viscosity(mu_o, mu_w, 0.5)
-    assert mu_w < mu_mix < mu_o
-
-
 def test_mixture_viscosity_pure_liquid():
     """With alpha=0 (no gas), mixture viscosity equals liquid viscosity."""
     mu_l, mu_g = 1e-3, 1e-5
-    mu = float(mixture_viscosity(mu_l, mu_g, 0.0, rho_l=800.0, rho_g=1.2))
+    mu = float(mixture_viscosity(mu_l, mu_g, 0.0, 800.0, 1.2))
     assert mu == pytest.approx(mu_l)
 
 
 def test_mixture_viscosity_pure_gas():
     """With alpha=1 (all gas), mixture viscosity equals gas viscosity."""
     mu_l, mu_g = 1e-3, 1e-5
-    mu = float(mixture_viscosity(mu_l, mu_g, 1.0, rho_l=800.0, rho_g=1.2))
+    mu = float(mixture_viscosity(mu_l, mu_g, 1.0, 800.0, 1.2))
     assert mu == pytest.approx(mu_g)
 
 
 def test_mixture_viscosity_between():
     """Mass-weighted mixture viscosity is between gas and liquid."""
     mu_l, mu_g = 1e-3, 1e-5
-    mu = float(mixture_viscosity(mu_l, mu_g, 0.5, rho_l=800.0, rho_g=1.2))
-    assert mu_g < mu < mu_l
-
-
-def test_mixture_viscosity_mass_weighted_requires_densities():
-    """mass_weighted method raises ValueError without densities."""
-    with pytest.raises(ValueError):
-        mixture_viscosity(1e-3, 1e-5, 0.5)
-
-
-def test_mixture_viscosity_geometric():
-    """Geometric (Arrhenius) method still works when explicitly requested."""
-    mu_l, mu_g = 1e-3, 1e-5
-    mu = float(mixture_viscosity(mu_l, mu_g, 0.5, method='geometric'))
+    mu = float(mixture_viscosity(mu_l, mu_g, 0.5, 800.0, 1.2))
     assert mu_g < mu < mu_l
 
 

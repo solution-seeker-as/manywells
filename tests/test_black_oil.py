@@ -3,18 +3,11 @@
 import pytest
 import numpy as np
 
-from manywells.pvt import P_REF, T_REF, WATER, density_from_api, api_from_density
+from manywells.pvt import P_REF, T_REF, WATER, density_from_api, api_from_density, gas_density_from_sg
 from manywells.pvt.black_oil import BlackOilPVT
-from manywells.units import CF_PSI, CF_RS, M_AIR
+from manywells.units import CF_PSI, CF_RS, M_AIR, CF_BAR
 from manywells.pvt.gas import gas_fvf, gas_density_std
 from manywells.pvt.water import water_fvf
-from manywells.pvt.fluid_mix import (
-    dissolved_gas_mass_ratio,
-    liquid_density_bo,
-    free_gas_flux,
-    liquid_flux,
-)
-from manywells.units import CF_BAR
 
 
 # ---------------------------------------------------------------------------
@@ -170,15 +163,11 @@ class TestLiveOilDensity:
         assert rho > 0
 
     def test_density_heavier_than_dead_oil(self, bo_light):
-        """Live oil (oil + dissolved gas) is denser than stock-tank oil
-        for high-pressure conditions because dissolved gas mass dominates expansion."""
+        """Live oil density is in a reasonable range around dead oil."""
         p = 50e5
         T = 373.15
         rho_live = float(bo_light.live_oil_density(p, T))
-        # At low pressure, live oil can be lighter or heavier depending on Rs/Bo balance;
-        # at very low pressure both Rs and (Bo-1) are small, density approaches rho_o_sc
         rho_dead = bo_light.rho_o_sc
-        # The density should be in a reasonable range around dead oil
         assert 0.5 * rho_dead < rho_live < 1.5 * rho_dead
 
     def test_density_formula_consistency(self, bo_light):
@@ -212,21 +201,6 @@ class TestBubblePointPressure:
         p_b_low = bo_light.bubble_point_pressure(10.0, T)
         p_b_high = bo_light.bubble_point_pressure(50.0, T)
         assert p_b_high > p_b_low
-
-
-class TestBlackOilFactory:
-
-    def test_from_well_params_roundtrip(self):
-        """Factory constructs equivalent BlackOilPVT from R_s_gas and rho_o."""
-        api_orig = 30.0
-        sg_gas_orig = 0.70
-        from manywells.pvt import R_UNIVERSAL
-        R_s_gas = R_UNIVERSAL / (M_AIR * sg_gas_orig)
-        rho_o = density_from_api(api_orig)
-
-        bo = BlackOilPVT.from_well_params(R_s_gas, rho_o, p_sep=1e6, T_sep=300)
-        assert bo.api == pytest.approx(api_orig, rel=1e-6)
-        assert bo.sg_gas == pytest.approx(sg_gas_orig, rel=1e-6)
 
 
 # =========================================================================
@@ -279,65 +253,57 @@ class TestWaterFVF:
 
 
 # =========================================================================
-# Fluid mixing function tests
+# FluidModel fluid mixing tests (replaces old fluid_mix module tests)
 # =========================================================================
 
 
-class TestFluidMix:
+class TestFluidModelMixing:
 
-    def test_dissolved_gas_mass_ratio(self):
-        Rs = 20.0         # Sm3/Sm3
-        rho_g_sc = 0.8    # kg/m3
-        rho_o_sc = 850.0  # kg/m3
-        r = dissolved_gas_mass_ratio(Rs, rho_g_sc, rho_o_sc)
-        assert r == pytest.approx(Rs * rho_g_sc / rho_o_sc)
+    @staticmethod
+    def _make_bo_fluid():
+        return FluidModel(
+            rho_o=850.0,
+            rho_g=gas_density_from_sg(0.65),
+            gor=200.0, wlr=0.0,
+            p_sep=100 * CF_PSI,
+            T_sep=273.15 + 21.1,
+        )
 
-    def test_liquid_density_bo_no_water(self):
-        """Pure oil (wlr=0): rho_l = (rho_o_sc + Rs*rho_g_sc) / Bo."""
-        rho_o_sc = 850
-        rho_g_sc = 0.8
-        Rs = 20.0
-        Bo = 1.15
-        rho_l = float(liquid_density_bo(rho_o_sc, rho_g_sc, WATER.rho, Rs, Bo, wlr=0.0))
-        expected = (rho_o_sc + Rs * rho_g_sc) / Bo
-        assert rho_l == pytest.approx(expected, rel=1e-6)
-
-    def test_liquid_density_bo_pure_water(self):
-        """Pure water (wlr=1): rho_l = rho_w."""
-        rho_l = float(liquid_density_bo(850, 0.8, WATER.rho, 20.0, 1.15, wlr=1.0))
-        assert rho_l == pytest.approx(WATER.rho, rel=1e-6)
+    def test_liquid_density_no_water(self):
+        """Pure oil (wlr=0): liquid_density uses live-oil formula."""
+        fl = self._make_bo_fluid()
+        p, T = 150.0, 373.15
+        Rs = float(fl.rs(p, T))
+        Bo = float(fl.bo(p, T))
+        expected = (fl.rho_o + Rs * fl.rho_g) / Bo
+        actual = float(fl.liquid_density(p, T))
+        assert actual == pytest.approx(expected, rel=1e-6)
 
     def test_free_gas_flux_no_dissolved_gas(self):
-        """When Rs=0, all gas is free."""
-        w_g_total = 2.0
-        w_lg = 0.5
-        w_g_free = float(free_gas_flux(w_g_total, w_lg, w_o=1.0, Rs=0.0,
-                                       rho_g_sc=0.8, rho_o_sc=850.0))
-        assert w_g_free == pytest.approx(w_g_total + w_lg, abs=1e-3)
+        """When Rs=0, all gas is free (dead oil path)."""
+        fl = FluidModel(oil_model='dead_oil')
+        w = fl.free_gas_flux(Rs=0, w_g_total=2.0, w_lg=0.5, w_o=1.0)
+        assert w == pytest.approx(2.5)
 
     def test_free_gas_decreases_with_rs(self):
-        """More dissolved gas => less free gas."""
-        args = dict(w_g_total=2.0, w_lg=0.0, w_o=5.0, rho_g_sc=0.8, rho_o_sc=850.0)
-        wf_low = float(free_gas_flux(Rs=5.0, **args))
-        wf_high = float(free_gas_flux(Rs=20.0, **args))
+        fl = self._make_bo_fluid()
+        wf_low = float(fl.free_gas_flux(Rs=5.0, w_g_total=2.0, w_lg=0.0, w_o=5.0))
+        wf_high = float(fl.free_gas_flux(Rs=20.0, w_g_total=2.0, w_lg=0.0, w_o=5.0))
         assert wf_high < wf_low
 
     def test_liquid_flux_increases_with_rs(self):
-        """More dissolved gas => heavier liquid phase."""
-        args = dict(w_l_inflow=10.0, w_o=5.0, w_g_total=2.0,
-                    rho_g_sc=0.8, rho_o_sc=850.0)
-        wl_low = float(liquid_flux(Rs=5.0, **args))
-        wl_high = float(liquid_flux(Rs=20.0, **args))
+        fl = self._make_bo_fluid()
+        wl_low = float(fl.liquid_flux(Rs=5.0, w_l_inflow=10.0, w_o=5.0, w_g_total=2.0))
+        wl_high = float(fl.liquid_flux(Rs=20.0, w_l_inflow=10.0, w_o=5.0, w_g_total=2.0))
         assert wl_high > wl_low
 
     def test_mass_conservation(self):
-        """free_gas + liquid = w_g_total + w_lg + w_l_inflow (total mass)."""
+        """free_gas + liquid = w_g_total + w_lg + w_l_inflow."""
+        fl = self._make_bo_fluid()
         w_g_total, w_lg, w_l_inflow, w_o = 2.0, 0.5, 10.0, 5.0
-        rho_g_sc, rho_o_sc = 0.8, 850.0
         Rs = 15.0
-
-        wf = float(free_gas_flux(w_g_total, w_lg, w_o, Rs, rho_g_sc, rho_o_sc))
-        wl = float(liquid_flux(w_l_inflow, w_o, w_g_total, Rs, rho_g_sc, rho_o_sc))
+        wf = float(fl.free_gas_flux(Rs, w_g_total, w_lg, w_o))
+        wl = float(fl.liquid_flux(Rs, w_l_inflow, w_o, w_g_total))
         total_in = w_g_total + w_lg + w_l_inflow
         total_out = wf + wl
         assert total_out == pytest.approx(total_in, rel=1e-3)
@@ -352,35 +318,16 @@ from manywells.pvt.fluid import FluidModel
 from manywells.simulator import WellProperties, BoundaryConditions, SSDFSimulator, SimError
 
 
-class TestFluidModelOilFraction:
-
-    def test_default_black_oil_is_none(self):
-        wp = WellProperties()
-        assert wp.fluid.black_oil is None
-
-    def test_f_o_in_liquid_pure_oil(self):
-        """When water_cut=0, oil fraction is 1."""
-        fl = FluidModel(water_cut=0.0)
-        assert fl.f_o_in_liquid == pytest.approx(1.0)
-
-    def test_f_o_in_liquid_with_water(self):
-        """Oil fraction is between 0 and 1 for mixed liquid."""
-        fl = FluidModel(water_cut=0.3)
-        assert 0 < fl.f_o_in_liquid < 1
-
-    def test_f_o_in_liquid_pure_water(self):
-        """Water cut near 1: f_o_in_liquid approaches 0."""
-        fl = FluidModel(water_cut=0.99)
-        assert fl.f_o_in_liquid < 0.02
-
-
 @pytest.mark.slow
 class TestDeadOilRegression:
-    """Ensure the dead oil (default) path still works identically."""
+    """Ensure the dead oil path still works identically."""
 
     def test_dead_oil_solves(self):
         geo = WellGeometry.vertical(500, 2, D=0.1)
-        wp = WellProperties(geometry=geo, fluid=FluidModel(api=45.0))
+        wp = WellProperties(
+            geometry=geo,
+            fluid=FluidModel(rho_o=density_from_api(45.0), oil_model='dead_oil'),
+        )
         bc = BoundaryConditions(p_r=120, p_s=30, u=0.8)
         sim = SSDFSimulator(wp, bc)
         try:
@@ -398,24 +345,16 @@ class TestBlackOilSimulator:
     @pytest.fixture
     def bo_sim(self):
         """Set up a simulator with the black oil model enabled."""
-        bo = BlackOilPVT(
-            api=35,
-            sg_gas=0.65,
+        fl = FluidModel(
+            rho_o=density_from_api(35),
+            rho_g=gas_density_from_sg(0.65),
+            wlr=0.0,
             p_sep=100 * CF_PSI,
             T_sep=273.15 + 21.1,
             p_bubble=250e5,
         )
-        fl = FluidModel(
-            api=35,
-            sg_gas=0.65,
-            water_cut=0.0,
-            black_oil=bo,
-        )
         geo = WellGeometry.vertical(2000, 5, D=0.1554)
-        wp = WellProperties(
-            geometry=geo,
-            fluid=fl,
-        )
+        wp = WellProperties(geometry=geo, fluid=fl)
         bc = BoundaryConditions(p_r=200, p_s=30, u=0.8)
         return SSDFSimulator(wp, bc)
 
@@ -447,7 +386,6 @@ class TestBlackOilSimulator:
             w_l = wp.geometry.A * (1 - alpha) * rho_l * v_l
             total_mass_fluxes.append(w_g + w_l)
 
-        # Total mass flux should be approximately constant
         for m in total_mass_fluxes:
             assert m == pytest.approx(total_mass_fluxes[0], rel=0.02)
 
@@ -462,19 +400,16 @@ class TestBlackOilSimulator:
         n = bo_sim.n_cells
         dim = bo_sim.dim_x
 
-        # Collect gas mass flux at bottom (cell 0) and top (cell n)
         cell_0 = result[0:dim]
         cell_n = result[dim * n: dim * (n + 1)]
 
-        w_g_bottom = wp.geometry.A * cell_0[3] * cell_0[4] * cell_0[1]  # alpha*rho_g*v_g
+        w_g_bottom = wp.geometry.A * cell_0[3] * cell_0[4] * cell_0[1]
         w_g_top = wp.geometry.A * cell_n[3] * cell_n[4] * cell_n[1]
 
         p_bottom = cell_0[0]
         p_top = cell_n[0]
 
-        # Pressure should decrease from bottom to top
         assert p_top < p_bottom
-        # Free gas should increase from bottom to top
         assert w_g_top > w_g_bottom
 
     def test_liquid_density_varies_with_pressure(self, bo_sim):
@@ -488,5 +423,4 @@ class TestBlackOilSimulator:
         n = bo_sim.n_cells
 
         rho_l_values = [result[dim * i + 5] for i in range(n + 1)]
-        # Not all identical (unlike the dead oil model)
         assert max(rho_l_values) - min(rho_l_values) > 0.1

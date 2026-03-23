@@ -10,8 +10,7 @@ Utilities for doing various PVT (Pressure/Volume/Temperature) calculations
 """
 
 from dataclasses import dataclass
-import casadi as ca
-from manywells.units import R_UNIVERSAL, P_REF, T_REF
+from manywells.units import R_UNIVERSAL, P_REF, T_REF, M_AIR
 
 
 ################################################
@@ -131,50 +130,48 @@ def density_from_api(api):
 
 
 ################################################
-# MIXTURE VISCOSITY (general mixing rules)
+# GAS DENSITY / SPECIFIC GRAVITY CONVERSIONS
 ################################################
 
-def liquid_mixture_viscosity(mu_o, mu_w, wlr):
+def gas_density_from_sg(sg_gas):
     """
-    Volume-weighted arithmetic mean viscosity for oil-water liquid mixture.
+    Gas density at standard conditions from specific gravity relative to air.
 
-    :param mu_o: Oil viscosity (Pa·s)
-    :param mu_w: Water viscosity (Pa·s)
-    :param wlr: Water-to-liquid volume fraction in [0, 1]
-    :return: Liquid mixture viscosity (Pa·s)
+    :param sg_gas: Gas specific gravity (dimensionless)
+    :return: Gas density at standard conditions (kg/m3)
     """
-    return wlr * mu_w + (1 - wlr) * mu_o
+    return P_REF * M_AIR * sg_gas / (R_UNIVERSAL * T_REF)
 
 
-def mixture_viscosity(mu_l, mu_g, alpha, rho_l=None, rho_g=None, method='mass_weighted'):
+def sg_from_gas_density(rho_g):
     """
-    Gas-liquid mixture viscosity. CasADi-compatible.
+    Gas specific gravity (relative to air) from density at standard conditions.
 
-    Supported methods:
-      - 'mass_weighted': Mass-weighted arithmetic mean (Hasan, Kabir &
-        Sayarpour 2010, Eq. A-3).  Requires ``rho_l`` and ``rho_g``.
-      - 'arithmetic': Volume-weighted arithmetic mean (Dukler et al. 1964).
-      - 'geometric':  Volume-weighted geometric mean (Arrhenius 1887).
+    :param rho_g: Gas density at standard conditions (kg/m3)
+    :return: Gas specific gravity (dimensionless)
+    """
+    return rho_g * R_UNIVERSAL * T_REF / (P_REF * M_AIR)
 
-    :param mu_l: Liquid viscosity (Pa·s)
-    :param mu_g: Gas viscosity (Pa·s)
+
+################################################
+# MIXTURE VISCOSITY
+################################################
+
+def mixture_viscosity(mu_l, mu_g, alpha, rho_l, rho_g):
+    """
+    Mass-weighted gas-liquid mixture viscosity (CasADi-compatible).
+
+    Reference: Hasan, Kabir & Sayarpour (2010), Eq. A-3.
+
+    :param mu_l: Liquid viscosity (Pa-s)
+    :param mu_g: Gas viscosity (Pa-s)
     :param alpha: Gas void fraction in [0, 1]
-    :param rho_l: Liquid density (kg/m³), required for 'mass_weighted'
-    :param rho_g: Gas density (kg/m³), required for 'mass_weighted'
-    :param method: Mixing rule ('mass_weighted', 'arithmetic', or 'geometric')
-    :return: Mixture viscosity (Pa·s)
+    :param rho_l: Liquid density (kg/m3)
+    :param rho_g: Gas density (kg/m3)
+    :return: Mixture viscosity (Pa-s)
     """
-    if method == 'mass_weighted':
-        if rho_l is None or rho_g is None:
-            raise ValueError("rho_l and rho_g are required for 'mass_weighted' method")
-        x = alpha * rho_g / (alpha * rho_g + (1 - alpha) * rho_l)
-        return mu_g * x + mu_l * (1 - x)
-    elif method == 'arithmetic':
-        return alpha * mu_g + (1 - alpha) * mu_l
-    elif method == 'geometric':
-        return ca.exp(alpha * ca.log(mu_g) + (1 - alpha) * ca.log(mu_l))
-    else:
-        raise ValueError(f"Unknown mixture viscosity method: {method}")
+    x = alpha * rho_g / (alpha * rho_g + (1 - alpha) * rho_l)
+    return mu_g * x + mu_l * (1 - x)
 
 
 ################################################
