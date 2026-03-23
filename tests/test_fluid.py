@@ -181,3 +181,49 @@ class TestLiveOilViscosity:
         mu_low_p = float(fl.liquid_viscosity(50.0, T))
         mu_high_p = float(fl.liquid_viscosity(300.0, T))
         assert mu_low_p == pytest.approx(mu_high_p)
+
+
+class TestSurfaceTension:
+
+    @staticmethod
+    def _make_black_oil_fluid():
+        bo = BlackOilPVT(api=30, sg_gas=0.65, p_sep=200 * CF_PSI, T_sep=333.15)
+        return FluidModel(api=30, sg_gas=0.65, GOR=150.0, water_cut=0.0, black_oil=bo)
+
+    def test_dead_oil_surface_tension_positive(self):
+        """Dead oil (no black_oil) surface tension is positive."""
+        fl = FluidModel(api=30)
+        sigma = float(fl.surface_tension(100.0, 273.15 + 60))
+        assert sigma > 0
+
+    def test_dead_oil_surface_tension_ignores_pressure(self):
+        """Without black_oil, surface tension does not depend on pressure."""
+        fl = FluidModel(api=30)
+        T = 273.15 + 60
+        s1 = float(fl.surface_tension(50.0, T))
+        s2 = float(fl.surface_tension(300.0, T))
+        assert s1 == pytest.approx(s2)
+
+    def test_black_oil_surface_tension_less_than_dead(self):
+        """With black oil, surface tension is reduced by dissolved gas."""
+        fl_dead = FluidModel(api=30, sg_gas=0.65, GOR=150.0, water_cut=0.0)
+        fl_live = self._make_black_oil_fluid()
+        p = 150.0  # bar
+        T = 273.15 + 80
+        sigma_dead = float(fl_dead.surface_tension(p, T))
+        sigma_live = float(fl_live.surface_tension(p, T))
+        assert sigma_live < sigma_dead
+
+    def test_black_oil_surface_tension_positive(self):
+        """Live oil surface tension is positive."""
+        fl = self._make_black_oil_fluid()
+        sigma = float(fl.surface_tension(200.0, 273.15 + 80))
+        assert sigma > 0
+
+    def test_black_oil_surface_tension_decreases_with_pressure(self):
+        """Higher pressure dissolves more gas, lowering surface tension."""
+        fl = self._make_black_oil_fluid()
+        T = 273.15 + 80
+        sigma_low_p = float(fl.surface_tension(50.0, T))
+        sigma_high_p = float(fl.surface_tension(250.0, T))
+        assert sigma_high_p < sigma_low_p

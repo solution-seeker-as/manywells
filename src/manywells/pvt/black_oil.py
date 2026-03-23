@@ -16,7 +16,7 @@ import casadi as ca
 
 from manywells.pvt import P_REF, T_REF, R_UNIVERSAL, api_from_density, density_from_api
 from manywells.units import CF_PSI, CF_RS, CF_CP, M_AIR, kelvin_to_fahrenheit
-from manywells.ca_functions import ca_min_approx
+from manywells.ca_functions import ca_min_approx, ca_max_approx, ca_sigmoid
 
 
 @dataclass
@@ -207,3 +207,31 @@ def live_oil_viscosity(mu_dead, Rs_scf):
     b = 5.44 * ca.constpow(Rs_scf + 150, -0.338)
     mu_live_cP = a * ca.constpow(mu_dead_cP, b)
     return mu_live_cP * CF_CP
+
+
+def live_oil_surface_tension(sigma_dead, Rs_scf):
+    """
+    Abdul-Majeed & Al-Soof (2000) live oil surface tension correction.
+
+    Dissolved gas reduces surface tension. At Rs = 500 scf/STB, surface
+    tension drops to roughly 40% of the dead-oil value.
+
+    The two branches of the original correlation meet continuously at
+    Rs_vol = 50 Sm3/Sm3 and are blended with a sigmoid for CasADi
+    differentiability.
+
+    Reference: Abdul-Majeed, G.H. and Al-Soof, N.B.A., "Estimation of
+    gas-oil surface tension", J Pet Sci Eng 27 (2000): 197-200.
+
+    :param sigma_dead: Dead oil surface tension (J/m2), may be CasADi symbolic
+    :param Rs_scf: Solution gas-oil ratio (scf/STB), may be CasADi symbolic
+    :return: Live oil surface tension (J/m2)
+    """
+    Rs_vol = Rs_scf * CF_RS  # Sm3/Sm3
+
+    Rs_safe = ca_max_approx(Rs_vol, 1e-6)
+    sigma_low = sigma_dead / (1 + 0.02549 * ca.constpow(Rs_safe, 1.0157))
+    sigma_high = sigma_dead * 32.0436 * ca.constpow(Rs_safe, -1.1367)
+
+    blend = ca_sigmoid(Rs_vol, 50.0, 0.5)
+    return (1 - blend) * sigma_low + blend * sigma_high

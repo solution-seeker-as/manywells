@@ -25,7 +25,7 @@ from manywells.pvt import (
     mixture_viscosity,
 )
 from manywells.pvt.dead_oil import dead_oil_viscosity, dead_oil_surface_tension
-from manywells.pvt.black_oil import live_oil_viscosity
+from manywells.pvt.black_oil import live_oil_viscosity, live_oil_surface_tension
 
 
 def test_reference_conditions():
@@ -293,3 +293,56 @@ def test_live_oil_viscosity_near_zero_rs():
     mu_dead = float(dead_oil_viscosity(35, T))
     mu_live = float(live_oil_viscosity(mu_dead, 1.0))
     assert mu_live == pytest.approx(mu_dead, rel=0.15)
+
+
+# ---- Live oil surface tension tests ----
+
+
+def test_live_oil_surface_tension_reduces_dead():
+    """Dissolved gas reduces surface tension."""
+    rho = 850.0
+    T = 273.15 + 60
+    sigma_dead = float(dead_oil_surface_tension(rho, T))
+    sigma_live = float(live_oil_surface_tension(sigma_dead, 500.0))
+    assert sigma_live < sigma_dead
+
+
+def test_live_oil_surface_tension_decreases_with_rs():
+    """More dissolved gas reduces surface tension further."""
+    rho = 850.0
+    T = 273.15 + 60
+    sigma_dead = float(dead_oil_surface_tension(rho, T))
+    sigma_low = float(live_oil_surface_tension(sigma_dead, 100.0))
+    sigma_high = float(live_oil_surface_tension(sigma_dead, 800.0))
+    assert sigma_high < sigma_low
+
+
+def test_live_oil_surface_tension_positive():
+    """Live oil surface tension remains positive."""
+    rho = 850.0
+    T = 273.15 + 60
+    sigma_dead = float(dead_oil_surface_tension(rho, T))
+    sigma_live = float(live_oil_surface_tension(sigma_dead, 1000.0))
+    assert sigma_live > 0
+
+
+def test_live_oil_surface_tension_near_zero_rs():
+    """At near-zero Rs, live surface tension is close to dead value."""
+    rho = 850.0
+    T = 273.15 + 60
+    sigma_dead = float(dead_oil_surface_tension(rho, T))
+    sigma_live = float(live_oil_surface_tension(sigma_dead, 0.1))
+    assert sigma_live == pytest.approx(sigma_dead, rel=0.05)
+
+
+def test_live_oil_surface_tension_continuity_at_branch():
+    """The two branches of the correlation meet near Rs_vol = 50 Sm3/Sm3."""
+    from manywells.units import CF_RS
+    rho = 850.0
+    T = 273.15 + 60
+    sigma_dead = float(dead_oil_surface_tension(rho, T))
+    Rs_scf_at_50 = 50.0 / CF_RS  # scf/STB that gives Rs_vol = 50 Sm3/Sm3
+    sigma_below = float(live_oil_surface_tension(sigma_dead, Rs_scf_at_50 - 10))
+    sigma_above = float(live_oil_surface_tension(sigma_dead, Rs_scf_at_50 + 10))
+    # Values should be close near the branch point
+    assert sigma_below == pytest.approx(sigma_above, rel=0.15)

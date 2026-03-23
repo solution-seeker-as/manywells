@@ -16,8 +16,8 @@ from manywells.pvt import (
 )
 from manywells.pvt.black_oil import BlackOilPVT
 from manywells.units import M_AIR, CF_BAR, CF_RS
-from manywells.pvt.dead_oil import dead_oil_viscosity
-from manywells.pvt.black_oil import live_oil_viscosity
+from manywells.pvt.dead_oil import dead_oil_viscosity, dead_oil_surface_tension
+from manywells.pvt.black_oil import live_oil_viscosity, live_oil_surface_tension
 import manywells.pvt.fluid_mix as fluid_mix
 
 
@@ -144,6 +144,25 @@ class FluidModel:
             mu_o = live_oil_viscosity(mu_o, Rs_scf)
         mu_w = water_viscosity(T)
         return liquid_mixture_viscosity(mu_o, mu_w, self.wlr)
+
+    def surface_tension(self, p, T):
+        """
+        Oil-gas surface tension at (p, T) (CasADi-compatible).
+
+        For dead oil, depends only on density and temperature.
+        For black oil, the Abdul-Majeed live oil correction reduces
+        surface tension to account for dissolved gas at (p, T).
+
+        :param p: Pressure (bar), may be CasADi symbolic
+        :param T: Temperature (K), may be CasADi symbolic
+        :return: Oil-gas surface tension (J/m2)
+        """
+        sigma = dead_oil_surface_tension(self.rho_o, T)
+        if self.black_oil is not None:
+            p_Pa = p * CF_BAR
+            Rs_scf = self.black_oil.rs(p_Pa, T) / CF_RS
+            sigma = live_oil_surface_tension(sigma, Rs_scf)
+        return sigma
 
     def gas_viscosity(self, T, rho_g):
         """Gas viscosity at (T, rho_g) (CasADi-compatible)."""

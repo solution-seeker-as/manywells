@@ -15,10 +15,9 @@ from dataclasses import dataclass
 import casadi as ca
 from manywells.ca_functions import ca_softmax
 from manywells.units import STD_GRAVITY
-from manywells.pvt.dead_oil import dead_oil_surface_tension
 
 
-def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, T):
+def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma):
     """
     Classify flow regime (annular, slug/churn, or bubbly) based on the following conditions:
 
@@ -81,14 +80,13 @@ def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, T):
     :param alpha: Void fraction
     :param rho_g: Gas density (kg/m³)
     :param rho_l: Liquid density (kg/m³)
-    :param T: Temperature (K)
+    :param sigma: Oil-gas surface tension (J/m²)
     :return: Vector of probabilities of each flow regime, [p_annular, p_slug, p_bubbly]
     """
     v_gs = alpha * v_g  # Superficial gas velocity (m/s)
     v_ls = (1 - alpha) * v_l  # Superficial liquid velocity (m/s)
 
-    # Compute surface tension and velocity condition for annular flow
-    sigma = dead_oil_surface_tension(rho_l, T)
+    # Velocity condition for annular flow
     annular_boundary = 3.1 * (STD_GRAVITY * sigma * (rho_l - rho_g) / rho_g ** 2) ** (1 / 4)
 
     # Conditions in flow regime hierarchy
@@ -129,17 +127,16 @@ class SlipModel:
     v_inf_annular = 0.0
 
     @staticmethod
-    def harmathy_rise_velocity(rho_g, rho_l, T):
+    def harmathy_rise_velocity(rho_g, rho_l, sigma):
         """
         Harmathy correlation for small bubble rise velocity
 
         :param rho_g: Gas density (kg/m³)
         :param rho_l: Liquid density (kg/m³)
-        :param T: Temperature in (K)
+        :param sigma: Oil-gas surface tension (J/m²)
         :return: Bubble rise velocity (m/s)
         """
-        s = dead_oil_surface_tension(rho=rho_l, T=T)  # Liquid surface tension (J/m²)
-        return 1.53 * ca.constpow(STD_GRAVITY * s * (rho_l - rho_g) / (rho_l ** 2), 1 / 4)
+        return 1.53 * ca.constpow(STD_GRAVITY * sigma * (rho_l - rho_g) / (rho_l ** 2), 1 / 4)
 
     @staticmethod
     def taylor_rise_velocity(rho_g, rho_l, D):
@@ -152,15 +149,21 @@ class SlipModel:
         """
         return 0.35 * ca.sqrt(STD_GRAVITY * D * (1 - rho_g / rho_l))
 
-    def identify_parameters(self, v_g, v_l, alpha, rho_g, rho_l, T, D):
+    def identify_parameters(self, v_g, v_l, alpha, rho_g, rho_l, sigma, D):
         """
-        Compute slip model parameters (C_0, v_inf) based on void fraction, alpha
+        Compute slip model parameters (C_0, v_inf) based on flow regime.
 
+        :param v_g: Gas velocity (m/s)
+        :param v_l: Liquid velocity (m/s)
         :param alpha: Void fraction
+        :param rho_g: Gas density (kg/m³)
+        :param rho_l: Liquid density (kg/m³)
+        :param sigma: Oil-gas surface tension (J/m²)
+        :param D: Inner diameter of pipe (m)
         :return: C_0, v_inf
         """
 
-        probs = classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, T)
+        probs = classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma)
         p_annular = probs[0]
         p_slug = probs[1]
         p_bubbly = probs[2]
@@ -171,26 +174,26 @@ class SlipModel:
         # Set drift velocity
         v_inf_annular = self.v_inf_annular
         v_inf_slug = self.taylor_rise_velocity(rho_g, rho_l, D)
-        v_inf_bubbly = self.harmathy_rise_velocity(rho_g, rho_l, T)
+        v_inf_bubbly = self.harmathy_rise_velocity(rho_g, rho_l, sigma)
 
         v_inf = p_annular * v_inf_annular + p_slug * v_inf_slug + p_bubbly * v_inf_bubbly
 
         return C_0, v_inf
 
-    def slip_equation(self, v_g, v_l, alpha, rho_g, rho_l, T, D):
+    def slip_equation(self, v_g, v_l, alpha, rho_g, rho_l, sigma, D):
         """
         Compute slip law: v_g = C_0 * v_m + v_inf, where v_m is the mixture velocity
         """
-        C_0, v_inf = self.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, T, D)
+        C_0, v_inf = self.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D)
         v_m = alpha * v_g + (1 - alpha) * v_l  # Mixture velocity
         eq = v_g - (C_0 * v_m + v_inf)
         return eq
 
-    def flow_regime(self, v_g, v_l, alpha, rho_g, rho_l, T) -> str:
+    def flow_regime(self, v_g, v_l, alpha, rho_g, rho_l, sigma) -> str:
         """
         Return textual description of classified (most probable) flow regime
         """
-        probs = classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, T)
+        probs = classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma)
         p_annular, p_slug, p_bubbly = probs.full().flatten().tolist()
         if p_annular > p_slug and p_annular > p_bubbly:
             return 'annular'
@@ -200,8 +203,8 @@ class SlipModel:
             return 'bubbly'
 
 
-
 if __name__ == '__main__':
+    from manywells.pvt.dead_oil import dead_oil_surface_tension
 
     x = ca.SX.sym(f'x', 3)
     f = ca.exp(x)
@@ -218,7 +221,8 @@ if __name__ == '__main__':
     rho_g = 1
     rho_l = 900
     T = 273.15 + 20
-    probs = classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, T)
+    sigma = dead_oil_surface_tension(rho_l, T)
+    probs = classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma)
 
     # annular boundary = 12.821059412975487
     print(probs.full())
@@ -229,10 +233,5 @@ if __name__ == '__main__':
     print(probs.full().flatten()[2])  # Bubbly flow
 
     model = SlipModel()
-    C_0, v_inf = model.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, T, D=0.1)
+    C_0, v_inf = model.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D=0.1)
     print(C_0, v_inf)
-
-
-
-
-

@@ -187,4 +187,4 @@ from manywells.pvt.gas import (  # noqa: E402, F401
 )
 from manywells.pvt.water import water_fvf, water_viscosity  # noqa: E402, F401
 from manywells.pvt.dead_oil import dead_oil_viscosity, dead_oil_surface_tension  # noqa: E402, F401
-from manywells.pvt.black_oil import live_oil_viscosity  # noqa: E402, F401
+from manywells.pvt.black_oil import live_oil_viscosity, live_oil_surface_tension  # noqa: E402, F401

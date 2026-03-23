@@ -149,12 +149,12 @@ class SSDFSimulator:
         p, v_g, v_l, alpha, rho_g, rho_l, T = x
         wp = self.wp
         geo = self.geo
+        fl = wp.fluid
 
         # Derivations for slip relation
         v_m = alpha * v_g + (1 - alpha) * v_l  # Mixture velocity
-        C_0, v_inf = wp.slip.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, T, geo.D)
-
-        fl = wp.fluid
+        sigma = fl.surface_tension(p, T)
+        C_0, v_inf = wp.slip.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, geo.D)
 
         # Closure relations
         g1 = v_g - C_0 * v_m - v_inf                # Slip relation
@@ -404,7 +404,8 @@ class SSDFSimulator:
         alpha = ca.SX.sym(f'alpha_0')
 
         # Slip model
-        C_0, v_inf = wp.slip.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, T_0, D)
+        sigma = fl.surface_tension(p_0, T_0)
+        C_0, v_inf = wp.slip.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D)
         v_m = w_g / (A * rho_g) + w_l / (A * rho_l)  # Known
 
         # Equations
@@ -620,9 +621,11 @@ class SSDFSimulator:
         df.insert(loc=2, column='tvd', value=tvd)
 
         # Add flow regime identifier
+        fl = self.wp.fluid
         flow_regime = list()
         for index, row in df.iterrows():
-            fr = self.wp.slip.flow_regime(row['v_g'], row['v_l'], row['alpha'], row['rho_g'], row['rho_l'], row['T'])
+            sigma = float(fl.surface_tension(row['p'], row['T']))
+            fr = self.wp.slip.flow_regime(row['v_g'], row['v_l'], row['alpha'], row['rho_g'], row['rho_l'], sigma)
             flow_regime.append(fr)
         df['flow-regime'] = flow_regime
 
