@@ -37,7 +37,13 @@ def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, T):
 
     This is a simplified version of the flow regime hierarchy in "Simplified two-phase flow modeling in wellbores" by
     Hasan, Kabir & Sayarpour (2010). One simplification is that slug and churn flow has been combined into one class.
-    Condition C1 and C3 are Eq. 19 and Eq. 18 in the paper, respectively.
+    Condition C1 and C3 are Eq. (A-19) and Eq. (A-18) in the paper, respectively.
+
+    TODO: The bubbly-to-slug transition threshold (C4: alpha >= 0.25) does not account for well
+    deviation. Hasan et al. (2010) Eq. (A-14)/(A-15) show that in deviated wells the transition
+    velocity v_gb is multiplied by cos(theta), because inclination concentrates gas near the upper
+    pipe wall, causing the local void fraction to reach 0.25 before the cross-sectional average does.
+    This means the transition to slug flow occurs at a lower average void fraction in deviated wells.
 
     Above, v_gs and v_ls are the superficial gas and liquid velocities, computed as:
         v_gs = alpha * v_g and v_ls = (1 - alpha) * v_l.
