@@ -14,5 +14,5 @@
 ```
 
 List of errors:
-- In Equation (A.10), the Harmathy and Taylor bubble rise velocities should be swapped; that is, the equation should be $v_{\infty} = 0 \cdot p_{\text{annular}} + v_{\infty T} \cdot p_{\text{slug-churn}} + v_{\infty b} \cdot p_{\text{bubbly}}$. 
+- In Equation (A.10), the Harmathy and Taylor bubble rise velocities should be swapped; that is, the equation should be $v_{\infty} = 0 \cdot p_{\text{annular}} + v_{\infty T} \cdot p_{\text{slug-churn}} + v_{\infty b} \cdot p_{\text{bubbly}}$. The equation was correctly implemented and this typo had no effect on the results presented in the paper.
 
