@@ -19,6 +19,7 @@ from manywells.simulator import (
     SSDFSimulator,
     SimError,
 )
+from manywells.units import CF_BAR
 
 
 class SSDFSimulatorIPOPT(SSDFSimulator):
@@ -29,45 +30,38 @@ class SSDFSimulatorIPOPT(SSDFSimulator):
         wp = self.wp
         bc = self.bc
         fl = wp.fluid
+        A = self.geo.A
+        D = self.geo.D
 
-        rho_g = CF_BAR * p_0 / (fl.R_s * T_0)
+        Z_0 = float(fl.z_factor(p_0, T_0))
+        rho_g = CF_BAR * p_0 / (Z_0 * fl.R_s * T_0)
         w_l_inflow = wp.inflow.liquid_mass_flow_rate(p_0, bc.p_r)
         w_g_inflow = fl.gas_mass_flow_rate(w_l_inflow)
 
-        if fl.black_oil is not None:
-            bo = fl.black_oil
-            p_Pa = p_0 * CF_BAR
+        rho_l = float(fl.liquid_density(p_0, T_0))
 
-            Rs_0 = float(bo.rs(p_Pa, T_0))
-            Bo_0 = float(bo.bo(p_Pa, T_0))
-            rho_l = float(fluid_mix.liquid_density_bo(
-                bo.rho_o_sc, bo.rho_g_sc, fl.rho_w, Rs_0, Bo_0, fl.wlr,
-            ))
+        w_o = w_l_inflow * fl.f_o_in_liquid
+        Rs_0 = float(fl.rs(p_0, T_0))
+        r = Rs_0 * fl.rho_g / fl.rho_o
+        w_dissolved = min(r * w_o, w_g_inflow)
+        w_g = max(w_g_inflow + bc.w_lg - w_dissolved, 0.0)
+        w_l = w_l_inflow + w_dissolved
 
-            w_o = w_l_inflow * fl.f_o_in_liquid
-            r = Rs_0 * bo.rho_g_sc / bo.rho_o_sc
-            w_dissolved = min(r * w_o, w_g_inflow)
-            w_g = max(w_g_inflow + bc.w_lg - w_dissolved, 0.0)
-            w_l = w_l_inflow + w_dissolved
-
-            self._w_g_total = w_g_inflow
-            self._w_o = w_o
-            self._w_l_inflow = w_l_inflow
-        else:
-            rho_l = fl.rho_l
-            w_g = w_g_inflow + bc.w_lg
-            w_l = w_l_inflow
+        self._w_g_total = w_g_inflow
+        self._w_o = w_o
+        self._w_l_inflow = w_l_inflow
 
         v_g = ca.SX.sym('v_g_0')
         v_l = ca.SX.sym('v_l_0')
         alpha = ca.SX.sym('alpha_0')
 
-        C_0, v_inf = wp.slip.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, T_0, wp.D)
-        v_m = w_g / (wp.A * rho_g) + w_l / (wp.A * rho_l)
+        sigma = fl.surface_tension(p_0, T_0)
+        C_0, v_inf = wp.slip.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D)
+        v_m = w_g / (A * rho_g) + w_l / (A * rho_l)
 
         g0 = v_g - (C_0 * v_m + v_inf)
-        g1 = (wp.A * alpha * rho_g) * v_g - w_g
-        g2 = (wp.A * (1 - alpha) * rho_l) * v_l - w_l
+        g1 = (A * alpha * rho_g) * v_g - w_g
+        g2 = (A * (1 - alpha) * rho_l) * v_l - w_l
 
         x_vec = ca.vertcat(*[v_g, v_l, alpha])
         g_vec = ca.vertcat(*[g0, g1, g2])
@@ -76,7 +70,7 @@ class SSDFSimulatorIPOPT(SSDFSimulator):
         solver_config = {'ipopt.print_level': 0, 'print_time': 0}
         solver = ca.nlpsol('S', 'ipopt', nlp, solver_config)
         alpha_guess = 0.5
-        x_guess = [w_g / (wp.A * alpha_guess * rho_g), w_l / (wp.A * (1 - alpha_guess) * rho_l), alpha_guess]
+        x_guess = [w_g / (A * alpha_guess * rho_g), w_l / (A * (1 - alpha_guess) * rho_l), alpha_guess]
         result = solver(x0=x_guess, lbx=[0, 0, 0], ubx=[ca.inf, ca.inf, 1], lbg=[0, 0, 0], ubg=[0, 0, 0])
         if not solver.stats()['success']:
             raise SimError('compute_left_boundary_state: Could not solve for alpha')
@@ -117,10 +111,6 @@ class SSDFSimulatorIPOPT(SSDFSimulator):
         return x
 
 
-from manywells.units import CF_BAR  # noqa: E402
-import manywells.pvt.fluid_mix as fluid_mix  # noqa: E402
-
-
 def compare_solutions(x_old, x_new, label=""):
     """Print per-variable comparison between two flat solution vectors."""
     var_names = ['p', 'v_g', 'v_l', 'alpha', 'rho_g', 'rho_l', 'T']
@@ -153,13 +143,13 @@ def benchmark_cellwise(n_cells=100):
     T_0 = bc.T_r
 
     # --- IPOPT ---
-    sim_ipopt = SSDFSimulatorIPOPT(wp, bc, n_cells=n_cells)
+    sim_ipopt = SSDFSimulatorIPOPT(wp, bc)
     t0 = time.perf_counter()
     x_ipopt = sim_ipopt._simulate_cellwise(p_0, T_0)
     t_ipopt = time.perf_counter() - t0
 
     # --- Newton rootfinder ---
-    sim_rf = SSDFSimulator(wp, bc, n_cells=n_cells)
+    sim_rf = SSDFSimulator(wp, bc)
     t0 = time.perf_counter()
     x_rf = sim_rf._simulate_cellwise(p_0, T_0)
     t_rf = time.perf_counter() - t0
@@ -185,7 +175,7 @@ def benchmark_full_simulation(n_cells=100):
     wp = WellProperties()
     bc = BoundaryConditions(u=0.5)
 
-    sim = SSDFSimulator(wp, bc, n_cells=n_cells)
+    sim = SSDFSimulator(wp, bc)
     t0 = time.perf_counter()
     x = sim.simulate()
     t_total = time.perf_counter() - t0
