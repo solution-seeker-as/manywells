@@ -90,6 +90,8 @@ You can cite it as shown in the bibtex entry below.
 }
 ```
 
+[You can find a paper corrigendum here](docs/corrigendum.md).
+
 ### License
 Manywells © 2024 by [Solution Seeker AS](https://solutionseeker.no) is licensed under 
 [Creative Commons Attribution-NonCommercial 4.0 International](https://creativecommons.org/licenses/by-nc/4.0/?ref=chooser-v1). 
