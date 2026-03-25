@@ -101,6 +101,11 @@ venv.bak/
 # IDEAs
 .idea/
 .vscode/
+.cursor/
 
 # Apple
 .DS_Store
+
+# Local folders
+local_scripts/
+papers/
