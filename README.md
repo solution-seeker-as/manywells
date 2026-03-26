@@ -58,6 +58,19 @@ Note that you will only get access to the files in the `manywells` folder if you
 ### Datasets
 If you wish to download and use the ManyWells datasets, you can find them at the [ManyWells project on HuggingFace](https://huggingface.co/datasets/solution-seeker-as/manywells). 
 
+You can use the `datasets` Python package to get started:
+```python
+import datasets
+
+# Download 'manywells-sol-1'
+data = datasets.load_dataset("solution-seeker-as/manywells", name='manywells-sol-1')
+
+# Cast dataset to a Pandas DataFrame
+df = data['train'].to_pandas()
+
+# Print the data
+print(df)
+```
 
 
 ### Reference
