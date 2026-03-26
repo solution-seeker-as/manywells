@@ -7,18 +7,20 @@ Created 21 February 2025
 Bjarne Grimstad, bjarne.grimstad@solutionseeker.no 
 """
 
-import pandas as pd
+import datasets
 
 
-# Read manywells-sol-1 dataset
-dataset_filename = '../data/manywells-sol/manywells-sol-1.zip'
-dataset = pd.read_csv(dataset_filename, compression='zip')
-print(dataset)
+# Download 'manywells-sol-1'
+data = datasets.load_dataset("solution-seeker-as/manywells", name='manywells-sol-1')
 
-# Read manywells-sol-1 config
-config_filename = '../data/manywells-sol/manywells-sol-1_config.zip'
-config = pd.read_csv(config_filename, compression='zip')
+# Cast dataset to a Pandas DataFrame
+df = data['train'].to_pandas()
+
+# Print the data
+print(df)
+
+# Load config
+config = datasets.load_dataset("solution-seeker-as/manywells", name='manywells-sol-1-config')
+
+# Print config
 print(config)
-
-
-

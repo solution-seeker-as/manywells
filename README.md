@@ -19,10 +19,6 @@ The figure below illustrates a well and some model components of the ManyWells s
 The project is structured as follows
 ```
 Project folder
-|-- data
-|   |-- manywells_sol       # Files related to the manywells-sol dataset  
-|   |-- manywells_nsol      # Files related to the manywells-nsol dataset
-|   |-- manywells_nscl      # Files related to the manywells-nscl dataset
 |-- docs                    # Documentation
 |-- manywells               # Implementation of simulator
 |   |-- calibration         # Code for calibration to data
@@ -37,11 +33,8 @@ Project folder
 
 To start developing with ManyWells, you first need to clone the repository by running the following command:
 ```
-GIT_LFS_SKIP_SMUDGE=1 git clone git@github.com:solution-seeker-as/manywells.git
+git clone git@github.com:solution-seeker-as/manywells.git
 ```
-The environment variable `GIT_LFS_SKIP_SMUDGE=1` is set to avoid downloading the large dataset files in the `data` folder (due to GitHub LFS quotas).
-
-If you wish to download the datasets, you can also find them at the [ManyWells project on HuggingFace](https://huggingface.co/datasets/solution-seeker-as/manywells).
 
 ### Python environment
 The `manywells` Python environment is defined by `pyproject.toml`, with specific package versions in `uv.lock`. 
@@ -52,9 +45,20 @@ uv sync
 ``` 
 
 ### Installation
-If you do not plan on modifying the ManyWells files, you can optionally install ManyWells as a Python package. 
-See [further instructions here](docs/installation.md). 
+If you do not plan on modifying the ManyWells files, you can optionally install ManyWells as a Python package by running the following command:
+```pip install git+ssh://git@github.com/solution-seeker-as/manywells.git```
+
+This command requires that you have registered an SSH key in your GitHub account.
+
+After having installed the environment, you can import the files in the manywells folder. 
+For example, you could import the simulator as `import manywells.simulator as sim`. 
+
 Note that you will only get access to the files in the `manywells` folder if you install the package. 
+
+### Datasets
+If you wish to download and use the ManyWells datasets, you can find them at the [ManyWells project on HuggingFace](https://huggingface.co/datasets/solution-seeker-as/manywells). 
+
+
 
 ### Reference
 If you use ManyWells in an academic work, we kindly ask you to cite our paper. 
