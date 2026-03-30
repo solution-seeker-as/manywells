@@ -565,11 +565,9 @@ class SSDFSimulator:
 
         # Add geometry columns (simulator order: bottom to top)
         geo = self.geo
-        z = np.array(geo.md[::-1])
         md = np.array(geo.md)    # simulator order (bottom → top)
         tvd = np.array(geo.tvd)  # simulator order (bottom → top)
 
-        df.insert(loc=0, column='z', value=z)
         df.insert(loc=1, column='md', value=md)
         df.insert(loc=2, column='tvd', value=tvd)
 
