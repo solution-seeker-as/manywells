@@ -20,7 +20,7 @@ def test_classify_flow_regime_sum_to_one():
     v_g, v_l, alpha = 20.0, 5.0, 0.5
     rho_g, rho_l = 1.0, 900.0
     sigma = _sigma(rho_l, 273.15 + 20)
-    probs = classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma)
+    probs = classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl=1.0)
     total = float(ca.sum1(probs).full())
     assert total == pytest.approx(1.0)
 
@@ -30,7 +30,7 @@ def test_classify_flow_regime_non_negative():
     v_g, v_l, alpha = 20.0, 5.0, 0.5
     rho_g, rho_l = 1.0, 900.0
     sigma = _sigma(rho_l, 273.15 + 20)
-    probs = classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma)
+    probs = classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl=1.0)
     p = probs.full().flatten()
     assert (p >= -1e-10).all()
 
@@ -86,5 +86,5 @@ def test_flow_regime_string():
     v_g, v_l, alpha = 20.0, 2.0, 0.8
     rho_g, rho_l = 1.0, 900.0
     sigma = _sigma(rho_l, 293.15)
-    regime = model.flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma)
+    regime = model.flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl=1.0)
     assert regime in ("annular", "slug-churn", "bubbly")

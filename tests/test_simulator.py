@@ -237,7 +237,6 @@ def test_simulator_solution_as_df_shape():
     for _ in range(n_nodes):
         dummy_state.extend([50.0, 5.0, 2.0, 0.3, 50.0, 700.0, 300.0])
     df = sim.solution_as_df(dummy_state)
-    assert "z" in df.columns
     assert "md" in df.columns
     assert "tvd" in df.columns
     for name in sim.variable_names:

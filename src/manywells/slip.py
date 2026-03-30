@@ -15,9 +15,10 @@ from dataclasses import dataclass
 import casadi as ca
 from manywells.ca_functions import ca_softmax
 from manywells.units import STD_GRAVITY
+from math import sqrt
 
 
-def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma):
+def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl):
     """
     Classify flow regime (annular, slug/churn, or bubbly) based on the following conditions:
 
@@ -32,17 +33,15 @@ def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma):
         C1: v_gs > 3.1 * (g * sigma * (rho_l - rho_g) / rho_g ** 2) ** (1/4)
         C2: alpha >= 0.7
         C3: v_gs > 1.08 * v_ls
-        C4: alpha >= 0.25
+        C4: alpha >= 0.25 * cos(theta)
 
     This is a simplified version of the flow regime hierarchy in "Simplified two-phase flow modeling in wellbores" by
     Hasan, Kabir & Sayarpour (2010). One simplification is that slug and churn flow has been combined into one class.
     Condition C1 and C3 are Eq. (A-19) and Eq. (A-18) in the paper, respectively.
 
-    TODO: The bubbly-to-slug transition threshold (C4: alpha >= 0.25) does not account for well
-    deviation. Hasan et al. (2010) Eq. (A-14)/(A-15) show that in deviated wells the transition
-    velocity v_gb is multiplied by cos(theta), because inclination concentrates gas near the upper
-    pipe wall, causing the local void fraction to reach 0.25 before the cross-sectional average does.
-    This means the transition to slug flow occurs at a lower average void fraction in deviated wells.
+    The bubbly-to-slug transition threshold (C4) is set to alpha >= 0.25 * cos(theta) to account
+    for earlier transition in inclined wells. This reduces to alpha >= 0.25 in vertical wells.
+    cos(theta) is represented by the cos_incl argument.
 
     Above, v_gs and v_ls are the superficial gas and liquid velocities, computed as:
         v_gs = alpha * v_g and v_ls = (1 - alpha) * v_l.
@@ -51,7 +50,7 @@ def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma):
         f1 = tanh(v_gs - 3.1 * (g * sigma * (rho_l - rho_g) / rho_g ** 2) ** (1/4))
         f2 = tanh(alpha - 0.7)
         f3 = tanh(v_gs - 1.08 * v_ls)
-        f4 = tanh(alpha - 0.25)
+        f4 = tanh(alpha - 0.25 * cos_incl)
         f = [f1, f2, f3, f4]
 
     An affine mapping of the features is then applied to give:
@@ -81,6 +80,7 @@ def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma):
     :param rho_g: Gas density (kg/m³)
     :param rho_l: Liquid density (kg/m³)
     :param sigma: Oil-gas surface tension (J/m²)
+    :param cos_incl: Cosine of angle to vertical (dimensionless)
     :return: Vector of probabilities of each flow regime, [p_annular, p_slug, p_bubbly]
     """
     v_gs = alpha * v_g  # Superficial gas velocity (m/s)
@@ -93,7 +93,7 @@ def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma):
     c_1 = ca.tanh(v_gs - annular_boundary)  # Eq. A-19 in Hasan, Kabir & Sayarpour (2010)
     c_2 = ca.tanh((alpha - 0.7) * 2)  # Multiplied by 2 to increase sensitivity
     c_3 = ca.tanh(v_gs - 1.08 * v_ls)  # Eq. A-18 in Hasan, Kabir & Sayarpour (2010)
-    c_4 = ca.tanh((alpha - 0.25) * 2)  # Multiplied by 2 to increase sensitivity
+    c_4 = ca.tanh((alpha - 0.25 * cos_incl) * 2)  # Multiplied by 2 to increase sensitivity
 
     # Output layer
     y_1 = 3.17715258 * c_1 + 6.81938489 * c_2 + 0.30182974 * c_3 + 3.58362465 * c_4 - 3.92904391  # Annular flow
@@ -149,28 +149,6 @@ class SlipModel:
         """
         return 0.35 * ca.sqrt(STD_GRAVITY * D * (1 - rho_g / rho_l))
 
-    @staticmethod
-    def averaged_rise_velocity(v_g, v_l, alpha, cos_incl, v_inf_b, v_inf_t):
-        """
-        Averaged rise velocity for slug and churn flow
-
-        NOTE: this averaging may be implicitly achieved by the probability based slip model of ManyWells
-
-        :param v_g: Gas velocity (m/s)
-        :param v_l: Liquid velocity (m/s)
-        :param alpha: Void fraction
-        :param cos_incl: Cosine of the inclination from vertical
-        :param v_inf_b: Small bubble rise velocity (m/s)
-        :param v_inf_t: Taylor bubble (slug) rise velocity (m/s)
-        :return: Averaged rise velocity (m/s)
-        """
-        v_gs = alpha * v_g  # Superficial gas velocity (m/s)
-        v_ls = (1 - alpha) * v_l  # Superficial liquid velocity (m/s)
-        v_gb = (0.42857 * v_ls + 0.35714 * v_inf_b) * cos_incl
-        sharpness = 0.1  # Sharpness of the transition from bubble to Taylor bubble rise velocity – Hasan et al. (2010) sets this to 0.1
-        r = ca.exp(-sharpness * v_gb / (v_gs - v_gb))
-        return (1 - r) * v_inf_b + r * v_inf_t
-
     def identify_parameters(self, v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl):
         """
         Compute slip model parameters (C_0, v_inf) based on flow regime.
@@ -186,7 +164,7 @@ class SlipModel:
         :return: C_0, v_inf
         """
 
-        probs = classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma)
+        probs = classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl)
         p_annular = probs[0]
         p_slug = probs[1]
         p_bubbly = probs[2]
@@ -196,28 +174,51 @@ class SlipModel:
 
         # Set drift velocity
         v_inf_annular = self.v_inf_annular
-        v_inf_taylor = self.taylor_rise_velocity(rho_g, rho_l, D)
+        v_inf_slug = self.taylor_rise_velocity(rho_g, rho_l, D)
         v_inf_bubbly = self.harmathy_rise_velocity(rho_g, rho_l, sigma)
-        # v_inf_slug = self.averaged_rise_velocity(v_g, v_l, alpha, cos_incl, v_inf_bubbly, v_inf_taylor)
 
-        v_inf = p_annular * v_inf_annular + p_slug * v_inf_taylor + p_bubbly * v_inf_bubbly
+        # Adjust rise velocity by well-deviation factor in Eq. (A-10) of Hasan et al. (2010)
+        sin_incl = sqrt(1 - cos_incl**2)
+        deviation_factor = sqrt(cos_incl + 1e-9) * (1 + sin_incl) ** 1.2  # Add 1e-9 to avoid imaginary numbers here
+        v_inf_slug *= deviation_factor
+
+        v_inf = p_annular * v_inf_annular + p_slug * v_inf_slug + p_bubbly * v_inf_bubbly
 
         return C_0, v_inf
 
     def slip_equation(self, v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl):
         """
         Compute slip law: v_g = C_0 * v_m + v_inf, where v_m is the mixture velocity
+
+        :param v_g: Gas velocity (m/s)
+        :param v_l: Liquid velocity (m/s)
+        :param alpha: Void fraction
+        :param rho_g: Gas density (kg/m³)
+        :param rho_l: Liquid density (kg/m³)
+        :param sigma: Oil-gas surface tension (J/m²)
+        :param D: Inner diameter of pipe (m)
+        :param cos_incl: Cosine of the angle to the vertical (dimensionless)
+        :return: Slip equation: v_g = C_0 * v_m + v_inf
         """
         C_0, v_inf = self.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl)
         v_m = alpha * v_g + (1 - alpha) * v_l  # Mixture velocity
         eq = v_g - (C_0 * v_m + v_inf)
         return eq
 
-    def flow_regime(self, v_g, v_l, alpha, rho_g, rho_l, sigma) -> str:
+    def flow_regime(self, v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl) -> str:
         """
         Return textual description of classified (most probable) flow regime
+
+        :param v_g: Gas velocity (m/s)
+        :param v_l: Liquid velocity (m/s)
+        :param alpha: Void fraction
+        :param rho_g: Gas density (kg/m³)
+        :param rho_l: Liquid density (kg/m³)
+        :param sigma: Oil-gas surface tension (J/m²)
+        :param cos_incl: Cosine of the angle to the vertical (dimensionless)
+        :return: Textual description of classified flow regime (annular, slug-churn, or bubbly)
         """
-        probs = classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma)
+        probs = classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl)
         p_annular, p_slug, p_bubbly = probs.full().flatten().tolist()
         if p_annular > p_slug and p_annular > p_bubbly:
             return 'annular'
@@ -246,7 +247,7 @@ if __name__ == '__main__':
     rho_l = 900
     T = 273.15 + 20
     sigma = dead_oil_surface_tension(rho_l, T)
-    probs = classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma)
+    probs = classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl=1.0)
 
     # annular boundary = 12.821059412975487
     print(probs.full())

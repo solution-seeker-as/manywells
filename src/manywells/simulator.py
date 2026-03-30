@@ -154,9 +154,7 @@ class SSDFSimulator:
         # Derivations for slip relation
         v_m = alpha * v_g + (1 - alpha) * v_l  # Mixture velocity
         sigma = fl.surface_tension(p, T)
-        cell_index_clamped = min(cell_index, len(geo.cos_incl) - 1)  # Clamp the cell index since we loop over n_cells + 1
-        cos_incl = geo.cos_incl[cell_index_clamped]
-
+        cos_incl = geo.cos_incl[min(cell_index, geo.n_cells - 1)]  # Clamp the cell index since we loop over n_cells + 1
         C_0, v_inf = wp.slip.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, geo.D, cos_incl)
 
         # Closure relations
@@ -576,7 +574,8 @@ class SSDFSimulator:
         flow_regime = list()
         for index, row in df.iterrows():
             sigma = float(fl.surface_tension(row['p'], row['T']))
-            fr = self.wp.slip.flow_regime(row['v_g'], row['v_l'], row['alpha'], row['rho_g'], row['rho_l'], sigma)
+            cos_incl = geo.cos_incl[min(index, geo.n_cells - 1)]
+            fr = self.wp.slip.flow_regime(row['v_g'], row['v_l'], row['alpha'], row['rho_g'], row['rho_l'], sigma, cos_incl)
             flow_regime.append(fr)
         df['flow-regime'] = flow_regime
 
