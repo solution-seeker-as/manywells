@@ -1,4 +1,4 @@
-# Energy Equation Modeling
+# Thermal Energy Modeling
 
 The simulator's energy equation governs the fluid temperature profile along the
 wellbore.  Three physical mechanisms are modeled:
