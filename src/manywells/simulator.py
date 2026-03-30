@@ -93,8 +93,8 @@ class SSDFSimulator:
         """
         Initialize steady-state drift-flux model simulator
 
-        The pipe is discretized into (n + 1) cells of length delta_md, where n = n_cells.
-        For each cell i in [0, ..., n] we create a state variable, x_i, and equations, g_i.
+        The pipe is discretized into n cells (see WellGeometry object)
+        Variables x_i and equations g_i are indexed at grid points i = 0, ..., n.
         State x_0 represents the left boundary (bottom of the well).
         State x_n represents the right boundary (top of the well / surface).
         The state holds the following variables (in the given order)
@@ -229,7 +229,7 @@ class SSDFSimulator:
 
     def _differential_equations(self, x, x_prev, cell_index: int):
         """
-        Create discretized differential equations for cell i=cell_index
+        Create discretized differential equations for cell i
 
         :param x: Variables of cell i
         :param x_prev: Variables of cell i-1
@@ -243,7 +243,7 @@ class SSDFSimulator:
         D = geo.D
         A = geo.A
 
-        delta_md = geo.delta_md
+        delta_md = geo.delta_md[cell_index - 1]
         cos_incl = geo.cos_incl[cell_index - 1]
         delta_tvd = delta_md * cos_incl
 
@@ -406,11 +406,11 @@ class SSDFSimulator:
         x += x_0
 
         for i in range(1, self.n_cells + 1):
-            # Build rootfinder for this cell (concrete cell_index = i)
-            x_i = self._create_variables(0)
-            x_prev_sym = [ca.SX.sym(f'xp_{j}') for j in range(self.dim_x)]
+            # Build rootfinder for this cell i
+            x_i = self._create_variables(i)
+            x_i_prev = self._create_variables(i - 1)            
 
-            g_diff = self._differential_equations(x_i, x_prev_sym, i)
+            g_diff = self._differential_equations(x_i, x_i_prev, i)
             g_clos = self._closure_relations(x_i, i)
 
             # Pack symbolic variables (x_vec), equations (g_vec), and parameters
@@ -418,15 +418,15 @@ class SSDFSimulator:
             # the rootfinder solves for x given p (the previous cell's state).
             x_vec = ca.vertcat(*x_i)
             g_vec = ca.vertcat(*(g_diff + g_clos))
-            p_vec = ca.vertcat(*x_prev_sym)
+            p_vec = ca.vertcat(*x_i_prev)
 
             F = ca.Function(f'F_{i}', [x_vec, p_vec], [g_vec])
             rf = ca.rootfinder(f'rf_{i}', 'newton', F)
 
-            x_i_prev = x[self.dim_x * (i - 1):self.dim_x * i]
+            x_i_prev_values = x[self.dim_x * (i - 1):self.dim_x * i]
 
             try:
-                result = rf(list(x_i_prev), list(x_i_prev))
+                result = rf(list(x_i_prev_values), list(x_i_prev_values))
             except RuntimeError:
                 raise SimError(f'Cell-wise rootfinder failed at cell {i}')
 
@@ -466,14 +466,13 @@ class SSDFSimulator:
         wp = self.wp
         bc = self.bc
 
-        # Note that we simulate for n+1 cell states: x_0, x_1, ..., x_n.
-        # The distance (in z) between x_0 and x_n is then equal to L
+        # We simulate for n cells, with variables at n+1 grid points: x_0, x_1, ..., x_n.
         # Each x_i is ordered as follows: x = (p, v_g, v_l, alpha, rho_g, rho_l)
         x = list()  # Variables
         g = list()  # Constraints (system of equations)
 
-        # Add variables and equations for all cells
-        for i in range(self.n_cells + 1):  # Note that we add one cell to get a total length of L
+        # Add variables and equations
+        for i in range(self.n_cells + 1):  # Loop over all grid points
 
             # Variables for cell i
             x_i = self._create_variables(i)
@@ -566,7 +565,7 @@ class SSDFSimulator:
 
         # Add geometry columns (simulator order: bottom to top)
         geo = self.geo
-        z = np.array([i * geo.delta_md for i in range(self.n_cells + 1)])
+        z = np.array(geo.md[::-1])
         md = np.array(geo.md)    # simulator order (bottom → top)
         tvd = np.array(geo.tvd)  # simulator order (bottom → top)
 

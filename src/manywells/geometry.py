@@ -26,29 +26,34 @@ import numpy as np
 class WellGeometry:
     """Wellbore geometry defined by an (MD, TVD) survey.
 
+    The survey points define the computational grid directly:
+    ``md_grid = md_survey`` and ``tvd_grid = tvd_survey``.  To build a
+    uniform grid from a sparse survey, use the :meth:`from_survey` factory.
+
     Parameters
     ----------
     md_survey : Sequence[float]
-        Measured depth at survey stations (m), starting at 0, increasing.
+        Measured depth at survey/grid stations (m), starting at 0, increasing.
     tvd_survey : Sequence[float]
-        True vertical depth at survey stations (m), starting at 0, increasing.
-    n_cells : int
-        Number of computational cells for the spatial discretisation.
+        True vertical depth at survey/grid stations (m), starting at 0,
+        increasing.
     D : float
         Inner pipe diameter (m).  Default ~6.1 inch.
 
     Pre-computed attributes (set in ``__post_init__``, simulator order:
     index 0 = bottom, index *n_cells* = top/surface):
 
+    n_cells : int
+        Number of computational cells (``len(md_survey) - 1``).
     md : tuple[float, ...]
         Grid-node measured depths (length *n_cells* + 1).
     tvd : tuple[float, ...]
         Grid-node true vertical depths (length *n_cells* + 1).
-    delta_md : float
-        Uniform cell length along the wellbore.
+    delta_md : tuple[float, ...]
+        Per-cell measured-depth increment (length *n_cells*).
     cos_incl : tuple[float, ...]
         Cosine of the inclination from vertical for each cell
-        (length *n_cells*).
+        (length *n_cells*).  Must lie in [0, 1].
     tvd_frac : tuple[float, ...]
         Fractional TVD at each grid node relative to the deepest point
         (length *n_cells* + 1).  Used for the geothermal gradient.
@@ -56,56 +61,54 @@ class WellGeometry:
 
     md_survey: Sequence[float]
     tvd_survey: Sequence[float]
-    n_cells: int
     D: float = 0.1554
 
+    n_cells: int = None
     md: tuple = None
     tvd: tuple = None
-    delta_md: float = None
+    delta_md: tuple = None
     cos_incl: tuple = None
     tvd_frac: tuple = None
 
     def __post_init__(self):
-        md_arr = np.asarray(self.md_survey, dtype=float)
-        tvd_arr = np.asarray(self.tvd_survey, dtype=float)
+        md_grid = np.asarray(self.md_survey, dtype=float)
+        tvd_grid = np.asarray(self.tvd_survey, dtype=float)
 
         # --- validation ---
-        if len(md_arr) != len(tvd_arr):
+        if len(md_grid) != len(tvd_grid):
             raise ValueError("md_survey and tvd_survey must have the same length")
-        if len(md_arr) < 2:
+        if len(md_grid) < 2:
             raise ValueError("Survey must have at least two stations")
-        if md_arr[0] != 0.0:
+        if md_grid[0] != 0.0:
             raise ValueError("md_survey must start at 0 (surface)")
-        if tvd_arr[0] != 0.0:
+        if tvd_grid[0] != 0.0:
             raise ValueError("tvd_survey must start at 0 (surface)")
-        if not np.all(np.diff(md_arr) > 0):
+        if not np.all(np.diff(md_grid) > 0):
             raise ValueError("md_survey must be strictly increasing")
-        if np.any(md_arr < tvd_arr - 1e-12):
+        if np.any(md_grid < tvd_grid - 1e-12):
             raise ValueError("MD must be >= TVD at every survey station")
         if self.D <= 0:
             raise ValueError("Pipe diameter D must be positive")
-        if self.n_cells < 1:
-            raise ValueError("n_cells must be >= 1")
 
         # store inputs as immutable tuples
-        object.__setattr__(self, "md_survey", tuple(md_arr))
-        object.__setattr__(self, "tvd_survey", tuple(tvd_arr))
+        object.__setattr__(self, "md_survey", tuple(md_grid))
+        object.__setattr__(self, "tvd_survey", tuple(tvd_grid))
+        
+        # Store nubmer of cells
+        object.__setattr__(self, "n_cells", len(md_grid) - 1)
 
-        # --- build uniform grid in survey order (surface → bottom) ---
-        md_grid = np.linspace(0.0, md_arr[-1], self.n_cells + 1)
-        tvd_grid = np.interp(md_grid, md_arr, tvd_arr)
-
-        # cell length (uniform)
-        object.__setattr__(self, "delta_md", float(md_arr[-1] / self.n_cells))
-
-        # per-cell cos(inclination) in survey order
-        d_tvd = np.diff(tvd_grid)
+        # per-cell increments in survey order
         d_md = np.diff(md_grid)
+        d_tvd = np.diff(tvd_grid)
         cos_survey = d_tvd / d_md
+
+        if np.any(cos_survey < 0) or np.any(cos_survey > 1):
+            raise ValueError("cos_incl must be in the unit interval [0, 1]")
 
         # --- convert to simulator order (bottom → top) ---
         object.__setattr__(self, "md", tuple(md_grid[::-1].tolist()))
         object.__setattr__(self, "tvd", tuple(tvd_grid[::-1].tolist()))
+        object.__setattr__(self, "delta_md", tuple(d_md[::-1].tolist()))
         object.__setattr__(self, "cos_incl", tuple(cos_survey[::-1].tolist()))
 
         # tvd_frac: fraction of max TVD at each node (simulator order)
@@ -132,8 +135,33 @@ class WellGeometry:
     # ----- factory methods -----------------------------------------------
 
     @classmethod
+    def from_survey(
+        cls,
+        md_survey: Sequence[float],
+        tvd_survey: Sequence[float],
+        n_cells: int,
+        D: float = 0.1554,
+    ) -> WellGeometry:
+        """Interpolate a sparse survey to *n_cells* uniform cells.
+
+        Parameters
+        ----------
+        md_survey, tvd_survey : Sequence[float]
+            Sparse (MD, TVD) survey stations used as interpolation knots.
+        n_cells : int
+            Number of equally-spaced computational cells.
+        D : float
+            Inner pipe diameter (m).
+        """
+        md_arr = np.asarray(md_survey, dtype=float)
+        tvd_arr = np.asarray(tvd_survey, dtype=float)
+        md_uniform = np.linspace(0.0, md_arr[-1], n_cells + 1)
+        tvd_uniform = np.interp(md_uniform, md_arr, tvd_arr)
+        return cls(md_survey=md_uniform, tvd_survey=tvd_uniform, D=D)
+
+    @classmethod
     def vertical(cls, length: float, n_cells: int, D: float = 0.1554) -> WellGeometry:
         """Create a vertical well geometry (MD == TVD everywhere)."""
         md = (0.0, float(length))
         tvd = (0.0, float(length))
-        return cls(md_survey=md, tvd_survey=tvd, n_cells=n_cells, D=D)
+        return cls.from_survey(md_survey=md, tvd_survey=tvd, n_cells=n_cells, D=D)

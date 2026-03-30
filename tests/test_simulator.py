@@ -32,10 +32,10 @@ def test_well_geometry_invalid_D():
         WellGeometry.vertical(2000, 100, D=0)
 
 
-def test_well_geometry_invalid_n_cells():
-    """WellGeometry rejects n_cells < 1."""
-    with pytest.raises(ValueError, match="n_cells"):
-        WellGeometry.vertical(2000, 0)
+def test_well_geometry_cos_incl_validation():
+    """WellGeometry rejects cos_incl outside [0, 1] (TVD decreasing)."""
+    with pytest.raises(ValueError, match="cos_incl"):
+        WellGeometry(md_survey=[0, 100, 200], tvd_survey=[0, 100, 80])
 
 
 def test_well_properties_choke_default():
@@ -129,7 +129,7 @@ def test_simulator_solve_l_shaped():
     md_survey.append(md_survey[-1] + 1000.0)
     tvd_survey.append(tvd_survey[-1])
 
-    geo = WellGeometry(md_survey=md_survey, tvd_survey=tvd_survey, n_cells=50)
+    geo = WellGeometry.from_survey(md_survey=md_survey, tvd_survey=tvd_survey, n_cells=50)
     wp = WellProperties(geometry=geo, fluid=FluidModel(rho_o=density_from_api(35.0), oil_model='dead_oil'))
     bc = BoundaryConditions(p_r=200, p_s=20, u=0.8)
     sim = SSDFSimulator(wp, bc)
@@ -267,7 +267,7 @@ class TestWellGeometry:
         """Deviated well: cos_incl < 1 in deviated sections."""
         md = [0, 500, 1000, 2000]
         tvd = [0, 500, 800, 1200]
-        geo = WellGeometry(md_survey=md, tvd_survey=tvd, n_cells=10)
+        geo = WellGeometry.from_survey(md_survey=md, tvd_survey=tvd, n_cells=10)
         assert geo.L == 2000
         # Not all cos_incl should be 1.0 (deviated sections)
         assert any(c < 0.99 for c in geo.cos_incl)
@@ -275,17 +275,17 @@ class TestWellGeometry:
     def test_md_geq_tvd_validation(self):
         """MD must be >= TVD at every survey station."""
         with pytest.raises(ValueError, match="MD must be >= TVD"):
-            WellGeometry(md_survey=[0, 100], tvd_survey=[0, 200], n_cells=5)
+            WellGeometry(md_survey=[0, 100], tvd_survey=[0, 200])
 
     def test_non_monotonic_md_rejected(self):
         """Non-monotonic MD is rejected."""
         with pytest.raises(ValueError, match="strictly increasing"):
-            WellGeometry(md_survey=[0, 100, 50], tvd_survey=[0, 100, 50], n_cells=5)
+            WellGeometry(md_survey=[0, 100, 50], tvd_survey=[0, 100, 50])
 
     def test_origin_validation(self):
         """Survey must start at (0, 0)."""
         with pytest.raises(ValueError, match="start at 0"):
-            WellGeometry(md_survey=[10, 100], tvd_survey=[10, 100], n_cells=5)
+            WellGeometry(md_survey=[10, 100], tvd_survey=[10, 100])
 
     def test_frozen(self):
         """WellGeometry instances are immutable."""
@@ -327,7 +327,7 @@ class TestWellGeometry:
         tvd_survey.append(tvd_toe)
 
         n_cells = 100
-        geo = WellGeometry(md_survey=md_survey, tvd_survey=tvd_survey, n_cells=n_cells)
+        geo = WellGeometry.from_survey(md_survey=md_survey, tvd_survey=tvd_survey, n_cells=n_cells)
 
         assert geo.L == pytest.approx(md_toe)
         assert len(geo.cos_incl) == n_cells
