@@ -124,7 +124,7 @@ class ClosedLoopWellSimulator(SSDFSimulator):
                 g_i += self._right_boundary_eqs(x_i)
 
             # Closure relations
-            g_i += self._closure_relations(x_i)
+            g_i += self._closure_relations(x_i, i)
 
             # Add to variable and constraint lists
             x += x_i

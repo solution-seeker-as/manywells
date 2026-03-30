@@ -58,7 +58,8 @@ def test_identify_parameters_returns_two():
     v_g, v_l, alpha = 5.0, 2.0, 0.3
     rho_g, rho_l, D = 50.0, 700.0, 0.15
     sigma = _sigma(rho_l, 293.15)
-    C_0, v_inf = model.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D)
+    cos_incl = 1.0
+    C_0, v_inf = model.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl)
     assert hasattr(C_0, "full") or isinstance(C_0, (int, float))
     assert hasattr(v_inf, "full") or isinstance(v_inf, (int, float))
     c0_val = float(C_0.full()) if hasattr(C_0, "full") else float(C_0)
@@ -73,7 +74,8 @@ def test_slip_equation_residual():
     v_g, v_l, alpha = 5.0, 2.0, 0.3
     rho_g, rho_l, D = 50.0, 700.0, 0.15
     sigma = _sigma(rho_l, 293.15)
-    eq = model.slip_equation(v_g, v_l, alpha, rho_g, rho_l, sigma, D)
+    cos_incl = 1.0
+    eq = model.slip_equation(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl)
     val = float(eq.full())
     assert abs(val) < 100.0
 

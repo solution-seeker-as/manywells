@@ -138,11 +138,12 @@ class SSDFSimulator:
 
         return [p, v_g, v_l, alpha, rho_g, rho_l, T]
 
-    def _closure_relations(self, x):
+    def _closure_relations(self, x, cell_index: int):
         """
         Creates closure relation equations (constraints)
 
         :param x: Variables
+        :param cell_index: Cell index (i)
         :return: list of equations
         """
         p, v_g, v_l, alpha, rho_g, rho_l, T = x
@@ -153,12 +154,15 @@ class SSDFSimulator:
         # Derivations for slip relation
         v_m = alpha * v_g + (1 - alpha) * v_l  # Mixture velocity
         sigma = fl.surface_tension(p, T)
-        C_0, v_inf = wp.slip.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, geo.D)
+        cell_index_clamped = min(cell_index, len(geo.cos_incl) - 1)  # Clamp the cell index since we loop over n_cells + 1
+        cos_incl = geo.cos_incl[cell_index_clamped]
+
+        C_0, v_inf = wp.slip.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, geo.D, cos_incl)
 
         # Closure relations
         g1 = v_g - C_0 * v_m - v_inf                # Slip relation
         Z = fl.z_factor(p, T)
-        g2 = p - Z * rho_g * fl.R_s * T / CF_BAR   # Real gas equation of state
+        g2 = p - Z * rho_g * fl.R_s * T / CF_BAR    # Real gas equation of state
         g3 = rho_l - fl.liquid_density(p, T)        # Liquid density
 
         return [g1, g2, g3]
@@ -300,7 +304,7 @@ class SSDFSimulator:
         g2 = A * (1 - alpha) * rho_l * v_l - w_l_total_i
 
         g3 = acc / CF_BAR + p - (acc_prev / CF_BAR + p_prev) + (dp_f + dp_g) / CF_BAR           # Momentum balance
-        g4 = T - T_prev + dT                                                                    # Energy balance
+        g4 = T - T_prev + dT                                                                    # Thermal energy balance
 
         return [g1, g2, g3, g4]
 
@@ -354,7 +358,8 @@ class SSDFSimulator:
 
         # Slip model
         sigma = fl.surface_tension(p_0, T_0)
-        C_0, v_inf = wp.slip.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D)
+        cos_incl = geo.cos_incl[0]
+        C_0, v_inf = wp.slip.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl)
         v_m = w_g / (A * rho_g) + w_l / (A * rho_l)  # Known
 
         # Equations
@@ -406,7 +411,7 @@ class SSDFSimulator:
             x_prev_sym = [ca.SX.sym(f'xp_{j}') for j in range(self.dim_x)]
 
             g_diff = self._differential_equations(x_i, x_prev_sym, i)
-            g_clos = self._closure_relations(x_i)
+            g_clos = self._closure_relations(x_i, i)
 
             # Pack symbolic variables (x_vec), equations (g_vec), and parameters
             # (p_vec) into CasADi vectors.  F maps (x, p) -> g(x; p) = 0, and
@@ -491,7 +496,7 @@ class SSDFSimulator:
                 g_i += self._right_boundary_eqs(x_i)
 
             # Closure relations
-            g_i += self._closure_relations(x_i)
+            g_i += self._closure_relations(x_i, i)
 
             # Add to variable and constraint lists
             x += x_i

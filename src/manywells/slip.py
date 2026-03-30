@@ -149,7 +149,29 @@ class SlipModel:
         """
         return 0.35 * ca.sqrt(STD_GRAVITY * D * (1 - rho_g / rho_l))
 
-    def identify_parameters(self, v_g, v_l, alpha, rho_g, rho_l, sigma, D):
+    @staticmethod
+    def averaged_rise_velocity(v_g, v_l, alpha, cos_incl, v_inf_b, v_inf_t):
+        """
+        Averaged rise velocity for slug and churn flow
+
+        NOTE: this averaging may be implicitly achieved by the probability based slip model of ManyWells
+
+        :param v_g: Gas velocity (m/s)
+        :param v_l: Liquid velocity (m/s)
+        :param alpha: Void fraction
+        :param cos_incl: Cosine of the inclination from vertical
+        :param v_inf_b: Small bubble rise velocity (m/s)
+        :param v_inf_t: Taylor bubble (slug) rise velocity (m/s)
+        :return: Averaged rise velocity (m/s)
+        """
+        v_gs = alpha * v_g  # Superficial gas velocity (m/s)
+        v_ls = (1 - alpha) * v_l  # Superficial liquid velocity (m/s)
+        v_gb = (0.42857 * v_ls + 0.35714 * v_inf_b) * cos_incl
+        sharpness = 0.1  # Sharpness of the transition from bubble to Taylor bubble rise velocity – Hasan et al. (2010) sets this to 0.1
+        r = ca.exp(-sharpness * v_gb / (v_gs - v_gb))
+        return (1 - r) * v_inf_b + r * v_inf_t
+
+    def identify_parameters(self, v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl):
         """
         Compute slip model parameters (C_0, v_inf) based on flow regime.
 
@@ -160,6 +182,7 @@ class SlipModel:
         :param rho_l: Liquid density (kg/m³)
         :param sigma: Oil-gas surface tension (J/m²)
         :param D: Inner diameter of pipe (m)
+        :param cos_incl: Cosine of the angle to the vertical
         :return: C_0, v_inf
         """
 
@@ -173,18 +196,19 @@ class SlipModel:
 
         # Set drift velocity
         v_inf_annular = self.v_inf_annular
-        v_inf_slug = self.taylor_rise_velocity(rho_g, rho_l, D)
+        v_inf_taylor = self.taylor_rise_velocity(rho_g, rho_l, D)
         v_inf_bubbly = self.harmathy_rise_velocity(rho_g, rho_l, sigma)
+        # v_inf_slug = self.averaged_rise_velocity(v_g, v_l, alpha, cos_incl, v_inf_bubbly, v_inf_taylor)
 
-        v_inf = p_annular * v_inf_annular + p_slug * v_inf_slug + p_bubbly * v_inf_bubbly
+        v_inf = p_annular * v_inf_annular + p_slug * v_inf_taylor + p_bubbly * v_inf_bubbly
 
         return C_0, v_inf
 
-    def slip_equation(self, v_g, v_l, alpha, rho_g, rho_l, sigma, D):
+    def slip_equation(self, v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl):
         """
         Compute slip law: v_g = C_0 * v_m + v_inf, where v_m is the mixture velocity
         """
-        C_0, v_inf = self.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D)
+        C_0, v_inf = self.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl)
         v_m = alpha * v_g + (1 - alpha) * v_l  # Mixture velocity
         eq = v_g - (C_0 * v_m + v_inf)
         return eq
@@ -233,5 +257,5 @@ if __name__ == '__main__':
     print(probs.full().flatten()[2])  # Bubbly flow
 
     model = SlipModel()
-    C_0, v_inf = model.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D=0.1)
+    C_0, v_inf = model.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D=0.1, cos_incl=1.0)
     print(C_0, v_inf)
