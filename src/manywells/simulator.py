@@ -580,37 +580,3 @@ class SSDFSimulator:
         df['flow-regime'] = flow_regime
 
         return df
-
-
-if __name__ == '__main__':
-    import matplotlib.pyplot as plt
-
-    ###########################################################################
-    # Create a new well (using default values)
-    ###########################################################################
-    well_properties = WellProperties()
-    boundary_conditions = BoundaryConditions(u=0.5)
-    sim = SSDFSimulator(well_properties, boundary_conditions)
-
-    ###########################################################################
-    # Simulate
-    ###########################################################################
-    x = sim.simulate()
-
-    # Convert solution to DataFrame
-    df = sim.solution_as_df(x)
-
-    ###########################################################################
-    # Plot results
-    ###########################################################################
-
-    # Plot solution from cell-wise simulation
-    A = well_properties.geometry.A
-    df['w_g'] = A * df['alpha'] * df['rho_g'] * df['v_g']  # Gas mass flow rates
-    df['w_l'] = A * (1 - df['alpha']) * df['rho_l'] * df['v_l']  # Liquid mass flow rates
-    pd.set_option('display.max_columns', None)
-    print(df)
-
-    df.plot()
-    plt.xlabel('Cell index')
-    plt.show()

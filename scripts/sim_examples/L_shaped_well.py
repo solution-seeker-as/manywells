@@ -1,4 +1,8 @@
 """
+Copyright (C) 2024 Solution Seeker AS - All Rights Reserved
+You may use, distribute and modify this code under the
+terms of the CC BY-NC 4.0 International Public License.
+
 Simulate an L-shaped well: vertical section → build section → horizontal section.
 
 Compares the L-shaped trajectory to a vertical well of the same TVD, showing

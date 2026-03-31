@@ -1,6 +1,6 @@
 [![license](https://img.shields.io/badge/license-CC--BY--NC%204.0-success)]()
 
-# ManyWells: simulation of multiphase flow in vertical oil and gas wells
+# ManyWells: simulation of multiphase flow in oil and gas wells
 
 This code implements a steady-state drift-flux model for simulating multiphase (liquid and gas) flow in wells.
 Three-phase flow (gas, oil, water) is supported by treating the oil and water as one mixed liquid phase.
@@ -27,6 +27,7 @@ Project folder
 |   |-- data_generation     # Scripts used to generate the ManyWells datasets
 |   |-- flow_regimes        # Scripts to develop a flow regime classifier
 |   |-- ml_examples         # Machine learning examples in the ManyWells paper
+|   |-- sim_examples        # Examples showing how to simulate various wells
 |-- tests					# Tests
 ```
 
