@@ -17,7 +17,6 @@ from manywells.pvt.black_oil import BlackOilPVT, live_oil_viscosity, live_oil_su
 from manywells.pvt.dead_oil import dead_oil_viscosity, dead_oil_surface_tension
 from manywells.pvt.water import water_viscosity
 from manywells.units import M_AIR, CF_BAR, CF_RS
-from manywells.ca_functions import ca_min_approx, ca_max_approx
 
 
 @dataclass
@@ -95,7 +94,7 @@ class FluidModel:
 
     @property
     def R_s(self) -> float:
-        """Specific gas constant of the gas phase (J/(kg K))."""
+        """Specific gas constant of the gas phase (J/(kg K)). TODO: Easily confused with the solution gas-oil ratio (Rs)"""
         return R_UNIVERSAL / (M_AIR * self._sg_gas)
 
     @property
@@ -240,38 +239,7 @@ class FluidModel:
         """Gas viscosity at (T, rho_g) (CasADi-compatible)."""
         return _gas_viscosity(T, rho_g, self.M_g)
 
-    def free_gas_flux(self, Rs, w_g_total, w_lg, w_o):
-        """
-        Free (undissolved) gas mass flow rate (CasADi-compatible).
-
-        :param Rs: Solution gas-oil ratio (Sm3/Sm3), may be CasADi symbolic
-        :param w_g_total: Total gas mass flow from reservoir (kg/s)
-        :param w_lg: Lift gas mass flow rate (kg/s)
-        :param w_o: Stock-tank oil mass flow rate (kg/s)
-        :return: Free gas mass flow rate (kg/s)
-        """
-        if self._black_oil is None:
-            return w_g_total + w_lg
-        w_dissolved = ca_min_approx(
-            Rs * self.rho_g / self.rho_o * w_o,
-            w_g_total,
-        )
-        return ca_max_approx(w_g_total + w_lg - w_dissolved, 0.0)
-
-    def liquid_flux(self, Rs, w_l_inflow, w_o, w_g_total):
-        """
-        Total liquid-phase mass flow rate including dissolved gas (CasADi-compatible).
-
-        :param Rs: Solution gas-oil ratio (Sm3/Sm3), may be CasADi symbolic
-        :param w_l_inflow: Liquid inflow from reservoir (kg/s)
-        :param w_o: Stock-tank oil mass flow rate (kg/s)
-        :param w_g_total: Total gas mass flow from reservoir (kg/s)
-        :return: Total liquid mass flow rate (kg/s)
-        """
-        if self._black_oil is None:
-            return w_l_inflow
-        w_dissolved = ca_min_approx(
-            Rs * self.rho_g / self.rho_o * w_o,
-            w_g_total,
-        )
-        return w_l_inflow + w_dissolved
+    def dissolved_gas(self, p, T, w_o):
+        """Dissolved gas mass at (p, T) for a given oil mass flow rate w_o (kg/s)."""
+        Rs = self.rs(p, T)  # Solution gas-oil ratio (Sm3/Sm3) - returns 0 for dead oil
+        return Rs * self.rho_g / self.rho_o * w_o

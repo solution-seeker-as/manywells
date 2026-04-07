@@ -279,33 +279,20 @@ class TestFluidModelMixing:
         actual = float(fl.liquid_density(p, T))
         assert actual == pytest.approx(expected, rel=1e-6)
 
-    def test_free_gas_flux_no_dissolved_gas(self):
-        """When Rs=0, all gas is free (dead oil path)."""
-        fl = FluidModel(oil_model='dead_oil')
-        w = fl.free_gas_flux(Rs=0, w_g_total=2.0, w_lg=0.5, w_o=1.0)
-        assert w == pytest.approx(2.5)
-
-    def test_free_gas_decreases_with_rs(self):
-        fl = self._make_bo_fluid()
-        wf_low = float(fl.free_gas_flux(Rs=5.0, w_g_total=2.0, w_lg=0.0, w_o=5.0))
-        wf_high = float(fl.free_gas_flux(Rs=20.0, w_g_total=2.0, w_lg=0.0, w_o=5.0))
-        assert wf_high < wf_low
-
-    def test_liquid_flux_increases_with_rs(self):
-        fl = self._make_bo_fluid()
-        wl_low = float(fl.liquid_flux(Rs=5.0, w_l_inflow=10.0, w_o=5.0, w_g_total=2.0))
-        wl_high = float(fl.liquid_flux(Rs=20.0, w_l_inflow=10.0, w_o=5.0, w_g_total=2.0))
-        assert wl_high > wl_low
-
     def test_mass_conservation(self):
-        """free_gas + liquid = w_g_total + w_lg + w_l_inflow."""
+        """w_g_out + w_l_out = w_g_reservoir + w_lg + w_l_reservoir."""
         fl = self._make_bo_fluid()
-        w_g_total, w_lg, w_l_inflow, w_o = 2.0, 0.5, 10.0, 5.0
-        Rs = 15.0
-        wf = float(fl.free_gas_flux(Rs, w_g_total, w_lg, w_o))
-        wl = float(fl.liquid_flux(Rs, w_l_inflow, w_o, w_g_total))
-        total_in = w_g_total + w_lg + w_l_inflow
-        total_out = wf + wl
+        p, T = 150.0, 373.15
+        wp = WellProperties(fluid=fl)
+        bc = BoundaryConditions(w_lg=0.5)
+        sim = SSDFSimulator(wp, bc)
+
+        w_l_in = wp.inflow.liquid_mass_flow_rate(p, bc.p_r)
+        w_g_in = fl.gas_mass_flow_rate(w_l_in)
+        total_in = w_g_in + bc.w_lg + w_l_in
+
+        w_g_out, w_l_out = sim._gas_and_liquid_flow_rate(p, T, w_l_in)
+        total_out = float(w_g_out) + float(w_l_out)
         assert total_out == pytest.approx(total_in, rel=1e-3)
 
 

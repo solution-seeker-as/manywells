@@ -177,16 +177,6 @@ class TestDeadOilUnifiedInterface:
         s2 = float(fl.surface_tension(300.0, T))
         assert s1 == pytest.approx(s2)
 
-    def test_free_gas_flux_returns_total(self):
-        fl = FluidModel(oil_model='dead_oil')
-        w = fl.free_gas_flux(Rs=0, w_g_total=2.0, w_lg=0.5, w_o=1.0)
-        assert w == pytest.approx(2.5)
-
-    def test_liquid_flux_returns_inflow(self):
-        fl = FluidModel(oil_model='dead_oil')
-        w = fl.liquid_flux(Rs=0, w_l_inflow=10.0, w_o=5.0, w_g_total=2.0)
-        assert w == pytest.approx(10.0)
-
 
 class TestBlackOilUnifiedInterface:
 

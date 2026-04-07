@@ -12,7 +12,7 @@ from manywells.simulator import (
 )
 from manywells.choke import BernoulliChokeModel
 from manywells.inflow import ProductivityIndex
-from manywells.pvt import density_from_api
+from manywells.pvt import density_from_api, gas_density_from_sg
 from manywells.pvt.fluid import FluidModel
 from manywells.units import STD_GRAVITY
 
@@ -115,6 +115,38 @@ def test_simulator_solve_small():
         assert len(result) == n_vars
     except SimError:
         pytest.skip("Simulator solve failed (e.g. Ipopt not available or no solution)")
+
+
+@pytest.mark.slow
+def test_mass_conservation():
+    """Total mass flux (gas + liquid) is constant across all cells."""
+    fl = FluidModel(
+        rho_o=density_from_api(35),
+        rho_g=gas_density_from_sg(0.65),
+        wlr=0.0,
+        p_bubble=250e5,
+    )
+    geo = WellGeometry.vertical(2000, 5, D=0.1554)
+    wp = WellProperties(geometry=geo, fluid=fl)
+    bc = BoundaryConditions(p_r=200, p_s=30, u=0.8)
+    sim = SSDFSimulator(wp, bc)
+    try:
+        result = sim.simulate()
+    except SimError:
+        pytest.skip("Simulator solve failed")
+
+    dim = sim.dim_x
+    A = geo.A
+
+    total_mass_fluxes = []
+    for i in range(sim.n_cells + 1):
+        p, v_g, v_l, alpha, rho_g, rho_l, T = result[dim * i: dim * (i + 1)]
+        w_g = A * alpha * rho_g * v_g
+        w_l = A * (1 - alpha) * rho_l * v_l
+        total_mass_fluxes.append(w_g + w_l)
+
+    for m in total_mass_fluxes:
+        assert m == pytest.approx(total_mass_fluxes[0], rel=0.02)
 
 
 @pytest.mark.slow

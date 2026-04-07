@@ -23,6 +23,7 @@ from manywells.inflow import InflowModel, ProductivityIndex, Vogel
 import manywells.pvt as pvt
 from manywells.pvt.fluid import FluidModel
 from manywells.slip import SlipModel
+from manywells.ca_functions import ca_min_approx, ca_max_approx
 
 
 class SimError(Exception):
@@ -138,6 +139,27 @@ class SSDFSimulator:
 
         return [p, v_g, v_l, alpha, rho_g, rho_l, T]
 
+    def _gas_and_liquid_flow_rate(self, p, T, w_l_inflow):
+        """
+        Computes gas and liquid mass flow rates at a given pressure and temperature.
+        If a black oil model is used, phase transfer is incorporated (gas dissolved in oil).
+
+        :param p: In-situ pressure (bar)
+        :param T: In-situ temperature (K)
+        :param w_l_inflow: Liquid mass flow rate from reservoir (kg/s)
+        :return: Liquid and gas mass flow rates (kg/s)
+        """
+        bc = self.bc
+        fl = self.wp.fluid
+
+        w_g = fl.gas_mass_flow_rate(w_l_inflow)  # Gas mass flow rate from reservoir
+        w_lg = bc.w_lg  # Lift gas mass flow rate
+        w_o = w_l_inflow * fl.f_o_in_liquid  # Oil mass flow rate
+        w_g_dissolved = ca_min_approx(fl.dissolved_gas(p, T, w_o), w_g)  # Dissolved gas mass flow rate
+        w_g_total = ca_max_approx(w_g + w_lg - w_g_dissolved, 0.0)
+        w_l_total = w_l_inflow + w_g_dissolved
+        return w_g_total, w_l_total
+
     def _closure_relations(self, x, cell_index: int):
         """
         Creates closure relation equations (constraints)
@@ -173,25 +195,16 @@ class SSDFSimulator:
         :return: list of equations
         """
         p, v_g, v_l, alpha, rho_g, rho_l, T = x
-        wp = self.wp
         bc = self.bc
         A = self.geo.A
 
-        fl = wp.fluid
+        # Compute mass flow rates
+        w_l_inflow = self.wp.inflow.liquid_mass_flow_rate(p, bc.p_r)
+        self._w_l_inflow = w_l_inflow  # Store liquid inflow rate (used in _differential_equations)
+        w_g_total, w_l_total = self._gas_and_liquid_flow_rate(p, T, w_l_inflow)
 
-        # Inflow from reservoir
-        w_l = wp.inflow.liquid_mass_flow_rate(p, bc.p_r)
-        w_g = fl.gas_mass_flow_rate(w_l)
-
-        self._w_g_total = w_g
-        self._w_o = w_l * fl.f_o_in_liquid
-        self._w_l_inflow = w_l
-
-        Rs_0 = fl.rs(p, T)
-        w_g_free = fl.free_gas_flux(Rs_0, w_g, bc.w_lg, self._w_o)
-        w_l_total = fl.liquid_flux(Rs_0, w_l, self._w_o, w_g)
-
-        g1 = A * alpha * rho_g * v_g - w_g_free
+        # Equations
+        g1 = A * alpha * rho_g * v_g - w_g_total
         g2 = A * (1 - alpha) * rho_l * v_l - w_l_total
         g3 = T - bc.T_r  # Inflow fluid temperature (fixed)
 
@@ -209,6 +222,7 @@ class SSDFSimulator:
         bc = self.bc
         A = self.geo.A
 
+        # Compute mass flow rates
         w_g = A * alpha * rho_g * v_g  # Gas mass flow rate
         w_l = A * (1 - alpha) * rho_l * v_l  # Liquid mass flow rate
         w_m = w_g + w_l  # Mixture mass flow rate
@@ -294,13 +308,12 @@ class SSDFSimulator:
 
         dT = dT_heat - dT_fric + dT_grav
 
+        # Compute flow rates
+        w_g_total, w_l_total = self._gas_and_liquid_flow_rate(p, T, self._w_l_inflow)  # Compute mass flow rates
+        
         # Discretized differential equations
-        Rs_i = fl.rs(p, T)
-        w_g_free_i = fl.free_gas_flux(Rs_i, self._w_g_total, bc.w_lg, self._w_o)
-        w_l_total_i = fl.liquid_flux(Rs_i, self._w_l_inflow, self._w_o, self._w_g_total)
-        g1 = A * alpha * rho_g * v_g - w_g_free_i
-        g2 = A * (1 - alpha) * rho_l * v_l - w_l_total_i
-
+        g1 = A * alpha * rho_g * v_g - w_g_total
+        g2 = A * (1 - alpha) * rho_l * v_l - w_l_total
         g3 = acc / CF_BAR + p - (acc_prev / CF_BAR + p_prev) + (dp_f + dp_g) / CF_BAR           # Momentum balance
         g4 = T - T_prev + dT                                                                    # Thermal energy balance
 
@@ -323,21 +336,13 @@ class SSDFSimulator:
 
         Z_0 = float(fl.z_factor(p_0, T_0))
         rho_g = CF_BAR * p_0 / (Z_0 * fl.R_s * T_0)
-        w_l_inflow = wp.inflow.liquid_mass_flow_rate(p_0, bc.p_r)
-        w_g_inflow = fl.gas_mass_flow_rate(w_l_inflow)
-
         rho_l = float(fl.liquid_density(p_0, T_0))
+        
 
-        w_o = w_l_inflow * fl.f_o_in_liquid
-        Rs_0 = float(fl.rs(p_0, T_0))
-        r = Rs_0 * fl.rho_g / fl.rho_o
-        w_dissolved = min(r * w_o, w_g_inflow)
-        w_g = max(w_g_inflow + bc.w_lg - w_dissolved, 0.0)
-        w_l = w_l_inflow + w_dissolved
-
-        self._w_g_total = w_g_inflow
-        self._w_o = w_o
-        self._w_l_inflow = w_l_inflow
+        # Compute mass flow rates
+        w_l_inflow = wp.inflow.liquid_mass_flow_rate(p_0, bc.p_r)
+        self._w_l_inflow = w_l_inflow  # Store liquid inflow rate (used in _differential_equations)
+        w_g, w_l = self._gas_and_liquid_flow_rate(p_0, T_0, w_l_inflow)  
 
         """
         Solve the following equations for the velocities and void fraction (v_g, v_l, alpha).
