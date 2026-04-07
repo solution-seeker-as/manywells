@@ -181,9 +181,8 @@ class SSDFSimulator:
 
         # Closure relations
         g1 = v_g - C_0 * v_m - v_inf                # Slip relation
-        Z = fl.z_factor(p, T)
-        g2 = p - Z * rho_g * fl.R_s * T / CF_BAR    # Real gas equation of state
-        g3 = rho_l - fl.liquid_density(p, T)        # Liquid density
+        g2 = rho_g - fl.gas_density(p, T)            # Gas density
+        g3 = rho_l - fl.liquid_density(p, T)         # Liquid density
 
         return [g1, g2, g3]
 
@@ -334,8 +333,7 @@ class SSDFSimulator:
         A = geo.A
         D = geo.D
 
-        Z_0 = float(fl.z_factor(p_0, T_0))
-        rho_g = CF_BAR * p_0 / (Z_0 * fl.R_s * T_0)
+        rho_g = float(fl.gas_density(p_0, T_0))
         rho_l = float(fl.liquid_density(p_0, T_0))
         
 

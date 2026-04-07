@@ -22,7 +22,7 @@ from manywells.units import M_AIR, CF_BAR, CF_RS
 @dataclass
 class FluidModel:
     """
-    Unified fluid model for two-phase wellbore flow.
+    Unified fluid model for three-phase wellbore flow (gas, oil, water).
 
     Parameterized by phase densities at standard conditions, gas-oil ratio,
     and water-liquid ratio.  The oil model ('black_oil' or 'dead_oil') controls
@@ -181,6 +181,17 @@ class FluidModel:
     def gas_mass_flow_rate(self, w_l):
         """Gas mass flow rate from liquid mass flow rate and gas fraction."""
         return (self.f_g / (1 - self.f_g)) * w_l
+
+    def gas_density(self, p, T):
+        """
+        Gas density at (p, T) from the real gas equation of state.
+
+        :param p: Pressure (bar), may be CasADi symbolic
+        :param T: Temperature (K), may be CasADi symbolic
+        :return: Gas density (kg/m3)
+        """
+        Z = self.z_factor(p, T)
+        return CF_BAR * p / (Z * self.R_s * T)
 
     def liquid_density(self, p, T):
         """
