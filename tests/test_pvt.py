@@ -12,22 +12,15 @@ from manywells.pvt import (
     SEAWATER,
     NORTH_SEA_BRENT_CRUDE,
     METHANE,
-    specific_gas_constant,
-    gas_density,
     liquid_mix,
-    water_liquid_ratio,
     api_from_density,
     density_from_api,
-    molecular_weight,
-    water_viscosity,
-    gas_viscosity,
-    mixture_viscosity,
-    sutton_pseudo_critical,
-    gas_z_factor,
+    mixture_viscosity,    
 )
 from manywells.pvt.dead_oil import dead_oil_viscosity, dead_oil_surface_tension
 from manywells.pvt.black_oil import live_oil_viscosity, live_oil_surface_tension
-
+from manywells.pvt.gas import specific_gas_constant, gas_density, gas_viscosity, gas_z_factor, sutton_pseudo_critical, molecular_weight
+from manywells.pvt.water import water_viscosity
 
 def test_reference_conditions():
     """Reference pressure and temperature match ISO 13443."""
@@ -86,14 +79,6 @@ def test_liquid_mix_half():
     # Mix density is between the two densities (water is denser than Brent crude)
     assert min(WATER.rho, NORTH_SEA_BRENT_CRUDE.rho) <= mix.rho <= max(WATER.rho, NORTH_SEA_BRENT_CRUDE.rho)
     assert "50.0%" in mix.name
-
-
-def test_water_liquid_ratio():
-    """wlr from no-slip mixture density."""
-    rho_o, rho_w = 850.0, 1000.0
-    rho_l = 0.3 * rho_o + 0.7 * rho_w  # wlr = 0.7
-    wlr = water_liquid_ratio(rho_l, rho_o, rho_w)
-    assert wlr == pytest.approx(0.7)
 
 
 def test_api_from_density():

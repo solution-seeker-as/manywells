@@ -87,16 +87,6 @@ def liquid_mix(liquid_1: LiquidProperties, liquid_2: LiquidProperties, mass_frac
         return LiquidProperties(name=mix_name, rho=mix_rho, cp=mix_cp)
 
 
-def water_liquid_ratio(rho_l, rho_o, rho_w):
-    """
-    Compute water to liquid volumetric ratio from densities, assuming no-slip:
-        rho_l = (1 - wlr) * rho_o + wlr * rho_w
-        => wlr = (rho_l - rho_o) / (rho_w - rho_o)
-    :return: water-liquid-ratio (wlr)
-    """
-    return (rho_l - rho_o) / (rho_w - rho_o)
-
-
 def api_from_density(rho):
     """
     Compute API gravity from density
@@ -172,17 +162,3 @@ def mixture_viscosity(mu_l, mu_g, alpha, rho_l, rho_g):
     """
     x = alpha * rho_g / (alpha * rho_g + (1 - alpha) * rho_l)
     return mu_g * x + mu_l * (1 - x)
-
-
-################################################
-# RE-EXPORTS from submodules
-################################################
-
-from manywells.pvt.gas import (  # noqa: E402, F401
-    specific_gas_constant, gas_density, gas_density_std,
-    gas_fvf, molecular_weight, gas_viscosity,
-    sutton_pseudo_critical, gas_z_factor,
-)
-from manywells.pvt.water import water_fvf, water_viscosity  # noqa: E402, F401
-from manywells.pvt.dead_oil import dead_oil_viscosity, dead_oil_surface_tension  # noqa: E402, F401
-from manywells.pvt.black_oil import live_oil_viscosity, live_oil_surface_tension  # noqa: E402, F401

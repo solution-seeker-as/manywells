@@ -11,11 +11,11 @@ from dataclasses import dataclass
 from manywells.pvt import (
     R_UNIVERSAL, P_REF, T_REF,
     api_from_density, gas_density_from_sg, sg_from_gas_density,
-    water_viscosity, gas_viscosity as _gas_viscosity,
 )
-from manywells.pvt.gas import gas_z_factor
+from manywells.pvt.gas import (gas_z_factor, gas_viscosity as _gas_viscosity)
 from manywells.pvt.black_oil import BlackOilPVT, live_oil_viscosity, live_oil_surface_tension
 from manywells.pvt.dead_oil import dead_oil_viscosity, dead_oil_surface_tension
+from manywells.pvt.water import water_viscosity
 from manywells.units import M_AIR, CF_BAR, CF_RS
 from manywells.ca_functions import ca_min_approx, ca_max_approx
 
