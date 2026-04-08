@@ -1,9 +1,15 @@
 """
+Copyright (C) 2024 Solution Seeker AS - All Rights Reserved
+You may use, distribute and modify this code under the
+terms of the CC BY-NC 4.0 International Public License.
+
 Gas lift study: step up gas lift rate from a low to a medium level and
 analyse the steady-state production response.
 
 Each operating point is a separate steady-state simulation with the choke
 valve position and reservoir/separator boundary conditions held fixed.
+
+The user can change the lift gas temperature to see how it affects the wellhead temperature.
 """
 
 import numpy as np

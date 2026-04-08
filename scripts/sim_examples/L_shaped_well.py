@@ -7,9 +7,6 @@ Simulate an L-shaped well: vertical section → build section → horizontal sec
 
 Compares the L-shaped trajectory to a vertical well of the same TVD, showing
 how deviation affects pressure, temperature, void fraction, and flow regime.
-
-Usage:
-    uv run python scripts/sim_l_shaped_well.py
 """
 
 import numpy as np
