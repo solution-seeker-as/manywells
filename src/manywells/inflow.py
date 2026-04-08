@@ -104,17 +104,13 @@ class FixedFlowRate(InflowModel):
         w_l = w_l_const
 
     This model can be used to enforce specific flow rates, which can be useful
-    when performing calibration.  An optional w_g_const is kept for cases where
-    the caller needs a specific gas rate that may differ from what FluidModel
-    would compute.
+    when performing calibration.
     """
 
     w_l_const: float    # Constant liquid mass flow rate (kg/s)
-    w_g_const: float    # Constant gas mass flow rate (kg/s)
 
     def __post_init__(self):
         assert self.w_l_const >= 0, 'Liquid mass flow rate must be non-negative'
-        assert self.w_g_const >= 0, 'Gas mass flow rate must be non-negative'
 
     def liquid_mass_flow_rate(self, p, p_r):
         """

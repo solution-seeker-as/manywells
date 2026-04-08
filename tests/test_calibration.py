@@ -73,4 +73,4 @@ def test_calibrate_inflow_model_unsupported_type():
 
     data = pd.DataFrame([{"p": 80.0, "p_r": 100.0, "w_l": 1.0}])
     with pytest.raises(ValueError, match="not supported"):
-        calibrate_inflow_model(data, FixedFlowRate(w_l_const=1.0, w_g_const=0.2))
+        calibrate_inflow_model(data, FixedFlowRate(w_l_const=1.0))
