@@ -82,6 +82,12 @@ class BoundaryConditions:
     def __post_init__(self):
         assert self.p_r > 0, 'Reservoir pressure must be positive'
         assert self.p_s > 0, 'Separator pressure must be positive'
+        
+        assert self.T_r > 0, 'Reservoir temperature must be positive'
+        assert self.T_s > 0, 'Ambient temperature must be positive'
+        if self.T_lg is not None:
+            assert self.T_lg > 0, 'Lift gas temperature must be positive'
+        
         assert 0 <= self.u <= 1, 'Choke opening must be in [0, 1]'
         assert 0 <= self.w_lg, 'Gas lift rate must be non-negative'
 
