@@ -11,7 +11,6 @@ import matplotlib.pyplot as plt
 from manywells.simulator import WellProperties, BoundaryConditions, SSDFSimulator
 
 
-
 # -- Create a new well (using default values) ----------------------------
 well_properties = WellProperties()
 boundary_conditions = BoundaryConditions(u=0.5)
