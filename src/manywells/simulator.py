@@ -152,7 +152,7 @@ class SSDFSimulator:
         bc = self.bc
         fl = self.wp.fluid
 
-        w_g = fl.gas_mass_flow_rate(w_l_inflow)  # Gas mass flow rate from reservoir
+        w_g = (fl.f_g / (1 - fl.f_g)) * w_l_inflow  # Gas mass flow rate from reservoir
         w_lg = bc.w_lg  # Lift gas mass flow rate
         w_o = w_l_inflow * fl.f_o_in_liquid  # Oil mass flow rate
         w_g_dissolved = ca_min_approx(fl.dissolved_gas(p, T, w_o), w_g)  # Dissolved gas mass flow rate

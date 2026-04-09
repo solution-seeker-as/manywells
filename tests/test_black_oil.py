@@ -288,7 +288,7 @@ class TestFluidModelMixing:
         sim = SSDFSimulator(wp, bc)
 
         w_l_in = wp.inflow.liquid_mass_flow_rate(p, bc.p_r)
-        w_g_in = fl.gas_mass_flow_rate(w_l_in)
+        w_g_in = (fl.f_g / (1 - fl.f_g)) * w_l_in
         total_in = w_g_in + bc.w_lg + w_l_in
 
         w_g_out, w_l_out = sim._gas_and_liquid_flow_rate(p, T, w_l_in)

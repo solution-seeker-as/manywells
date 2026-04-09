@@ -45,7 +45,7 @@ class FluidModel:
 
     # Volumetric ratios at standard conditions
     gor: float = 200.0          # Gas-oil ratio (Sm3/Sm3)
-    wlr: float = 0.0           # Water-liquid ratio (also known as water cut), in [0, 1)
+    wlr: float = 0.0            # Water-liquid ratio (also known as water cut), in [0, 1)
 
     # Model selection
     oil_model: str = 'black_oil'    # 'black_oil' or 'dead_oil'
@@ -94,7 +94,7 @@ class FluidModel:
 
     @property
     def R_s(self) -> float:
-        """Specific gas constant of the gas phase (J/(kg K)). TODO: Easily confused with the solution gas-oil ratio (Rs)"""
+        """Specific gas constant of the gas phase (J/(kg K)). NOTE: Easily confused with the solution gas-oil ratio (Rs)"""
         return R_UNIVERSAL / (M_AIR * self._sg_gas)
 
     @property
@@ -178,10 +178,6 @@ class FluidModel:
             return 1.0
         return gas_z_factor(p * CF_BAR, T, self._sg_gas)
 
-    def gas_mass_flow_rate(self, w_l):
-        """Gas mass flow rate from liquid mass flow rate and gas fraction."""
-        return (self.f_g / (1 - self.f_g)) * w_l
-
     def gas_density(self, p, T):
         """
         Gas density at (p, T) from the real gas equation of state.
@@ -228,6 +224,10 @@ class FluidModel:
         mu_w = water_viscosity(T)
         return self.wlr * mu_w + (1 - self.wlr) * mu_o
 
+    def gas_viscosity(self, T, rho_g):
+        """Gas viscosity at (T, rho_g) (CasADi-compatible)."""
+        return _gas_viscosity(T, rho_g, self.M_g)
+    
     def surface_tension(self, p, T):
         """
         Oil-gas surface tension at (p, T) (CasADi-compatible).
@@ -245,10 +245,6 @@ class FluidModel:
             Rs_scf = self.rs(p, T) / CF_RS
             sigma = live_oil_surface_tension(sigma, Rs_scf)
         return sigma
-
-    def gas_viscosity(self, T, rho_g):
-        """Gas viscosity at (T, rho_g) (CasADi-compatible)."""
-        return _gas_viscosity(T, rho_g, self.M_g)
 
     def dissolved_gas(self, p, T, w_o):
         """Dissolved gas mass at (p, T) for a given oil mass flow rate w_o (kg/s)."""

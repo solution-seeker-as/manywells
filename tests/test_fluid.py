@@ -129,15 +129,6 @@ class TestFluidModelFoInLiquid:
         assert fl.f_o_in_liquid < 0.02
 
 
-class TestFluidModelMethods:
-
-    def test_gas_mass_flow_rate(self):
-        fl = FluidModel(gor=200.0)
-        w_l = 10.0
-        w_g = fl.gas_mass_flow_rate(w_l)
-        assert w_g == pytest.approx((fl.f_g / (1 - fl.f_g)) * w_l)
-
-
 class TestDeadOilUnifiedInterface:
 
     def test_rs_returns_zero(self):

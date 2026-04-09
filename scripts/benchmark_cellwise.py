@@ -36,7 +36,7 @@ class SSDFSimulatorIPOPT(SSDFSimulator):
         Z_0 = float(fl.z_factor(p_0, T_0))
         rho_g = CF_BAR * p_0 / (Z_0 * fl.R_s * T_0)
         w_l_inflow = wp.inflow.liquid_mass_flow_rate(p_0, bc.p_r)
-        w_g_inflow = fl.gas_mass_flow_rate(w_l_inflow)
+        w_g_inflow = (fl.f_g / (1 - fl.f_g)) * w_l_inflow
 
         rho_l = float(fl.liquid_density(p_0, T_0))
 
