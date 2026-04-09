@@ -73,6 +73,7 @@ class BoundaryConditions:
     # Temperatures
     T_r: float = 373.15       # Reservoir temperature (K). Default value corresponds to 100 decC.
     T_s: float = 277.15       # Ambient temperature (K) at the surface z=L. Default value corresponds to 4 degC.
+    T_lg: float = None        # Lift gas temperature (K) at injection point. None means T_r (no mixing effect).
 
     # Controls
     u: float = 1.             # Choke position (dimensionless). Must be in [0,1].
@@ -81,6 +82,12 @@ class BoundaryConditions:
     def __post_init__(self):
         assert self.p_r > 0, 'Reservoir pressure must be positive'
         assert self.p_s > 0, 'Separator pressure must be positive'
+        
+        assert self.T_r > 0, 'Reservoir temperature must be positive'
+        assert self.T_s > 0, 'Ambient temperature must be positive'
+        if self.T_lg is not None:
+            assert self.T_lg > 0, 'Lift gas temperature must be positive'
+        
         assert 0 <= self.u <= 1, 'Choke opening must be in [0, 1]'
         assert 0 <= self.w_lg, 'Gas lift rate must be non-negative'
 
@@ -195,6 +202,7 @@ class SSDFSimulator:
         """
         p, v_g, v_l, alpha, rho_g, rho_l, T = x
         bc = self.bc
+        fl = self.wp.fluid
         A = self.geo.A
 
         # Compute mass flow rates
@@ -202,10 +210,20 @@ class SSDFSimulator:
         self._w_l_inflow = w_l_inflow  # Store liquid inflow rate (used in _differential_equations)
         w_g_total, w_l_total = self._gas_and_liquid_flow_rate(p, T, w_l_inflow)
 
+        # Temperature at injection point: energy balance between reservoir fluid and lift gas
+        T_lg = bc.T_lg if bc.T_lg is not None else bc.T_r
+        T_inflow = bc.T_r
+        if bc.w_lg > 0:
+            # Compute mix temperature at the injection point
+            w_g_res = fl.gas_mass_flow_rate(w_l_inflow)
+            H_cap_res = w_l_inflow * fl.cp_l + w_g_res * fl.cp_g
+            H_cap_lg = bc.w_lg * fl.cp_g
+            T_inflow = (H_cap_res * bc.T_r + H_cap_lg * T_lg) / (H_cap_res + H_cap_lg)
+
         # Equations
         g1 = A * alpha * rho_g * v_g - w_g_total
         g2 = A * (1 - alpha) * rho_l * v_l - w_l_total
-        g3 = T - bc.T_r  # Inflow fluid temperature (fixed)
+        g3 = T - T_inflow  # Inflow fluid temperature
 
         return [g1, g2, g3]
 
@@ -446,7 +464,7 @@ class SSDFSimulator:
         if self.x_guess is None:
             # Guess on pressure and temperature in first cell
             p_0 = bc.p_r - (bc.p_r - bc.p_s) * 0.05  # 5% of the total pressure drop occurs at the inflow
-            T_0 = bc.T_r
+            T_0 = bc.T_r  # We can improve this guess by using the mixing temperature at the injection point
 
             # Compute the other cell states
             x_guess = self._simulate_cellwise(p_0, T_0)
@@ -520,7 +538,7 @@ class SSDFSimulator:
                 ubx[i] = bc.p_r  # Upper bound on pressures
 
             if x_i.name().split('_')[0] == 'T':
-                lbx[i] = bc.T_s      # Lower bound on temperatures
+                lbx[i] = bc.T_s if bc.T_lg is None else min(bc.T_s, bc.T_lg)  # Lower bound on temperatures
                 ubx[i] = bc.T_r + 1  # Upper bound on temperatures (slacking bound by adding 1 K)
 
             if x_i.name().split('_')[0] == 'alpha':

@@ -11,24 +11,18 @@ import matplotlib.pyplot as plt
 from manywells.simulator import WellProperties, BoundaryConditions, SSDFSimulator
 
 
-###########################################################################
-# Create a new well (using default values)
-###########################################################################
+# -- Create a new well (using default values) ----------------------------
 well_properties = WellProperties()
 boundary_conditions = BoundaryConditions(u=0.5)
 sim = SSDFSimulator(well_properties, boundary_conditions)
 
-###########################################################################
-# Simulate
-###########################################################################
+# -- Simulate ------------------------------------------------------------
 x = sim.simulate()
 
 # Convert solution to DataFrame
 df = sim.solution_as_df(x)
 
-###########################################################################
-# Plot results
-###########################################################################
+# -- Plot results ---------------------------------------------------------
 
 A = well_properties.geometry.A
 df['w_g'] = A * df['alpha'] * df['rho_g'] * df['v_g']

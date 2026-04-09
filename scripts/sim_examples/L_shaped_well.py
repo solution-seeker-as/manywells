@@ -7,9 +7,6 @@ Simulate an L-shaped well: vertical section → build section → horizontal sec
 
 Compares the L-shaped trajectory to a vertical well of the same TVD, showing
 how deviation affects pressure, temperature, void fraction, and flow regime.
-
-Usage:
-    uv run python scripts/sim_l_shaped_well.py
 """
 
 import numpy as np
@@ -19,7 +16,7 @@ from manywells.geometry import WellGeometry
 from manywells.simulator import WellProperties, BoundaryConditions, SSDFSimulator
 
 
-# ── Well geometries ──────────────────────────────────────────────────────
+# -- Well geometries ------------------------------------------------------
 
 TVD = 2000.0
 N_CELLS = 100
@@ -39,7 +36,7 @@ tvd_survey.append(tvd_survey[-1])
 geo_l = WellGeometry.from_survey(md_survey, tvd_survey, n_cells=N_CELLS)
 
 
-# ── Simulate both wells ─────────────────────────────────────────────────
+# -- Simulate both wells -------------------------------------------------
 
 bc = BoundaryConditions(u=0.5)
 
@@ -58,7 +55,7 @@ x_l = sim_l.simulate()
 df_l = sim_l.solution_as_df(x_l)
 
 
-# ── Plot results ─────────────────────────────────────────────────────────
+# -- Plot results ---------------------------------------------------------
 
 fig, axes = plt.subplots(2, 3, figsize=(15, 9))
 
@@ -106,7 +103,7 @@ fig.suptitle(
 plt.tight_layout(rect=[0, 0, 1, 0.96])
 
 
-# ── Trajectory comparison ────────────────────────────────────────────────
+# -- Trajectory comparison ------------------------------------------------
 
 fig2, (ax_traj, ax_cos) = plt.subplots(1, 2, figsize=(11, 5))
 

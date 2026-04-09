@@ -49,15 +49,14 @@ def test_vogel_liquid_mass_flow_rate():
 
 def test_fixed_flow_rate():
     """FixedFlowRate returns constant w_l regardless of pressure."""
-    fix = FixedFlowRate(w_l_const=5.0, w_g_const=1.0)
+    fix = FixedFlowRate(w_l_const=5.0)
     w_l = fix.liquid_mass_flow_rate(80.0, 100.0)
     assert w_l == 5.0
     w_l2 = fix.liquid_mass_flow_rate(20.0, 50.0)
     assert w_l2 == 5.0
-    assert fix.w_g_const == 1.0
 
 
 def test_fixed_flow_rate_negative_rejected():
     """FixedFlowRate rejects negative liquid rate."""
     with pytest.raises(AssertionError, match="non-negative"):
-        FixedFlowRate(w_l_const=-1.0, w_g_const=0.0)
+        FixedFlowRate(w_l_const=-1.0)

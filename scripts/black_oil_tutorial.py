@@ -17,10 +17,10 @@ from manywells.pvt.fluid import FluidModel
 from manywells.units import CF_BAR
 
 
-# ── Fluid setup ──────────────────────────────────────────────────────────
-#
+# -- Fluid setup ----------------------------------------------------------
+
 # A typical North Sea oil: API 35, gas gravity 0.65, bubble point at 250 bar.
-#
+
 fl = FluidModel(
     rho_o=density_from_api(35),
     rho_g=gas_density_from_sg(0.65),
@@ -35,8 +35,8 @@ print(f"Bubble point:       {fl.p_bubble / 1e5:.0f} bar")
 print()
 
 
-# ── 1. Rs and Bo vs pressure (at constant temperature) ───────────────────
-#
+# -- 1. Rs and Bo vs pressure (at constant temperature) -------------------
+
 # At low pressure, little gas is dissolved (low Rs) and the oil barely
 # expands (Bo near 1).  As pressure rises, more gas dissolves and the
 # oil swells.  Above the bubble point, Rs and Bo are capped -- all
@@ -108,8 +108,8 @@ fig.suptitle(f'Black Oil PVT at T = {T_fixed - 273.15:.0f} $\\degree$C  '
 plt.tight_layout(rect=[0, 0, 1, 0.96])
 
 
-# ── 2. Temperature effect on Rs ──────────────────────────────────────────
-#
+# -- 2. Temperature effect on Rs ------------------------------------------
+
 # Hotter oil holds less dissolved gas at the same pressure.
 
 fig2, ax2 = plt.subplots(figsize=(8, 5))
@@ -130,8 +130,8 @@ ax2.set_title('Temperature Effect on Rs: Hotter Oil Dissolves Less Gas',
 ax2.legend(title='Temperature')
 
 
-# ── 3. Dead oil vs black oil comparison ──────────────────────────────────
-#
+# -- 3. Dead oil vs black oil comparison ----------------------------------
+
 # The dead oil model assumes Rs = 0, Bo = 1 everywhere.
 # The black oil model captures the pressure-dependent phase behavior.
 
@@ -179,7 +179,7 @@ fig3.suptitle('Dead Oil vs Black Oil Model', fontsize=13, fontweight='bold')
 plt.tight_layout()
 
 
-# ── Summary printout ─────────────────────────────────────────────────────
+# -- Summary printout -----------------------------------------------------
 
 print("Key values at typical wellbore conditions:")
 print(f"{'Pressure (bar)':>16} {'Rs (Sm3/Sm3)':>14} {'Bo':>8} {'rho_l (kg/m3)':>15}")
