@@ -1,0 +1,20 @@
+[build-system]
+requires = ["maturin>=1.14,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "manywells_rs"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+dynamic = ["version"]
+
+[tool.maturin]
+# Mixed Rust/Python project: the compiled extension is nested inside the
+# `manywells_rs` package (importable as `manywells_rs.manywells_rs`), and the
+# hand-written package below re-exports it and adds a thin Python wrapper so the
+# Rust simulator is a drop-in for manywells.simulator.SSDFSimulator.
+python-source = "python"

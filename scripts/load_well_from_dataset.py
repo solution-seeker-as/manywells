@@ -49,6 +49,44 @@ def load_well(well_id, df_config) -> Well:
     return well
 
 
+def load_well_config(well_id, df_config):
+    """
+    Load a well's parameters from a dataset config DataFrame (e.g. loaded from
+    ./data/manywells-sol/manywells-sol-1_config.zip) and construct the corresponding
+    WellProperties and BoundaryConditions.
+
+    Mirrors load_well above, but returns the (WellProperties, BoundaryConditions)
+    as a plain tuple (e.g. for driving a simulator directly).
+
+    :param well_id: ID of the well to load (must be present in df_config['ID'])
+    :param df_config: DataFrame of well configs
+    :return: (WellProperties, BoundaryConditions)
+    """
+    assert well_id in df_config['ID'].tolist(), 'ID not found'
+    w_config = df_config[df_config['ID'] == well_id].to_dict('records')[0]
+
+    if w_config['wp.inflow.class_name'] != 'Vogel':
+        raise ValueError('Inflow model class must be "Vogel"')
+    inflow_model = Vogel(w_l_max=w_config['wp.inflow.w_l_max'], f_g=w_config['wp.inflow.f_g'])
+
+    if w_config['wp.choke.class_name'] != 'SimpsonChokeModel':
+        raise ValueError('Choke model class must be "SimpsonChokeModel"')
+    choke_model = SimpsonChokeModel(K_c=w_config['wp.choke.K_c'], chk_profile=w_config['wp.choke.chk_profile'])
+
+    wp = WellProperties(
+        L=w_config['wp.L'], D=w_config['wp.D'], rho_l=w_config['wp.rho_l'], R_s=w_config['wp.R_s'],
+        cp_g=w_config['wp.cp_g'], cp_l=w_config['wp.cp_l'], f_D=w_config['wp.f_D'], h=w_config['wp.h'],
+        inflow=inflow_model, choke=choke_model,
+    )
+
+    bc = BoundaryConditions(
+        p_r=w_config['bc.p_r'], p_s=w_config['bc.p_s'], T_r=w_config['bc.T_r'], T_s=w_config['bc.T_s'],
+        u=w_config['bc.u'], w_lg=w_config['bc.w_lg'],
+    )
+
+    return wp, bc
+
+
 if __name__ == "__main__":
     # Load config
     df_meta = pd.read_csv('./data/manywells-sol/manywells-sol-1_config.zip', compression='zip')
