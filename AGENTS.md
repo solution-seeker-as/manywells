@@ -9,7 +9,7 @@ ManyWells is a steady-state drift-flux simulator for multiphase (gas + liquid) f
 The environment is defined by `pyproject.toml` + `uv.lock`. Use [uv](https://docs.astral.sh/uv/):
 
 ```console
-uv sync --extra dev                                  # install the environment (dev extra adds pytest)
+uv sync                                              # install the environment (the dev dependency group adds pytest)
 uv run pytest                                        # full test suite
 uv run pytest -m "not slow"                          # skip the slow full-solve tests
 uv run pytest tests/test_simulator.py::test_name     # one test

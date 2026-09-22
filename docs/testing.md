@@ -4,16 +4,16 @@ The project uses [pytest](https://pytest.org/) for testing. Tests live in the `t
 
 ## Setup
 
-Install the package with the optional dev dependency so pytest is available:
+Install the environment. pytest comes from the `dev` dependency group, which `uv sync` installs by default:
 
 ```bash
-uv sync --extra dev
+uv sync
 ```
 
-Or with pip:
+Or with pip (25.1 or newer, for dependency-group support):
 
 ```bash
-pip install -e ".[dev]"
+pip install -e . --group dev
 ```
 
 ## Running tests

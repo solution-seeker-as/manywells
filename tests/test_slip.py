@@ -21,7 +21,7 @@ def test_classify_flow_regime_sum_to_one():
     rho_g, rho_l = 1.0, 900.0
     sigma = _sigma(rho_l, 273.15 + 20)
     probs = classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl=1.0)
-    total = float(ca.sum1(probs).full())
+    total = ca.sum1(probs).full().item()
     assert total == pytest.approx(1.0)
 
 
@@ -40,7 +40,7 @@ def test_harmathy_rise_velocity_positive():
     rho_g, rho_l = 10.0, 800.0
     sigma = _sigma(rho_l, 293.15)
     v = SlipModel.harmathy_rise_velocity(rho_g, rho_l, sigma)
-    v_val = float(v.full()) if hasattr(v, "full") else float(v)
+    v_val = v.full().item() if hasattr(v, "full") else float(v)
     assert v_val > 0
 
 
@@ -48,7 +48,7 @@ def test_taylor_rise_velocity_positive():
     """Taylor bubble rise velocity is positive."""
     rho_g, rho_l, D = 10.0, 800.0, 0.1
     v = SlipModel.taylor_rise_velocity(rho_g, rho_l, D)
-    v_val = float(v.full()) if hasattr(v, "full") else float(v)
+    v_val = v.full().item() if hasattr(v, "full") else float(v)
     assert v_val > 0
 
 
@@ -62,8 +62,8 @@ def test_identify_parameters_returns_two():
     C_0, v_inf = model.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl)
     assert hasattr(C_0, "full") or isinstance(C_0, (int, float))
     assert hasattr(v_inf, "full") or isinstance(v_inf, (int, float))
-    c0_val = float(C_0.full()) if hasattr(C_0, "full") else float(C_0)
-    v_val = float(v_inf.full()) if hasattr(v_inf, "full") else float(v_inf)
+    c0_val = C_0.full().item() if hasattr(C_0, "full") else float(C_0)
+    v_val = v_inf.full().item() if hasattr(v_inf, "full") else float(v_inf)
     assert 1.0 <= c0_val <= 1.25
     assert v_val >= 0
 
@@ -76,7 +76,7 @@ def test_slip_equation_residual():
     sigma = _sigma(rho_l, 293.15)
     cos_incl = 1.0
     eq = model.slip_equation(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl)
-    val = float(eq.full())
+    val = eq.full().item()
     assert abs(val) < 100.0
 
 

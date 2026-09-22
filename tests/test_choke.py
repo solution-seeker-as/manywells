@@ -65,7 +65,7 @@ def _eval_choke_mass_flow(choke_model, *args):
     """Evaluate mass_flow_rate (CasADi) with given numeric args."""
     w = choke_model.mass_flow_rate(*args)
     if hasattr(w, "full"):
-        return float(w.full())
+        return w.full().item()
     return float(w)
 
 
@@ -98,7 +98,7 @@ def test_simpson_multiplier():
     """Simpson multiplier is positive for valid inputs."""
     x_g, rho_g, rho_l = 0.2, 10.0, 800.0
     Phi = SimpsonChokeModel.simpson_multiplier(x_g, rho_g, rho_l)
-    val = float(Phi.full()) if hasattr(Phi, "full") else float(Phi)
+    val = Phi.full().item() if hasattr(Phi, "full") else float(Phi)
     assert val > 0
 
 
@@ -108,5 +108,5 @@ def test_simpson_choke_mass_flow_rate():
     u, p_in, p_out = 1.0, 100.0, 20.0
     x_g, rho_g, rho_l = 0.1, 50.0, 700.0
     w = model.mass_flow_rate(u, p_in, p_out, x_g, rho_g, rho_l)
-    val = float(w.full()) if hasattr(w, "full") else float(w)
+    val = w.full().item() if hasattr(w, "full") else float(w)
     assert val > 0
