@@ -114,7 +114,7 @@ Confirmed by Bjarne on 2026-09-30, from the measurements of `build/tolerance_sta
 
 **Reference.** `verification/data/distribution_reference.json` is built by `build/distribution_reference.py` from the published `sol-1` and `nsol-1` rows, with the rows on the trickle-root signature (PWH − PDC < 0.01 bar) removed. That removes 35,259 `sol-1` rows (3.53%) and 1,464 `nsol-1` rows (0.15%). The signature misses some trickle rows: on the case set it catches 47 of the 64 unstable roots and none of the 136 stable ones. For each of 21 features (CHK, PBH, PWH, PDC, TBH, TWH, the mass rates, the standard-volume rates and the inflow fractions), the reference stores the values at the percentiles 1..99 and the empirical CDF at those values, and it stores the Spearman correlation matrix.
 
-**Check.** For each feature, the candidate's empirical CDF at the reference's percentile values may differ from the reference's by at most 0.02, and no rank correlation may differ by more than 0.05. Calibration on the published data: a 50k-row subsample of the reference gives gaps of 0.005 and 0.009, while the published `sol-1` rows with the trickle rows left in give 0.034 (TWH) and 0.092, so they fail.
+**Check.** For each feature, the candidate's empirical CDF at the reference's percentile values may differ from the reference's by at most 0.02, and no rank correlation may differ by more than 0.05. Bjarne confirmed the bounds, and the removal of signature rows instead of re-solving them at the stable root, on 2026-09-30. Calibration on the published data: a 50k-row subsample of the reference gives gaps of 0.005 and 0.009, while the published `sol-1` rows with the trickle rows left in give 0.034 (TWH) and 0.092, so they fail.
 
 ## v1.0.0 on its own reference
 
