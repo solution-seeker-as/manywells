@@ -215,7 +215,7 @@ class SSDFSimulator:
         T_inflow = bc.T_r
         if bc.w_lg > 0:
             # Compute mix temperature at the injection point
-            w_g_res = fl.gas_mass_flow_rate(w_l_inflow)
+            w_g_res = (fl.f_g / (1 - fl.f_g)) * w_l_inflow  # Gas mass flow rate from reservoir
             H_cap_res = w_l_inflow * fl.cp_l + w_g_res * fl.cp_g
             H_cap_lg = bc.w_lg * fl.cp_g
             T_inflow = (H_cap_res * bc.T_r + H_cap_lg * T_lg) / (H_cap_res + H_cap_lg)

@@ -20,8 +20,8 @@ class InflowModel(abc.ABC):
     Abstract representation of an inflow model.
 
     An inflow model describes the reservoir's ability to deliver liquid at a
-    given drawdown (p_r - p).  The gas-liquid split is a fluid property and is
-    handled by FluidModel.gas_mass_flow_rate.
+    given drawdown (p_r - p).  The gas-liquid split is a fluid property: the
+    simulator derives the gas rate from FluidModel.f_g.
     """
 
     @abc.abstractmethod

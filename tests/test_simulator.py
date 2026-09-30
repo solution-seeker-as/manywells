@@ -1,6 +1,7 @@
 """Tests for manywells.simulator."""
 
 import pytest
+import casadi as ca
 import numpy as np
 
 from manywells.geometry import WellGeometry
@@ -164,6 +165,49 @@ def test_simulator_solve_l_shaped():
         assert "md" in df.columns and "tvd" in df.columns
     except SimError:
         pytest.skip("Simulator solve failed for L-shaped geometry")
+
+
+# ---------------------------------------------------------------------------
+# Gas lift
+# ---------------------------------------------------------------------------
+
+def _inflow_temperature(bc, p_0=150.0):
+    """Inflow temperature (K) at z=0 given by the left boundary equations, at bottomhole pressure p_0 (bar)."""
+    sim = SSDFSimulator(WellProperties(), bc)
+    x = sim._create_variables(0)
+    g_T = sim._left_boundary_eqs(x)[2]  # T - T_inflow
+    f = ca.Function('g_T', [ca.vertcat(*x)], [g_T])
+    x_0 = [p_0, 1.0, 1.0, 0.5, 100.0, 800.0, 0.0]  # T = 0, so g_T = -T_inflow
+    return -float(f(x_0))
+
+
+def test_lift_gas_mixing_temperature():
+    """Lift gas colder than the reservoir fluid lowers the inflow temperature, but not below T_lg."""
+    T_r, T_lg = 373.15, 300.0
+    assert _inflow_temperature(BoundaryConditions(T_r=T_r, w_lg=1.0)) == pytest.approx(T_r)  # T_lg=None means T_r
+    T_mix = _inflow_temperature(BoundaryConditions(T_r=T_r, T_lg=T_lg, w_lg=1.0))
+    assert T_lg < T_mix < T_r
+    assert _inflow_temperature(BoundaryConditions(T_r=T_r, T_lg=T_lg, w_lg=3.0)) < T_mix  # more lift gas, colder
+
+
+@pytest.mark.slow
+def test_simulator_solve_with_gas_lift():
+    """The lift gas is carried in the gas phase: w_g = f_g / (1 - f_g) * w_l + w_lg for dead oil."""
+    geo = WellGeometry.vertical(2000, 20, D=0.1554)
+    fl = FluidModel(rho_o=density_from_api(35.0), oil_model='dead_oil')
+    wp = WellProperties(geometry=geo, fluid=fl)
+    w_lg = 1.0
+    bc = BoundaryConditions(p_r=200, p_s=20, u=0.8, w_lg=w_lg, T_lg=300.0)
+    sim = SSDFSimulator(wp, bc)
+    try:
+        result = sim.simulate()
+    except SimError:
+        pytest.skip("Simulator solve failed with gas lift")
+
+    p, v_g, v_l, alpha, rho_g, rho_l, T = result[-sim.dim_x:]  # wellhead state
+    w_g = geo.A * alpha * rho_g * v_g
+    w_l = geo.A * (1 - alpha) * rho_l * v_l
+    assert w_g - fl.f_g / (1 - fl.f_g) * w_l == pytest.approx(w_lg, rel=1e-3)
 
 
 # ---------------------------------------------------------------------------
