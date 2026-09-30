@@ -12,7 +12,7 @@ Various functions implemented using Casadi
 import casadi as ca
 
 
-def ca_max_approx(x, y, eps: float = 1e-6):
+def ca_max_approx(x, y, eps: float = 1e-6):  # spec: SMO-1
     """
     A differential approximation of the max function: max(x, y)
         max(x, y) ≃ (1/2) * (x + y + sqrt((x-y)**2 + eps)),
@@ -25,7 +25,7 @@ def ca_max_approx(x, y, eps: float = 1e-6):
     """
     return 0.5 * (x + y + ca.sqrt((x - y) ** 2 + eps))
 
-def ca_min_approx(x, y, eps: float = 1e-6):
+def ca_min_approx(x, y, eps: float = 1e-6):  # spec: SMO-2
     """
     A differential approximation of the min function: min(x, y)
         min(x, y) ≃ (1/2) * (x + y - sqrt((x-y)**2 + eps)),
@@ -38,7 +38,7 @@ def ca_min_approx(x, y, eps: float = 1e-6):
     return 0.5 * (x + y - ca.sqrt((x - y) ** 2 + eps))
 
 
-def ca_softmax(x):
+def ca_softmax(x):  # spec: SMO-3
     """
     Implements the softmax function
     :param x: A vector of reals

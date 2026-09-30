@@ -128,7 +128,7 @@ class WellGeometry:
         return self.md_survey[-1]
 
     @property
-    def A(self) -> float:
+    def A(self) -> float:  # spec: GEO-2
         """Cross-sectional area of the pipe (m²)."""
         return np.pi * (self.D / 2) ** 2
 

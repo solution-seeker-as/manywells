@@ -18,7 +18,7 @@ from manywells.units import STD_GRAVITY
 from math import sqrt
 
 
-def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl):
+def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl):  # spec: SLIP-6, SLIP-7
     """
     Classify flow regime (annular, slug/churn, or bubbly) based on the following conditions:
 
@@ -127,7 +127,7 @@ class SlipModel:
     v_inf_annular = 0.0
 
     @staticmethod
-    def harmathy_rise_velocity(rho_g, rho_l, sigma):
+    def harmathy_rise_velocity(rho_g, rho_l, sigma):  # spec: SLIP-4
         """
         Harmathy correlation for small bubble rise velocity
 
@@ -139,7 +139,7 @@ class SlipModel:
         return 1.53 * ca.constpow(STD_GRAVITY * sigma * (rho_l - rho_g) / (rho_l ** 2), 1 / 4)
 
     @staticmethod
-    def taylor_rise_velocity(rho_g, rho_l, D):
+    def taylor_rise_velocity(rho_g, rho_l, D):  # spec: SLIP-5
         """
         Correlation for Taylor-bubble rise velocity
         :param rho_g: Gas density (kg/m³)
@@ -170,7 +170,7 @@ class SlipModel:
         p_bubbly = probs[2]
 
         # Set profile parameter
-        C_0 = p_annular * self.C_0_annular + p_slug * self.C_0_slug + p_bubbly * self.C_0_bubbly
+        C_0 = p_annular * self.C_0_annular + p_slug * self.C_0_slug + p_bubbly * self.C_0_bubbly  # spec: SLIP-2
 
         # Set drift velocity
         v_inf_annular = self.v_inf_annular
@@ -205,7 +205,7 @@ class SlipModel:
         eq = v_g - (C_0 * v_m + v_inf)
         return eq
 
-    def flow_regime(self, v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl) -> str:
+    def flow_regime(self, v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl) -> str:  # spec: SLIP-8
         """
         Return textual description of classified (most probable) flow regime
 

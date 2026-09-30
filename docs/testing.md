@@ -41,8 +41,10 @@ uv run pytest tests/ -v -m "not slow"
 | **test_slip.py** | `classify_flow_regime`, `SlipModel` (Harmathy, Taylor, `identify_parameters`, `slip_equation`, `flow_regime`) |
 | **test_simulator.py** | `WellProperties`, `BoundaryConditions`, `SSDFSimulator` (construction, variables, `solution_as_df`), optional `@pytest.mark.slow` full solve |
 | **test_calibration.py** | `calibrate_bernoulli_choke_model`, `calibrate_inflow_model` (PI and Vogel), and error cases |
+| **test_spec_vectors.py** | `develop` against the test vectors from v1.0.0 in `specs/model/` (component tables and residual rows); `spec_parse.py` reads the spec files |
+| **test_spec_traceability.py** | Equation IDs, coverage tables and `# spec:` tags (`specs/model/README.md`) |
 
-There are **65 tests** in total. The one that runs a small simulator solve is marked `slow` so it can be skipped for faster feedback with `-m "not slow"`.
+The tests that run a full simulator solve are marked `slow` so it can be skipped for faster feedback with `-m "not slow"`.
 
 ## Configuration
 

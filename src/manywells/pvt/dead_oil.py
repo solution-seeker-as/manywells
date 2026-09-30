@@ -32,7 +32,7 @@ def dead_oil_viscosity(api, T):
     return mu_cP * CF_CP
 
 
-def dead_oil_surface_tension(rho, T):
+def dead_oil_surface_tension(rho, T):  # spec: PVT-OIL-3
     """
     Correlation for dead oil surface tension.
 

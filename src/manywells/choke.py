@@ -25,7 +25,7 @@ from manywells.units import CF_BAR
 class ChokeModel(abc.ABC):
     """
     Abstract class for choke models based on the Bernoulli equation with support for two-phase correction multipliers:
-        w = (K_c * sigma(u) / Phi) * sqrt(2 * rho * (p_in - max(p_out, cpm * p_in)))
+        w = K_c * sigma(u) * sqrt(2 * rho * (p_in - max(p_out, cpm * p_in)) / Phi)
     where
         w is mass rate of the mixture (kg/s)
         K_c is a choke coefficient (m²)
@@ -64,15 +64,15 @@ class ChokeModel(abc.ABC):
         :param u: Choke position
         :return: Choke (relative) opening
         """
-        if self.chk_profile == 'linear':
+        if self.chk_profile == 'linear':  # spec: CHK-7
             return u
-        elif self.chk_profile == 'sigmoid':
+        elif self.chk_profile == 'sigmoid':  # spec: CHK-8
             b = 1.5
             return (u**b)/(u**b + (1-u)**b)
-        elif self.chk_profile == 'convex':
+        elif self.chk_profile == 'convex':  # spec: CHK-9
             b = 0.25  # Number in [0, 1]
             return b * u + (1 - b) * u ** 2
-        elif self.chk_profile == 'concave':
+        elif self.chk_profile == 'concave':  # spec: CHK-10
             # This is also known as a quick open valve characteristics
             b = 0.75  # Number in (0, 1], changed from 0.5 to 0.75
             return u ** b
@@ -80,7 +80,7 @@ class ChokeModel(abc.ABC):
             raise NotImplementedError('Choke profile not supported')
 
     @staticmethod
-    def critical_pressure_ratio(gamma: float = 1.307):
+    def critical_pressure_ratio(gamma: float = 1.307):  # spec: CHK-4
         """
         Compute the critical pressure ratio:
             cpr = p_crit / p_in = (2 / (gamma + 1)) ** (gamma / (gamma - 1)),
@@ -96,7 +96,7 @@ class ChokeModel(abc.ABC):
     def choke_equation(self, u: float, p_in: float, p_out: float, rho: float, multiplier: float):
         """
         Choke equation for mass flow rate:
-            mass flow rate = (K_c * sigma(u) / Phi) * sqrt(2 * rho * dp)
+            mass flow rate = K_c * sigma(u) * sqrt(2 * rho * dp / Phi)
         where Phi is the two-phase correction multiplier.
 
         :param u: Choke position in [0, 1] (dimensionless)
@@ -107,9 +107,10 @@ class ChokeModel(abc.ABC):
         :return: Mass flow rate (kg/s)
         """
         chk = self.choke_opening(u)
+        # spec: CHK-3
         p_c = ca_max_approx(self.cpr * p_in, p_out)  # Approximation of max(cpr * p_in, p_out)
         dp = CF_BAR * (p_in - p_c)  # Pressure difference (Pa)
-        return self.K_c * chk * ca.sqrt(2 * rho * dp / multiplier)
+        return self.K_c * chk * ca.sqrt(2 * rho * dp / multiplier)  # spec: CHK-2
 
     @abc.abstractmethod
     def mass_flow_rate(self, *args, **kwargs):
@@ -118,7 +119,7 @@ class ChokeModel(abc.ABC):
         """
         pass
 
-    def is_choked(self, p_in, p_out):
+    def is_choked(self, p_in, p_out):  # spec: CHK-12
         """
         Return True if flow is choked, otherwise False
 
@@ -131,7 +132,7 @@ class ChokeModel(abc.ABC):
 
 class BernoulliChokeModel(ChokeModel):
 
-    def mass_flow_rate(self, u, p_in, p_out, rho_m):
+    def mass_flow_rate(self, u, p_in, p_out, rho_m):  # spec: CHK-6
         """
         Compute mass flow rate through choke using Bernoulli model
             rho = rho_m
@@ -148,7 +149,7 @@ class BernoulliChokeModel(ChokeModel):
 
 class SimpsonChokeModel(ChokeModel):
 
-    def mass_flow_rate(self, u, p_in, p_out, x_g, rho_g, rho_l):
+    def mass_flow_rate(self, u, p_in, p_out, x_g, rho_g, rho_l):  # spec: CHK-5
         """
         Compute mass flow rate through choke with two-phase correction
             rho = rho_l
@@ -166,7 +167,7 @@ class SimpsonChokeModel(ChokeModel):
         return self.choke_equation(u, p_in, p_out, rho=rho_l, multiplier=Phi)
 
     @staticmethod
-    def simpson_multiplier(x_g, rho_g, rho_l):
+    def simpson_multiplier(x_g, rho_g, rho_l):  # spec: CHK-5
         """
         Compute two-phase correction multiplier of Simpson et al.
 

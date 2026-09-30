@@ -159,6 +159,7 @@ class SSDFSimulator:
         bc = self.bc
         fl = self.wp.fluid
 
+        # spec: INF-4
         w_g = (fl.f_g / (1 - fl.f_g)) * w_l_inflow  # Gas mass flow rate from reservoir
         w_lg = bc.w_lg  # Lift gas mass flow rate
         w_o = w_l_inflow * fl.f_o_in_liquid  # Oil mass flow rate
@@ -187,6 +188,7 @@ class SSDFSimulator:
         C_0, v_inf = wp.slip.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, geo.D, cos_incl)
 
         # Closure relations
+        # spec: SLIP-1
         g1 = v_g - C_0 * v_m - v_inf                # Slip relation
         g2 = rho_g - fl.gas_density(p, T)            # Gas density
         g3 = rho_l - fl.liquid_density(p, T)         # Liquid density
@@ -212,7 +214,7 @@ class SSDFSimulator:
 
         # Temperature at injection point: energy balance between reservoir fluid and lift gas
         T_lg = bc.T_lg if bc.T_lg is not None else bc.T_r
-        T_inflow = bc.T_r
+        T_inflow = bc.T_r  # spec: THM-3
         if bc.w_lg > 0:
             # Compute mix temperature at the injection point
             w_g_res = (fl.f_g / (1 - fl.f_g)) * w_l_inflow  # Gas mass flow rate from reservoir
@@ -227,7 +229,7 @@ class SSDFSimulator:
 
         return [g1, g2, g3]
 
-    def _right_boundary_eqs(self, x):
+    def _right_boundary_eqs(self, x):  # spec: CHK-1
         """
         Equations (constraints) representing the right boundary conditions
 
@@ -281,11 +283,12 @@ class SSDFSimulator:
         p_prev, v_g_prev, v_l_prev, alpha_prev, rho_g_prev, rho_l_prev, T_prev = x_prev
 
         # Helper derivations
+        # spec: BAL-7, BAL-8
         rho_m = alpha * rho_g + (1 - alpha) * rho_l  # Mixture density
         v_m = alpha * v_g + (1 - alpha) * v_l  # Mixture velocity
 
         if wp.f_D is not None:
-            f_D = wp.f_D
+            f_D = wp.f_D  # spec: FRIC-2
         else:
             mu_l = fl.liquid_viscosity(p, T)
             mu_g = fl.gas_viscosity(T, rho_g)
@@ -298,10 +301,10 @@ class SSDFSimulator:
         acc_prev = alpha_prev * rho_g_prev * v_g_prev ** 2 + (1 - alpha_prev) * rho_l_prev * v_l_prev ** 2
 
         # Frictional pressure drop (acts along the flow path)
-        dp_f = delta_md * (f_D / D / 2) * rho_m * (v_m ** 2)
+        dp_f = delta_md * (f_D / D / 2) * rho_m * (v_m ** 2)  # spec: FRIC-1
 
         # Gravitational pressure drop (only the vertical component contributes)
-        dp_g = delta_tvd * STD_GRAVITY * rho_m
+        dp_g = delta_tvd * STD_GRAVITY * rho_m  # spec: BAL-6
 
         # Ambient temperature: linear geothermal gradient based on TVD fraction
         tvd_frac_i = geo.tvd_frac[cell_index]
@@ -331,6 +334,7 @@ class SSDFSimulator:
         # Discretized differential equations
         g1 = A * alpha * rho_g * v_g - w_g_total
         g2 = A * (1 - alpha) * rho_l * v_l - w_l_total
+        # spec: DISC-4
         g3 = acc / CF_BAR + p - (acc_prev / CF_BAR + p_prev) + (dp_f + dp_g) / CF_BAR           # Momentum balance
         g4 = T - T_prev + dT                                                                    # Thermal energy balance
 

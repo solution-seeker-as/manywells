@@ -19,7 +19,7 @@ from manywells.units import (
 )
 
 
-def specific_gas_constant(rho):
+def specific_gas_constant(rho):  # spec: PVT-GAS-2
     """
     Compute the specific gas constant, denoted R_s with unit J / (kg K)
     :param rho: Gas density at standard conditions
@@ -28,7 +28,7 @@ def specific_gas_constant(rho):
     return P_REF / (rho * T_REF)
 
 
-def gas_density(R_s: float, p: float = P_REF, T: float = T_REF, Z: float = 1.0):
+def gas_density(R_s: float, p: float = P_REF, T: float = T_REF, Z: float = 1.0):  # spec: PVT-GAS-1, PVT-GAS-2
     """
     Compute gas density using the real gas equation of state:
         density = p / (Z * R_s * T),

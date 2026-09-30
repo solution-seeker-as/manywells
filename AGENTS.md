@@ -52,6 +52,7 @@ The pipe is discretized into `n_cells` cells, and each grid point carries the se
 
 ## Where to look for more
 
+- `specs/model/` before changing any physics: the model's equations with stable IDs, one file per module (`specs/model/README.md`). Code that implements an equation carries a `# spec: <ID>` tag; `tests/test_spec_traceability.py` checks the tags and `tests/test_spec_vectors.py` checks `develop` against test vectors from v1.0.0. `specs/discrepancies.md` lists where the paper and v1.0.0 differ, and `specs/sampling.md` specifies the dataset sampling.
 - `docs/thermal_energy_modeling.md` when changing the energy equation; it derives the temperature terms and cites the sources.
 - `docs/testing.md` for the test layout and pytest configuration.
 - `docs/datasets.md` when touching data generation, for the dataset feature definitions and the relations between them.

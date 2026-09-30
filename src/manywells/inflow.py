@@ -63,7 +63,7 @@ class ProductivityIndex(InflowModel):
         :param p_r: Reservoir pressure (bar)
         :return: Liquid mass flow rate, w_l (kg/s)
         """
-        return self.k_l * (p_r - p)
+        return self.k_l * (p_r - p)  # spec: INF-2
 
 
 @dataclass
@@ -94,7 +94,7 @@ class Vogel(InflowModel):
         :return: Liquid mass flow rate, w_l (kg/s)
         """
         r = p / p_r
-        return self.w_l_max * (1 - 0.2 * r - 0.8 * r ** 2)
+        return self.w_l_max * (1 - 0.2 * r - 0.8 * r ** 2)  # spec: INF-1
 
 
 @dataclass

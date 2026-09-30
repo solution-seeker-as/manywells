@@ -64,7 +64,7 @@ See api_from_density() and density_from_api() for more details on how to convert
 # LIQUID UTILITIES AND API CONVERSIONS
 ################################################
 
-def liquid_mix(liquid_1: LiquidProperties, liquid_2: LiquidProperties, mass_fraction: float):
+def liquid_mix(liquid_1: LiquidProperties, liquid_2: LiquidProperties, mass_fraction: float):  # spec: PVT-MIX-2, PVT-MIX-3, PVT-MIX-4
     """
     Mix two liquids based on mass fraction. The mixture properties are computed from the volume fraction.
 
@@ -87,7 +87,7 @@ def liquid_mix(liquid_1: LiquidProperties, liquid_2: LiquidProperties, mass_frac
         return LiquidProperties(name=mix_name, rho=mix_rho, cp=mix_cp)
 
 
-def api_from_density(rho):
+def api_from_density(rho):  # spec: PVT-OIL-2
     """
     Compute API gravity from density
 

@@ -178,7 +178,7 @@ class FluidModel:
             return 1.0
         return gas_z_factor(p * CF_BAR, T, self._sg_gas)
 
-    def gas_density(self, p, T):
+    def gas_density(self, p, T):  # spec: PVT-GAS-1
         """
         Gas density at (p, T) from the real gas equation of state.
 
