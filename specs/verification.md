@@ -2,7 +2,7 @@
 
 *Step 2 of `plans/manywells-v2-plan.md`. Owner: Bjarne Grimstad. Status: in use; tolerances and case set confirmed 2026-09-30.*
 
-The verifier checks a candidate's roots, for each case in a fixed case set, against reference root sets computed from ManyWells v1.0.0. It holds no model: it depends on neither `manywells` nor CasADi, and it does not re-implement the equations. It checks `develop` in its v1-compatibility configuration (Step 7) and the Rust port (Step 8). How new model versions are checked, without a reference, is in the plan's "New model versions". The Distributions check is built in Step 3, and the real-well accuracy check is private.
+The verifier checks a candidate's roots, for each case in a fixed case set, against reference root sets computed from ManyWells v1.0.0. It holds no model: it depends on neither `manywells` nor CasADi, and it does not re-implement the equations. It checks `develop` in its v1-compatibility configuration (Step 7) and the Rust port (Step 8). How new model versions are checked, without a reference, is in the plan's "New model versions". The Distributions check (below) compares whole regenerated datasets, and the real-well accuracy check is private.
 
 Code: `verification/src/manywells_verify/`. Data: `verification/data/`. Build scripts: `verification/build/` and its README.
 
@@ -107,6 +107,14 @@ Confirmed by Bjarne on 2026-09-30, from the measurements of `build/tolerance_sta
 - a table of counts per check;
 - the largest distance of a passing operating point;
 - unexpected failures, expected failures now passing, and findings for review.
+
+## Distributions
+
+`manywells-verify-distributions CANDIDATE --dataset sol-1` (or `nsol-1`) compares a dataset regenerated in the v1-compatibility configuration, at the stable root, with the published data (Step 7).
+
+**Reference.** `verification/data/distribution_reference.json` is built by `build/distribution_reference.py` from the published `sol-1` and `nsol-1` rows, with the rows on the trickle-root signature (PWH − PDC < 0.01 bar) removed. That removes 35,259 `sol-1` rows (3.53%) and 1,464 `nsol-1` rows (0.15%). The signature misses some trickle rows: on the case set it catches 47 of the 64 unstable roots and none of the 136 stable ones. For each of 21 features (CHK, PBH, PWH, PDC, TBH, TWH, the mass rates, the standard-volume rates and the inflow fractions), the reference stores the values at the percentiles 1..99 and the empirical CDF at those values, and it stores the Spearman correlation matrix.
+
+**Check.** For each feature, the candidate's empirical CDF at the reference's percentile values may differ from the reference's by at most 0.02, and no rank correlation may differ by more than 0.05. Calibration on the published data: a 50k-row subsample of the reference gives gaps of 0.005 and 0.009, while the published `sol-1` rows with the trickle rows left in give 0.034 (TWH) and 0.092, so they fail.
 
 ## v1.0.0 on its own reference
 
