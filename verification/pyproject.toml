@@ -8,16 +8,14 @@ where = ["src"]
 [project]
 name = "manywells-verify"
 version = "0.1.0"
-description = "Verifier for ManyWells solutions, built on the frozen ManyWells v1.0.0 residual"
+description = "Verifier for ManyWells solutions against reference roots computed from ManyWells v1.0.0"
 license = "CC-BY-NC-4.0"
 requires-python = ">=3.11"
-# No dependency on manywells: the verifier must stay independent of the implementations it checks.
+# No dependency on manywells or CasADi: the verifier holds no model and stays independent of what it checks.
 dependencies = [
     "numpy>=1.24",
-    "scipy>=1.10",
     "pandas>=1.5",
     "pyarrow>=12",
-    "casadi>=3.6.4",
 ]
 authors = [
   {name = "Bjarne Grimstad"},

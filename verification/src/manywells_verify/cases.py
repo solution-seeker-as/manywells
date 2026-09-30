@@ -8,11 +8,12 @@ Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
 Cases and roots, and their parquet files.
 
-A case is one well at one operating point on one grid: the parameter vector of the residual
-graph (one column per parameter), the model variant, the number of cells N and provenance.
-A root is a full state x of length 7(N + 1). Reference root sets and candidate results use
-the same root file format: one row per root, keyed by case_id. A case with no rows in a
-candidate file means that the candidate reported no root for it.
+A case is one well at one operating point on one grid: v1.0.0's well properties and boundary
+conditions (one column per parameter), the model variant, the number of cells N and provenance.
+A root is a full state x: [p, v_g, v_l, alpha, rho_g, rho_l, T] at each of the N + 1 grid points,
+so 7(N + 1) values. Reference root sets and candidate results use the same root file format: one
+row per root, keyed by case_id. A case with no rows in a candidate file means that the candidate
+reported no root for it; a case with no rows in the reference means that the well has no root.
 """
 
 from dataclasses import dataclass, field
@@ -22,7 +23,25 @@ from typing import Mapping
 import numpy as np
 import pandas as pd
 
-from manywells_verify.residual import Variant
+DIM_X = 7
+STATE = ('p', 'v_g', 'v_l', 'alpha', 'rho_g', 'rho_l', 'T')
+INFLOWS = ('vogel', 'pi')
+CHOKES = ('simpson', 'bernoulli')
+PROFILES = ('linear', 'sigmoid', 'convex', 'concave')
+
+
+@dataclass(frozen=True)
+class Variant:
+    """The discrete model choices of a well: inflow model, choke model and choke profile."""
+    inflow: str = 'vogel'
+    choke: str = 'simpson'
+    profile: str = 'linear'
+
+    def __post_init__(self):
+        for value, allowed in ((self.inflow, INFLOWS), (self.choke, CHOKES), (self.profile, PROFILES)):
+            if value not in allowed:
+                raise ValueError(f'{value!r} is not one of {allowed}')
+
 
 SCHEMA_VERSION = 1
 LABELS = ('stable', 'unstable', 'indeterminate')

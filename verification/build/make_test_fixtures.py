@@ -13,8 +13,8 @@ Small fixtures for the verifier's unit tests, from v1.0.0 (verification/tests/da
 - well 977 with p_r lowered past the fold, where v1 finds no root from any start;
 - the one-root well's root at N = 50, 100 and 200, as a convergence group.
 
-Each root is labelled with the dense-Jacobian code of plans/evidence/stability_label.py, which is
-independent of the verifier's sparse label. Runs in the v1.0.0 environment, from the repository root:
+Each root is labelled from v1's Jacobian with plans/evidence/stability_label.py. Runs in the v1.0.0
+environment, from the repository root:
 
     .worktrees/v1.0.0/.venv/bin/python verification/build/make_test_fixtures.py --data-dir <dir>
 """
@@ -30,7 +30,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_graph import REPO, params_of, variant_of  # noqa: E402  (sets up the v1.0.0 imports)
+from common import REPO, params_of, variant_of  # noqa: E402  (sets up the v1.0.0 imports)
 from manywells.simulator import SimError  # noqa: E402
 from root_sets import GUESSES  # noqa: E402  (plans/evidence)
 from scripts.load_well_from_dataset import load_well  # noqa: E402
@@ -77,10 +77,8 @@ def main():
         if p_r is not None:
             well.bc.p_r = p_r
         roots = roots_of(well.wp, well.bc, n_cells)
-        variant = variant_of(well.wp)
         entry = {'case_id': case_id, 'config_id': well_id, 'n_cells': n_cells, 'group': group,
-                 'params': params_of(well.wp, well.bc),
-                 'variant': [variant.inflow, variant.choke, variant.profile], 'roots': []}
+                 'params': params_of(well.wp, well.bc), 'variant': variant_of(well.wp), 'roots': []}
         for k, root in enumerate(roots):
             key = f'{case_id}.root{k}'
             arrays[key] = root['x']

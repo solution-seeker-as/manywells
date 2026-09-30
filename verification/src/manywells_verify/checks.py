@@ -8,34 +8,29 @@ Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
 The verifier's checks (specs/verification.md), applied to a candidate's roots for one case.
 
-Per root: Residuals, Invariants and, for roots that pass both, Stability (the label computed
-from the residual graph). Per case: Operating point and Root set, against the case's reference
-root set. Per convergence group: Convergence of the operating point over N, 2N and 4N.
+The verifier holds no model. It compares a candidate's roots with the case's reference root
+set, computed from v1.0.0: Invariants per root; Operating point, Root set and Stability per
+case, by matching each candidate root to the nearest reference root; Convergence of the
+operating point over N, 2N and 4N per group.
 """
 
 from dataclasses import dataclass, field
 
 import numpy as np
-import scipy.sparse.linalg as spla
 
-from manywells_verify.cases import Case, Root
-from manywells_verify.residual import DIM_X, ResidualGraph, choke_row, row_layout
+from manywells_verify.cases import DIM_X, Case
 
-GRAVITY = 9.81      # m/s², for the momentum-row scale only
-W_FLOOR = 1e-3      # kg/s, floor on mass-rate scales
-V_FLOOR = 1e-3      # m/s, floor on velocity scales
+V_FLOOR = 1e-3      # m/s, floor on velocity scales in the state distance
 
 
 @dataclass(frozen=True)
 class Tolerances:
     """Provisional values until Step 2 item 5 sets them (specs/verification.md)."""
-    tol_r: float = 1e-6              # scaled residual, ∞-norm
-    tol_x: float = 1e-4              # scaled state distance, ∞-norm
+    tol_x: float = 1e-4              # scaled state distance to a reference root, ∞-norm
     p_slack: float = 1e-6            # bar: allowed pressure rise between neighbouring points
     flux_rel: float = 1e-6           # phase mass-rate variation along the well, relative to the total rate
     T_slack: float = 1e-6            # K: allowed temperature below the ambient profile
     choke_band: float = 5e-4         # bar: dead band around the choked/unchoked switch
-    label_min: float = 1e-6          # |normalized dR/dp0| below which the label is indeterminate
     order: tuple = (0.7, 1.4)        # bounds on the observed order of convergence
     conv_noise: float = 1e-9         # relative change of an output below which it is not used
     conv_choke_margin: float = 1.0   # bar: groups this close to the choke switch are skipped
@@ -55,22 +50,22 @@ class Check:
 @dataclass
 class RootResult:
     index: int
-    checks: dict
-    label: str | None = None         # label from the residual graph, for roots that pass
-    slope: float | None = None       # normalized dR/dp0
+    invariants: Check
+    match: int | None = None         # index of the reference root within tol_x, if any
+    distance: float | None = None    # scaled distance to the nearest reference root
 
     @property
     def valid(self) -> bool:
-        return not (self.checks['residuals'].failed or self.checks['invariants'].failed)
+        return not self.invariants.failed
 
 
 @dataclass
 class CaseResult:
     case: Case
     roots: list
-    checks: dict                     # every check, aggregated over the case's roots
+    checks: dict                     # invariants, operating_point, root_set, stability
     findings: list = field(default_factory=list)
-    n_stable_reference: int | None = None   # stable roots in the reference root set, if there is one
+    n_stable_reference: int | None = None
 
 
 # ---------------------------------------------------------------------------------------------
@@ -81,7 +76,7 @@ def area(case: Case) -> float:
 
 
 def grid(x, n_cells: int) -> np.ndarray:
-    """State as an (N + 1, 7) array: one row per grid point, columns as in residual.STATE."""
+    """State as an (N + 1, 7) array: one row per grid point, columns as in cases.STATE."""
     return np.asarray(x, dtype=float).reshape(n_cells + 1, DIM_X)
 
 
@@ -102,69 +97,32 @@ def outputs(X, case: Case) -> dict:
     return {'PBH': X[0, 0], 'PWH': X[-1, 0], 'TWH': X[-1, 6], 'WLIQ': w_l[0], 'WGAS incl. lift gas': w_g[0]}
 
 
-def row_points(n_cells: int) -> np.ndarray:
-    """Grid point that each row of r belongs to."""
-    rows_left, rows_clo, rows_cell, row_chk = row_layout(n_cells)
-    points = np.empty(DIM_X * (n_cells + 1), dtype=int)
-    points[rows_left] = 0
-    points[rows_clo] = np.arange(n_cells + 1)[:, None]
-    points[rows_cell] = np.arange(1, n_cells + 1)[:, None]
-    points[row_chk] = n_cells
-    return points
-
-
-def row_scales(X, case: Case, names, points) -> np.ndarray:
-    """Scale of each residual row, so that rows of different kinds and units are comparable."""
-    p, v_g, v_l, alpha, rho_g, rho_l, T = X.T
-    A = area(case)
-    G = alpha * rho_g * v_g + (1 - alpha) * rho_l * v_l        # total mass flux, kg/(m² s)
-    rho_m = alpha * rho_g + (1 - alpha) * rho_l
-    dz = case.params['L'] / case.n_cells
-    dT = max(case.params['T_r'] - case.params['T_s'], 1.0)
-    per_point = {
-        'gas inflow': np.maximum(A * G, W_FLOOR), 'liquid inflow': np.maximum(A * G, W_FLOOR),
-        'inflow temperature': np.full_like(p, dT),
-        'slip': np.maximum(np.abs(v_g), V_FLOOR),
-        'gas EOS': np.maximum(p, 1.0),
-        'liquid density': np.full_like(p, case.params['rho_l']),
-        'gas mass': np.maximum(G, W_FLOOR / A), 'liquid mass': np.maximum(G, W_FLOOR / A),
-        'momentum': np.maximum(rho_m * GRAVITY * dz / 1e5, 1e-3),
-        'energy': np.full_like(p, dT),
-        'choke': np.maximum(A * G, W_FLOOR),
-    }
-    return np.array([per_point[name][k] for name, k in zip(names, points)])
-
-
 def state_distance(x, reference, case: Case) -> float:
-    """Scaled ∞-norm distance between two states on the same grid."""
+    """
+    Scaled ∞-norm distance between two states on the same grid: p by p_r - p_s, velocities and
+    densities relative to the reference, alpha absolute, T by T_r - T_s.
+    """
     X, Y = grid(x, case.n_cells), grid(reference, case.n_cells)
     scale = np.column_stack([
-        np.full(len(Y), max(case.params['p_r'] - case.params['p_s'], 1.0)),     # p
-        np.maximum(np.abs(Y[:, 1]), V_FLOOR), np.maximum(np.abs(Y[:, 2]), V_FLOOR),  # v_g, v_l
-        np.ones(len(Y)),                                                        # alpha
-        np.maximum(Y[:, 4], 1e-3), np.maximum(Y[:, 5], 1e-3),                   # rho_g, rho_l
-        np.full(len(Y), max(case.params['T_r'] - case.params['T_s'], 1.0)),     # T
+        np.full(len(Y), max(case.params['p_r'] - case.params['p_s'], 1.0)),
+        np.maximum(np.abs(Y[:, 1]), V_FLOOR), np.maximum(np.abs(Y[:, 2]), V_FLOOR),
+        np.ones(len(Y)),
+        np.maximum(Y[:, 4], 1e-3), np.maximum(Y[:, 5], 1e-3),
+        np.full(len(Y), max(case.params['T_r'] - case.params['T_s'], 1.0)),
     ])
     return float(np.max(np.abs(X - Y) / scale))
 
 
 # ---------------------------------------------------------------------------------------------
-# Per-root checks
+# Per-root check
 
-def check_residuals(r, scale, names, points, n_cells: int, tol: Tolerances) -> Check:
-    c = choke_row(n_cells)
-    if np.isnan(r[c]):
-        return Check('fail', 'choke row is NaN: the wellhead pressure is below the pressure the choke sees downstream')
-    if not np.all(np.isfinite(r)):
-        bad = np.flatnonzero(~np.isfinite(r))
-        return Check('fail', f'{len(bad)} non-finite rows, first: {names[bad[0]]} at point {points[bad[0]]}')
-    scaled = np.abs(r) / scale
-    k = int(np.argmax(scaled))
-    detail = f'{scaled[k]:.1e} at the {names[k]} row of point {points[k]} ({r[k]:+.2e} unscaled)'
-    return Check('pass' if scaled[k] <= tol.tol_r else 'fail', detail, float(scaled[k]))
-
-
-def check_invariants(X, case: Case, choked, tol: Tolerances) -> Check:
+def check_invariants(x, case: Case, choked, tol: Tolerances) -> Check:
+    N = case.n_cells
+    if np.size(x) != DIM_X * (N + 1):
+        return Check('fail', f'state has length {np.size(x)}, expected {DIM_X * (N + 1)} for N = {N}')
+    X = grid(x, N)
+    if not np.all(np.isfinite(X)):
+        return Check('fail', 'state has non-finite values')
     p, v_g, v_l, alpha, rho_g, rho_l, T = X.T
     prm = case.params
     problems = []
@@ -181,8 +139,7 @@ def check_invariants(X, case: Case, choked, tol: Tolerances) -> Check:
             problems.append(f'phase mass rates vary along the well by {drift:.1e} of the total rate')
     rise = np.diff(p)
     if rise.max() > tol.p_slack:
-        k = int(np.argmax(rise)) + 1
-        problems.append(f'pressure rises by {rise.max():.2e} bar at point {k}')
+        problems.append(f'pressure rises by {rise.max():.2e} bar at point {int(np.argmax(rise)) + 1}')
     if not p[-1] > prm['p_s']:
         problems.append(f'wellhead pressure {p[-1]:.4f} bar not above p_s = {prm["p_s"]:.4f} bar')
     if not p[0] < prm['p_r']:
@@ -195,82 +152,16 @@ def check_invariants(X, case: Case, choked, tol: Tolerances) -> Check:
         if abs(margin) > tol.choke_band and choked != (margin >= 0):
             problems.append(f'CHOKED = {choked}, but cpr p_N - p_s = {margin:+.4f} bar')
     if problems:
-        return Check('fail', '; '.join(problems[:3]) + (f' (+{len(problems) - 3} more)' if len(problems) > 3 else ''))
+        extra = f' (+{len(problems) - 3} more)' if len(problems) > 3 else ''
+        return Check('fail', '; '.join(problems[:3]) + extra)
     return Check('pass')
-
-
-def stability_slope(J, X, case: Case):
-    """
-    Normalized d(choke row)/dp0 along the manifold where every other row holds, and a
-    condition estimate of the reduced Jacobian. Positive is unstable, negative is stable.
-    """
-    N = case.n_cells
-    c, n = choke_row(N), J.shape[0]
-    rows = np.delete(np.arange(n), c)
-    cols = np.arange(1, n)
-    J = J.tocsr()
-    J_rr = J[rows][:, cols].tocsc()
-    lu = spla.splu(J_rr)
-    dx = -lu.solve(J[rows, 0].toarray().ravel())
-    slope = J[c, 0] + (J[c][:, cols] @ dx).item()
-    w_g, w_l = mass_rates(X, case)
-    normalized = float(slope) * (case.params['p_r'] - case.params['p_s']) / max(w_g[-1] + w_l[-1], W_FLOOR)
-    inverse = spla.LinearOperator(J_rr.shape, matvec=lu.solve, rmatvec=lambda v: lu.solve(v, trans='T'),
-                                  dtype=float)
-    cond = spla.onenormest(J_rr) * spla.onenormest(inverse)
-    return normalized, float(cond)
-
-
-def label_of(slope: float, tol: Tolerances) -> str:
-    if slope > tol.label_min:
-        return 'unstable'
-    if slope < -tol.label_min:
-        return 'stable'
-    return 'indeterminate'
-
-
-def check_root(graph: ResidualGraph, case: Case, root: Root, index: int, tol: Tolerances) -> RootResult:
-    N = case.n_cells
-    if root.x.shape != (DIM_X * (N + 1),):
-        failed = Check('fail', f'state has length {root.x.size}, expected {DIM_X * (N + 1)} for N = {N}')
-        return RootResult(index, {'residuals': failed, 'invariants': failed,
-                                  'stability': Check('n/a', 'root is not valid')})
-    X = grid(root.x, N)
-    P = graph.param_vector(case.params)
-    r, J = graph.evaluate(root.x, P, N, case.variant)
-    names, points = graph.row_names(N), row_points(N)
-    checks = {'residuals': check_residuals(r, row_scales(X, case, names, points), names, points, N, tol),
-              'invariants': check_invariants(X, case, root.choked, tol)}
-    result = RootResult(index, checks)
-    if not result.valid:
-        checks['stability'] = Check('n/a', 'root is not valid')
-        return result
-
-    try:
-        slope, cond = stability_slope(J, X, case)
-    except RuntimeError as e:            # singular reduced Jacobian
-        checks['stability'] = Check('indeterminate', f'reduced Jacobian is singular ({e})')
-        result.label = 'indeterminate'
-        return result
-    result.label, result.slope = label_of(slope, tol), slope
-    detail = f'graph label {result.label} (normalized dR/dp0 {slope:+.2e}, cond {cond:.1e})'
-    if result.label == 'indeterminate':
-        checks['stability'] = Check('indeterminate', detail, slope)
-    elif root.label is None:
-        checks['stability'] = Check('n/a', detail + '; candidate reports no label', slope)
-    else:
-        status = 'pass' if root.label == result.label else 'fail'
-        checks['stability'] = Check(status, f'candidate label {root.label}, {detail}', slope)
-    return result
 
 
 # ---------------------------------------------------------------------------------------------
 # Per-case checks
 
 def check_operating_point(case: Case, roots, results, reference, tol: Tolerances) -> Check:
-    if reference is None:
-        return Check('n/a', 'no reference root set')
-    stable = [r for r in reference if r.label == 'stable']
+    stable = [k for k, r in enumerate(reference) if r.label == 'stable']
     chosen = [k for k, r in enumerate(roots) if r.operating_point]
     if len(chosen) > 1:
         return Check('fail', f'{len(chosen)} roots are marked as the operating point')
@@ -282,73 +173,75 @@ def check_operating_point(case: Case, roots, results, reference, tol: Tolerances
         return Check('pass', 'no stable reference root and no operating point reported')
     if not chosen:
         return Check('fail', 'no operating point reported, but the reference has a stable root')
-    k = chosen[0]
-    if not results[k].valid:
-        return Check('fail', 'the operating point fails Residuals or Invariants')
-    d = state_distance(roots[k].x, stable[0].x, case)
+    k, s = chosen[0], stable[0]
+    res = results[k]
+    if not res.valid:
+        return Check('fail', f'the operating point fails Invariants: {res.invariants.detail}')
+    d = state_distance(roots[k].x, reference[s].x, case)
     if d <= tol.tol_x:
         return Check('pass', f'distance {d:.1e} to the stable reference root', d)
-    nearest = min(reference, key=lambda r: state_distance(roots[k].x, r.x, case))
+    nearest = min(range(len(reference)), key=lambda j: state_distance(roots[k].x, reference[j].x, case))
     return Check('fail', f'distance {d:.1e} to the stable reference root; nearest reference root is '
-                         f'{nearest.label} ({state_distance(roots[k].x, nearest.x, case):.1e}); '
-                         f'p0 {roots[k].x[0]:.3f} bar vs {stable[0].x[0]:.3f} bar', d)
+                         f'{reference[nearest].label} ({state_distance(roots[k].x, reference[nearest].x, case):.1e}); '
+                         f'p0 {roots[k].x[0]:.3f} bar vs {reference[s].x[0]:.3f} bar', d)
 
 
-def check_root_set(case: Case, roots, results, reference, tol: Tolerances):
-    """Root set check and findings about valid candidate roots missing from the reference."""
-    if reference is None:
-        return Check('n/a', 'no reference root set'), []
+def check_root_set(roots, results, reference) -> Check:
     if len(roots) <= 1 and all(r.label is None for r in roots):
-        return Check('n/a', 'candidate reports no root set (at most one unlabelled root)'), []
-    valid = [k for k, res in enumerate(results) if res.valid]
-    matched, missing = set(), []
-    for ref in reference:
-        # An unlabelled candidate root matches by distance alone; Stability checks the labels it does report
-        eligible = [k for k in valid if roots[k].label is None or ref.label == 'indeterminate'
-                    or roots[k].label == ref.label]
-        dist = {k: state_distance(roots[k].x, ref.x, case) for k in eligible}
-        best = min(dist, key=dist.get, default=None)
-        if best is None or dist[best] > tol.tol_x:
-            missing.append(f'{ref.label} root at p0 = {ref.x[0]:.3f} bar')
-        else:
-            matched.add(best)
-    findings = [f'candidate root {k} (p0 = {roots[k].x[0]:.3f} bar) is valid but not in the reference root set'
-                for k in valid if k not in matched]
+        return Check('n/a', 'candidate reports no root set (at most one unlabelled root)')
+    matched = {res.match for res in results if res.valid and res.match is not None}
+    missing = [f'{r.label} root at p0 = {r.x[0]:.3f} bar' for j, r in enumerate(reference) if j not in matched]
     if missing:
-        return Check('fail', 'missing: ' + '; '.join(missing)), findings
-    return Check('pass', f'{len(reference)} reference roots matched'), findings
+        return Check('fail', 'missing: ' + '; '.join(missing))
+    return Check('pass', f'{len(reference)} reference roots matched')
 
 
-def aggregate(results, name: str) -> Check:
-    """One check over all roots: fail if any root fails, then indeterminate, then pass."""
-    checks = [(res.index, res.checks[name]) for res in results]
-    if not checks:
+def check_stability(roots, results, reference) -> Check:
+    """Each label the candidate reports must equal the label of the reference root it matches."""
+    compared = [(k, res.match) for k, res in enumerate(results)
+                if roots[k].label is not None and res.valid and res.match is not None]
+    if not compared:
+        return Check('n/a', 'no labelled root matches a reference root')
+    wrong = [(k, j) for k, j in compared if roots[k].label != reference[j].label]
+    if wrong:
+        k, j = wrong[0]
+        return Check('fail', f'root {k} is labelled {roots[k].label}, the reference root at '
+                             f'p0 = {reference[j].x[0]:.3f} bar is {reference[j].label}')
+    return Check('pass', f'{len(compared)} labels match the reference')
+
+
+def aggregate_invariants(results) -> Check:
+    if not results:
         return Check('n/a', 'no roots reported')
-    for status in ('fail', 'indeterminate'):
-        hits = [(k, c) for k, c in checks if c.status == status]
-        if hits:
-            k, c = hits[0]
-            return Check(status, f'root {k}: {c.detail}', c.value)
-    passed = [(k, c) for k, c in checks if c.status == 'pass']
-    if not passed:
-        return Check('n/a', checks[0][1].detail)
-    worst = max(passed, key=lambda kc: kc[1].value if kc[1].value is not None else 0.0)
-    return Check('pass', f'root {worst[0]}: {worst[1].detail}' if worst[1].detail else '', worst[1].value)
+    failed = [res for res in results if res.invariants.failed]
+    if failed:
+        return Check('fail', f'root {failed[0].index}: {failed[0].invariants.detail}')
+    return Check('pass', f'{len(results)} roots')
 
 
-def verify_case(graph: ResidualGraph, case: Case, roots, reference=None, tol: Tolerances = Tolerances()) -> CaseResult:
+def verify_case(case: Case, roots, reference, tol: Tolerances = Tolerances()) -> CaseResult:
     """Run every per-root and per-case check on a candidate's roots for one case."""
-    roots = list(roots or [])
-    results = [check_root(graph, case, root, k, tol) for k, root in enumerate(roots)]
-    checks = {name: aggregate(results, name) for name in ('residuals', 'invariants', 'stability')}
-    checks['operating_point'] = check_operating_point(case, roots, results, reference, tol)
-    checks['root_set'], findings = check_root_set(case, roots, results, reference, tol)
-    findings += [f'root {res.index}: {res.checks["stability"].detail}'
-                 for res in results if res.checks['stability'].status == 'indeterminate']
+    roots, reference = list(roots or []), list(reference or [])
+    results = []
+    for k, root in enumerate(roots):
+        res = RootResult(k, check_invariants(root.x, case, root.choked, tol))
+        if res.valid and reference:
+            dist = [state_distance(root.x, ref.x, case) for ref in reference]
+            j = int(np.argmin(dist))
+            res.distance = dist[j]
+            res.match = j if dist[j] <= tol.tol_x else None
+        results.append(res)
+
+    checks = {'invariants': aggregate_invariants(results),
+              'operating_point': check_operating_point(case, roots, results, reference, tol),
+              'root_set': check_root_set(roots, results, reference),
+              'stability': check_stability(roots, results, reference)}
+    findings = [f'root {res.index} (p0 = {roots[res.index].x[0]:.3f} bar) passes Invariants but matches no '
+                f'reference root' + (f' (nearest at distance {res.distance:.1e})' if res.distance is not None else '')
+                for res in results if res.valid and res.match is None]
     if checks['operating_point'].status == 'indeterminate':
         findings.append(checks['operating_point'].detail)
-    n_stable = None if reference is None else sum(r.label == 'stable' for r in reference)
-    return CaseResult(case, results, checks, findings, n_stable)
+    return CaseResult(case, results, checks, findings, sum(r.label == 'stable' for r in reference))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -374,7 +267,7 @@ def check_convergence(members, tol: Tolerances) -> Check:
     for name in outs[0]:
         o1, o2, o4 = (o[name] for o in outs)
         d1, d2 = o1 - o2, o2 - o4
-        if abs(d2) <= tol.conv_noise * max(abs(o4), 1.0) or d2 == 0:
+        if d2 == 0 or abs(d2) <= tol.conv_noise * max(abs(o4), 1.0):
             skipped.append(name)
             continue
         orders[name] = float(np.log2(abs(d1 / d2)))

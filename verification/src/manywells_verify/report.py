@@ -20,9 +20,9 @@ from pathlib import Path
 
 from manywells_verify.checks import Check, Tolerances, check_convergence, verify_case
 
-CHECKS = ('residuals', 'invariants', 'stability', 'operating_point', 'root_set')
-TITLES = {'residuals': 'Residuals', 'invariants': 'Invariants', 'stability': 'Stability',
-          'operating_point': 'Operating point', 'root_set': 'Root set', 'convergence': 'Convergence (groups)'}
+CHECKS = ('invariants', 'operating_point', 'root_set', 'stability')
+TITLES = {'invariants': 'Invariants', 'operating_point': 'Operating point', 'root_set': 'Root set',
+          'stability': 'Stability', 'convergence': 'Convergence (groups)'}
 STATUSES = ('pass', 'fail', 'expected', 'indeterminate', 'n/a')
 
 
@@ -88,11 +88,12 @@ class Report:
         for name in CHECKS + ('convergence',):
             c = counts[name]
             lines.append(f'| {TITLES[name]} | ' + ' | '.join(str(c[s]) for s in STATUSES) + ' |')
-        worst = max((r for r in self.results if r.checks['residuals'].value is not None),
-                    key=lambda r: r.checks['residuals'].value, default=None)
-        t = self.tolerances
-        lines += ['', (f'Worst scaled residual {worst.checks["residuals"].value:.1e} ({worst.case.case_id}). '
-                       if worst else '') + f'Tolerances: tol_r = {t.tol_r:g}, tol_x = {t.tol_x:g}.']
+        ops = [r for r in self.results if r.checks['operating_point'].status == 'pass'
+               and r.checks['operating_point'].value is not None]
+        worst = max(ops, key=lambda r: r.checks['operating_point'].value, default=None)
+        lines += ['', (f'Largest distance of a passing operating point to its reference root: '
+                       f'{worst.checks["operating_point"].value:.1e} ({worst.case.case_id}). ' if worst else '')
+                  + f'tol_x = {self.tolerances.tol_x:g}.']
 
         def section(title, items):
             if not items:
@@ -117,21 +118,21 @@ class Report:
             'stable_root_rate': {'hits': hits, 'eligible': eligible},
             'cases': [{'case_id': r.case.case_id, 'source': r.case.source, 'group': r.case.group,
                        'checks': {n: check_dict(r.case.case_id, n, r.checks[n]) for n in CHECKS},
-                       'roots': [{'index': rr.index, 'label': rr.label, 'slope': rr.slope,
-                                  'checks': {n: asdict(c) for n, c in rr.checks.items()}} for rr in r.roots],
+                       'roots': [{'index': rr.index, 'invariants': asdict(rr.invariants), 'match': rr.match,
+                                  'distance': rr.distance} for rr in r.roots],
                        'findings': r.findings} for r in self.results],
             'convergence': {g: check_dict(g, 'convergence', c) for g, c in self.convergence.items()},
         }
 
 
-def verify(graph, cases: dict, candidate: dict, reference: dict, tol: Tolerances = Tolerances(),
+def verify(cases: dict, candidate: dict, reference: dict, tol: Tolerances = Tolerances(),
            expected: dict | None = None, name: str = 'candidate') -> Report:
     """
     Check a candidate's roots on every case. Every case has a reference root set; a case with
     no reference rows has an empty one (no root). A case with no candidate rows means that the
     candidate reported no root.
     """
-    results = [verify_case(graph, case, candidate.get(cid, []), reference.get(cid, []), tol)
+    results = [verify_case(case, candidate.get(cid, []), reference.get(cid, []), tol)
                for cid, case in cases.items()]
 
     groups = defaultdict(list)

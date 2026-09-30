@@ -1080,22 +1080,17 @@ name = "manywells-verify"
 version = "0.1.0"
 source = { editable = "verification" }
 dependencies = [
-    { name = "casadi" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "pandas" },
     { name = "pyarrow" },
-    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
-    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "casadi", specifier = ">=3.6.4" },
     { name = "numpy", specifier = ">=1.24" },
     { name = "pandas", specifier = ">=1.5" },
     { name = "pyarrow", specifier = ">=12" },
-    { name = "scipy", specifier = ">=1.10" },
 ]
 
 [[package]]

@@ -112,4 +112,4 @@ papers/
 
 # Verifier build environments and full data (see verification/build/README.md)
 .worktrees/
-verification/data/full/
+verification/data/build/

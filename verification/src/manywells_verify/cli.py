@@ -21,12 +21,11 @@ from pathlib import Path
 from manywells_verify.cases import read_cases, read_roots
 from manywells_verify.checks import Tolerances
 from manywells_verify.report import read_expected_failures, verify
-from manywells_verify.residual import ResidualGraph
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(prog='manywells-verify', description='Check candidate roots against the '
-                                     'frozen ManyWells residual graph and a case set with reference root sets.')
+    parser = argparse.ArgumentParser(prog='manywells-verify', description='Check candidate roots against a case '
+                                     'set with reference root sets computed from ManyWells v1.0.0.')
     parser.add_argument('candidate', type=Path, help='candidate roots (parquet, root file format)')
     parser.add_argument('--data', type=Path, required=True, help='folder with cases.parquet and reference_roots.parquet')
     parser.add_argument('--expected-failures', type=Path, help='CSV with columns case_id, check, reason')
@@ -40,12 +39,7 @@ def main(argv=None) -> int:
     unknown = sorted(set(candidate) - set(cases))
     if unknown:
         parser.error(f'{len(unknown)} candidate case ids are not in the case set, e.g. {unknown[0]}')
-    models = {c.model for c in cases.values()}
-    if len(models) != 1:
-        parser.error(f'the case set mixes models {sorted(models)}; verify one model at a time')
-
-    graph = ResidualGraph(models.pop())
-    report = verify(graph, cases, candidate, reference, Tolerances(),
+    report = verify(cases, candidate, reference, Tolerances(),
                     read_expected_failures(args.expected_failures), args.name or args.candidate.stem)
     print(report.to_markdown())
     if args.json:
