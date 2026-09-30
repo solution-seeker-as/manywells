@@ -25,13 +25,13 @@ V_FLOOR = 1e-3      # m/s, floor on velocity scales in the state distance
 
 @dataclass(frozen=True)
 class Tolerances:
-    """Provisional values until Step 2 item 5 sets them (specs/verification.md)."""
+    """Set in Step 2 item 5 and confirmed by Bjarne on 2026-09-30 (specs/verification.md)."""
     tol_x: float = 1e-4              # scaled state distance to a reference root, ∞-norm
     p_slack: float = 1e-6            # bar: allowed pressure rise between neighbouring points
     flux_rel: float = 1e-6           # phase mass-rate variation along the well, relative to the total rate
     T_slack: float = 1e-6            # K: allowed temperature below the ambient profile
     choke_band: float = 5e-4         # bar: dead band around the choked/unchoked switch
-    order: tuple = (0.7, 1.4)        # bounds on the observed order of convergence
+    order: tuple = (0.8, 1.25)       # bounds on the observed order of convergence
     conv_noise: float = 1e-9         # relative change of an output below which it is not used
     conv_choke_margin: float = 1.0   # bar: groups this close to the choke switch are skipped
 

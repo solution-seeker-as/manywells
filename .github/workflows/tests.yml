@@ -20,3 +20,18 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: uv sync --locked
       - run: uv run pytest
+
+  # The verifier on v1.0.0's own solutions and the committed case set (specs/verification.md).
+  # Candidates (develop's v1-compatibility configuration, the Rust port) join here in Steps 7 and 8.
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.11"
+      - run: uv sync --locked
+      - run: >
+          uv run manywells-verify verification/data/v1_cold.parquet --data verification/data
+          --expected-failures verification/expected_failures.csv --name "v1.0.0 (default guess)"
+          | tee -a "$GITHUB_STEP_SUMMARY"

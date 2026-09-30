@@ -1,6 +1,6 @@
 # Verification
 
-*Step 2 of `plans/manywells-v2-plan.md`. Owner: Bjarne Grimstad. Status: draft; tolerances provisional until Step 2 item 5.*
+*Step 2 of `plans/manywells-v2-plan.md`. Owner: Bjarne Grimstad. Status: in use; tolerances and case set confirmed 2026-09-30.*
 
 The verifier checks a candidate's roots, for each case in a fixed case set, against reference root sets computed from ManyWells v1.0.0. It holds no model: it depends on neither `manywells` nor CasADi, and it does not re-implement the equations. It checks `develop` in its v1-compatibility configuration (Step 7) and the Rust port (Step 8). How new model versions are checked, without a reference, is in the plan's "New model versions". The Distributions check is built in Step 3, and the real-well accuracy check is private.
 
@@ -24,28 +24,27 @@ plus the variant (inflow `vogel` or `pi`; choke `simpson` or `bernoulli`; choke 
 
 ## Case set
 
-<!-- Counts filled in from the labelled run -->
+141 cases with 200 reference roots, committed in `verification/data/` (2.9 MB). Every random draw is seeded from the case's source, well and draw number, so the set can be rebuilt exactly or enlarged. 158 cases were drawn; 17 were left out (below).
 
-About 150 cases, committed in `verification/data/`. Every random draw is seeded from the case's source, well and draw number, so the set can be rebuilt exactly or enlarged.
+| Source | Cases | Reference roots | Purpose |
+|---|--:|---|---|
+| `sol-1 u = 0.5` | 18 | 2 in 17, 1 in 1 | sol-1 wells whose first solve at u = 0.5, the generator's, lands on the trickle root (15), and stable ones (3) |
+| `sol-1 drawn` | 39 | 2 in 9, 1 in 29, 0 in 1 | sol-1 wells at operating points drawn as the generator drew them, by two-root criterion and gas lift |
+| `fresh sample_well` | 9 | 2 in 5, 1 in 4 | new wells from v1's sampler, for the failures and mostly-choked wells the generator's filters removed |
+| `near fold` | 3 | 2 in 2, 1 in 1 | p_r just above where a well's two roots merge |
+| `past fold` | 4 | 0 | p_r just below it |
+| `gas lift on two-root well` | 10 | 2 in 1, 1 in 9 | gas lift on wells that meet the two-root criterion without it |
+| `nsol-1 final state` | 17 | 2 in 16, 1 in 1 | nsol-1's stored final states, with the friction factor recovered from the stored state (below) |
+| `synthetic variant` | 5 | 2 in 2, 1 in 3 | Bernoulli choke and productivity-index inflow, which no dataset uses |
+| `convergence` | 36 | 2 in 12, 1 in 24 | 12 drawn cases at N, 2N and 4N |
 
-| Source | Purpose |
-|---|---|
-| `sol-1 u = 0.5` | sol-1 wells whose first solve at u = 0.5, the generator's, lands on the trickle root, plus a few stable ones |
-| `sol-1 drawn` | sol-1 wells at operating points drawn as the generator drew them, by two-root criterion and gas lift |
-| `fresh sample_well` | new wells from v1's sampler, for the failures and mostly-choked wells the generator's filters removed |
-| `near fold`, `past fold` | p_r just above and below where a well's two roots merge |
-| `gas lift on two-root well` | gas lift on wells that meet the two-root criterion without it |
-| `nsol-1 final state` | nsol-1's stored final states, where the stored boundary conditions match the dataset's last row |
-| `synthetic variant` | Bernoulli choke and productivity-index inflow, which no dataset uses |
-| `convergence` | the same drawn case at N, 2N and 4N |
-
-There are no closed-loop cases (decided 2026-09-30).
+There are no closed-loop cases (decided 2026-09-30). nsol-1's configs store `f_D = 0.05` for every well, although the generator draws it from U(0.01, 0.08); each nsol-1 case uses the friction factor recovered from its stored final state, which then solves v1's equations to 1e-7 or better.
 
 **Reference root sets.** Every reference root is a v1.0.0 solution. Two searches find them. Method A solves v1 from its default guess, the dataset generator's start where there is one, the interpolated root one grid coarser for convergence members, and cellwise guesses at `p_s + f (p_r - p_s)` for f in {0.5, 0.7, 0.85, 0.95, 0.995}. Method B solves v1 from each root the Rust solver on `rust_implementation` finds. A root is accepted if Ipopt reports `Solve_Succeeded` and it passes Invariants.
 
 The label is the sign of d(choke row)/dp0 along the manifold where every other row of v1's system holds, from one solve with v1's Jacobian with the choke row and the p0 column removed. It is normalized by `(p_r - p_s) / w_m`. Positive is unstable, negative stable. A magnitude of at most `label_min` is indeterminate.
 
-A case is settled when both methods give the same accepted roots and no label is indeterminate. Other cases go to Bjarne and stay out of the case set until he rules. Rust returns at most two roots per case, so it does not test the assumption that there are at most two independently.
+A case is in the case set only if both methods give the same accepted roots, no label is indeterminate, and no v1 solution was rejected. Every other case is left out (Bjarne, 2026-09-30). In this build that left out 17: 13 where v1's own starts missed a root the Rust starts found, 1 where Rust missed roots v1 found, 2 near the fold with two stable roots (the model has more than two roots there), and 1 where v1 returned `Feasible_Point_Found` at a tangent point next to the fold. The list is written to `data/build/disagreements.md` on a rebuild. Rust returns at most two roots per case, so it does not test the assumption that there are at most two independently.
 
 ## Files
 
@@ -54,7 +53,7 @@ A case is settled when both methods give the same accepted roots and no label is
 | `cases.parquet` | one per case | `schema_version`, `case_id`, `model`, `source`, `inflow`, `choke`, `profile`, `n_cells`, `group`, one column per parameter, `config_id`, `seed`, `note` |
 | `reference_roots.parquet`, candidate files | one per root | `case_id`, `root`, `x` (list of 7(N + 1) floats), `label` (`stable`, `unstable`, `indeterminate` or empty), `operating_point`, `choked` (nullable); other columns are ignored |
 
-A case with no rows in `reference_roots.parquet` has no root: the well cannot flow there. A case with no rows in a candidate file means the candidate reported no root. `group` links the N, 2N and 4N members of a convergence group. `v1_cold.parquet` holds v1.0.0's solutions from its default guess (for convergence members, from the interpolated coarser root), and `v1_dataset.parquet` its solutions from the start the dataset generator used.
+A case with no rows in `reference_roots.parquet` has no root: the well cannot flow there. A case with no rows in a candidate file means the candidate reported no root. `group` links the N, 2N and 4N members of a convergence group. `v1_cold.parquet` holds v1.0.0's solutions from its default guess (for convergence members, from the interpolated coarser root), and `v1_dataset.parquet` its solutions from the start the dataset generator used. `verification/expected_failures.csv` lists v1.0.0's expected failures: Operating point where its default guess reaches the trickle root (20) or fails (15), written by `build/expected_failures.py`.
 
 ## Checks
 
@@ -86,17 +85,18 @@ Each check is `pass`, `fail`, `indeterminate` or `n/a`. A failure listed in the 
 
 ## Tolerances
 
-<!-- Step 2 item 5: proposed from tolerance_stats.py, confirmed by Bjarne -->
+Confirmed by Bjarne on 2026-09-30, from the measurements of `build/tolerance_stats.py` on the case set:
 
-| Name | Value | Meaning |
-|---|---|---|
-| `tol_x` | 1e-4 (provisional) | state distance to a reference root |
-| `p_slack` | 1e-6 bar (provisional) | pressure rise between neighbouring points |
-| `flux_rel` | 1e-6 (provisional) | phase mass-rate variation / total rate |
-| `T_slack` | 1e-6 K (provisional) | temperature below ambient |
-| `choke_band` | 5e-4 bar (provisional) | CHOKED dead band |
-| `label_min` | 1e-3 (provisional) | indeterminate label threshold, applied when the reference is built |
-| `order` | 0.7 to 1.4 (provisional) | observed convergence order |
+| Name | Value | Meaning | Measured on the reference |
+|---|---|---|---|
+| `tol_x` | 1e-4 | state distance to a reference root (about 0.01 bar and 0.01 K) | one root reached from different v1 starts: at most 3.4e-6 apart; distinct roots: at least 0.10 apart |
+| `p_slack` | 1e-6 bar | pressure rise between neighbouring points | pressure falls by at least 0.24 bar per cell |
+| `flux_rel` | 1e-6 | phase mass-rate variation / total rate | at most 1.8e-8 |
+| `T_slack` | 1e-6 K | temperature below ambient | at most 2e-10 K |
+| `choke_band` | 5e-4 bar | CHOKED dead band | the smooth max in v1's choke row is about 5e-4 bar wide |
+| `label_min` | 1e-3 | indeterminate label threshold, applied when the reference is built | smallest \|normalized dR/dp0\| in the case set: 8.6 |
+| `order` | 0.8 to 1.25 | observed convergence order | 0.95 to 1.11 over 9 groups |
+| `conv_choke_margin` | 1 bar | convergence groups this close to the choke switch are skipped | 3 of 12 groups |
 
 ## Report
 
@@ -107,3 +107,7 @@ Each check is `pass`, `fail`, `indeterminate` or `n/a`. A failure listed in the 
 - a table of counts per check;
 - the largest distance of a passing operating point;
 - unexpected failures, expected failures now passing, and findings for review.
+
+## v1.0.0 on its own reference
+
+`manywells-verify verification/data/v1_cold.parquet --data verification/data --expected-failures verification/expected_failures.csv` gives PASS: no unexpected failures, 35 expected failures, and a stable-root rate of 74.3% (101 of 136 cases with a stable root). The case set is harder than the datasets on purpose: it holds the trickle-root wells, the fold, and fresh wells the generators' filters would have removed. Started from the dataset generators' own starts instead of its default guess, v1 returns the stable root in all 67 cases that have such a start. The CI job `verify` in `.github/workflows/tests.yml` runs this command on every push and pull request.

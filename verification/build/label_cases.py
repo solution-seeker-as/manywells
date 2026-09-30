@@ -12,11 +12,12 @@ environment:
     uv run python verification/build/label_cases.py
 
 Every root is a v1.0.0 solution. A root is accepted if Ipopt reported Solve_Succeeded and it
-passes the Invariants check. It was found by method A if a v1 start (default guess, the dataset
+passes the Invariants check; a case with any other v1 solution is not settled, since that
+solution may be a root the rule cannot judge (for example Feasible_Point_Found at a fold). It was found by method A if a v1 start (default guess, the dataset
 generator's start, an interpolated coarser root, or a cellwise guess) reached it, and by method B
 if v1 reached it from a Rust root. Its label is the sign of its normalized stability slope, and
 indeterminate when the magnitude is at most LABEL_MIN. A case is settled when both methods give
-the same accepted roots and no label is indeterminate. Settled cases are written to
+the same accepted roots, no label is indeterminate and no solution was rejected. Settled cases are written to
 verification/data/ (committed): cases.parquet, reference_roots.parquet, and v1's own solutions
 as candidates, v1_cold.parquet (default guess) and v1_dataset.parquet (the dataset generator's
 start, where there is one). The other cases go to data/build/disagreements.md for Bjarne.
@@ -33,7 +34,7 @@ from manywells_verify.checks import Tolerances, check_invariants
 
 VERIFICATION = Path(__file__).resolve().parents[1]
 BUILD, OUT = VERIFICATION / 'data' / 'build', VERIFICATION / 'data'
-LABEL_MIN = 1e-3          # |normalized dR/dp0| at or below which a label is indeterminate (provisional)
+LABEL_MIN = 1e-3          # |normalized dR/dp0| at or below which a label is indeterminate
 
 
 def case_from(d: dict) -> Case:
@@ -67,7 +68,8 @@ def main():
         a = [x for x in roots if 'A' in x['methods']]
         b = [x for x in roots if 'B' in x['methods']]
         indeterminate = [x for x in roots if x['label'] == 'indeterminate']
-        if len(a) == len(b) == len(roots) and not indeterminate:
+        rejected = [x for x in r['roots'] if not any(x['key'] == y['key'] for y in roots)]
+        if len(a) == len(b) == len(roots) and not indeterminate and not rejected:
             settled.append(case)
             reference[cid] = [Root(x['x'], x['label'], info={'slope': x['slope'], 'spread': x['spread'], 'starts': ', '.join(x['starts'])})
                               for x in roots]
@@ -78,9 +80,9 @@ def main():
                            + ', '.join(f'{x["p0"]:.3f}' for x in b) + ' bar')
             if indeterminate:
                 why.append(f'{len(indeterminate)} indeterminate label(s)')
-            rejected = [x for x in r['roots'] if x['return_status'] != 'Solve_Succeeded']
             if rejected:
-                why.append(f'{len(rejected)} solution(s) without Solve_Succeeded')
+                why.append('rejected v1 solution(s): ' + ', '.join(
+                    f'{x["p0"]:.3f} bar ({x["return_status"]}, slope {x["slope"]:+.1e})' for x in rejected))
             lines.append(f'- `{cid}` ({d["source"]}; {d["note"] or "-"}): ' + '; '.join(why) + '. Roots: '
                          + ', '.join(f'{x["p0"]:.3f} bar {x["label"]} (slope {x["slope"]:+.1e}, from {", ".join(x["starts"])})'
                                      for x in roots))
@@ -110,9 +112,9 @@ def main():
     write_roots({k: v for k, v in cold.items() if k in ids}, OUT / 'v1_cold.parquet')
     write_roots({k: v for k, v in dataset.items() if k in ids}, OUT / 'v1_dataset.parquet')
     (BUILD / 'disagreements.md').write_text(
-        f'# Cases for adjudication ({len(lines)})\n\nThe two root searches disagree, a label is indeterminate '
-        f'(|normalized dR/dp0| <= {LABEL_MIN:g}), or a solution lacks Solve_Succeeded. These cases are not in '
-        'the case set.\n\n' + '\n'.join(lines) + '\n')
+        f'# Cases left out ({len(lines)})\n\nThe two root searches disagree, a label is indeterminate '
+        f'(|normalized dR/dp0| <= {LABEL_MIN:g}), or a v1 solution was rejected (no Solve_Succeeded, or it '
+        'fails Invariants). These cases are not in the case set (Bjarne, 2026-09-30).\n\n' + '\n'.join(lines) + '\n')
 
     counts = Counter((c.source, len(reference[c.case_id])) for c in settled)
     print(f'{len(settled)} settled cases, {len(lines)} for adjudication')

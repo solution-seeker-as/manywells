@@ -57,7 +57,7 @@ from scripts.load_well_from_dataset import load_well  # noqa: E402
 from stability_label import Graph  # noqa: E402
 
 GRAVITY = 9.81
-SAME_ROOT = 1e-6          # scaled state distance below which two v1 solutions are one root
+SAME_ROOT = 1e-4          # scaled state distance below which two v1 solutions are one root (trickle roots: ~3e-6 apart)
 N_TRICKLE_U05, N_STABLE_U05 = 15, 3
 QUOTA_DRAWN = 10          # sol-1 drawn operating points per (two-root, gas lift) stratum
 N_FRESH = 12
@@ -211,9 +211,15 @@ def select_drawn(df, rng):
 def select_fresh():
     cases = []
     for k in range(N_FRESH):
-        seed = seed_for('fresh', k)
-        np.random.seed(seed)
-        new, op_seed = draw(sample_well(), 'fresh-op', k)
+        for attempt in range(100):       # sample_well raises when it discards a well; the generator retries
+            seed = seed_for('fresh', k, attempt)
+            np.random.seed(seed)
+            try:
+                well = sample_well()
+                break
+            except ValueError:
+                continue
+        new, op_seed = draw(well, 'fresh-op', k)
         cases.append(case_of(f'fresh-{k:03d}', 'fresh sample_well', new.wp, new.bc, seed=seed,
                              note=f'operating point seed {op_seed}'))
     return cases
@@ -261,10 +267,32 @@ def select_nsol(df_cfg, data_dir, rng):
     for well_id in rng.choice(sorted(keep), N_NSOL, replace=False):
         well = load_well(int(well_id), df_cfg)
         cid = f'nsol1-{well_id:04d}-last'
-        cases.append(case_of(cid, 'nsol-1 final state', well.wp, well.bc, config_id=int(well_id)))
-        x_last[cid] = np.array(json.loads(cfg.loc[well_id, 'x_last']))
-        assert x_last[cid].size == 707
+        x = np.array(json.loads(cfg.loc[well_id, 'x_last']))
+        assert x.size == 707
+        well.wp.f_D = recover_f_D(well.wp, well.bc, x)
+        cases.append(case_of(cid, 'nsol-1 final state', well.wp, well.bc, config_id=int(well_id),
+                             note=f'f_D = {well.wp.f_D:.6f} recovered from the stored final state (config: 0.05)'))
+        x_last[cid] = x
     return cases, x_last
+
+
+def recover_f_D(wp, bc, x) -> float:
+    """
+    The friction factor nsol-1's final state x was solved with. nsol-1's configs store f_D = 0.05
+    for every well, although the generator draws it from U(0.01, 0.08); every row of v1's residual
+    is affine in f_D, so two evaluations give it, and x must then solve v1's equations.
+    """
+    def residual(f_D):
+        wp.f_D = f_D
+        return np.array(Graph(wp, bc, n_cells=100).build().g_fun(x)).ravel()
+    g0, g1 = residual(0.05), residual(0.06)
+    slope = (g1 - g0) / 0.01
+    ok = np.isfinite(g0) & np.isfinite(slope)
+    f_D = 0.05 - (g0[ok] @ slope[ok]) / (slope[ok] @ slope[ok])
+    worst = np.nanmax(np.abs(residual(f_D)))
+    if worst > 1e-6:
+        raise ValueError(f'no single f_D makes the stored state solve v1 (max |g| {worst:.1e})')
+    return float(f_D)
 
 
 def select_synthetic(df, rng):

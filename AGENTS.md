@@ -56,4 +56,5 @@ The pipe is discretized into `n_cells` cells, and each grid point carries the se
 - `docs/testing.md` for the test layout and pytest configuration.
 - `docs/datasets.md` when touching data generation, for the dataset feature definitions and the relations between them.
 - `docs/simulate.md` and `scripts/sim_examples/` for how a simulation is set up end to end.
+- `specs/verification.md` for the verifier (`verification/`): the case set and reference roots from v1.0.0, the checks, the tolerances and how to run it (`uv run manywells-verify verification/data/v1_cold.parquet --data verification/data --expected-failures verification/expected_failures.csv`). `verification/build/README.md` explains how the reference data is rebuilt.
 - The ManyWells paper (cited in `README.md`) documents release v1.0.0, which also generated the published HuggingFace datasets (`solution-seeker-as/manywells`). The code has changed since, so treat the paper as background rather than the spec for current behaviour; `git log v1.0.0..HEAD` shows what moved, and `docs/corrigendum.md` lists known typos in the paper.
