@@ -37,7 +37,7 @@ The layout is `src/`-based. Scripts under `scripts/` import both `manywells.*` a
 
 `scripts/` is research code, not library API. `sim_examples/` is the best reference for setting up and running a simulation; `data_generation/` produces the published datasets and is the slow integration path. Tests in `tests/` follow the module layout.
 
-`specs/` holds the decided specifications: goals, the constitution, the model, sampling and verification. `verification/` is the verifier, a separate package. `plans/` holds the plan of work and the backlog; plans are drafts, not specs.
+`specs/` holds the decided specifications: goals, the constitution, the model, sampling, verification and the architecture. `verification/` is the verifier, a separate package. `plans/` holds the plan of work and the backlog; plans are drafts, not specs.
 
 ## How a simulation runs
 
@@ -114,6 +114,7 @@ Real-well data is confidential. Some real-well data for validation resides in th
 - `specs/constitution.md` for the rules, and `specs/goals.md` for the goals and the direction for v2 (scope, non-goals, API and dataset compatibility).
 - `specs/model/` before changing any physics: the model's equations with stable IDs, one file per module (`specs/model/README.md`). Code that implements an equation carries a `# spec: <ID>` tag; `tests/test_spec_traceability.py` checks the tags and `tests/test_spec_vectors.py` checks `develop` against test vectors from v1.0.0. `specs/discrepancies.md` lists where the paper and v1.0.0 differ, and `specs/sampling.md` specifies the dataset sampling.
 - `specs/verification.md` for the verifier's case set, checks and tolerances, and `verification/build/README.md` for how its reference data is built.
+- `specs/architecture.md` before moving code between modules, adding a module or a model option, or changing an interface: the target module layout (which Step 7 of the plan implements), the interface contracts with units, the extension points, the Rust core's design, and the module each planned v2 feature belongs to. The Layout section above describes the code as it is today.
 - `docs/thermal_energy_modeling.md` when changing the energy equation; it derives the temperature terms and cites the sources.
 - `docs/testing.md` for the test layout and pytest configuration.
 - `docs/datasets.md` when touching data generation, for the dataset feature definitions and the relations between them.

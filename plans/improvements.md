@@ -172,7 +172,9 @@ can run quietly.
 
 ### 2.3 `isinstance`-based choke dispatch blocks extension
 
-**[plan: Step 6]** Interface contracts.
+**[plan: Step 6]** Interface contracts. Settled in `specs/architecture.md`:
+`ChokeModel.mass_flow_rate(u, p_s, s, A)` takes the wellhead state. Step 7
+implements it.
 
 `_right_boundary_eqs` (`simulator.py:248-255`) and
 `cl_simulator.py:185-197` branch on `isinstance(wp.choke, ...)` and raise for
@@ -190,7 +192,9 @@ needs. The simulator then calls it polymorphically with no `isinstance`.
 
 ### 2.4 Hidden state `self._w_l_inflow`
 
-**[plan: Step 6]** Interface contracts.
+**[plan: Step 6]** Interface contracts. Settled in `specs/architecture.md`: the
+reservoir liquid rate is an explicit argument of every point's rows. Step 7
+implements it.
 
 `_differential_equations` depends on `self._w_l_inflow` being set as a side
 effect of `_left_boundary_eqs` / `_compute_left_boundary_state`
@@ -201,8 +205,9 @@ needed from `x_0` — the expression is cheap and symbolic anyway.
 
 ### 2.5 The simulator mutates the user's objects
 
-**[plan: Step 6]** The `SSDFSimulator` part. The `ClosedLoopWellSimulator` part
-is **[out of v2]**.
+**[plan: Step 6]** The `SSDFSimulator` part, settled in `specs/architecture.md`:
+frozen inputs, and the default choke set in `WellProperties.__post_init__`.
+Step 7 implements it. The `ClosedLoopWellSimulator` part is **[out of v2]**.
 
 - `SSDFSimulator.__init__` writes the default choke back into the *caller's*
   `WellProperties` (`simulator.py:126-127`).
@@ -283,6 +288,10 @@ free by reusing a parameterized objective.
 
 **[plan: Step 6]** A structural change with an expected order-of-magnitude
 gain, so it can pass principle 7; the gain is to be measured on the case set.
+Settled in `specs/architecture.md` (`build_system` and `IpoptSolver` once per
+well). Measured on two wells on 2026-09-30, the build is 97% of a warm
+re-solve, a bound of about 40x; Step 7 implements it and repeats the
+measurement on the case set.
 
 `SSDFSimulator.simulate()` reconstructs the full symbolic system and a fresh
 Ipopt instance on every call. For the package's main use cases — data
