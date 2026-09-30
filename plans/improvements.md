@@ -119,12 +119,14 @@ form (Phi multiplies the *pressure-drop* term); fix the class docstring.
 
 **[any time]**
 
-- `AGENTS.md` documents `uv run python scripts/sim_examples/<name>.py`, but that
+- ~~`AGENTS.md` documents `uv run python scripts/sim_examples/<name>.py`, but that
   fails for examples that import `scripts.*`, such as `gl_temp.py`
   (`ModuleNotFoundError: No module named 'scripts'`), because running a file
   puts its own directory on `sys.path`, not the project root. `uv run python -m
   scripts.sim_examples.gl_temp` works. Either document `-m`, or drop the
-  `scripts.*` import from the examples. *(Found 2026-09-30.)*
+  `scripts.*` import from the examples. *(Found 2026-09-30.)*~~ **[done
+  2026-09-30 in Step 5]** `AGENTS.md` documents `-m`, and
+  `tests/test_examples.py` runs the examples that way.
 - `src/manywells/units.py:8` — module docstring claims "All public interfaces in
   the manywells package use SI units (Pa, ...)", but the simulator, choke,
   inflow and `FluidModel` methods all take **bar**. Meanwhile
@@ -259,10 +261,13 @@ free by reusing a parameterized objective.
 
 - ~~**Add a gas-lift test** (see 1.1) — the highest-value missing test.~~
   **[done 2026-09-30 in `8b05b18`]**
-- **[plan: Step 5]** **Smoke-test the examples**: a `slow`-marked test that runs each
+- ~~**[plan: Step 5]** **Smoke-test the examples**: a `slow`-marked test that runs each
   `scripts/sim_examples/*.py` headless (`matplotlib.use("Agg")`) would have
   caught both 1.1 and 1.3. The examples are the de-facto tutorial; broken
-  examples are costly for an open-source project.
+  examples are costly for an open-source project.~~ **[done 2026-09-30 in
+  Step 5]** `tests/test_examples.py` runs each example in its own process with
+  `MPLBACKEND=Agg`, in a temporary directory (`gl_temp.py` saves a figure to
+  the working directory).
 - **Fix the water FVF tests** along with 1.2.
 - **[plan: Step 7]** **Energy-equation regression test** (as test vectors in
   `specs/model/thermal.md`): the thermal model

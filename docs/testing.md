@@ -43,8 +43,11 @@ uv run pytest tests/ -v -m "not slow"
 | **test_calibration.py** | `calibrate_bernoulli_choke_model`, `calibrate_inflow_model` (PI and Vogel), and error cases |
 | **test_spec_vectors.py** | `develop` against the test vectors from v1.0.0 in `specs/model/` (component tables and residual rows); `spec_parse.py` reads the spec files |
 | **test_spec_traceability.py** | Equation IDs, coverage tables and `# spec:` tags (`specs/model/README.md`) |
+| **test_examples.py** | Every script in `scripts/sim_examples/` runs to the end headless (`slow`) |
 
-The tests that run a full simulator solve are marked `slow` so it can be skipped for faster feedback with `-m "not slow"`.
+`verification/tests/` tests the verifier (`specs/verification.md`); `uv run pytest` runs it with the rest.
+
+The tests that run a full simulator solve, or the examples, are marked `slow` so they can be skipped for faster feedback with `-m "not slow"`.
 
 ## Configuration
 
