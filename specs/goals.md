@@ -1,8 +1,8 @@
 # ManyWells v2 goals
 
-*2026-09-30. Owner: Bjarne Grimstad. Status: decided.*
+*2026-09-30, revised the same day (lean verification). Owner: Bjarne Grimstad. Status: decided.*
 
-This file records the goals of the v2 foundation plan (`plans/manywells-v2-plan.md`) and the direction for v2 that the plan prepares for. The v2 direction can be revised after the plan; any change needs Bjarne's sign-off. Terms such as *verifier*, *residual graph* and *v1-compatibility configuration* are defined in the plan.
+This file records the goals of the v2 foundation plan (`plans/manywells-v2-plan.md`) and the direction for v2 that the plan prepares for. The v2 direction can be revised after the plan; any change needs Bjarne's sign-off. Terms such as *verifier*, *reference root set* and *v1-compatibility configuration* are defined in the plan.
 
 ## Purpose
 
@@ -18,7 +18,7 @@ Neither ranks above the other. Where they conflict, Bjarne decides case by case.
 The plan ends when new equations are easy to add and test:
 
 - `develop`'s model is specified in `specs/model/`, with v1.0.0 as a named configuration.
-- The verifier checks v1.0.0, the Rust port against v1.0.0's model, `develop` in its v1-compatibility configuration, and `develop`'s full model.
+- The verifier checks the Rust port and `develop` in its v1-compatibility configuration against reference root sets computed from v1.0.0. `develop`'s full model is checked by component test vectors, invariants, spot checks, convergence and stability property checks, without a second implementation of the model.
 - v1's sampling procedure, extended to `develop`'s new inputs (trajectory, black-oil parameters, pipe roughness), runs on `develop`.
 - One new equation has gone through the whole loop (plan, Step 9).
 
@@ -35,14 +35,14 @@ The new flow-regime model and the port of `develop`'s model to Rust come after t
 
   The other model changes on `develop` (fixed-rate inflow, inclination terms in the slip model) are in scope too. v2 also adds a flow-regime model with four regimes (bubbly, slug, churn, annular) after Hasan et al.; `develop`'s classifier merges slug and churn. It is a draft (`scripts/flow_regimes/new_flow_regime_model.md`), not yet on `develop`. Any other model change needs its own feature spec and Bjarne's approval. Which features ship in v2.0 and which wait for v2.x is decided later.
 - **Solution.** The model's answer is a root set: every steady-state root, each labelled stable or unstable. The label is static (nodal-analysis) stability: at a stable root, a small increase in rate makes the flow fall back; at an unstable one it runs away. The unstable roots in v1's data are low-rate *trickle* roots. The operating point is the stable root; if there is none, the well cannot flow at those conditions. `simulate()` returns the operating point and raises if there is none; the full root set is available on request.
-- **Implementation.** A Rust core with Python bindings, which are the public API. `develop`'s Python/CasADi simulator stays the working implementation until the Rust core covers the full model (after this plan, before v2.0.0), and is then retired. CasADi stays in the verifier, for the residual graph and the stability label. From then on each equation exists twice, in the Rust core and in the verifier's residual graph built from the spec, and the verifier checks one against the other. `closed_loop/` subclasses the Python simulator, so it is removed with it and can return in a later version on the Rust core. Calibration must work with the Rust core; its spec decides how.
+- **Implementation.** A Rust core with Python bindings, which are the public API. `develop`'s Python/CasADi simulator stays the working implementation until the Rust core covers the full model (after this plan, before v2.0.0), and is then retired. Each equation is implemented once, in the Rust core; the verifier does not re-implement the model. While the Python simulator exists, the two must agree on the operating point. `closed_loop/` subclasses the Python simulator, so it is removed with it and can return in a later version on the Rust core. Calibration must work with the Rust core; its spec decides how.
 - **Distribution.** Prebuilt wheels on PyPI, so `pip install manywells` needs no Rust toolchain.
 - **Release.** Besides the model and the Rust core, v2.0.0 needs calibration, checked privately against real-well data, and new datasets. There is no closed-loop dataset. Whether there is a new paper is open.
 
 ## Compatibility
 
 - **API.** v2.0.0 may break any part of the API, provided the CHANGELOG lists each break with an old→new snippet. The v1-compatibility configuration reproduces v1.0.0's physics, not its API.
-- **Datasets.** v2 datasets are new datasets (`manywells-sol-2` and so on, after v1's `-sol-1`, `-nsol-1` and `-nscl-1`) with their own schema. The published v1 datasets are never modified. The v1 erratum, which labels published samples as stable-root or trickle-root, goes in the public dataset `solution-seeker-as/manywells-verification`. A note in `docs/corrigendum.md` and on the `manywells` dataset card points to it. The residual graph lives in this repo, next to the verifier.
+- **Datasets.** v2 datasets are new datasets (`manywells-sol-2` and so on, after v1's `-sol-1`, `-nsol-1` and `-nscl-1`) with their own schema. The published v1 datasets are never modified. The v1 erratum is a note in `docs/corrigendum.md`: the ~280 K TWH spike in the published data comes from samples on the unstable trickle root. No per-sample labels are published. There is no public verification dataset; the verifier's case set and reference root sets live in this repo.
 
 ## Non-goals
 
