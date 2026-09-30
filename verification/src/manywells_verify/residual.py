@@ -55,7 +55,7 @@ def choke_row(n_cells: int) -> int:
     return DIM_X * n_cells + 3
 
 
-def _row_layout(n_cells: int):
+def row_layout(n_cells: int):
     """Row indices of each block in r: left (3,), closure (N+1, 3), cell (N, 4), choke (scalar)."""
     N = n_cells
     first = 6 + DIM_X * np.arange(N)            # first row of grid point i = 1..N
@@ -92,6 +92,17 @@ class ResidualGraph:
             raise KeyError(f'missing parameters: {missing}')
         return np.array([float(values[k]) for k in self.params])
 
+    def row_names(self, n_cells: int) -> np.ndarray:
+        """Name of each row of r, e.g. 'momentum' or 'choke', from the manifest."""
+        blocks = self.manifest['blocks']
+        rows_left, rows_clo, rows_cell, row_chk = row_layout(n_cells)
+        names = np.empty(DIM_X * (n_cells + 1), dtype=object)
+        names[rows_left] = blocks['left_vogel']['row_names']
+        names[rows_clo] = blocks['closure']['row_names']
+        names[rows_cell] = blocks['cell']['row_names']
+        names[row_chk] = blocks['choke_simpson_linear']['row_names'][0]
+        return names
+
     def _mapped(self, name: str, n: int) -> ca.Function:
         if (name, n) not in self._maps:
             self._maps[name, n] = self._blocks[name].map(n)
@@ -121,7 +132,7 @@ class ResidualGraph:
         g_cell, J_cell, J_cell_prev = self._mapped('cell', N)(X[:, 1:], X[:, :-1], i, N, P)
         g_chk, J_chk = self._blocks[f'choke_{variant.choke}_{variant.profile}'](X[:, N], P)
 
-        rows_left, rows_clo, rows_cell, row_chk = _row_layout(N)
+        rows_left, rows_clo, rows_cell, row_chk = row_layout(N)
         r = np.empty(n)
         r[rows_left] = np.asarray(g_left).ravel()
         r[rows_clo] = np.asarray(g_clo).T

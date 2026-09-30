@@ -76,6 +76,11 @@
         "J_x"
       ],
       "rows": 3,
+      "row_names": [
+        "gas inflow",
+        "liquid inflow",
+        "inflow temperature"
+      ],
       "params_used": [
         "D",
         "w_l_max",
@@ -97,6 +102,11 @@
         "J_x"
       ],
       "rows": 3,
+      "row_names": [
+        "gas inflow",
+        "liquid inflow",
+        "inflow temperature"
+      ],
       "params_used": [
         "D",
         "k_l",
@@ -118,6 +128,11 @@
         "J_x"
       ],
       "rows": 3,
+      "row_names": [
+        "slip",
+        "gas EOS",
+        "liquid density"
+      ],
       "params_used": [
         "D",
         "rho_l",
@@ -140,6 +155,12 @@
         "J_x_prev"
       ],
       "rows": 4,
+      "row_names": [
+        "gas mass",
+        "liquid mass",
+        "momentum",
+        "energy"
+      ],
       "params_used": [
         "L",
         "D",
@@ -163,6 +184,9 @@
         "J_x"
       ],
       "rows": 1,
+      "row_names": [
+        "choke"
+      ],
       "params_used": [
         "D",
         "K_c",
@@ -183,6 +207,9 @@
         "J_x"
       ],
       "rows": 1,
+      "row_names": [
+        "choke"
+      ],
       "params_used": [
         "D",
         "K_c",
@@ -203,6 +230,9 @@
         "J_x"
       ],
       "rows": 1,
+      "row_names": [
+        "choke"
+      ],
       "params_used": [
         "D",
         "K_c",
@@ -223,6 +253,9 @@
         "J_x"
       ],
       "rows": 1,
+      "row_names": [
+        "choke"
+      ],
       "params_used": [
         "D",
         "K_c",
@@ -243,6 +276,9 @@
         "J_x"
       ],
       "rows": 1,
+      "row_names": [
+        "choke"
+      ],
       "params_used": [
         "D",
         "K_c",
@@ -263,6 +299,9 @@
         "J_x"
       ],
       "rows": 1,
+      "row_names": [
+        "choke"
+      ],
       "params_used": [
         "D",
         "K_c",
@@ -283,6 +322,9 @@
         "J_x"
       ],
       "rows": 1,
+      "row_names": [
+        "choke"
+      ],
       "params_used": [
         "D",
         "K_c",
@@ -303,6 +345,9 @@
         "J_x"
       ],
       "rows": 1,
+      "row_names": [
+        "choke"
+      ],
       "params_used": [
         "D",
         "K_c",

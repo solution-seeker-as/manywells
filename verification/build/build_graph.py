@@ -62,6 +62,14 @@ PARAMS = {
 WELL_FIELDS = ('L', 'D', 'rho_l', 'R_s', 'cp_g', 'cp_l', 'f_D', 'h')
 BC_FIELDS = ('p_r', 'p_s', 'T_r', 'T_s', 'u', 'w_lg')
 
+# Row names per block, in v1.0.0's order (the Residuals check scales each row by its kind)
+ROW_NAMES = {
+    'left': ['gas inflow', 'liquid inflow', 'inflow temperature'],
+    'closure': ['slip', 'gas EOS', 'liquid density'],
+    'cell': ['gas mass', 'liquid mass', 'momentum', 'energy'],
+    'choke': ['choke'],
+}
+
 CHECK_WELLS = (977, 1701, 1847, 0, 1, 2, 3)  # sol-1 config IDs; 977 and 1701 land on the trickle root
 RTOL = 1e-13
 
@@ -166,6 +174,7 @@ def save(blocks):
                           'inputs': f.name_in(),
                           'outputs': f.name_out(),
                           'rows': f.size1_out(0),
+                          'row_names': ROW_NAMES[name.split('_')[0]],
                           'params_used': used[name],
                           'sha256': sha256(OUT / f'{name}.casadi')}
                    for name, f in blocks.items()},

@@ -15,8 +15,13 @@ requires-python = ">=3.11"
 dependencies = [
     "numpy>=1.24",
     "scipy>=1.10",
+    "pandas>=1.5",
+    "pyarrow>=12",
     "casadi>=3.6.4",
 ]
 authors = [
   {name = "Bjarne Grimstad"},
 ]
+
+[project.scripts]
+manywells-verify = "manywells_verify.cli:main"

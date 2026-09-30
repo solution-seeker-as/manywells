@@ -25,11 +25,6 @@ RTOL = 1e-13
 
 
 @pytest.fixture(scope='module')
-def graph():
-    return ResidualGraph('v1.0.0')
-
-
-@pytest.fixture(scope='module')
 def golden():
     with np.load(GRAPH_DIR / 'golden.npz') as data:
         return dict(data)
