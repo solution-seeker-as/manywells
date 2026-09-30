@@ -1,6 +1,6 @@
 # Sampling
 
-*Step 4 of `plans/manywells-v2-plan.md`. Owner: Bjarne Grimstad. Status: draft, 2026-09-30. The v1 procedure (SMP-1 to SMP-31) records v1.0.0's code; the extension to `develop`'s inputs (SMP-40 to SMP-44) is proposed and waits for Bjarne.*
+*Step 4 of `plans/manywells-v2-plan.md`. Owner: Bjarne Grimstad. Status: in use, 2026-09-30. The v1 procedure (SMP-1 to SMP-30) records v1.0.0's code, with the rulings of `specs/discrepancies.md`. SMP-31 and the extension to `develop`'s inputs (SMP-40 to SMP-44) are placeholders that Step 7 settles when it implements the sampler (Bjarne, 2026-09-30).*
 
 How ManyWells draws wells and operating points for its datasets. This is not physics, so it lives outside `specs/model/`. It records v1.0.0's procedure, which generated `manywells-sol-1` and `manywells-nsol-1`, and extends it to the inputs that `develop`'s model adds: trajectory, black-oil parameters and pipe roughness. The approach stays the same, independent draws. In the v1-compatibility configuration the sampler draws v1's inputs as before, so that the Distributions check (`specs/verification.md`, Step 3) can compare regenerated samples with the published datasets. Closed loop (`manywells-nscl-1`) is out of scope for v2 (`specs/goals.md`).
 
@@ -10,7 +10,7 @@ After this plan the procedure will be redesigned for the v2 datasets; that is a 
 
 - $U(a, b)$ is the uniform distribution. Every draw is independent of the others unless its definition says otherwise.
 - A **well** is drawn once (SMP-1 to SMP-17). A **sample** is one operating point of a well, solved once; `sol-1` draws 500 per well (SMP-18 to SMP-22), `nsol-1` evolves 500 weekly samples (SMP-23 to SMP-27).
-- The published datasets store the samples in their rows (`docs/datasets.md`) and the wells in their config files. A `sol-1` config holds the well draws, with $u = 0.5$ from the generator's first solve (SMP-28). An `nsol-1` config holds the well's state after its last attempt, because the generator updates the well in place (SMP-24 to SMP-27) and saves it at the end: the fractions, $\rho_l$, $c_{pl}$, the inflow's $f_g$, $p_r$, $p_s$, $u$, $w_{lg}$ and the decay rate $\gamma_{pr}$ are final values. The draws survive in its `ns_bhv` fields `pr_init`, `ps_init` and `init_fractions`. Both kinds store $f_D$ wrongly for `nsol-1` (S-8).
+- The published datasets store the samples in their rows (`docs/datasets.md`) and the wells in their config files. A `sol-1` config holds the well draws, with $u = 0.5$ from the generator's first solve (SMP-28). An `nsol-1` config holds the well's state at its last sample, the last row of its data, because the generator updates the well in place (SMP-24 to SMP-27) and saves it at the end: the fractions, $\rho_l$, $c_{pl}$, the inflow's $f_g$, $p_r$, $p_s$, $u$, $w_{lg}$ and the decay rate $\gamma_{pr}$ are final values. The draws survive in its `ns_bhv` fields `pr_init`, `ps_init` and `init_fractions`. Both kinds store $f_D$ wrongly for `nsol-1` (S-8).
 - Source: `scripts/data_generation/` at the `v1.0.0` tag. Where the code and the paper differ, `specs/discrepancies.md` (S-1 to S-12) records it; this file follows the code.
 
 ## Well draws
@@ -171,11 +171,11 @@ Each accepted sample becomes one dataset row, computed from the root: the featur
 
 ### SMP-31 · Seeding
 
-**Proposed.** Every draw comes from a random generator seeded from the dataset name, the well index and the draw's index within the well, and each dataset records the seeds. v1.0.0 seeded NumPy from process ID × time for `sol-1` and from the process ID alone for `nsol-1` (S-9), so its datasets cannot be regenerated; that is why the Distributions check compares distributions, not rows.
+**Placeholder for Step 7.** Every draw is seeded, and each dataset records its seeds (plan, Step 5). A starting point: every draw comes from a random generator seeded from the dataset name, the well index and the draw's index within the well, and each dataset records the seeds. v1.0.0 seeded NumPy from process ID × time for `sol-1` and from the process ID alone for `nsol-1` (S-9), so its datasets cannot be regenerated; that is why the Distributions check compares distributions, not rows.
 
 ## Extension to `develop`'s inputs
 
-**Proposed, for Bjarne to decide.** `develop`'s model takes inputs that v1's does not. The sampler draws them as further independent draws, and draws v1's inputs exactly as above in both configurations, so that the two configurations share the v1 draws.
+**Placeholders for Step 7** (Bjarne, 2026-09-30): the values below are starting points, which Step 7 sets when it implements the sampler and can look at the drawn distributions. `develop`'s model takes inputs that v1's does not. The sampler draws them as further independent draws, and draws v1's inputs exactly as above in both configurations, so that the two configurations share the v1 draws.
 
 ### SMP-40 · Configurations and mapping
 

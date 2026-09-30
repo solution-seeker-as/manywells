@@ -116,3 +116,15 @@ def test_convergence_is_first_order(fixtures):
     assert check_convergence([(case, roots[0]) for case, roots in members[:2]], Tolerances()).status == 'n/a'
     missing = [(case, None if k == 0 else roots[0]) for k, (case, roots) in enumerate(members)]
     assert check_convergence(missing, Tolerances()).failed
+
+
+def test_two_stable_roots_take_the_lowest_p0(fixtures):
+    """SOL-6: with several stable reference roots, the operating point is the one with the lowest p0."""
+    case, roots = fixtures['sol1-977']
+    both_stable = [Root(r.x, 'stable') for r in roots]  # 169.00 and 208.02 bar, relabelled
+    low = verify_case(case, unlabelled(roots, 0), both_stable)
+    high = verify_case(case, unlabelled(roots, 1), both_stable)
+    assert low.checks['operating_point'].status == 'pass'
+    assert high.checks['operating_point'].failed
+    assert low.n_stable_reference == 2
+    assert any('lowest p0' in f for f in low.findings)

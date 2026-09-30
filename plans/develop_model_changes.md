@@ -40,7 +40,7 @@ The row vectors of `specs/model/discretization.md` measure the gap. `tests/test_
 
 ### 3. Surface tension from the fluid model
 
-- **What.** `FluidModel.surface_tension(p, T)`: the dead-oil correlation at the oil's density at standard conditions, $\rho_o$, instead of at the state's liquid density $\rho_l$ (PVT-MIX-5, `specs/discrepancies.md` D-8), with a live-oil correction for black oil (Abdul-Majeed and Al-Soof, two branches blended by a sigmoid at $R_{so} = 50$ Sm³/Sm³ with rate 0.5).
+- **What.** `FluidModel.surface_tension(p, T)`: the dead-oil correlation at the oil's density at standard conditions, $\rho_o$, instead of at the state's liquid density $\rho_l$ (PVT-MIX-5, `specs/discrepancies.md` D-8), with a live-oil correction for black oil (Abdul-Majeed and Abu Al-Soof, 2000, Eqs. (4)–(5), blended by a sigmoid at $R_{so} = 50$ Sm³/Sm³ with rate 0.5). The coefficients match the source, but its two branches do not meet at $R_{so} = 50$: the ratio $\sigma_{lo}/\sigma_{od}$ is 0.425 by (4) and 0.375 by (5), a 12% step that the sigmoid smooths. `black_oil.py`'s docstring says they meet continuously; correct it when specifying the option.
 - **Gap.** With `wlr = 0` and `rho_o = rho_l` the two agree at a root, but not away from it: the SLIP-1 rows differ by up to 13% (W1) at the perturbed states. With water in the liquid they differ at roots too. The v1-compatibility configuration needs $\sigma_{od}(\rho_l, T)$ with the state's $\rho_l$.
 - **Commits.** `12be414`.
 

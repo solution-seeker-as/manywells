@@ -25,11 +25,11 @@ $\rho$ is a density at standard conditions. The inverse is $\rho = 141.5\,\rho_{
 
 ### PVT-OIL-3 · Dead-oil surface tension
 
-Abdul-Majeed and Al-Soof (2000), with $T$ in °C ($T_C = T - 273.15$) and the result converted from dyn/cm to J/m²:
+Abdul-Majeed and Abu Al-Soof (2000), Eqs. (1)–(3), with $T$ in °C ($T_C = T - 273.15$) and the result converted from dyn/cm to J/m²:
 
 $$\sigma_{od}(\rho, T) = 10^{-3}\,\big(1.11591 - 0.00305\,T_C\big)\big(38.085 - 0.259\,\text{API}(\rho)\big).$$
 
-This is approximately the source's correlation in °F, $(1.17013 - 1.694\cdot10^{-3}\,T_F)(38.085 - 0.259\,\text{API})$ dyn/cm, rewritten in °C: the conversion gives $1.115922 - 0.0030492\,T_C$ (`specs/discrepancies.md`, D-9). Which density it is evaluated at is set by PVT-MIX-5.
+The coefficients are the source's, which gives the correlation in °C. It was fitted to dead-oil data at 15.6, 37.8 and 54.4 °C and API gravities 15 to 50; ManyWells evaluates it up to the reservoir temperature, 150 °C at most (`specs/sampling.md`, SMP-14), and down to API 10 (PVT-MIX-5). Which density it is evaluated at is set by PVT-MIX-5.
 
 ## Options
 
@@ -45,7 +45,7 @@ None. Neither function checks that the API gravity or the temperature is in the 
 ## Sources
 
 - Paper §4.2 (oil density range) and Appendix A.1 (surface tension).
-- Abdul-Majeed and Al-Soof (2000), "Estimation of gas–oil surface tension", *Journal of Petroleum Science and Engineering* 27, 197–200.
+- Abdul-Majeed and Abu Al-Soof (2000), "Estimation of gas–oil surface tension", *Journal of Petroleum Science and Engineering* 27, 197–200 (`papers/`).
 
 ## Test vectors
 

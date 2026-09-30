@@ -165,15 +165,14 @@ def check_operating_point(case: Case, roots, results, reference, tol: Tolerances
     chosen = [k for k, r in enumerate(roots) if r.operating_point]
     if len(chosen) > 1:
         return Check('fail', f'{len(chosen)} roots are marked as the operating point')
-    if len(stable) > 1:
-        return Check('indeterminate', f'reference has {len(stable)} stable roots')
     if not stable:
         if chosen:
             return Check('fail', 'reference has no stable root (the well cannot flow), but an operating point is reported')
         return Check('pass', 'no stable reference root and no operating point reported')
     if not chosen:
         return Check('fail', 'no operating point reported, but the reference has a stable root')
-    k, s = chosen[0], stable[0]
+    k = chosen[0]
+    s = min(stable, key=lambda j: reference[j].x[0])  # SOL-6: of several stable roots, the lowest p0
     res = results[k]
     if not res.valid:
         return Check('fail', f'the operating point fails Invariants: {res.invariants.detail}')
@@ -239,9 +238,11 @@ def verify_case(case: Case, roots, reference, tol: Tolerances = Tolerances()) ->
     findings = [f'root {res.index} (p0 = {roots[res.index].x[0]:.3f} bar) passes Invariants but matches no '
                 f'reference root' + (f' (nearest at distance {res.distance:.1e})' if res.distance is not None else '')
                 for res in results if res.valid and res.match is None]
-    if checks['operating_point'].status == 'indeterminate':
-        findings.append(checks['operating_point'].detail)
-    return CaseResult(case, results, checks, findings, sum(r.label == 'stable' for r in reference))
+    n_stable = sum(r.label == 'stable' for r in reference)
+    if n_stable > 1:
+        findings.append(f'reference has {n_stable} stable roots; the operating point is the one with the lowest p0 '
+                        f'(SOL-6)')
+    return CaseResult(case, results, checks, findings, n_stable)
 
 
 # ---------------------------------------------------------------------------------------------

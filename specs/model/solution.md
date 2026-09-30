@@ -48,11 +48,11 @@ If the root set has no stable root (no root at all, or only unstable ones), ther
 
 ### SOL-6 · More than one stable root
 
-**Proposed, for Bjarne to decide.** If the root set has more than one stable root, the operating point is the stable root with the lowest $p_0$, which is the highest rate. Every root stays in the root set with its label, and the case is flagged as having several stable roots.
+Decided by Bjarne, 2026-09-30 (`specs/discrepancies.md`, D-20). If the root set has more than one stable root, the operating point is the stable root with the lowest $p_0$, which is the highest rate. Every root stays in the root set with its label, and the case is flagged as having several stable roots.
 
 Step 2 found this case near the fold: `fold-1505` has stable roots at $p_0$ = 115.547 and 115.908 bar, and `fold-0485` at 149.537 and 151.378 bar (`verification/data/build/disagreements.md`). Between two stable roots there must be at least one unstable root, so these cases have at least three roots, and neither root search resolved all of them. Both cases are out of the case set.
 
-Why the lowest $p_0$: of the stable roots, it is the one a flowing well reaches when its rate falls from a higher rate, for example after kick-off or when it is choked back. Starting from shut-in, a well whose static column reaches the separator settles at the stable root with the highest $p_0$ instead, so the choice is a convention, not physics. The alternative is to report no unique operating point, so that `simulate()` raises, as in SOL-5.
+Why the lowest $p_0$: of the stable roots, it is the one a flowing well reaches when its rate falls from a higher rate, for example after kick-off or when it is choked back. Starting from shut-in, a well whose static column reaches the separator settles at the stable root with the highest $p_0$ instead, so the choice is a convention, not physics.
 
 ### SOL-7 · Two-root criterion
 
@@ -79,5 +79,5 @@ Not part of the model; recorded because the verifier records which root v1.0.0 r
 | SOL-3 | — | `plans/evidence/stability_label.py`, `verification/build/label_cases.py` | verifier: Stability |
 | SOL-4 | — | — | verifier: Operating point |
 | SOL-5 | — | — | verifier: Operating point |
-| SOL-6 | — | — | spec-only: proposed, and the verifier reports such cases as indeterminate and the case set leaves them out |
+| SOL-6 | — | `verification/src/manywells_verify/checks.py` `check_operating_point` | verifier: Operating point (tested in `verification/tests/test_checks.py`, as the case set has no such case: both were left out for incomplete root sets) |
 | SOL-7 | — | — | property: `plans/evidence/root_sets.py`, `plans/solver_description.md` §7; spec-only: a property of the model, not an equation |

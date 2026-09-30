@@ -61,8 +61,8 @@ class Report:
         return [(k, n) for (k, n) in self.expected if (k, n) in seen and not seen[k, n].failed]
 
     def stable_root_rate(self):
-        """Of the cases with one stable reference root, how many the candidate returns as the operating point."""
-        eligible = [r for r in self.results if r.n_stable_reference == 1]
+        """Of the cases with a stable reference root, how many the candidate returns as the operating point."""
+        eligible = [r for r in self.results if r.n_stable_reference]
         hits = sum(r.checks['operating_point'].status == 'pass' for r in eligible)
         return hits, len(eligible)
 

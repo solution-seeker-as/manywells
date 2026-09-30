@@ -1,6 +1,6 @@
 # ManyWells model specification
 
-*Step 4 of `plans/manywells-v2-plan.md`. Owner: Bjarne Grimstad. Status: draft, 2026-09-30. The `v1.0.0` configuration is complete; the rulings in `specs/discrepancies.md` are proposed and wait for Bjarne. `develop`'s model changes are listed in `plans/develop_model_changes.md` and are added here as options in Step 7.*
+*Step 4 of `plans/manywells-v2-plan.md`. Owner: Bjarne Grimstad. Status: in use, 2026-09-30. The `v1.0.0` configuration is complete, and Bjarne has ruled on every item of `specs/discrepancies.md`. `develop`'s model changes are listed in `plans/develop_model_changes.md` and are added here as options in Step 7.*
 
 This directory specifies ManyWells' steady-state drift-flux model of gas–liquid flow in a well. It is the source of truth for the physics: every physics expression in the code traces to an equation ID here (principle 1), and no physics change goes in without a change to these files in the same PR. The spec says *what* the model is. Derivations and motivation stay in `docs/` and the paper, and the spec cites them.
 
@@ -62,7 +62,7 @@ The `v1.0.0` configuration reproduces ManyWells v1.0.0, which generated the publ
 | Friction | FRIC-1 with FRIC-2 (fixed $f_D$) | Step 7 (roughness, Chen) |
 | Energy | BAL-5 with THM-1, THM-2; THM-3 at the bottom | Step 7 (frictional heating, gravity term, lift-gas temperature) |
 | Discretization | DISC-1 to DISC-6 | Step 7 |
-| Choke | CHK-1 to CHK-4, CHK-12; CHK-11 once decided (v1.0.0's row is NaN where CHK-11 applies, which no root reaches) | same |
+| Choke | CHK-1 to CHK-4, CHK-11, CHK-12; CHK-11 extends v1.0.0, whose row is NaN where it applies, a region no root reaches | same |
 | Solution | SOL-1 to SOL-6 | same |
 
 Well options in every configuration:

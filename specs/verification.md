@@ -44,7 +44,7 @@ There are no closed-loop cases (decided 2026-09-30). nsol-1's configs store `f_D
 
 The label is the sign of d(choke row)/dp0 along the manifold where every other row of v1's system holds, from one solve with v1's Jacobian with the choke row and the p0 column removed. It is normalized by `(p_r - p_s) / w_m`. Positive is unstable, negative stable. A magnitude of at most `label_min` is indeterminate.
 
-A case is in the case set only if both methods give the same accepted roots, no label is indeterminate, and no v1 solution was rejected. Every other case is left out (Bjarne, 2026-09-30). In this build that left out 17: 13 where v1's own starts missed a root the Rust starts found, 1 where Rust missed roots v1 found, 2 near the fold with two stable roots (the model has more than two roots there), and 1 where v1 returned `Feasible_Point_Found` at a tangent point next to the fold. The list is written to `data/build/disagreements.md` on a rebuild. Rust returns at most two roots per case, so it does not test the assumption that there are at most two independently.
+A case is in the case set only if both methods give the same accepted roots, no label is indeterminate, and no v1 solution was rejected. Every other case is left out (Bjarne, 2026-09-30). In this build that left out 17: 13 where v1's own starts missed a root the Rust starts found, 1 where Rust missed roots v1 found, 2 near the fold with two stable roots (the model has more than two roots there, and neither search found the unstable root between them), and 1 where v1 returned `Feasible_Point_Found` at a tangent point next to the fold. The list is written to `data/build/disagreements.md` on a rebuild. Rust returns at most two roots per case, so it does not test the assumption that there are at most two independently.
 
 ## Files
 
@@ -72,7 +72,7 @@ Per root:
 
 Per case:
 
-- **Operating point.** With one stable reference root, the candidate's operating point must pass Invariants and match that root. With no stable reference root, the candidate must report no operating point. Two stable reference roots are indeterminate until `specs/model/solution.md` settles that case.
+- **Operating point.** With a stable reference root, the candidate's operating point must pass Invariants and match it; with more than one, it must match the one with the lowest p0 (`specs/model/solution.md`, SOL-6), and the case gets a finding. With no stable reference root, the candidate must report no operating point.
 - **Root set**, for candidates that report more than one root or any label. Every reference root must be matched by a valid candidate root.
 - **Stability**, for candidates that label their roots. Each label must equal the label of the reference root that the root matches.
 - **Findings.** A valid candidate root that matches no reference root is a finding for Bjarne, not a failure: either both searches missed it or the candidate is wrong, and the verifier cannot tell which.
@@ -103,7 +103,7 @@ Confirmed by Bjarne on 2026-09-30, from the measurements of `build/tolerance_sta
 `manywells-verify CANDIDATE --data DIR [--expected-failures CSV] [--json OUT]` prints a one-screen Markdown report. It exits with status 1 on unexpected failures, and `--json` writes every check of every root and case. The report contains:
 
 - the verdict;
-- the **stable-root rate**: of the cases with one stable reference root, the share where the candidate's operating point is that root;
+- the **stable-root rate**: of the cases with a stable reference root, the share where the candidate's operating point is the stable root (SOL-6's where there are several);
 - a table of counts per check;
 - the largest distance of a passing operating point;
 - unexpected failures, expected failures now passing, and findings for review.
