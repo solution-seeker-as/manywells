@@ -109,3 +109,7 @@ venv.bak/
 # Local folders
 local_scripts/
 papers/
+
+# Verifier build environments and full data (see verification/build/README.md)
+.worktrees/
+verification/data/full/

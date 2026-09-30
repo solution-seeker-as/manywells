@@ -13,6 +13,12 @@ resolution-markers = [
     "python_full_version < '3.12' and sys_platform != 'emscripten' and sys_platform != 'win32'",
 ]
 
+[manifest]
+members = [
+    "manywells",
+    "manywells-verify",
+]
+
 [[package]]
 name = "aiohappyeyeballs"
 version = "2.7.1"
@@ -1048,6 +1054,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "manywells-verify" },
     { name = "pytest" },
 ]
 
@@ -1063,7 +1070,29 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=7.0.0" }]
+dev = [
+    { name = "manywells-verify", editable = "verification" },
+    { name = "pytest", specifier = ">=7.0.0" },
+]
+
+[[package]]
+name = "manywells-verify"
+version = "0.1.0"
+source = { editable = "verification" }
+dependencies = [
+    { name = "casadi" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.3", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "casadi", specifier = ">=3.6.4" },
+    { name = "numpy", specifier = ">=1.24" },
+    { name = "scipy", specifier = ">=1.10" },
+]
 
 [[package]]
 name = "matplotlib"

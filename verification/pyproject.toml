@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project]
+name = "manywells-verify"
+version = "0.1.0"
+description = "Verifier for ManyWells solutions, built on the frozen ManyWells v1.0.0 residual"
+license = "CC-BY-NC-4.0"
+requires-python = ">=3.11"
+# No dependency on manywells: the verifier must stay independent of the implementations it checks.
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "casadi>=3.6.4",
+]
+authors = [
+  {name = "Bjarne Grimstad"},
+]
