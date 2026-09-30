@@ -1,6 +1,8 @@
-# ManyWells v2 — Spec-Driven Development Plan
+# ManyWells v2 foundation — Spec-Driven Development Plan
 
-*Draft 2026-09-29, revised 2026-09-30 (multiple roots and stability; work continues on `develop`). Owner: Bjarne Grimstad. Status: proposal.*
+*Draft 2026-09-29, revised 2026-09-30 (multiple roots and stability; work continues on `develop`; scope decisions; foundation step towards v2). Owner: Bjarne Grimstad. Status: proposal.*
+
+This plan is a step towards v2, not the release plan. v2 will be a major release with new datasets and perhaps a new paper. This plan brings the repo to a state where new equations are easy to add and test: `develop`'s model is specified in `specs/model/`, the verifier covers it, and v1's sampling procedure runs on the new code. It ends when one new equation has gone through the whole loop (Step 9). What follows is listed under After this plan.
 
 ## Starting point
 
@@ -9,11 +11,17 @@
 - **A fast Rust implementation exists** on the `rust_implementation` branch and is the first candidate against v1.0.0. It targets v1.0.0's model and API, not `develop`'s: its Python wrapper takes v1's `WellProperties` fields (`L`, `D`, `rho_l`, …), which `develop` has replaced with `geometry` and `fluid`. It must be shown to solve v1's model, not to reproduce v1's solutions. It finds every root of the steady-state equations and can label each one stable or unstable; v1 returns whichever root Ipopt reaches from its initial guess. On 151 sampled two-root wells, v1 landed on the unstable trickle root in 12 (`plans/solver_improvements.md`). Where the two disagree on the operating point, the stable root is correct.
 - **Known v1 defect: no root selection.** The paper says the system has "multiple solutions, some which may be unphysical" and relies on a good initial guess. The generators solve each well at u = 0.5 first and reuse that solution as the initial guess for all 500 samples of the well, which likely explains why trickle samples cluster in a few wells. In `manywells-sol-1`, 3.5% of samples (from 131 of 2,000 wells) have PWH within 10 mbar of PDC, with a median TWH of 279 K against 349 K for samples with PWH more than 1 bar above PDC. They make up 33.5k of the 44k samples between 275 and 285 K, which is the low-temperature spike in the TWH histogram. The exact count comes from the relabelling in Step 3.
 - **Validation data.** `solution-seeker-as/manywells-validation-data` on HuggingFace is private and stays private: it is the home for the real-well data from paper §6.1 (current contents to be confirmed in Step 3), which is confidential ("Real data is confidential and cannot be shared", paper, Data availability). Everything the verifier needs is synthetic (cases, v1 solutions, stability labels, dataset summaries), so it goes into a new public dataset instead (Step 3), and CI, agents and third parties can run the verifier without credentials.
-- **Known v1 limitations** (paper §8) are the natural v2 feature candidates: incompressible liquid and no gas–liquid mass transfer; vertical wells only; a single friction factor for the whole well; a simplified thermal model; independent parameter sampling that can produce unrealistic wells. `develop` already has work on the first four; Step 7 brings it under the verifier.
+- **Known v1 limitations** (paper §8) are the natural v2 feature candidates: incompressible liquid and no gas–liquid mass transfer; vertical wells only; a single friction factor for the whole well; a simplified thermal model; independent parameter sampling that can produce unrealistic wells. `develop` already has work on the first four; Step 7 brings it under the verifier. The fifth is left for after this plan, which only ports the sampling procedure (see Scope decisions).
+
+## Scope decisions
+
+- **Calibration is deferred until after this plan** (but before `v2.0.0`). `calibration/` gets no spec here, and the private real-well accuracy check, which depends on calibration, is not run.
+- **Closed loop is out of scope for v2** and can be added in a later version. There is no `manywells-nscl-2` dataset and no spec or verifier coverage for `closed_loop/`, which stays on `develop` untouched. The published `nscl-1` data is still relabelled in Step 3, as an erratum for v1 users, and its cases can stay in the verifier's case set, since the verifier checks only the final state.
+- **Sampling is ported now and redesigned later.** This plan makes v1's sampling procedure work with `develop`'s models, with the same approach (independent draws) extended to the new inputs: trajectory, black-oil parameters and pipe roughness. It gets its own spec, `specs/sampling.md` (Step 4), and is implemented in Step 7. In the v1-compatibility configuration it draws v1's inputs as before, so the distribution check can compare regenerated samples with the published datasets. After this plan, the procedure will likely change substantially, to generate v2 datasets that differ significantly from v1's.
 
 ## Principles
 
-1. **The spec is the source of truth; code is derived.** Every physics expression in the code traces to a numbered equation in `specs/model.md`. No physics change without a spec change in the same PR.
+1. **The spec is the source of truth; code is derived.** Every physics expression in the code traces to a numbered equation in `specs/model/`, and a test enforces it (Step 4). No physics change without a spec change in the same PR.
 2. **Verify against the equations, not against v1's numbers.** The pass/fail signal is "does this solution satisfy the model?", evaluated with v1's own residual function, so it survives solver changes and language ports and does not flag alternative valid roots as regressions.
 3. **Harness before features.** Nothing agent-produced merges until the verifier (Step 2) is green on v1.0.0 itself, meaning it passes everywhere except the expected-failure list of Step 2. The model changes already on `develop` predate the verifier; Step 7 brings them under it after the fact.
 4. **Small specs, versioned with the code, reviewed like code.** One spec per feature; the executable part (tests, tolerances, fixtures) is primary, prose is secondary.
@@ -30,7 +38,7 @@ r(x; θ, b, N) ∈ R^{8(N+1)}
 
 over the full state `x = (α_g, α_l, ρ_g, ρ_l, v_g, v_l, p, T)(z_i)`, `i = 0..N`, for well parameters `θ`, boundary conditions and controls `b`, and grid size `N`. Its rows are the discretized mass balances (16)–(17), the implicit-Euler momentum balance (18), the energy balance (19), the 4(N+1) closure relations (drift-flux, softmax regime transitions, fluid properties), and the 4 boundary conditions (inflow (10), choke (11)/(14), temperature (15)).
 
-The verifier holds two graphs: the frozen v1.0.0 graph, and the graph of the current model on `develop`, re-derived from `specs/model.md` and its feature specs (Step 7) and versioned with them. A candidate is checked against the graph of the model it implements. The Rust port and `develop` in its v1-compatibility configuration are checked against the v1.0.0 graph; `develop`'s full model is checked against its own.
+The verifier holds two graphs: the frozen v1.0.0 graph, and the graph of the current model on `develop`, re-derived from `specs/model/` (Step 7) and versioned with it. In the spec, the two models are named configurations (Step 4). A candidate is checked against the graph of the model it implements. The Rust port and `develop` in its v1-compatibility configuration are checked against the v1.0.0 graph; `develop`'s full model is checked against its own.
 
 A candidate's result for a case — one or more roots, from a refactored Python solver, the Rust port, or anything else — **passes** if all of the following hold:
 
@@ -42,11 +50,13 @@ A candidate's result for a case — one or more roots, from a refactored Python 
 | **Operating point** | The candidate's operating point is within `tol_x` of the stable reference root | cases with a reference root set (Step 2) |
 | **Root set** | The candidate reports every reference root, each within `tol_x` and with the same stability label | candidates that return root sets, on cases with a reference root set |
 | **Convergence** | Outputs (PBH, PWH, TWH, rates) change at first order as `Δz → Δz/2 → Δz/4` (implicit Euler) | a fixed subset of cases, on the stable root |
-| **Distributions** | Regenerated samples match the marginals and correlation structure of the three published datasets, with trickle-root samples removed (Step 3), within stated bounds | dataset-level, per release |
+| **Distributions** | Samples regenerated in the v1-compatibility configuration, at the stable root, match the marginals and correlation structure of the stable-root reference for `sol-1` and `nsol-1` (below), within stated bounds | dataset-level, whenever the sampler or the generation pipeline changes |
 
 The choke row (11) takes the square root of `p_L − p_sc` and is NaN when `p_L < p_s`, so the verifier evaluates it only at candidate roots, where `p_L > p_s`.
 
-Because the problem is a nonconvex feasibility NLP with multiple roots and a 95.6% success rate in v1, the verifier must also handle **cases where v1 failed or returned the unstable root**. A candidate that converges where v1 failed is judged on the checks above alone. The headline metric is the **stable-root rate**: of the cases in the validation set that have a stable root, the share where the candidate returns it as the operating point. v2 must not lower it. v1's baseline is its success rate minus the cases where it returned the trickle root.
+The distribution check follows the stable root, not v1's choice of root. Its reference is the published data with each trickle-root sample replaced by the stable root at the same inputs (Step 3), so it has no ~280 K TWH spike, which matches what the Rust implementation's stable-root detection produces. Replacing rather than removing keeps the weight of the wells whose samples v1 put on the trickle root. The regenerated samples are drawn for the published well configs, not for newly sampled wells, because v1's `nsol` generator also filtered wells by their root: it discarded a well when its solve at u = 1 gave `w_tot < 7` kg/s, using whichever root it found. Datasets regenerated with the Rust implementation after its `simulate()[0]` fix (Step 8) are a cross-check of the reference's shape.
+
+Because the problem is a nonconvex feasibility NLP with multiple roots and a 95.6% success rate in v1, the verifier must also handle **cases where v1 failed or returned the unstable root**. A candidate that converges where v1 failed is judged on the checks above alone. The headline metric is the **stable-root rate**: of the cases in the validation set that have a stable root, the share where the candidate returns it as the operating point. No change may lower it. v1's baseline is its success rate minus the cases where it returned the trickle root.
 
 Value-matching goldens (exact reproduction of v1 outputs) are kept **only for cases where v1 returned the stable root**, as a fast smoke test — they are not the definition of correctness.
 
@@ -63,7 +73,7 @@ Value-matching goldens (exact reproduction of v1 outputs) are kept **only for ca
 The checks above establish that a candidate solves the model and returns its stable root. They say nothing about whether the physics is accurate. That is what the §6.1 comparison against a real well measures: calibrate the uncertain parameters (friction factor, heat capacity, choke parameters) on part of the data, then compare simulated PBH, PWH and TWH against the 100 measured points, using v1.0.0's errors on the same points as the baseline, after confirming that v1 was on the stable root at each point. Because the data is confidential, this check:
 
 - runs manually or on a private runner, never in public CI and never in an agent session;
-- is required for each feature that changes the model (Steps 7 and 9) and before tagging `v2.0.0`, not on every PR;
+- is not run in this plan, because it depends on calibration, which is deferred (see Scope decisions); for `v2.0.0` it runs once, on the release candidate, not per feature or per PR;
 - reports aggregates only (error metrics per output), so nothing confidential reaches the public repo, PRs, reports or changelogs.
 
 ## Steps
@@ -72,7 +82,7 @@ The checks above establish that a candidate solves the model and returns its sta
 
 - **Goal.** Give the process the input it cannot produce itself.
 - **Work.** Decide which v1 limitations v2 relaxes; whether v2 is Rust core + Python bindings, Rust and Python side by side, or Python only; which API and dataset-schema breaks are acceptable, including reporting every root with a stability label; what stays out of scope (transient flow, competing with OLGA/LedaFlow).
-- **Output.** `specs/goals.md`.
+- **Output.** `specs/goals.md`, covering the goals of this plan and the direction for v2 that it prepares for; the v2 goals can be revised after this plan.
 - **Done when.** You would hand it to a new contributor and expect no clarifying questions about scope.
 - **Who.** Bjarne. An agent can interview and draft; the decisions are yours.
 
@@ -82,7 +92,7 @@ The checks above establish that a candidate solves the model and returns its sta
 - **Work.**
   1. Pin `manywells==1.0.0` and its CasADi version. Extract the residual function `r(x; θ, b, N)` as a standalone CasADi `Function`, built for each grid size `N` used in the case set (a candidate is always evaluated on its own grid); serialize it (`.casadi`) and generate C source from it, committed under `verification/residual_graph/` and tagged with the CasADi version, so it can be evaluated from Python *and* linked into Rust tests without the Python stack. Build it in a separate environment from the `v1.0.0` tag and commit only the serialized graph: `develop`'s package is also called `manywells`, so the verifier cannot import v1.0.0 next to it.
   2. Write the `manywells-verify` package: `verify(case, candidate_roots) → report` implementing the checks above, including the graph-based stability label, with per-equation residual scaling and a clear verdict.
-  3. Define the validation case set: sample wells and operating points covering all regimes, choked/unchoked, gas lift on/off, and all three operating modes. Include cases where v1 failed, two-root wells, wells near the fold where the two roots merge, gas-lift cases (the two-root criterion is untested with gas lift), and wells whose first solve at u = 0.5 lands on the trickle root.
+  3. Define the validation case set: sample wells and operating points covering all regimes, choked/unchoked, gas lift on/off, and the open-loop stationary and nonstationary modes, plus closed-loop cases taken from `nscl-1` (closed loop itself is out of scope). Include cases where v1 failed, two-root wells, wells near the fold where the two roots merge, gas-lift cases (the two-root criterion is untested with gas lift), and wells whose first solve at u = 0.5 lands on the trickle root.
   4. Label each case by its reference root set, found two independent ways: v1 from its default guess plus cellwise guesses spread over `(p_s, p_r)`, and `manywells_rs`. Accept a root only if it passes Residuals and Invariants, and take its stability label from the residual graph. If Rust roots are not yet accurate enough to pass `tol_r` (items 2–3 of `plans/solver_improvements.md`), use each as the initial guess for a v1 solve. A case gets a reference root set when both methods find the same roots; disagreements go to Bjarne. Also record v1's outcome from its default guess: stable root, unstable root, or failed. A v1-only sweep of the choke row over `p_0` does not work as a completeness check: the row is NaN when `p_L < p_s`, which is exactly the region next to the trickle root, and the cellwise march fails at high rates.
   5. Propose initial tolerances (`tol_r`, `tol_x`, invariant slack, convergence-order bounds) and confirm them with Bjarne.
   6. Run the verifier on v1.0.0's own solutions. v1 must pass Residuals, Invariants and Convergence on every solution it returns; it reports no stability labels or root sets, so those two checks do not apply. Cases where v1 returns the unstable root fail Operating point and go on an expected-failure list as a known v1 defect. Any other failure is a real finding about v1, not about the verifier.
@@ -97,8 +107,8 @@ The checks above establish that a candidate solves the model and returns its sta
   - `cases/` — well parameters `θ`, boundary conditions and controls `b`, grid `N`, one row per case, with a stable case ID.
   - `roots/` — the reference root set per case: `p_0` and full state per root, its stability label, and which of the two methods in Step 2 found it.
   - `solutions_v1/` — full state `x(z_0..z_N)` from v1.0.0 per case, Ipopt status and iteration count, `‖r‖∞` at v1's own solution, the stability label of v1's root, and v1's outcome (stable root, unstable root, or failed).
-  - `v1_sample_labels/` — for each sample in the published datasets, whether it is on the stable or the unstable root. The `sol-1` rows cannot be regenerated: each sample redraws `p_r` (±2%) and the fluid fractions, `p_r` is not stored, and the generators seeded from process ID × time. So each row's inputs are rebuilt: u from CHK, `p_s` from PDC, `w_lg` from WGL, the fractions from FGAS/FOIL/FWAT, and `p_r` by inverting the Vogel inflow at PBH and WLIQ. A label is kept only if re-solving reproduces PBH, PWH and TWH; the remaining rows are labelled by the trickle signature (PWH within 10 mbar of PDC) and marked approximate. Check what the `nsol-1` and `nscl-1` rows store before applying the same method to them.
-  - `dataset_reference/` — summary statistics (marginals, correlation matrices) of the three published datasets, both as published and with trickle-root samples removed, for the distribution check, so CI does not download 3M rows.
+  - `v1_sample_labels/` — for each sample in the published datasets, whether it is on the stable or the unstable root. The `sol-1` rows cannot be regenerated: each sample redraws `p_r` (±2%) and the fluid fractions, `p_r` is not stored, and the generators seeded from process ID × time. So each row's inputs are rebuilt: u from CHK, `p_s` from PDC, `w_lg` from WGL, the fractions from FGAS/FOIL/FWAT, and `p_r` by inverting the Vogel inflow at PBH and WLIQ. A label is kept only if re-solving reproduces PBH, PWH and TWH; for those rows that are on the trickle root, the stable root at the same inputs is stored too, for the distribution reference. The remaining rows are labelled by the trickle signature (PWH within 10 mbar of PDC) and marked approximate; they are left out of the stable-root reference and counted. Check what the `nsol-1` and `nscl-1` rows store before applying the same method to them.
+  - `dataset_reference/` — summary statistics (marginals, correlation matrices) of `sol-1` and `nsol-1`, both as published and as the stable-root reference (each trickle-root sample replaced by the stable root at the same inputs), for the distribution check, so CI does not download 3M rows.
   - A dataset card describing the schema, tolerances, and how to run the verifier against it.
 
   The residual graph is not in the dataset; it lives with the verifier code (Step 2), so the two are versioned together.
@@ -109,24 +119,34 @@ The checks above establish that a candidate solves the model and returns its sta
 ### Step 4 — Extract the spec from paper + v1.0.0, and reconcile
 
 - **Goal.** A structured, numbered model spec, and a settled list of where code and paper disagree.
-- **Work.** An agent drafts `specs/model.md` from paper §2–§4 and the appendix (equations with IDs, closures per regime, fluid property and thermal models, inflow and choke boundary conditions, the sampling procedure), then cross-checks against v1.0.0 and produces a **discrepancy list**: clipping, smoothing at regime transitions, safeguards, unit conversions, or constants not in the paper. Bjarne adjudicates each item: paper is right, code is right, or both change. Each equation ID gets a pointer to the verifier row(s) that enforce it. `specs/model.md` describes the v1.0.0 model. The model changes on `develop` since v1.0.0 go on a separate list, as input to Step 7, where each becomes a feature spec; `docs/thermal_energy_modeling.md` and `docs/corrigendum.md` on `develop` are inputs. The spec also needs two items the paper does not define, which Bjarne decides:
-  - **Solution set and operating point.** The roots on `(p_s, p_r)`; the static stability criterion (the nodal-analysis argument above, dR/d`p_0` < 0 in the shooting form); the operating point as the stable root; and "no stable root" meaning the well cannot flow at those conditions. The two-root criterion is recorded as a tested property, not a definition.
-  - **The choke residual for `p_L ≤ p_s`.** Equation (11) has no real value there: v1 returns NaN and the Rust port squares the equation. The definition of the root set depends on it.
-- **Output.** `specs/model.md`, `specs/discrepancies.md` (resolved), the list of model changes on `develop` since v1.0.0, and updated verifier scaling if the reconciliation changes anything.
-- **Done when.** Every residual row in the verifier maps to an equation ID and vice versa.
+- **Work.** An agent drafts `specs/model/` from paper §2–§4 and the appendix (equations with IDs, closures per regime, fluid property and thermal models, inflow and choke boundary conditions), then cross-checks against v1.0.0 and produces a **discrepancy list**: clipping, smoothing at regime transitions, safeguards, unit conversions, or constants not in the paper. Bjarne adjudicates each item: paper is right, code is right, or both change. Each equation ID gets a pointer to the verifier row(s) that enforce it or use it. This step writes the `v1.0.0` configuration. The model changes on `develop` since v1.0.0 go on a separate list, as input to Step 7, which adds them to the component files; `docs/thermal_energy_modeling.md` and `docs/corrigendum.md` on `develop` are inputs. The spec is organised as follows:
+  - **One file per model part, mirroring `src/manywells/`** (tree under Proposed repository layout). Where an equation belongs, and which spec file a PR touches, then follows from the code. `README.md` holds the scope, the ID scheme and how the parts compose; `nomenclature.md` defines symbols, units and the state vector once for every file.
+  - **Same template in every component file:** purpose; interface (inputs, outputs, units, and whether it must work on CasADi symbols); equations with IDs; options, and which configuration uses each; safeguards (clipping, smoothing, bounds); sources; test vectors (inputs with expected outputs, checked by the tests in `tests/`); pointers to code and verifier rows.
+  - **The spec says what; `docs/` says why.** Spec files state equations, units, validity ranges and safeguards, and cite derivations, which stay in `docs/` (for example `docs/thermal_energy_modeling.md`). That keeps each file to a few pages.
+  - **Stable, namespaced equation IDs**, such as `FRIC-2`, `PVT-OIL-5` or `CHK-3`. IDs are never renumbered, and removing an equation retires its ID. Paper numbers such as (16) are recorded as aliases.
+  - **Options in the component files, configurations in `README.md`.** Each component file lists its alternatives, for example fixed `f_D` or Chen in `friction.md`. `README.md` defines named configurations, one choice per component: `v1.0.0` and `develop`'s default to begin with. The v1.0.0 model and `develop`'s model are then two configurations of one spec, not two documents.
+  - **A traceability test.** Code carries tags such as `# spec: FRIC-2`. A pytest checks that every tag names an existing ID, and that every ID is tagged in code or marked spec-only. This makes principle 1 a CI check; it must pass from Step 7 on.
+
+  The spec also needs two items the paper does not define, which Bjarne decides:
+  - **Solution set and operating point** (`solution.md`). The roots on `(p_s, p_r)`; the static stability criterion (the nodal-analysis argument above, dR/d`p_0` < 0 in the shooting form); the operating point as the stable root; and "no stable root" meaning the well cannot flow at those conditions. The two-root criterion is recorded as a tested property, not a definition.
+  - **The choke residual for `p_L ≤ p_s`** (`choke.md`). Equation (11) has no real value there: v1 returns NaN and the Rust port squares the equation. The definition of the root set depends on it.
+
+  Sampling gets its own spec, `specs/sampling.md`, outside `specs/model/` because it is not physics. It records v1's procedure (`scripts/data_generation/well.py`: per-well draws in `sample_well`, per-sample redraws in `sample_new_conditions`) and extends it to `develop`'s inputs: trajectory, black-oil parameters and pipe roughness. The approach stays the same (independent draws), and the v1-compatibility configuration draws v1's inputs as before.
+- **Output.** `specs/model/` with the `v1.0.0` configuration, `specs/sampling.md`, `specs/discrepancies.md` (resolved), the list of model changes on `develop` since v1.0.0, the traceability test, and updated verifier scaling if the reconciliation changes anything.
+- **Done when.** Every residual row in the verifier maps to an equation ID, and every equation ID is a residual row or is used by one.
 - **Who.** Agent drafts and cross-checks; Bjarne adjudicates.
 
 ### Step 5 — Write the constitution and the agent instructions
 
 - **Goal.** Short, stable rules that every agent session starts from.
-- **Work.** `specs/constitution.md` (1–2 pages): purpose, non-goals, the principles above, SI units internally, code names follow the paper's nomenclature (`alpha_g`, `rho_l`, `v_m`, `w_g`, `f_D`), determinism given a seed, dataset reproducibility (every dataset row carries the inputs needed to re-solve it, and generators record their seeds), no confidential real-well data in the public repo or datasets. `AGENTS.md` already exists on `develop` (environment, layout, contracts, "done means"); extend it, and symlink `CLAUDE.md` to it, with: how to run the verifier, how to add a case, how to regenerate reference data, what requires human sign-off (any change to `specs/model.md`, any tolerance, any schema change to the published datasets), and that agents never access the private real-well data (the accuracy check is run by Bjarne).
+- **Work.** `specs/constitution.md` (1–2 pages): purpose, non-goals, the principles above, SI units internally, code names follow the paper's nomenclature (`alpha_g`, `rho_l`, `v_m`, `w_g`, `f_D`), determinism given a seed, dataset reproducibility (every dataset row carries the inputs needed to re-solve it, and generators record their seeds), no confidential real-well data in the public repo or datasets. `AGENTS.md` already exists on `develop` (environment, layout, contracts, "done means"); extend it, and symlink `CLAUDE.md` to it, with: how to run the verifier, how to add a case, how to regenerate reference data, what requires human sign-off (any change to `specs/model/`, any tolerance, any schema change to the published datasets), and that agents never access the private real-well data (the accuracy check is run by Bjarne).
 - **Done when.** A fresh agent session, given only the repo, runs the verifier correctly on the first try.
 - **Who.** Agent drafts; Bjarne edits.
 
 ### Step 6 — Write the v2 architecture spec (short)
 
 - **Goal.** Module boundaries and extension points, designed around the limitations v2 relaxes.
-- **Work.** Start from the modules that already exist on `develop` (`geometry.py`, `pvt/`, `slip.py`, `inflow.py`, `choke.py`, `friction.py`, `ca_functions.py`, `units.py`, `calibration/`, `closed_loop/`) and add what is missing: discretization/integrator, solver adapter (Ipopt today; others possible), sampling, dataset schema and writers. Extension points for pluggable friction models, well trajectory, and richer thermal models. Interface contracts with types and units; a solver returns a root set with stability labels, not a single solution. Decide where the Rust implementation sits. Its two shortcuts do not carry over to `develop`'s physics: it computes temperature in closed form, but the frictional-heating term depends on pressure; and it holds the phase mass rates fixed along the well, but they vary once gas dissolves into the oil. A Rust core for the full v2 model would need a temperature solve per cell and phase rates that vary along the well.
+- **Work.** Start from the modules that already exist on `develop` (`geometry.py`, `pvt/`, `slip.py`, `inflow.py`, `choke.py`, `friction.py`, `ca_functions.py`, `units.py`, `calibration/`) and add what is missing: discretization/integrator, solver adapter (Ipopt today; others possible), sampling, dataset schema and writers. `calibration/` gets its contract later, before `v2.0.0`; `closed_loop/` is out of scope. Extension points for pluggable friction models, well trajectory, and richer thermal models. Interface contracts with types and units; a solver returns a root set with stability labels, not a single solution. Decide where the Rust implementation sits. Its two shortcuts do not carry over to `develop`'s physics: it computes temperature in closed form, but the frictional-heating term depends on pressure; and it holds the phase mass rates fixed along the well, but they vary once gas dissolves into the oil. A Rust core for the full v2 model would need a temperature solve per cell and phase rates that vary along the well.
 - **Output.** `specs/architecture.md`.
 - **Done when.** Each planned v2 feature can be located in exactly one module.
 - **Who.** Agent drafts; Bjarne reviews.
@@ -136,13 +156,14 @@ The checks above establish that a candidate solves the model and returns its sta
 - **Goal.** Put the model changes already on `develop` under the same spec-and-verifier discipline as new features, anchored to v1.0.0.
 - **Work.**
   1. Take the list of model changes since v1.0.0 from Step 4: geometry and inclination corrections in the slip model, friction, PVT, the energy balance, lift-gas temperature, fixed-rate inflow, and the initial-guess march.
-  2. Add a v1-compatibility configuration in which every change is switched off: vertical well, fixed `f_D`, dead oil, ideal gas, v1 energy balance. The extra energy terms have no switch today. Keep the configuration as a supported mode; it is the regression anchor to v1.0.0.
+  2. Add a v1-compatibility configuration to the code (the `v1.0.0` configuration in `specs/model/README.md`), in which every change is switched off: vertical well, fixed `f_D`, dead oil, ideal gas, v1 energy balance. The extra energy terms have no switch today. Keep the configuration as a supported mode; it is the regression anchor to v1.0.0.
   3. Require `develop` in that configuration to pass the v1.0.0 verifier on the full case set, including Operating point.
-  4. Write a feature spec after the fact for each change (`specs/features/NNN-<name>.md`), with its spec delta against `specs/model.md`, and run the private accuracy check for each.
+  4. Write a feature spec after the fact for each change (`specs/features/NNN-<name>.md`: motivation, delta, acceptance), add the change to the component files in `specs/model/` as a new option with new equation IDs, and tag the code. The feature specs are the change record; `specs/model/` always shows the current model.
   5. Build the residual graph of `develop`'s full model from the updated spec, and check `develop` against it on cases that exercise the new features (deviated wells, black oil, real gas, lift-gas temperature). Invariants that hold only for dead oil are dropped for black-oil cases.
   6. Once Step 1 has decided on root reporting, return root sets with stability labels from `develop`'s simulator, using the multi-start search and the graph-based label, and measure its stable-root rate.
-- **Output.** The v1-compatibility configuration and its CI job; a feature spec per change since v1.0.0; a verifier version for `develop`'s model.
-- **Done when.** `develop` passes the v1.0.0 verifier in the v1-compatibility configuration, and its own verifier on the full model.
+  7. Implement the ported sampler from `specs/sampling.md`, in the module Step 6 assigns to sampling. Check that in the v1-compatibility configuration it reproduces v1's input distributions, and that samples regenerated at the stable root (item 6) pass the distribution check.
+- **Output.** The v1-compatibility configuration and its CI job; a feature spec per change since v1.0.0; a verifier version for `develop`'s model; the ported sampler.
+- **Done when.** `develop` passes the v1.0.0 verifier in the v1-compatibility configuration and its own verifier on the full model, and the traceability test passes.
 - **Who.** Agent implements and drafts the specs; Bjarne adjudicates the specs and any case where `develop` and v1.0.0 disagree in the compatibility configuration.
 
 ### Step 8 — Pilot: bring the Rust implementation under the verifier
@@ -160,12 +181,30 @@ The checks above establish that a candidate solves the model and returns its sta
 - **Done when.** The verifier, not a person, is what says the Rust port is correct.
 - **Who.** Agent implements; Bjarne reviews, and adjudicates only where the Rust port and the verifier disagree on a root or a label.
 
-### Step 9 — Scale out: one spec per feature, then v2 datasets
+### Step 9 — Prove the loop: add one new equation
 
-- **Goal.** Deliver v2 features through the same loop, in parallel where modules are independent.
-- **Work.** For each remaining feature from Step 1 (the changes already on `develop` are covered in Step 7): `specs/features/NNN-<name>.md` (motivation, spec delta with new equation IDs, acceptance tests, out of scope) → agent plan → implementation → verifier → private accuracy check (if the model changed) → human review → merge, with spec and code in the same PR. When a feature changes the model, the residual function changes with it, so the verifier is re-derived from the new spec, versioned, and the affected cases are re-labelled. Finally, regenerate the datasets as `manywells-*-2`, storing every root with a stability column next to `solution_number` (default loaders return the stable root) unless Step 1 decides on the operating point only, and every input needed to re-solve each row. Run the distribution check against the stable-only reference and the private accuracy check, publish with a changelog that references spec versions and the aggregate accuracy results and explains why the ~280 K TWH spike is gone, and tag `v2.0.0`.
-- **Done when.** `v2.0.0` released; all features have a spec, a verifier version, and a passing CI run; the private accuracy check has been run on the release candidate and its aggregate results recorded.
-- **Who.** Agents in parallel; Bjarne owns specs, tolerances, and releases.
+- **Goal.** Show that the repo has reached this plan's end state, in which a new equation is easy to add and test.
+- **Work.** Pick one small, self-contained addition, for example another friction-factor correlation as an option in `friction.md`. Take it the whole way through the loop that v2 work will use: feature spec (`specs/features/NNN-<name>.md`: motivation, delta to the component files in `specs/model/` with new equation IDs, acceptance tests, out of scope) → agent plan → implementation with `# spec:` tags and test vectors → residual graph re-derived for the new option → verifier → human review → merge, with spec and code in the same PR. Record every step that needed more than `AGENTS.md` and the specs describe.
+- **Output.** The new equation, merged; a list of the gaps found, each fixed; a "how to add an equation" section in `AGENTS.md`, checked against what was actually done.
+- **Done when.** The addition went through the loop with no undocumented steps left, and CI is green, including the traceability test.
+- **Who.** Agent implements, working only from `AGENTS.md` and the specs; Bjarne reviews the spec delta.
+
+## After this plan: the path to v2.0.0
+
+v2 is a major release with new datasets and perhaps a new paper. After this plan, the remaining work is:
+
+- **New equations and models** through the loop proven in Step 9, in parallel where modules are independent. When a feature changes the model, the residual graph is re-derived from the spec, versioned, and the affected cases are re-labelled.
+- **Sampling redesign.** A new procedure for v2 datasets that differ significantly from v1's; it can address the unrealistic-wells limitation. `specs/sampling.md` gets a new version, and the distribution check keeps covering the v1-compatibility configuration.
+- **Calibration.** A spec for `calibration/`, then the private real-well accuracy check on the release candidate, with its aggregate results recorded.
+- **v2 datasets.** Generated with the redesigned sampler, storing every root with a stability column next to `solution_number` (default loaders return the stable root) unless decided otherwise, and every input needed to re-solve each row. No `nscl-2`, since closed loop is out of scope for v2. The changelog references spec versions and the aggregate accuracy results, and notes that v1's ~280 K TWH spike came from trickle roots.
+- **Paper**, if there is one, and the `v2.0.0` tag.
+
+Decisions for v2.0.0, not needed in this plan:
+
+- Which of the four v1 limitations with work on `develop` are finished in v2.0, and which wait for v2.x.
+- Acceptance bound for the private accuracy check relative to v1.0.0's errors on the real well (to settle with calibration).
+- v2 dataset schema: every root with a stability label (proposed), or the operating point only.
+- Whether the CC BY-NC 4.0 license stays for v2 code (a major version is the natural moment to revisit).
 
 ## Sequencing
 
@@ -187,7 +226,25 @@ manywells/
   specs/
     goals.md                     # Step 1
     constitution.md              # Step 5
-    model.md                     # Step 4 — equations with IDs
+    model/                       # Step 4 — one file per model part, mirroring src/manywells/
+      README.md                  # scope, ID scheme, how the parts compose, named configurations
+      nomenclature.md            # symbols, units, state vector
+      balances.md                # mass, momentum, energy balances (continuous form)
+      discretization.md          # grid, implicit Euler, residual rows and their order
+      solution.md                # root set, stability, operating point
+      geometry.md                # trajectory, MD/TVD, inclination
+      pvt/
+        gas.md                   # ideal and real gas, z-factor
+        oil.md                   # dead oil, black oil, dissolved gas
+        water.md
+        mixture.md               # liquid mixing, viscosity mixing, surface tension
+      slip.md                    # drift flux, flow-regime classifier, rise velocities
+      friction.md                # fixed f_D, Haaland, Chen
+      thermal.md                 # heat loss, frictional heating, gravity term, lift-gas mixing
+      inflow.md                  # Vogel, productivity index, fixed rate
+      choke.md                   # Simpson, Bernoulli, critical pressure ratio, residual for p_L ≤ p_s
+      smoothing.md               # smooth max/min, softmax (part of the model, not just numerics)
+    sampling.md                  # Step 4 — v1's sampling procedure, ported to develop's inputs
     discrepancies.md             # Step 4 — resolved paper/code differences
     architecture.md              # Step 6
     verification.md              # Step 2 — checks, tolerances, case-set definition
@@ -203,12 +260,8 @@ manywells/
 ## Open decisions (to settle in Step 1)
 
 - Rust core with Python bindings, or two implementations kept equivalent by the verifier? Either way: is the Rust port extended to `develop`'s model, or kept as a fast v1.0.0 solver?
-- Which of the five v1 limitations are in scope for v2.0, and which wait for v2.x?
 - Name of the public verification dataset (working name `manywells-verification`), and whether the residual graph stays in the code repo (proposed) or is also mirrored there.
-- Acceptance bound for the private accuracy check relative to v1.0.0's errors on the real well.
 - Initial tolerances: `tol_r` (scaled residual), `tol_x` (operating-point and root-set checks), and the convergence-order bound.
-- Whether the CC BY-NC 4.0 license stays for v2 code (a major version is the natural moment to revisit).
 - How the operating-point rule handles edge cases: two stable roots, or only unstable roots. Neither was seen on `sol-1`.
 - Whether to publish the v1 sample labels as an erratum or companion column for the `-1` datasets, with a corrigendum note on the TWH spike.
-- v2 dataset schema: every root with a stability label (proposed), or the operating point only.
 - Energy balance in the Rust port: v1's implicit-Euler step (19), or the exact solution of the ODE as a spec change. The exact solution applies only to v1's energy balance, not to `develop`'s.
