@@ -23,6 +23,11 @@ use crate::thermal;
 /// Absolute tolerance of the cell's Brent on the pressure (bar): none, so that it converges to a few ulp
 const CELL_XTOL: f64 = 0.0;
 
+/// Largest |momentum row| (bar) at which a cell counts as solved. At a root of the row, Brent leaves about 1e-13 bar;
+/// where the closures jump between solutions, as the slip law can where it has several void fractions, the row jumps
+/// across zero instead of crossing it, by far more than this, and the cell is not solved.
+const CELL_ROW_TOL: f64 = 1e-8;
+
 /// The phase rates of a march, the same at every point (BAL-3)
 #[derive(Clone, Copy, Debug)]
 pub struct Rates {
@@ -36,8 +41,8 @@ pub struct March {
     /// The state at every point the march reached
     pub x: Vec<f64>,
     pub rates: Rates,
-    /// A cell had no subsonic root (choked), a state could not be computed, or the march fell below p_s, so x is
-    /// not a solution of the rows
+    /// A cell's momentum row was not solved (choked, or a jump), a state could not be computed, or the march fell
+    /// below p_s, so x is not a solution of the rows
     pub failed: bool,
     /// The pressure fell below p_s, and the march stopped there
     pub below_separator: bool,
@@ -46,9 +51,9 @@ pub struct March {
 enum CellStep {
     /// The cell's momentum row is zero at this pressure
     Solved(f64),
-    /// No subsonic root above p_s: the march continues at the pressure p* where the row is smallest, so that R stays
-    /// continuous in p_0, but it is not a solution
-    Choked(f64),
+    /// No subsonic root above p_s (choked), or the row jumps across zero: the march continues at the pressure p*
+    /// where the row is smallest, or at the jump, so that R stays continuous in p_0, but it is not a solution
+    Unsolved(f64),
     /// The row is positive down to p_s, so its subsonic root, if any, lies below p_s
     BelowSeparator,
 }
@@ -107,7 +112,7 @@ impl<'a> Marcher<'a> {
             let (c_0, v_inf) = terms.parameters(alpha);
             Ok(alpha * (c_0 * j_m + v_inf) - j_g)
         };
-        brentq(&mut h, 0.0, 1.0, 0.0, RTOL, 100).ok()
+        brentq(&mut h, 0.0, 1.0, 0.0, RTOL, 100).ok().map(|(alpha, _)| alpha)
     }
 
     /// The state at a point at pressure p and temperature t: the closures at the march's rates
@@ -132,14 +137,15 @@ impl<'a> Marcher<'a> {
         // The row is U-shaped in p, with its minimum at the cell's sonic pressure p*, and positive at p_prev. Below
         // zero at p_s: p_s lies right of p*, or left of it where the row still falls, so the only sign change on
         // [p_s, p_prev] is the subsonic root
+        let solved = |(p, f): (f64, f64)| if f.abs() <= CELL_ROW_TOL { CellStep::Solved(p) } else { CellStep::Unsolved(p) };
         let f_s = match row(p_s) {
             Ok(f) => f,
-            Err(_) => return CellStep::Choked(p_prev),
+            Err(_) => return CellStep::Unsolved(p_prev),
         };
         if f_s < 0.0 {
             return match brentq(&mut row, p_s, p_prev, CELL_XTOL, RTOL, 100) {
-                Ok(p) => CellStep::Solved(p),
-                Err(_) => CellStep::Choked(p_prev),
+                Ok(root) => solved(root),
+                Err(_) => CellStep::Unsolved(p_prev),
             };
         }
         // Otherwise the row's minimum on [p_s, p_prev] decides: below zero, the subsonic root lies between it and
@@ -150,11 +156,11 @@ impl<'a> Marcher<'a> {
         }, p_s, p_prev, 1e-2, 200, f64::NEG_INFINITY);
         if f_star < 0.0 {
             return match brentq(&mut row, p_star, p_prev, CELL_XTOL, RTOL, 100) {
-                Ok(p) => CellStep::Solved(p),
-                Err(_) => CellStep::Choked(p_star),
+                Ok(root) => solved(root),
+                Err(_) => CellStep::Unsolved(p_star),
             };
         }
-        if f_s <= f_star { CellStep::BelowSeparator } else { CellStep::Choked(p_star) }
+        if f_s <= f_star { CellStep::BelowSeparator } else { CellStep::Unsolved(p_star) }
     }
 
     /// March from p_0 to the wellhead
@@ -173,7 +179,7 @@ impl<'a> Marcher<'a> {
         for i in 1..=n {
             let p = match self.solve_cell(t[i], &prev, &rates) {
                 CellStep::Solved(p) => p,
-                CellStep::Choked(p) => {
+                CellStep::Unsolved(p) => {
                     failed = true;
                     p
                 }

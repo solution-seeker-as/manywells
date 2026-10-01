@@ -103,7 +103,7 @@ fn shoot(m: &Marcher) -> Result<Vec<(f64, bool)>, String> {
     let xtol = 4.0 * f64::EPSILON * op.p_r;
     let mut roots = Vec::new();
     for (a, b, rising) in brackets {
-        if let Ok(d) = brentq(&mut r_of_d, op.p_r - b, op.p_r - a, xtol, RTOL, 100) {
+        if let Ok((d, _)) = brentq(&mut r_of_d, op.p_r - b, op.p_r - a, xtol, RTOL, 100) {
             roots.push((op.p_r - d, rising));
         }
     }

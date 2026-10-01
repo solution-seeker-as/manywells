@@ -31,8 +31,9 @@ impl std::fmt::Display for RootError {
     }
 }
 
-/// A root of f in [xa, xb], where f(xa) and f(xb) differ in sign, by Brent's method
-pub fn brentq<F>(f: &mut F, xa: f64, xb: f64, xtol: f64, rtol: f64, maxiter: usize) -> Result<f64, RootError>
+/// A root of f in [xa, xb], where f(xa) and f(xb) differ in sign, by Brent's method, as (x, f(x)). Where f jumps
+/// across zero instead of crossing it, Brent converges onto the jump, and f(x) shows it.
+pub fn brentq<F>(f: &mut F, xa: f64, xb: f64, xtol: f64, rtol: f64, maxiter: usize) -> Result<(f64, f64), RootError>
 where
     F: FnMut(f64) -> Result<f64, RootError>,
 {
@@ -43,10 +44,10 @@ where
     let mut fpre = f(xpre)?;
     let mut fcur = f(xcur)?;
     if fpre == 0.0 {
-        return Ok(xpre);
+        return Ok((xpre, fpre));
     }
     if fcur == 0.0 {
-        return Ok(xcur);
+        return Ok((xcur, fcur));
     }
     if fpre * fcur > 0.0 {
         return Err(RootError::NoSignChange);
@@ -71,7 +72,7 @@ where
         let delta = (xtol + rtol * xcur.abs()) / 2.0;
         let sbis = (xblk - xcur) / 2.0;
         if fcur == 0.0 || sbis.abs() < delta {
-            return Ok(xcur);
+            return Ok((xcur, fcur));
         }
 
         if spre.abs() > delta && fcur.abs() < fpre.abs() {
@@ -158,12 +159,19 @@ mod tests {
     #[test]
     fn brentq_finds_simple_roots() {
         let mut f = |x: f64| Ok(x * x - 2.0);
-        let r = brentq(&mut f, 0.0, 2.0, 2e-12, RTOL, 100).unwrap();
-        assert!((r - 2.0_f64.sqrt()).abs() < 1e-10);
+        let (r, fr) = brentq(&mut f, 0.0, 2.0, 2e-12, RTOL, 100).unwrap();
+        assert!((r - 2.0_f64.sqrt()).abs() < 1e-10 && fr.abs() < 1e-10);
 
         let mut g = |x: f64| Ok(2.0 - x);
-        let r = brentq(&mut g, 0.0, 5.0, 2e-12, RTOL, 100).unwrap();
+        let (r, _) = brentq(&mut g, 0.0, 5.0, 2e-12, RTOL, 100).unwrap();
         assert!((r - 2.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn brentq_shows_a_jump() {
+        let mut f = |x: f64| Ok(if x < 1.0 { -1.0 } else { 1.0 });
+        let (x, fx) = brentq(&mut f, 0.0, 2.0, 0.0, RTOL, 200).unwrap();
+        assert!((x - 1.0).abs() < 1e-12 && fx.abs() == 1.0);
     }
 
     #[test]
