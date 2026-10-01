@@ -47,7 +47,7 @@ mod _core {
     use crate::pvt::fluid::{Fluid, FluidInputs};
     use crate::pvt::{gas, oil};
     use crate::shoot;
-    use crate::slip;
+    use crate::slip::{self, Slip};
     use crate::smoothing;
 
     /// The operating point as (p_r, p_s, T_r, T_s, T_lg, u, w_lg), in bar, K and kg/s: the parameters of the Python
@@ -83,11 +83,13 @@ mod _core {
     impl Well {
         #[new]
         #[pyo3(signature = (*, md, tvd, D, rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, f_D, h, frictional_heating,
-                            gravity_term, inflow, inflow_coefficient, choke, K_c, profile))]
+                            gravity_term, C_0_annular, C_0_slug, C_0_bubbly, v_inf_annular, inflow, inflow_coefficient,
+                            choke, K_c, profile))]
         #[allow(non_snake_case, clippy::too_many_arguments)]
         fn new(md: Vec<f64>, tvd: Vec<f64>, D: f64, rho_o: f64, rho_g: f64, rho_w: f64, gor: f64, wlr: f64, cp_g: f64,
-               cp_o: f64, cp_w: f64, f_D: f64, h: f64, frictional_heating: bool, gravity_term: bool, inflow: &str,
-               inflow_coefficient: f64, choke: &str, K_c: f64, profile: &str) -> PyResult<Self> {
+               cp_o: f64, cp_w: f64, f_D: f64, h: f64, frictional_heating: bool, gravity_term: bool, C_0_annular: f64,
+               C_0_slug: f64, C_0_bubbly: f64, v_inf_annular: f64, inflow: &str, inflow_coefficient: f64, choke: &str,
+               K_c: f64, profile: &str) -> PyResult<Self> {
             let inflow = match inflow {
                 "vogel" => Inflow::Vogel { w_l_max: inflow_coefficient },
                 "pi" => Inflow::ProductivityIndex { k_l: inflow_coefficient },
@@ -104,6 +106,7 @@ mod _core {
                 fluid: Fluid::new(FluidInputs { rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w }),
                 f_d: f_D,
                 thermal: Thermal { h, frictional_heating, gravity_term },
+                slip: Slip { c_0_annular: C_0_annular, c_0_slug: C_0_slug, c_0_bubbly: C_0_bubbly, v_inf_annular },
                 inflow,
                 choke: Choke::new(model, K_c, profile),
             };
@@ -209,17 +212,17 @@ mod _core {
                 vec![spec.fluid.f_g, spec.fluid.rho_l, spec.fluid.cp_l, spec.fluid.x_o]
             }
             "slip_parameters" => {
-                let [v_g, v_l, alpha, rho_g, rho_l, sigma, d] = take(name, a)?;
-                let (c_0, v_inf) = slip::identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, d);
+                let [v_g, v_l, alpha, rho_g, rho_l, sigma, d, cos_incl] = take(name, a)?;
+                let (c_0, v_inf) = spec.slip.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, d, cos_incl);
                 vec![c_0, v_inf]
             }
             "regime_probabilities" => {
-                let [v_g, v_l, alpha, rho_g, rho_l, sigma] = take(name, a)?;
-                slip::classify(v_g, v_l, alpha, rho_g, rho_l, sigma, spec.geometry.d).to_vec()
+                let [v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl] = take(name, a)?;
+                spec.slip.classify(v_g, v_l, alpha, rho_g, rho_l, sigma, spec.geometry.d, cos_incl).to_vec()
             }
             "regime" => {
-                let [v_g, v_l, alpha, rho_g, rho_l, sigma] = take(name, a)?;
-                let probs = slip::classify(v_g, v_l, alpha, rho_g, rho_l, sigma, spec.geometry.d);
+                let [v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl] = take(name, a)?;
+                let probs = spec.slip.classify(v_g, v_l, alpha, rho_g, rho_l, sigma, spec.geometry.d, cos_incl);
                 vec![regime_index(slip::regime_label(probs))]
             }
             "harmathy_rise_velocity" => {

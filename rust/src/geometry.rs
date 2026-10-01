@@ -85,6 +85,19 @@ pub mod tests {
         Geometry::from_grid(&z, &z, d).unwrap()
     }
 
+    /// A survey of (MD, TVD) stations from the surface, interpolated linearly onto n uniform cells, as
+    /// WellGeometry.from_survey does (GEO-4, which the core leaves to Python), bottomhole first
+    pub fn survey(md: &[f64], tvd: &[f64], n: usize, d: f64) -> Geometry {
+        let total = md[md.len() - 1];
+        let at = |m: f64| {
+            let k = md.windows(2).position(|w| m <= w[1]).unwrap_or(md.len() - 2);
+            tvd[k] + (tvd[k + 1] - tvd[k]) * (m - md[k]) / (md[k + 1] - md[k])
+        };
+        let m: Vec<f64> = (0..=n).rev().map(|k| total * k as f64 / n as f64).collect();
+        let z: Vec<f64> = m.iter().map(|&m| at(m)).collect();
+        Geometry::from_grid(&m, &z, d).unwrap()
+    }
+
     #[test]
     fn a_vertical_grid_has_unit_inclination() {
         let g = vertical(2000.0, 10, 0.15);

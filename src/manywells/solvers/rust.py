@@ -43,10 +43,6 @@ CORE_CLASSES = {'geometry': (WellGeometry,), 'fluid': (FluidModel,), 'friction':
 def _not_yet_ported(wp) -> list:
     """The options of wp that the core does not implement yet. Step 9 ports them one feature spec at a time."""
     geo, fluid, thermal, out = wp.geometry, wp.fluid, wp.thermal, []
-    if not np.allclose(geo.cos_incl, 1.0, rtol=0, atol=1e-12):
-        out.append('an inclined well (002)')
-    if wp.slip != SlipModel():
-        out.append('slip parameters other than the defaults (002)')
     if not fluid.ideal_gas:
         out.append('a real gas (006)')
     if fluid.oil_model != 'dead_oil':
@@ -87,6 +83,8 @@ def core_well(wp) -> '_core.Well':
                       rho_o=fluid.rho_o, rho_g=fluid.rho_g, rho_w=fluid.rho_w, gor=fluid.gor, wlr=fluid.wlr,
                       cp_g=fluid.cp_g, cp_o=fluid.cp_o, cp_w=fluid.cp_w, f_D=wp.friction.f_D, h=wp.thermal.h,
                       frictional_heating=wp.thermal.frictional_heating, gravity_term=wp.thermal.gravity_term,
+                      C_0_annular=wp.slip.C_0_annular, C_0_slug=wp.slip.C_0_slug, C_0_bubbly=wp.slip.C_0_bubbly,
+                      v_inf_annular=wp.slip.v_inf_annular,
                       inflow='vogel' if vogel else 'pi', inflow_coefficient=inflow.w_l_max if vogel else inflow.k_l,
                       choke='simpson' if isinstance(choke, SimpsonChokeModel) else 'bernoulli', K_c=choke.K_c,
                       profile=choke.chk_profile)

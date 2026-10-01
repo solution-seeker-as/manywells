@@ -54,7 +54,7 @@ class VerifierCase:
         return OVERLAYS[self.overlay](wp, bc) if self.overlay else (wp, bc)
 
     @property
-    def configuration(self) -> str:
+    def group(self) -> str:
         return 'verifier' + (f'+{self.overlay}' if self.overlay else '')
 
 
@@ -83,7 +83,7 @@ def time_case(case, backend) -> Comparison:
 
 def run(case, backends):
     c = compare_case(case) if len(backends) == 2 else time_case(case, backends[0])
-    return c, getattr(case, 'configuration', None) or case.name.rsplit('#', 1)[0]
+    return c, case.group
 
 
 def agreement_table(results) -> str:

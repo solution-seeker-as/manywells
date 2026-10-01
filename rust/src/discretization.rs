@@ -132,10 +132,12 @@ pub fn choke_row(spec: &WellSpec, op: &OperatingPoint, s: &State) -> f64 {  // s
     w_m - spec.choke.mass_flow_rate(op.u, s.p, op.p_s, w_g, w_l, s.alpha, s.rho_g, s.rho_l)
 }
 
-/// Closure relations at a point: the slip law (m/s), the gas law (bar) and the liquid density (kg/m³)
-pub fn closure_rows(spec: &WellSpec, s: &State) -> [f64; 3] {
+/// Closure relations at a point in a cell of inclination cos_incl: the slip law (m/s), the gas law (bar) and the liquid
+/// density (kg/m³)
+pub fn closure_rows(spec: &WellSpec, s: &State, cos_incl: f64) -> [f64; 3] {
     let sigma = spec.fluid.surface_tension(s.rho_l, s.t);
-    let (c_0, v_inf) = slip::identify_parameters(s.v_g, s.v_l, s.alpha, s.rho_g, s.rho_l, sigma, spec.geometry.d);
+    let (c_0, v_inf) = spec.slip.identify_parameters(s.v_g, s.v_l, s.alpha, s.rho_g, s.rho_l, sigma, spec.geometry.d,
+                                                     cos_incl);
     [
         s.v_g - c_0 * s.v_m() - v_inf, // spec: SLIP-1
         spec.fluid.gas_law_row(s.p, s.t, s.rho_g),
@@ -169,21 +171,22 @@ pub fn rows(spec: &WellSpec, op: &OperatingPoint, x: &[f64]) -> Vec<(&'static st
     let w_res = reservoir_rate(spec, op, points[0].p);
     let mut values = Vec::with_capacity(DIM_X * (n + 1));
     values.extend(bottom_rows(spec, op, &points[0], w_res));
-    values.extend(closure_rows(spec, &points[0]));
+    values.extend(closure_rows(spec, &points[0], spec.geometry.point_cos(0)));
     for i in 1..=n {
         values.extend(cell_rows(spec, op, spec.geometry.cell(i), &points[i], &points[i - 1], w_res));
         if i == n {
             values.push(choke_row(spec, op, &points[n]));
         }
-        values.extend(closure_rows(spec, &points[i]));
+        values.extend(closure_rows(spec, &points[i], spec.geometry.point_cos(i)));
     }
     row_ids(spec).into_iter().zip(values).collect()
 }
 
 /// The regime label at each point (SLIP-8)
 pub fn flow_regimes(spec: &WellSpec, x: &[f64]) -> Vec<&'static str> {
-    x.chunks_exact(DIM_X).map(State::of).map(|s| {
+    x.chunks_exact(DIM_X).map(State::of).enumerate().map(|(i, s)| {
         let sigma = spec.fluid.surface_tension(s.rho_l, s.t);
-        slip::regime_label(slip::classify(s.v_g, s.v_l, s.alpha, s.rho_g, s.rho_l, sigma, spec.geometry.d))
+        let cos_incl = spec.geometry.point_cos(i);
+        slip::regime_label(spec.slip.classify(s.v_g, s.v_l, s.alpha, s.rho_g, s.rho_l, sigma, spec.geometry.d, cos_incl))
     }).collect()
 }

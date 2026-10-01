@@ -45,7 +45,8 @@ from manywells.solvers.roots import TOL_X, state_distance
 
 ROW_REL = 1e-10       # rows at the same state: the same arithmetic, to rounding amplified by the rows' cancellations
 ROOT_ROW = 1e-8       # a core-only root zeroes every CasADi row but the choke row to this (bar, K, kg/(m² s), m/s)
-ROOT_CHOKE_REL = 1e-6  # and the choke row to this fraction of the wellhead rate (p_0's resolution times dR/dp_0)
+ROOT_CHOKE_REL = 1e-6  # and the choke row to this fraction of the wellhead rate, or to what p_0's resolution allows,
+ROOT_P0_ULPS = 8       # this many ulp of p_r times |dR/dp_0|, if more (steep at the trickle roots next to p_r)
 SEED = 20261002       # the comparison set's seed (SMP-31)
 FEATURES = ('001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011')
 
@@ -311,8 +312,12 @@ class Case:
     n_cells: int = 100
 
     @property
+    def group(self) -> str:
+        return f'{self.configuration}{"+" + self.overlay if self.overlay else ""}'
+
+    @property
     def name(self) -> str:
-        return f'{self.configuration}{"+" + self.overlay if self.overlay else ""}#{self.well}'
+        return f'{self.group}#{self.well}'
 
     def inputs(self):
         """(wp, bc): the well's draws and one stationary sample (SMP-18 to SMP-22), then the overlay."""
@@ -422,8 +427,9 @@ def compare_root_sets(wp, bc, system, casadi_roots, rust_roots, rust_rows) -> Co
         ids = np.array(ids)
         p, v_g, v_l, alpha, rho_g, rho_l, T = rr.state[-1]
         w_m = wp.geometry.A * (alpha * rho_g * v_g + (1 - alpha) * rho_l * v_l)
-        zeroes = (np.max(np.abs(rows[ids != 'CHK-1'])) < ROOT_ROW
-                  and abs(rows[ids == 'CHK-1'][0]) < ROOT_CHOKE_REL * w_m)
+        slope = abs(rr.slope) * max(w_m, 1e-3) / (bc.p_r - bc.p_s)  # dR/dp_0 (kg/s per bar), undoing normalized_slope
+        choke_bound = max(ROOT_CHOKE_REL * w_m, ROOT_P0_ULPS * np.finfo(float).eps * bc.p_r * slope)
+        zeroes = (np.max(np.abs(rows[ids != 'CHK-1'])) < ROOT_ROW and abs(rows[ids == 'CHK-1'][0]) <= choke_bound)
         c.core_only.append((rr.p_0, bool(zeroes)))
     roots = list(casadi_roots) + list(rust_roots)
     c.several_alpha = any(several_void_fractions(wp, r.x) for r in roots)

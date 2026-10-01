@@ -11,6 +11,7 @@ use crate::choke::Choke;
 use crate::geometry::Geometry;
 use crate::inflow::Inflow;
 use crate::pvt::fluid::Fluid;
+use crate::slip::Slip;
 use crate::thermal::Thermal;
 
 /// A well: one part per model part, as WellProperties
@@ -20,6 +21,7 @@ pub struct WellSpec {
     pub fluid: Fluid,
     pub f_d: f64,      // Darcy friction factor
     pub thermal: Thermal,
+    pub slip: Slip,
     pub inflow: Inflow,
     pub choke: Choke,
 }
@@ -76,7 +78,7 @@ impl OperatingPoint {
 pub mod test_wells {
     use super::*;
     use crate::choke::{ChokeModel, Profile};
-    use crate::geometry::tests::vertical;
+    use crate::geometry::tests::{survey, vertical};
     use crate::pvt::fluid::FluidInputs;
     use crate::units::{P_REF, T_REF};
 
@@ -93,6 +95,7 @@ pub mod test_wells {
             geometry: vertical(2500.0, n_cells, 0.127),
             fluid: v1_fluid(900.0, 420.0, 2225.0, 3000.0, 0.15),
             f_d: 0.03, thermal: Thermal { h: 25.0, frictional_heating: false, gravity_term: false },
+            slip: Slip::default(),
             inflow: Inflow::Vogel { w_l_max: 80.0 },
             choke: Choke::new(ChokeModel::Simpson, 0.0015201224372924933, Profile::Sigmoid),
         };
@@ -104,6 +107,7 @@ pub mod test_wells {
             geometry: vertical(1800.0, n_cells, 0.1524),
             fluid: v1_fluid(820.0, 500.0, 2225.0, 2200.0, 0.4),
             f_d: 0.05, thermal: Thermal { h: 15.0, frictional_heating: false, gravity_term: false },
+            slip: Slip::default(),
             inflow: Inflow::ProductivityIndex { k_l: 0.6 },
             choke: Choke::new(ChokeModel::Bernoulli, 0.001824146924750992, Profile::Linear),
         };
@@ -117,10 +121,26 @@ pub mod test_wells {
         (spec, op)
     }
 
+    /// W1 with the energy terms, deviated: vertical to 750 m, then 45° to the same depth (001, 002, 009)
+    pub fn w1_deviated(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let (mut spec, op) = w1_thermal(n_cells);
+        let md = 750.0 + 1750.0 * std::f64::consts::SQRT_2;
+        spec.geometry = survey(&[0.0, 750.0, md], &[0.0, 750.0, 2500.0], n_cells, 0.127);
+        (spec, op)
+    }
+
+    /// W2, L-shaped: vertical to 1800 m, then 600 m horizontal (001, 002)
+    pub fn w2_l_shaped(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let (mut spec, op) = w2(n_cells);
+        spec.geometry = survey(&[0.0, 1800.0, 2400.0], &[0.0, 1800.0, 1800.0], n_cells, 0.1524);
+        (spec, op)
+    }
+
     /// Every test well
     pub fn all(n_cells: usize) -> Vec<(&'static str, WellSpec, OperatingPoint)> {
         let named = |name, (spec, op)| (name, spec, op);
-        vec![named("w1", w1(n_cells)), named("w2", w2(n_cells)), named("w1_thermal", w1_thermal(n_cells))]
+        vec![named("w1", w1(n_cells)), named("w2", w2(n_cells)), named("w1_thermal", w1_thermal(n_cells)),
+             named("w1_deviated", w1_deviated(n_cells)), named("w2_l_shaped", w2_l_shaped(n_cells))]
     }
 }
 

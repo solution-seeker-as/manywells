@@ -248,13 +248,13 @@ RUST_ADAPTERS = {
     'INF-4': lambda f_g, w_l: rust('reservoir_gas_rate', w_l,
                                    fluid=v1_fluid(rho_l=850.0, R_s=420.0, cp_g=2225.0, cp_l=2000.0, f_g=f_g)),
     'SLIP-2, SLIP-3': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, D, **_:
-        rust('slip_parameters', v_g, v_l, alpha, rho_g, rho_l, sigma, D),
+        rust('slip_parameters', v_g, v_l, alpha, rho_g, rho_l, sigma, D, 1.0),
     'SLIP-4': lambda rho_g, rho_l, sigma, **_: rust('harmathy_rise_velocity', rho_g, rho_l, sigma),
     'SLIP-5': lambda rho_g, rho_l, D: rust('taylor_rise_velocity', rho_g, rho_l, D),
     'SLIP-6, SLIP-7': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, **_:
-        rust('regime_probabilities', v_g, v_l, alpha, rho_g, rho_l, sigma),
+        rust('regime_probabilities', v_g, v_l, alpha, rho_g, rho_l, sigma, 1.0),
     'SLIP-8': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, **_:
-        REGIMES[int(rust('regime', v_g, v_l, alpha, rho_g, rho_l, sigma))],
+        REGIMES[int(rust('regime', v_g, v_l, alpha, rho_g, rho_l, sigma, 1.0))],
     'PVT-GAS-1': lambda p, T, R_s: rust('ideal_gas_density', p, T, R_s),
     'PVT-OIL-2': lambda rho: rust('api_from_density', rho),
     'PVT-OIL-3': lambda rho, T: rust('dead_oil_surface_tension', rho, T),
@@ -314,8 +314,7 @@ RUST_NOT_IN_CORE = {
 
 # Step 9 ports develop's model to the core one feature spec at a time: the tables whose functions it has not got yet
 RUST_NOT_PORTED = {
-    'SMO-2': '007', 'THM-5': '010', 'SLIP-10, SLIP-11': '002',
-    'SLIP-11 (classifier)': '002', 'FRIC-3': '004', 'FRIC-4': '004', 'FRIC-5': '004', 'FRIC-6': '004',
+    'SMO-2': '007', 'THM-5': '010', 'FRIC-3': '004', 'FRIC-4': '004', 'FRIC-5': '004', 'FRIC-6': '004',
     'PVT-GAS-3': '006', 'PVT-GAS-4, PVT-GAS-5': '006', 'PVT-GAS-7': '004', 'PVT-OIL-5': '007',
     'PVT-OIL-6, PVT-OIL-8': '007', 'PVT-OIL-7': '007', 'PVT-OIL-9': '007', 'PVT-OIL-10': '004', 'PVT-OIL-11': '004',
     'PVT-OIL-12': '003', 'PVT-OIL-13': '008', 'PVT-WAT-3': '004', 'PVT-MIX-6': '007', 'PVT-MIX-7': '003',
