@@ -108,9 +108,10 @@ where
     Err(RootError::MaxIter)
 }
 
-/// The minimum of f on [a, b] by golden-section search, as (x, f(x)), until the interval is at most xtol wide.
-/// It assumes f has one minimum on the interval and does not check it.
-pub fn minimize<F>(f: &mut F, mut a: f64, mut b: f64, xtol: f64, maxiter: usize) -> (f64, f64)
+/// The minimum of f on [a, b] by golden-section search, as (x, f(x)), until the interval is at most xtol wide, or
+/// the first point where f is below `below`, which is all a caller looking for a sign change needs. It assumes f has
+/// one minimum on the interval and does not check it.
+pub fn minimize<F>(f: &mut F, mut a: f64, mut b: f64, xtol: f64, maxiter: usize, below: f64) -> (f64, f64)
 where
     F: FnMut(f64) -> f64,
 {
@@ -118,8 +119,17 @@ where
     let mut c = b - INV_PHI * (b - a);
     let mut d = a + INV_PHI * (b - a);
     let mut fc = f(c);
+    if fc < below {
+        return (c, fc);
+    }
     let mut fd = f(d);
     for _ in 0..maxiter {
+        if fd < below {
+            return (d, fd);
+        }
+        if fc < below {
+            return (c, fc);
+        }
         if (b - a).abs() <= xtol {
             break;
         }
@@ -165,8 +175,15 @@ mod tests {
     #[test]
     fn minimize_finds_the_minimum() {
         let mut f = |x: f64| (x - 2.0) * (x - 2.0);
-        let (x, fx) = minimize(&mut f, 0.0, 5.0, 1e-8, 200);
+        let (x, fx) = minimize(&mut f, 0.0, 5.0, 1e-8, 200, f64::NEG_INFINITY);
         assert!((x - 2.0).abs() < 1e-4);
         assert!(fx < 1e-8);
+    }
+
+    #[test]
+    fn minimize_stops_below_the_threshold() {
+        let mut f = |x: f64| (x - 2.0) * (x - 2.0) - 0.01;
+        let (x, fx) = minimize(&mut f, 0.0, 5.0, 1e-12, 200, 0.0);
+        assert!(fx < 0.0 && (x - 2.0).abs() < 0.1);
     }
 }

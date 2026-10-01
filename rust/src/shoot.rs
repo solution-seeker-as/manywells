@@ -11,10 +11,14 @@
 use crate::discretization::{self, State, DIM_X};
 use crate::input::{OperatingPoint, WellSpec};
 use crate::march::Marcher;
-use crate::scalar::{brentq, RootError, RTOL};
+use crate::scalar::{brentq, minimize, RootError, RTOL};
 
 /// Number of scan intervals on (p_s, p_r)
 const SCAN_INTERVALS: usize = 100;
+
+/// Width, relative to p_r - p_s, to which the scan's golden-section search narrows a local minimum of R before it
+/// concludes that R stays positive there. Two roots closer than this are 1/100 of the verifier's tol_x apart in p_0.
+const REFINE_XTOL: f64 = 1e-6;
 
 /// A root and what it carries besides its state
 pub struct Root {
@@ -35,45 +39,56 @@ pub struct Search {
     pub marches: usize,
 }
 
-/// p_0 of the roots, each with whether R rises through it. Scans R(p_0) from p_r down to p_s until it first turns
-/// negative, assuming R has the sign pattern + - + or - +, and refines the brackets on each side of that sample.
-fn shoot(m: &Marcher) -> Vec<(f64, bool)> {
+/// p_0 of the roots, each with whether R rises through it. Samples R(p_0) on a uniform scan of (p_s, p_r) and runs
+/// Brent on every sign change between neighbouring samples. A negative region narrower than the scan's step, near
+/// the fold where two roots merge, leaves R positive at every sample but with a local minimum: a golden-section
+/// search between the minimum's neighbours looks for a negative R there, and Brent then runs on both sides of it.
+fn shoot(m: &Marcher) -> Result<Vec<(f64, bool)>, String> {
     let op = m.op;
     let p_lo = op.p_s + 1e-3;
     let p_hi = op.p_r - 1e-6;
     let step = (p_hi - p_lo) / SCAN_INTERVALS as f64;
-    let mut residual = |p: f64| m.residual(p).map(|(r, _)| r).ok_or(RootError::NoSignChange);
-    let accept = |p: f64| matches!(m.residual(p), Some((_, false)));
-
-    let mut prev: Option<f64> = None; // Last sample with R >= 0
-    let mut roots = Vec::new();
-    for k in 0..=SCAN_INTERVALS {
-        let p = p_hi - step * k as f64;
-        let r = match m.residual(p) {
-            Some((r, _)) => r,
-            None => {
-                prev = None; // No bracket across a hole
-                continue;
-            }
-        };
-        if r < 0.0 {
-            if let Some(p_prev) = prev {
-                if let Ok(root) = brentq(&mut residual, p, p_prev, 1e-6, RTOL, 100) {
-                    if accept(root) {
-                        roots.push((root, true));
-                    }
-                }
-            }
-            if let Ok(root) = brentq(&mut residual, p_lo, p, 1e-6, RTOL, 100) {
-                if accept(root) {
-                    roots.push((root, false));
-                }
-            }
-            return roots;
+    let residual = |p: f64| -> Result<f64, String> {
+        match m.residual(p) {
+            Some((r, _)) => Ok(r),
+            None => Err(format!("the shooting residual is not finite at p_0 = {p} bar")),
         }
-        prev = Some(p);
+    };
+    let mut brent_r = |p: f64| residual(p).map_err(|_| RootError::NoSignChange);
+
+    // The scan, from p_s up to p_r
+    let p: Vec<f64> = (0..=SCAN_INTERVALS).rev().map(|k| p_hi - step * k as f64).collect();
+    let r: Vec<f64> = p.iter().map(|&p| residual(p)).collect::<Result<_, _>>()?;
+
+    let mut brackets = Vec::new(); // (a, b, rising): a sign change on [a, b], where R rises if it is negative at a
+    for j in 0..SCAN_INTERVALS {
+        if (r[j] < 0.0) != (r[j + 1] < 0.0) {
+            brackets.push((p[j], p[j + 1], r[j] < 0.0));
+        }
     }
-    roots
+    let xtol_refine = REFINE_XTOL * (op.p_r - op.p_s);
+    for j in 1..SCAN_INTERVALS {
+        if r[j] >= 0.0 && r[j - 1] >= r[j] && r[j + 1] >= r[j] {
+            let mut f = |p: f64| residual(p).unwrap_or(f64::INFINITY);
+            let (q, r_q) = minimize(&mut f, p[j - 1], p[j + 1], xtol_refine, 200, 0.0);
+            if r_q < 0.0 {
+                brackets.push((p[j - 1], q, false));
+                brackets.push((q, p[j + 1], true));
+            }
+        }
+    }
+
+    let mut roots = Vec::new();
+    for (a, b, rising) in brackets {
+        if let Ok(root) = brentq(&mut brent_r, a, b, 1e-6, RTOL, 100) {
+            if matches!(m.residual(root), Some((_, false))) {
+                roots.push((root, rising));
+            }
+        }
+    }
+    roots.sort_by(|x, y| x.0.total_cmp(&y.0));
+    roots.dedup_by(|x, y| x.0 == y.0);
+    Ok(roots)
 }
 
 /// A root at p_0, with its outputs, or None if its march fails
@@ -100,7 +115,7 @@ pub fn root_set(spec: &WellSpec, op: &OperatingPoint) -> Result<Search, String> 
     spec.check()?;
     op.check()?;
     let m = Marcher::new(spec, op);
-    let mut roots: Vec<Root> = shoot(&m).into_iter().filter_map(|(p_0, rising)| root_at(&m, p_0, rising)).collect();
+    let mut roots: Vec<Root> = shoot(&m)?.into_iter().filter_map(|(p_0, rising)| root_at(&m, p_0, rising)).collect();
     roots.sort_by(|a, b| a.x[0].total_cmp(&b.x[0]));
     Ok(Search { roots, marches: m.marches() })
 }

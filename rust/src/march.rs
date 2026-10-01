@@ -147,7 +147,7 @@ impl<'a> Marcher<'a> {
         let (p_star, f_star) = minimize(&mut |p| match row(p) {
             Ok(v) if v.is_finite() => v,
             _ => f64::INFINITY,
-        }, p_s, p_prev, 1e-2, 200);
+        }, p_s, p_prev, 1e-2, 200, 0.0);
         if f_star < 0.0 {
             return match brentq(&mut row, p_star, p_prev, 1e-6, RTOL, 100) {
                 Ok(p) => CellStep::Solved(p),
