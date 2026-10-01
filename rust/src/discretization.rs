@@ -85,7 +85,7 @@ pub fn bottom_rows(spec: &WellSpec, op: &OperatingPoint, s: &State, w_res: f64) 
     [
         a * s.alpha * s.rho_g * s.v_g - w_g,         // spec: INF-6
         a * (1.0 - s.alpha) * s.rho_l * s.v_l - w_l, // spec: INF-7
-        s.t - thermal::inflow_temperature(op.t_r),   // spec: THM-3
+        s.t - spec.thermal.inflow_temperature(w_res, op.w_lg, op.t_r, op.t_lg, &spec.fluid), // THM-3 or THM-5
     ]
 }
 
@@ -148,7 +148,7 @@ pub fn closure_rows(spec: &WellSpec, s: &State, cos_incl: f64) -> [f64; 3] {
 /// The spec ID of every row of the system, in order: the rows of each point depend on the well's options
 pub fn row_ids(spec: &WellSpec) -> Vec<&'static str> {  // spec: DISC-11
     let n = spec.n_cells();
-    let bottom = ["INF-6", "INF-7", "THM-3"];
+    let bottom = ["INF-6", "INF-7", if spec.thermal.lift_gas_mixing { "THM-5" } else { "THM-3" }];
     let cell = ["DISC-7", "DISC-8", "DISC-9", "DISC-10"];
     let gas_law = if spec.fluid.gas_law == GasLaw::Ideal { "PVT-GAS-1" } else { "PVT-GAS-3" };
     let liquid = if spec.fluid.has_mass_transfer() { "PVT-MIX-6" } else { "PVT-MIX-1" };

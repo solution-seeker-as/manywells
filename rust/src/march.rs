@@ -256,7 +256,8 @@ impl<'a> Marcher<'a> {
         let mut x = Vec::with_capacity(DIM_X * (n + 1));
         let mut failed = false;
         let cos_0 = self.spec.geometry.point_cos(0);
-        let Some(mut prev) = self.point_state(p_0, thermal::inflow_temperature(self.op.t_r), w_res, cos_0) else {
+        let t_0 = self.spec.thermal.inflow_temperature(w_res, self.op.w_lg, self.op.t_r, self.op.t_lg, &self.spec.fluid);
+        let Some(mut prev) = self.point_state(p_0, t_0, w_res, cos_0) else {
             x.extend_from_slice(&[f64::NAN; DIM_X]);
             return March { x, w_res, failed: true, below_separator: false };
         };

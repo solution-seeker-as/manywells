@@ -6,7 +6,8 @@
 
 //! The thermal model (specs/model/thermal.md), as ThermalModel in src/manywells/thermal.py: heat loss to an ambient
 //! profile linear in true vertical depth, and optionally frictional heating and the gravity term; the fluid enters at
-//! the reservoir temperature. Derivations of the terms: docs/thermal_energy_modeling.md.
+//! the reservoir temperature, or mixed with lift gas at its own. Derivations of the terms:
+//! docs/thermal_energy_modeling.md.
 
 use crate::discretization::State;
 use crate::pvt::fluid::Fluid;
@@ -17,6 +18,7 @@ pub struct Thermal {
     pub h: f64,                   // Overall heat transfer coefficient (W/(m² K))
     pub frictional_heating: bool, // Viscous dissipation heats the liquid (THM-6)
     pub gravity_term: bool,       // Work against gravity cools the flow (THM-7)
+    pub lift_gas_mixing: bool,    // Lift gas at T_lg mixes with the reservoir fluid at the bottomhole (THM-5)
 }
 
 /// Ambient temperature (K) at a point whose true vertical depth is tvd_frac of the bottomhole's, linear from T_s at
@@ -71,15 +73,33 @@ pub fn energy_step(t_prev: f64, t_a: f64, delta_md: f64, h: f64, d: f64, capacit
     (t_prev + delta_md * k * t_a) / (1.0 + delta_md * k)
 }
 
-/// Temperature of the fluid entering the well (K)
-pub fn inflow_temperature(t_r: f64) -> f64 {  // spec: THM-3
-    t_r
+impl Thermal {
+    /// Temperature (K) of the fluid at the bottomhole, for a reservoir liquid rate w_res and a lift gas rate w_lg
+    /// (kg/s), the reservoir temperature t_r and the lift gas temperature t_lg (K): with lift-gas mixing, the heat
+    /// capacity weighted mix of the reservoir fluid and the lift gas, exactly T_r if T_lg = T_r
+    pub fn inflow_temperature(&self, w_res: f64, w_lg: f64, t_r: f64, t_lg: f64, fluid: &Fluid) -> f64 {
+        if !self.lift_gas_mixing {
+            return t_r; // spec: THM-3
+        }
+        let h_res = w_res * fluid.cp_l + fluid.reservoir_gas_rate(w_res) * fluid.cp_g;
+        let h_lg = w_lg * fluid.cp_g;
+        t_r + h_lg * (t_lg - t_r) / (h_res + h_lg) // spec: THM-5
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::input::test_wells::v1_fluid;
+
+    #[test]
+    fn lift_gas_at_the_reservoir_temperature_leaves_the_inflow_at_it() {
+        let fluid = v1_fluid(820.0, 420.0, 2225.0, 3000.0, 0.1);
+        let th = Thermal { h: 20.0, frictional_heating: false, gravity_term: false, lift_gas_mixing: true };
+        assert_eq!(th.inflow_temperature(10.0, 2.0, 360.0, 360.0, &fluid), 360.0);
+        let t = th.inflow_temperature(10.0, 2.0, 360.0, 300.0, &fluid);
+        assert!(t < 360.0 && t > 300.0);
+    }
 
     fn state(alpha: f64, v_g: f64, v_l: f64) -> State {
         State { p: 100.0, v_g, v_l, alpha, rho_g: 60.0, rho_l: 820.0, t: 350.0 }
@@ -88,7 +108,7 @@ mod tests {
     #[test]
     fn frictional_heating_of_a_liquid_is_f_over_rho_c() {
         let fluid = v1_fluid(820.0, 420.0, 2225.0, 3000.0, 0.1);
-        let th = Thermal { h: 0.0, frictional_heating: true, gravity_term: false };
+        let th = Thermal { h: 0.0, frictional_heating: true, gravity_term: false, lift_gas_mixing: false };
         let dt = th.temperature_gradient(&state(0.0, 1.0, 2.0), &fluid, 350.0, 500.0, 1.0, 0.1);
         assert!((dt - 500.0 / (820.0 * 3000.0)).abs() < 1e-15);
     }
@@ -96,7 +116,7 @@ mod tests {
     #[test]
     fn the_gravity_term_is_g_over_c_for_a_gas_and_zero_for_a_liquid() {
         let fluid = v1_fluid(820.0, 420.0, 2225.0, 3000.0, 0.1);
-        let th = Thermal { h: 0.0, frictional_heating: false, gravity_term: true };
+        let th = Thermal { h: 0.0, frictional_heating: false, gravity_term: true, lift_gas_mixing: false };
         let gas = -th.temperature_gradient(&state(1.0, 10.0, 1.0), &fluid, 350.0, 0.0, 1.0, 0.1);
         assert!((gas - STD_GRAVITY / 2225.0).abs() < 1e-15);
         assert_eq!(th.temperature_gradient(&state(0.0, 1.0, 2.0), &fluid, 350.0, 0.0, 1.0, 0.1), 0.0);

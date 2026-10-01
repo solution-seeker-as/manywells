@@ -43,8 +43,6 @@ CORE_CLASSES = {'geometry': (WellGeometry,), 'fluid': (FluidModel,), 'friction':
 def _not_yet_ported(wp) -> list:
     """The options of wp that the core does not implement yet. Step 9 ports them one feature spec at a time."""
     geo, fluid, thermal, out = wp.geometry, wp.fluid, wp.thermal, []
-    if thermal.lift_gas_mixing:
-        out.append('lift-gas mixing (010)')
     if type(wp.inflow) is FixedFlowRate:
         out.append('a fixed liquid rate (011)')
     return out
@@ -78,6 +76,7 @@ def core_well(wp) -> '_core.Well':
                       surface_tension_model=fluid.surface_tension_model,
                       **_friction(wp.friction), h=wp.thermal.h,
                       frictional_heating=wp.thermal.frictional_heating, gravity_term=wp.thermal.gravity_term,
+                      lift_gas_mixing=wp.thermal.lift_gas_mixing,
                       C_0_annular=wp.slip.C_0_annular, C_0_slug=wp.slip.C_0_slug, C_0_bubbly=wp.slip.C_0_bubbly,
                       v_inf_annular=wp.slip.v_inf_annular,
                       inflow='vogel' if vogel else 'pi', inflow_coefficient=inflow.w_l_max if vogel else inflow.k_l,

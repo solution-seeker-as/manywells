@@ -97,7 +97,7 @@ pub mod test_wells {
         let spec = WellSpec {
             geometry: vertical(2500.0, n_cells, 0.127),
             fluid: v1_fluid(900.0, 420.0, 2225.0, 3000.0, 0.15),
-            friction: Friction::FixedFactor { f_d: 0.03 }, thermal: Thermal { h: 25.0, frictional_heating: false, gravity_term: false },
+            friction: Friction::FixedFactor { f_d: 0.03 }, thermal: Thermal { h: 25.0, frictional_heating: false, gravity_term: false, lift_gas_mixing: false },
             slip: Slip::default(),
             inflow: Inflow::Vogel { w_l_max: 80.0 },
             choke: Choke::new(ChokeModel::Simpson, 0.0015201224372924933, Profile::Sigmoid),
@@ -109,7 +109,7 @@ pub mod test_wells {
         let spec = WellSpec {
             geometry: vertical(1800.0, n_cells, 0.1524),
             fluid: v1_fluid(820.0, 500.0, 2225.0, 2200.0, 0.4),
-            friction: Friction::FixedFactor { f_d: 0.05 }, thermal: Thermal { h: 15.0, frictional_heating: false, gravity_term: false },
+            friction: Friction::FixedFactor { f_d: 0.05 }, thermal: Thermal { h: 15.0, frictional_heating: false, gravity_term: false, lift_gas_mixing: false },
             slip: Slip::default(),
             inflow: Inflow::ProductivityIndex { k_l: 0.6 },
             choke: Choke::new(ChokeModel::Bernoulli, 0.001824146924750992, Profile::Linear),
@@ -120,7 +120,7 @@ pub mod test_wells {
     /// W1 with frictional heating and the gravity term (009), so that the energy row depends on the pressure
     pub fn w1_thermal(n_cells: usize) -> (WellSpec, OperatingPoint) {
         let (mut spec, op) = w1(n_cells);
-        spec.thermal = Thermal { h: 25.0, frictional_heating: true, gravity_term: true };
+        spec.thermal = Thermal { h: 25.0, frictional_heating: true, gravity_term: true, lift_gas_mixing: false };
         (spec, op)
     }
 
@@ -178,6 +178,14 @@ pub mod test_wells {
         (spec, op)
     }
 
+    /// W1 with develop's model and its lift gas (0.8 kg/s) injected at 300 K, mixing with the inflow (010)
+    pub fn w1_cold_lift_gas(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let (mut spec, mut op) = w1_develop(n_cells);
+        spec.thermal.lift_gas_mixing = true;
+        op.t_lg = 300.0;
+        (spec, op)
+    }
+
     /// Every test well
     pub fn all(n_cells: usize) -> Vec<(&'static str, WellSpec, OperatingPoint)> {
         let named = |name, (spec, op)| (name, spec, op);
@@ -185,7 +193,7 @@ pub mod test_wells {
              named("w1_deviated", w1_deviated(n_cells)), named("w2_l_shaped", w2_l_shaped(n_cells)),
              named("w1_real_gas", w1_real_gas(n_cells)), named("w1_black_oil", w1_black_oil(n_cells)),
              named("w2_bubble_point", w2_bubble_point(n_cells)), named("w1_develop", w1_develop(n_cells)),
-             named("w2_haaland", w2_haaland(n_cells))]
+             named("w2_haaland", w2_haaland(n_cells)), named("w1_cold_lift_gas", w1_cold_lift_gas(n_cells))]
     }
 }
 

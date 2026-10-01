@@ -313,7 +313,7 @@ RUST_NOT_IN_CORE = {
 }
 
 # Step 9 ports develop's model to the core one feature spec at a time: the tables whose functions it has not got yet
-RUST_NOT_PORTED = {'THM-5': '010'}
+RUST_NOT_PORTED = {}
 
 
 def rust_vector_params():

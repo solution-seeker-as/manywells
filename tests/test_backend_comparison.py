@@ -32,7 +32,7 @@ from .backend_cases import (COMPARISON, FEATURES, OVERLAYS, ROOT_ROW, ROW_REL, c
 
 # Step 9 ports develop's model one feature spec at a time: the features whose options the core refuses so far. A well
 # that uses one of them must be refused, and once a feature is ported its number must go from here.
-NOT_YET_PORTED = {'010', '011'}
+NOT_YET_PORTED = {'011'}
 
 MATRIX = matrix()
 
