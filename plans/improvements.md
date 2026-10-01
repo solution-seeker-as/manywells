@@ -50,6 +50,9 @@ Related cleanups:
 
 ### 1.2 `water_fvf` has the wrong sign **[verified]**
 
+**[done 2026-10-01 in Step 7]** `Bw = 1 - c_w (p - p_ref)` (PVT-WAT-2), with the
+test updated; the form is a draft for Bjarne's sign-off.
+
 **[plan: Step 7]** Fix it before its option is written into
 `specs/model/pvt/water.md`, so the spec does not record the wrong sign.
 
@@ -67,6 +70,10 @@ must be updated together with the fix. The function is currently unused by the
 simulator, so the fix is safe.
 
 ### 1.3 Data-generation scripts are broken against the current API **[verified]**
+
+**[done 2026-10-01 in Step 7]** `manywells.sampling` and `manywells.datasets`
+port the procedure (`specs/sampling.md`), the generators are thin callers, and the
+frozen dataclasses make a misspelt assignment raise.
 
 **[plan: Step 7, item 7]** The sampler port. `scripts/data_generation_v2/` was
 an untracked early draft and was deleted on 2026-09-30.
@@ -152,6 +159,10 @@ form (Phi multiplies the *pressure-drop* term); fix the class docstring.
 
 ### 2.1 Replace `assert` validation with exceptions
 
+**[done 2026-10-01 in Step 7]** for the inputs: `WellProperties`, `BoundaryConditions`,
+the inflow, choke, friction and thermal models and `FluidModel` raise `ValueError`.
+`liquid_mix` and `ca_double_sigmoid` still assert.
+
 **[any time]**
 
 `WellProperties`, `BoundaryConditions`, `ProductivityIndex`, `Vogel`,
@@ -160,6 +171,10 @@ disappears under `python -O`. `WellGeometry` and `BlackOilPVT` already raise
 `ValueError` — make that the pattern everywhere.
 
 ### 2.2 Use `logging`/exception payloads instead of `print`
+
+**[done 2026-10-01 in Step 7]** for the simulator: it never prints; failed starts go to
+`logging.getLogger('manywells')`, and `NoOperatingPoint` carries the root set. The
+calibration functions still print (§2.8).
 
 **[any time]** The plan's evidence scripts and root-set search (Step 7, item 6)
 currently have to capture stdout to silence failed starts.
@@ -171,6 +186,9 @@ so downstream users — e.g. the data-generation loop that *expects* failures �
 can run quietly.
 
 ### 2.3 `isinstance`-based choke dispatch blocks extension
+
+**[done 2026-10-01 in Step 7]** `ChokeModel.mass_flow_rate(u, p_s, s, A)`, with each
+model's `density_and_multiplier`. Closed loop keeps its own dispatch, on its frozen base.
 
 **[plan: Step 6]** Interface contracts. Settled in `specs/architecture.md`:
 `ChokeModel.mass_flow_rate(u, p_s, s, A)` takes the wellhead state. Step 7
@@ -192,6 +210,9 @@ needs. The simulator then calls it polymorphically with no `isinstance`.
 
 ### 2.4 Hidden state `self._w_l_inflow`
 
+**[done 2026-10-01 in Step 7]** `discretization.py` passes $w_\text{res}$ to every
+point's rows.
+
 **[plan: Step 6]** Interface contracts. Settled in `specs/architecture.md`: the
 reservoir liquid rate is an explicit argument of every point's rows. Step 7
 implements it.
@@ -204,6 +225,9 @@ the kind of thing that breaks when methods are overridden, as in
 needed from `x_0` — the expression is cheap and symbolic anyway.
 
 ### 2.5 The simulator mutates the user's objects
+
+**[done 2026-10-01 in Step 7]** for `SSDFSimulator`: frozen inputs, the default choke in
+`WellProperties.__post_init__`, the operating point as parameters.
 
 **[plan: Step 6]** The `SSDFSimulator` part, settled in `specs/architecture.md`:
 frozen inputs, and the default choke set in `WellProperties.__post_init__`.
@@ -243,6 +267,8 @@ dataclasses as immutable (consider `frozen=True` like `WellGeometry`).
 
 ### 2.7 `SlipModel` parameters are not configurable
 
+**[done 2026-10-01 in Step 7]** `SlipModel(C_0_slug=1.2)` works.
+
 **[plan: Step 7]** Making them fields is part of specifying `slip.md`'s
 interface. The calibration use case is **[after the plan]**.
 
@@ -274,7 +300,9 @@ free by reusing a parameterized objective.
   `MPLBACKEND=Agg`, in a temporary directory (`gl_temp.py` saves a figure to
   the working directory).
 - **Fix the water FVF tests** along with 1.2.
-- **[plan: Step 7]** **Energy-equation regression test** (as test vectors in
+- **[done 2026-10-01 in Step 7]** The develop vectors of THM-4 to THM-7 in
+  `specs/model/thermal.md`, and `tests/test_thermal.py`.
+  **[plan: Step 7]** **Energy-equation regression test** (as test vectors in
   `specs/model/thermal.md`): the thermal model
   (`docs/thermal_energy_modeling.md`) has heat loss, friction heating and
   adiabatic cooling terms; a test pinning wellhead temperature for a reference
@@ -285,6 +313,10 @@ free by reusing a parameterized objective.
 ## 4. Performance and architecture
 
 ### 4.1 Build the NLP once, parameterize the boundary conditions (largest win)
+
+**[done 2026-10-01 in Step 7]** `build_system`, `IpoptSolver` and the march's
+rootfinders are built once per well; the gain on the case set is in the plan's
+Step 7 status.
 
 **[plan: Step 6]** A structural change with an expected order-of-magnitude
 gain, so it can pass principle 7; the gain is to be measured on the case set.
@@ -355,6 +387,9 @@ failures) would make the published-dataset methodology reproducible from the
 library itself and reduce script drift (see 1.3).
 
 ### 4.4 Vectorize `solution_as_df` regime classification
+
+**[done 2026-10-01 in Step 7]** One classifier function mapped over the points
+(`System.regime_probabilities`).
 
 **[any time]**
 

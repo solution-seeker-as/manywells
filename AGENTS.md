@@ -26,22 +26,30 @@ The layout is `src/`-based. Scripts under `scripts/` import both `manywells.*` a
 
 ## Layout
 
-`src/manywells/simulator.py` holds `SSDFSimulator` and its two inputs, `WellProperties` (well, fluid and physics models) and `BoundaryConditions` (the operating point). Everything else in the package is a pluggable model the simulator composes, each a dataclass or ABC whose methods work on CasADi symbols as well as floats:
+The modules follow `specs/architecture.md`. `src/manywells/simulator.py` holds `SSDFSimulator`, its inputs `WellProperties` (one component object per model part) and `BoundaryConditions` (the operating point), `SimError` and `NoOperatingPoint`. The components are frozen dataclasses or ABCs whose methods work on CasADi symbols as well as floats, and import only `units`, `ca_functions` and, within `pvt/`, each other:
 
-- `geometry.py`: discretization and trajectory (MD/TVD, inclination).
-- `pvt/`: fluid properties. `fluid.py` is the one interface the simulator calls; the other modules hold phase correlations.
+- `geometry.py`: the trajectory and grid (MD/TVD, inclination, TVD fraction).
+- `pvt/`: fluid properties. `fluid.py` (`FluidModel`) is the one interface the rest calls, including the phase rates with dissolved gas; the other modules hold phase correlations.
 - `slip.py`: drift-flux closure and flow-regime classification.
+- `friction.py`, `thermal.py`: the friction model (fixed `f_D` or from roughness) and the thermal model (heat loss, frictional heating, gravity term, inflow temperature).
 - `inflow.py`, `choke.py`: the bottom and top boundary models.
-- `friction.py`, `ca_functions.py`, `units.py`: friction factor, smooth approximations for CasADi, constants and unit conversions.
-- `calibration/`: fitting model parameters to data. `closed_loop/`: a simulator subclass for closed-loop control.
+- `ca_functions.py`, `units.py`: smooth approximations for CasADi, constants and unit conversions.
 
-`scripts/` is research code, not library API. `sim_examples/` is the best reference for setting up and running a simulation; `data_generation/` produces the published datasets and is the slow integration path. Tests in `tests/` follow the module layout.
+On top of them:
 
-`specs/` holds the decided specifications: goals, the constitution, the model, sampling, verification and the architecture. `verification/` is the verifier, a separate package. `plans/` holds the plan of work and the backlog; plans are drafts, not specs.
+- `discretization.py`: `build_system(wp)`, the rows of every point (DISC-11), built once per well with the operating point as parameters.
+- `solvers/`: the Ipopt adapter, the initial-guess march, and the multi-start root search with the stability label. `solution.py`: `Root`, `RootSet` and the operating point (SOL-4 to SOL-6).
+- `configurations.py`: the `v1.0.0` configuration (`v1_well`) and the check that a well is in a configuration.
+- `sampling/`, `datasets/`: the ported dataset sampler (`specs/sampling.md`) and the rows and files of a dataset.
+- `calibration/`: fitting model parameters to data. `closed_loop/`: closed-loop control, out of v2, on a frozen copy of the old simulator (`closed_loop/_base.py`); leave it alone.
+
+`scripts/` is research code, not library API. `sim_examples/` is the best reference for setting up and running a simulation; `data_generation/` holds the dataset generators, thin callers of `manywells.sampling`; `verification/` the scripts that run `develop` for the verifier. Tests in `tests/` follow the module layout.
+
+`specs/` holds the decided specifications: goals, the constitution, the model, sampling, verification, the architecture and the feature specs (`specs/features/`). `verification/` is the verifier, a separate package. `plans/` holds the plan of work and the backlog; plans are drafts, not specs.
 
 ## How a simulation runs
 
-The pipe is discretized into `n_cells` cells, and each grid point carries the seven state variables listed under Contracts. `simulate()` assembles inflow equations at the bottom, discretized momentum and energy equations for each cell, the choke equation at the top and closure relations at every point into one CasADi system, solved as a feasibility NLP with Ipopt. A cell-by-cell Newton march supplies the initial guess. Failures raise `SimError`; `solution_as_df` turns the solution into a DataFrame with a flow regime per grid point.
+The pipe is discretized into `n_cells` cells, and each grid point carries the seven state variables listed under Contracts. `SSDFSimulator(wp)` builds the well's system once (`discretization.build_system`): inflow rows at the bottom, mass, momentum and energy rows for each cell, the choke row at the top and closure relations at every point, with the boundary conditions as parameters, and an Ipopt feasibility NLP on it. `simulate(bc)` runs the root search (`solvers/roots.py`): marches from several bottomhole pressures (Newton per point, Ipopt where Newton fails) give starts for Ipopt, the solutions are merged into roots, and each root is labelled stable or unstable from the residual's Jacobian. It returns the operating point, the stable root, as a `Root`, and raises `NoOperatingPoint` (a `SimError`) if there is none; `root_set(bc)` returns every root found. `solution_as_df` turns a root into a DataFrame with a flow regime per grid point. The two-argument constructor `SSDFSimulator(wp, bc)` with `simulate()` still works, with a `DeprecationWarning`.
 
 ## Contracts to preserve
 
@@ -57,8 +65,14 @@ The pipe is discretized into `n_cells` cells, and each grid point carries the se
 
 The command under Environment and commands checks v1.0.0's own solutions, the baseline, as the CI job `verify` does. Its report must say `Verdict: PASS` with 0 unexpected failures, 35 expected failures, 141 cases and a stable-root rate of 74.3%; it exits with status 1 on any unexpected failure. Always pass `--expected-failures`: without it, v1.0.0's 35 known defects count as failures and the verdict is FAIL. `--json OUT` writes every check of every root, and `--name` names the candidate in the report.
 
-- **Candidates.** A candidate is a parquet file with one row per root: `case_id`, `root`, `x` (the 7(N + 1) state values, point by point from the bottomhole, in state-vector order), `label` (`stable`, `unstable` or empty), `operating_point` and `choked` (nullable). Read the cases with `manywells_verify.cases.read_cases('verification/data/cases.parquet')` and write the roots with `write_roots({case_id: [Root(x, label, operating_point, choked)], ...}, path)`. Every `case_id` must be in the case set; a case with no rows means the candidate found no root. The cases are v1.0.0 wells (`L`, `D`, `rho_l`, ...). Mapping them to `develop`'s `WellGeometry` and `FluidModel` in a v1-compatibility configuration is Step 7 of `plans/manywells-v2-plan.md`; until then there is no `develop` candidate.
-- **Distributions.** `uv run manywells-verify-distributions ROWS --dataset sol-1` (or `nsol-1`) compares a regenerated dataset (parquet or CSV with the datasets' feature columns) with the stable-root reference of the published one.
+- **Candidates.** A candidate is a parquet file with one row per root: `case_id`, `root`, `x` (the 7(N + 1) state values, point by point from the bottomhole, in state-vector order), `label` (`stable`, `unstable` or empty), `operating_point` and `choked` (nullable). Read the cases with `manywells_verify.cases.read_cases('verification/data/cases.parquet')` and write the roots with `write_roots({case_id: [Root(x, label, operating_point, choked)], ...}, path)`. Every `case_id` must be in the case set; a case with no rows means the candidate found no root. The cases are v1.0.0 wells (`L`, `D`, `rho_l`, ...).
+- **`develop`'s candidate.** `scripts/verification/develop_candidate.py` maps each case to `develop` in the `v1.0.0` configuration (`manywells.configurations.v1_well`) and writes every root it finds, about 40 s on 24 cores. The CI job `verify` runs it and the verifier, with no expected failures: the report must say `Verdict: PASS` with 0 failures and a stable-root rate of 100%.
+
+  ```console
+  uv run python -m scripts.verification.develop_candidate develop.parquet
+  uv run manywells-verify develop.parquet --data verification/data --name "develop (v1.0.0 configuration)"
+  ```
+- **Distributions.** `uv run manywells-verify-distributions ROWS --dataset sol-1` (or `nsol-1`) compares a regenerated dataset (parquet or CSV with the datasets' feature columns and the published wells' `ID`) with the stable-root reference of the published one, weighting the candidate's rows so that its wells mix as the reference's do. `scripts/verification/regenerate_distributions.py` regenerates samples at the stable root for the published `sol-1` wells and runs the check; at 5 samples per well it takes about 17 minutes on 24 cores.
 - **Expected failures.** `verification/expected_failures.csv` lists v1.0.0's known defects on the case set: cases where its default guess reaches the trickle root or fails. `verification/build/expected_failures.py` writes it. Never add an entry to make a candidate pass.
 - **Tests of the verifier itself:** `uv run pytest verification/tests`.
 
@@ -87,7 +101,8 @@ The v1.0.0 environment is a git worktree of the tag in `.worktrees/v1.0.0`, set 
 ## Done means
 
 - The relevant tests pass. `uv run pytest -m "not slow"` is fine while iterating; run the full suite before finishing changes to the solver, the physics or the public API, since only the slow tests run a full solve and the examples.
-- New physics or a new model comes with a test, and with its spec change in `specs/model/` in the same commit: equation IDs, `# spec:` tags in the code and test vectors (`specs/model/README.md`). `tests/test_spec_traceability.py` and `tests/test_spec_vectors.py` pass.
+- New physics or a new model comes with a test, and with its spec change in `specs/model/` in the same commit: equation IDs, `# spec:` tags in the code and test vectors (`specs/model/README.md`; a new option's vectors come from `specs/tools/make_develop_vectors.py`). `tests/test_spec_traceability.py` and `tests/test_spec_vectors.py` pass.
+- A change to the model keeps the `v1.0.0` configuration's rows exactly v1.0.0's (the row vectors) and its verifier report at PASS with no expected failures; a new option is off in that configuration.
 - The examples in `scripts/sim_examples/` still run if you changed the public API. `tests/test_examples.py` (slow) runs each one headless.
 - A change to `verification/` keeps `uv run pytest verification/tests` passing and the verifier's baseline report unchanged, unless changing it was the point.
 - If the change adds a solver routine or path (a subroutine, a special-case path, a fallback, a tuning constant), state its measured gain in speed or robustness on the verifier's case set (constitution, principle 7). Bjarne decides whether the gain is large enough.
@@ -114,7 +129,7 @@ Real-well data is confidential. Some real-well data for validation resides in th
 - `specs/constitution.md` for the rules, and `specs/goals.md` for the goals and the direction for v2 (scope, non-goals, API and dataset compatibility).
 - `specs/model/` before changing any physics: the model's equations with stable IDs, one file per module (`specs/model/README.md`). Code that implements an equation carries a `# spec: <ID>` tag; `tests/test_spec_traceability.py` checks the tags and `tests/test_spec_vectors.py` checks `develop` against test vectors from v1.0.0. `specs/discrepancies.md` lists where the paper and v1.0.0 differ, and `specs/sampling.md` specifies the dataset sampling.
 - `specs/verification.md` for the verifier's case set, checks and tolerances, and `verification/build/README.md` for how its reference data is built.
-- `specs/architecture.md` before moving code between modules, adding a module or a model option, or changing an interface: the target module layout (which Step 7 of the plan implements), the interface contracts with units, the extension points, the Rust core's design, and the module each planned v2 feature belongs to. The Layout section above describes the code as it is today.
+- `specs/architecture.md` before moving code between modules, adding a module or a model option, or changing an interface: the module layout (implemented in Step 7 of the plan), the interface contracts with units, the extension points, the Rust core's design, and the module each planned v2 feature belongs to.
 - `docs/thermal_energy_modeling.md` when changing the energy equation; it derives the temperature terms and cites the sources.
 - `docs/testing.md` for the test layout and pytest configuration.
 - `docs/datasets.md` when touching data generation, for the dataset feature definitions and the relations between them.

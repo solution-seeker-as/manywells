@@ -39,9 +39,15 @@ uv run pytest tests/ -v -m "not slow"
 | **test_choke.py** | `ChokeModel` (critical pressure ratio, choke openings, invalid profile/K_c), `BernoulliChokeModel`, `SimpsonChokeModel`, `is_choked` |
 | **test_inflow.py** | `ProductivityIndex`, `Vogel`, `FixedFlowRate` |
 | **test_slip.py** | `classify_flow_regime`, `SlipModel` (Harmathy, Taylor, `identify_parameters`, `slip_equation`, `flow_regime`) |
-| **test_simulator.py** | `WellProperties`, `BoundaryConditions`, `SSDFSimulator` (construction, variables, `solution_as_df`), optional `@pytest.mark.slow` full solve |
+| **test_simulator.py** | `WellProperties`, `BoundaryConditions` (frozen, validated), `SSDFSimulator` (construction, row order, the deprecated two-argument form, `solution_as_df`); `slow`: full solves, root sets, `NoOperatingPoint` |
+| **test_thermal.py** | `ThermalModel`: heat loss, frictional heating, gravity term, ambient profile, inflow temperature |
+| **test_configurations.py** | `manywells.configurations`: the `v1.0.0` configuration and its check |
+| **test_roots.py** | The root search's copies of the verifier's state distance and thresholds, admissibility (SOL-1), labels, the operating point (SOL-4 to SOL-6), the starts |
+| **test_model_properties.py** | Property and spot checks of develop's full model on deviated, L-shaped, black-oil and cold-lift-gas wells: Invariants, inflow and choke rows, mass conservation, friction, heat flow, convergence, two-root stability (`slow`) |
+| **test_sampling.py** | The ported sampler: seeding, draw ranges and distributions, the map to each configuration, operating-point draws, the non-stationary walk, dataset rows; `slow`: one well's generation |
+| **test_closed_loop.py** | `ClosedLoopWellSimulator` on its frozen base, pinned to its values before Step 7 (`slow`) |
 | **test_calibration.py** | `calibrate_bernoulli_choke_model`, `calibrate_inflow_model` (PI and Vogel), and error cases |
-| **test_spec_vectors.py** | `develop` against the test vectors from v1.0.0 in `specs/model/` (component tables and residual rows); `spec_parse.py` reads the spec files |
+| **test_spec_vectors.py** | `develop` against the test vectors from v1.0.0 in `specs/model/` (component tables, and residual rows in the `v1.0.0` configuration); `spec_parse.py` reads the spec files |
 | **test_spec_traceability.py** | Equation IDs, coverage tables and `# spec:` tags (`specs/model/README.md`) |
 | **test_examples.py** | Every script in `scripts/sim_examples/` runs to the end headless (`slow`) |
 
