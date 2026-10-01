@@ -16,7 +16,7 @@ This plan is a step towards v2, not the release plan. v2 will be a major release
 ## Scope decisions
 
 - **Calibration is deferred until after this plan** (but before `v2.0.0`). `calibration/` gets no spec here, and the private real-well accuracy check, which depends on calibration, is not run.
-- **Closed loop is out of scope for v2** and can be added in a later version. There is no `manywells-nscl-2` dataset and no spec or verifier coverage for `closed_loop/`, which stays on `develop` untouched during this plan. It subclasses the Python simulator, so it is removed when that simulator is retired (see After this plan). Before Step 7 restructures the simulator, it copies today's `SSDFSimulator` verbatim into `closed_loop/` as its private base, so closed loop's behaviour does not change (decided 2026-09-30, `specs/architecture.md`). Step 3's corrigendum note still covers the published `nscl-1` data, but its final states are not in the verifier's case set (decided 2026-09-30).
+- **Closed loop is out of scope for v2** and can be added in a later version. There is no `manywells-nscl-2` dataset and no spec or verifier coverage for `closed_loop/`, which stays on `develop` untouched during this plan. It is retired after this plan (decided 2026-10-01; see After this plan). Before Step 7 restructures the simulator, it copies today's `SSDFSimulator` verbatim into `closed_loop/` as its private base, so closed loop's behaviour does not change (decided 2026-09-30, `specs/architecture.md`). Step 3's corrigendum note still covers the published `nscl-1` data, but its final states are not in the verifier's case set (decided 2026-09-30).
 - **Sampling is ported now and redesigned later.** This plan makes v1's sampling procedure work with `develop`'s models, with the same approach (independent draws) extended to the new inputs: trajectory, black-oil parameters and pipe roughness. It gets its own spec, `specs/sampling.md` (Step 4), and is implemented in Step 7. In the v1-compatibility configuration it draws v1's inputs as before, so the distribution check can compare regenerated samples with the published datasets. After this plan, the procedure will likely change substantially, to generate v2 datasets that differ significantly from v1's.
 
 ## Principles
@@ -63,9 +63,9 @@ A change on `develop`, and any new equation (Step 9), comes in as an option that
 - spot checks of relations that need no closure: the inflow equation at the bottom and the choke equation at the top, conservation of total mass, non-negative friction in every cell, and heat flowing outwards;
 - Convergence;
 - stability property checks with the implementation's own Jacobian: a two-root well has one stable and one unstable root, the unstable one at higher `p_0`;
-- while the Python simulator exists, agreement between the Python and Rust implementations on the operating point for the same cases.
+- once the Rust core covers the option, agreement between the two backends on the rows at the same states and on the operating point for the same cases. Both backends are kept (`specs/goals.md`).
 
-What this does not catch is a self-consistent assembly or discretization error on a new code path, of the kind of the Rust port's exact energy solution: component test vectors do not see how components are assembled, and Convergence passes a consistent scheme. Spec review, and the two implementations while both exist, are the defence.
+What this does not catch is a self-consistent assembly or discretization error on a new code path, of the kind of the Rust port's exact energy solution: component test vectors do not see how components are assembled, and Convergence passes a consistent scheme. Spec review and the two backends are the defence.
 
 ### Multiple roots and stability
 
@@ -220,7 +220,7 @@ The checks above establish that a candidate solves the model and returns its sta
   - **Spec and harness gaps** (feature spec, Findings), each with Bjarne's ruling:
     1. `fold-1503`'s reference misses a v1.0.0 root (unstable, 128.0882 bar). Ruling: a known finding; the reference stays unchanged.
     2. The slip law can have three void fractions at sampled states, so the root set contains roots that differ in the branch. Neither backend finds them all, and the spec says nothing about which branch is physical. Ruling: an open model question, noted in `slip.md` and `solution.md`, to be ruled after the plan with the new flow-regime model.
-    3. `develop`'s CasADi search misses roots that the core finds. Not changed: the CasADi backend is retired once the core covers the whole model.
+    3. `develop`'s CasADi search misses roots that the core finds. Not changed in Step 8. Both backends are kept, so it is a backlog item (`plans/improvements.md` §2.9).
     4. The case set has no low-$u$ wells with both roots within a scan step of $p_r$, no states with several void fractions, and no case with more than two roots. Its near-fold cases were placed with the old port's grid. Ruling: after the plan.
     5. The Distributions check counts against a solver every row that v1.0.0 failed to solve. Ruling: decided with Step 7's open item on the check's margin.
 
@@ -239,7 +239,8 @@ The checks above establish that a candidate solves the model and returns its sta
 v2 is a major release with new datasets and perhaps a new paper. After this plan, the remaining work is:
 
 - **New equations and models** through the loop proven in Step 9, in parallel where modules are independent. Each is an option that is off in the v1-compatibility configuration, so the reference root sets stay valid.
-- **Rust core.** Port `develop`'s model to the Rust core designed in Step 6, then retire the Python/CasADi simulator and `closed_loop/` with it. Publish prebuilt wheels on PyPI, so installing needs no Rust toolchain.
+- **Rust core.** Port `develop`'s model to the Rust core designed in Step 6. The Python/CasADi simulator stays: the two backends are developed together, each equation in both, and checked against each other (`specs/goals.md`, decided 2026-10-01). Publish prebuilt wheels on PyPI, so installing needs no Rust toolchain.
+- **Retire `closed_loop/`**, with its frozen base `closed_loop/_base.py` and `tests/test_closed_loop.py`. Closed loop is out of scope for v2 and can return in a later version.
 - **Verifier coverage** (Step 8, gaps 2 and 4): cases for low-$u$ wells whose roots lie within one scan step of $p_r$, states with several void fractions, and wells with more than two roots. The old port, method B, misses the first kind, so the build needs a search that finds them, such as v1.0.0 solved from the Rust core's roots. Then a ruling on the void-fraction branch (`specs/model/slip.md`, Open question), with the new flow-regime model.
 - **Sampling redesign.** A new procedure for v2 datasets that differ significantly from v1's; it can address the unrealistic-wells limitation. `specs/sampling.md` gets a new version, and the distribution check keeps covering the v1-compatibility configuration.
 - **Calibration.** A spec for `calibration/` (with `plans/improvements.md` §2.8), which must work with the Rust core, then the private real-well accuracy check on the release candidate, with its aggregate results recorded.

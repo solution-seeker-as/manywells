@@ -246,7 +246,7 @@ dataclasses as immutable (consider `frozen=True` like `WellGeometry`).
 
 ### 2.6 `ClosedLoopWellSimulator` cleanups
 
-**[out of v2]** Closed loop is out of scope for v2 (plan, Scope decisions).
+**[out of v2]** Closed loop is out of scope for v2 (plan, Scope decisions), and `closed_loop/` is retired after the plan (Bjarne, 2026-10-01), so these cleanups lapse.
 
 - `import matplotlib.pyplot as plt` at module level (`cl_simulator.py:20`)
   drags a GUI dependency into library code and breaks headless use; it is only
@@ -287,6 +287,15 @@ on failure and `print` solver stats; align with `SimError`/logging (see 2.2).
 They also rebuild a fresh Ipopt instance per call — fine for now, but if 3.x
 becomes parametric (see 4.1), the calibration loops get the same benefit for
 free by reusing a parameterized objective.
+
+### 2.9 The CasADi root search misses roots the Rust core finds
+
+**[after the plan]** *Found in Step 8, 2026-10-01* (`specs/features/014-rust-solver.md`, Findings 3). Both backends are kept (`specs/goals.md`), so the CasADi backend's search stays in use, and its completeness matters.
+
+- In Step 8's regenerated `sol-1` samples (first 200 wells, 1,000 samples), the Rust core has an operating point in 3 samples where the multi-start search has none: IDs 16, 70 and 130. Each is a genuine root: every CasADi row is about 1e-13 there, and Ipopt started there stays.
+- At ID 67, k = 0, the core also finds an unstable root the CasADi search misses.
+- The case set does not show this: both backends pass it at 100%.
+- An option, in the `v1.0.0` configuration and later in every configuration the core covers: use the core's roots as extra starts for Ipopt, and record which roots only one backend finds. That is a comparison between the backends, not an independent search, so the verifier's reference stays as it is.
 
 ## 3. Testing
 

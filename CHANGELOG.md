@@ -16,7 +16,7 @@ v2.0.0 may break any part of the API; every break is listed here with an old→n
 
 ### API breaks
 
-**Simulator.** The well's system is built once; the boundary conditions go to `simulate`, which returns a `Root`. The old form still works, with a `DeprecationWarning`, until the CasADi backend is retired.
+**Simulator.** The well's system is built once; the boundary conditions go to `simulate`, which returns a `Root`. The old form still works, with a `DeprecationWarning`, until v2.0.0.
 
 ```python
 # old

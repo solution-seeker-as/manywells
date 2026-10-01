@@ -11,7 +11,7 @@ Private base of ClosedLoopWellSimulator: a frozen copy of manywells/simulator.py
 
 Closed loop is out of scope for v2 (specs/goals.md). Its simulator subclasses SSDFSimulator and
 overrides methods that Step 7 removed, so it keeps this copy and its behaviour does not change
-until it is removed with the CasADi backend (specs/architecture.md, decision 2). Do not extend it.
+until closed_loop/ is retired after the plan (specs/architecture.md, decision 2). Do not extend it.
 Only two kinds of edit are allowed: SimError is the simulator's own class, so callers catch one
 exception type, and call sites follow component interfaces that change without changing a value. Closed
 loop has no spec, so the copy carries no spec tags.

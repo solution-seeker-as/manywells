@@ -134,7 +134,7 @@ class SSDFSimulator:
     rho_g and rho_l are the gas and liquid densities, and T is temperature.
 
     Deprecated: SSDFSimulator(wp, bc) with simulate() and the x_guess attribute, which returns the operating point's
-    state as a flat list. It is removed with the CasADi backend.
+    state as a flat list. It is removed in v2.0.0.
     """
 
     def __init__(self, well_properties: WellProperties, boundary_conditions: BoundaryConditions = None,

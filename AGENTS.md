@@ -42,9 +42,9 @@ On top of them:
 - `solvers/`: the Ipopt adapter, the initial-guess march, and the multi-start root search with the stability label. `solution.py`: `Root`, `RootSet` and the operating point (SOL-4 to SOL-6).
 - `configurations.py`: the `v1.0.0` configuration (`v1_well`) and the check that a well is in a configuration.
 - `sampling/`, `datasets/`: the ported dataset sampler (`specs/sampling.md`) and the rows and files of a dataset.
-- `calibration/`: fitting model parameters to data. `closed_loop/`: closed-loop control, out of v2, on a frozen copy of the old simulator (`closed_loop/_base.py`); leave it alone.
+- `calibration/`: fitting model parameters to data. `closed_loop/`: closed-loop control, out of v2, on a frozen copy of the old simulator (`closed_loop/_base.py`); leave it alone. It is retired after the plan.
 
-`rust/` is the Rust core (crate `manywells-core`, built as `manywells._core`): the same model parts, one module per spec file, with `// spec:` tags, the rows of each point defined once in `discretization.rs`, and a shooting search on the bottomhole pressure (`march.rs`, `shoot.rs`). It covers the `v1.0.0` configuration only so far (`specs/features/014-rust-solver.md`). `solvers/rust.py` converts a well to its inputs and builds the `RootSet` from its roots; the bindings in `lib.rs` sit behind the crate's `python` feature.
+`rust/` is the Rust core (crate `manywells-core`, built as `manywells._core`): the same model parts, one module per spec file, with `// spec:` tags, the rows of each point defined once in `discretization.rs`, and a shooting search on the bottomhole pressure (`march.rs`, `shoot.rs`). It covers the `v1.0.0` configuration only so far (`specs/features/014-rust-solver.md`). Both backends are kept and developed together, so a new equation goes into both, under the same spec ID (`specs/goals.md`). `solvers/rust.py` converts a well to its inputs and builds the `RootSet` from its roots; the bindings in `lib.rs` sit behind the crate's `python` feature.
 
 `scripts/` is research code, not library API. `sim_examples/` is the best reference for setting up and running a simulation; `data_generation/` holds the dataset generators, thin callers of `manywells.sampling`; `verification/` the scripts that run `develop` for the verifier. Tests in `tests/` follow the module layout.
 
