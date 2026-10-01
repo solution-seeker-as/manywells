@@ -16,6 +16,11 @@ pub fn min_approx(x: f64, y: f64, eps: f64) -> f64 {  // spec: SMO-2
     0.5 * (x + y - ((x - y) * (x - y) + eps).sqrt())
 }
 
+/// Sigmoid in x, with inflection point a and rate k: 1 / (1 + exp(-k (x - a)))
+pub fn sigmoid(x: f64, a: f64, k: f64) -> f64 {  // spec: SMO-4
+    1.0 / (1.0 + (-k * (x - a)).exp())
+}
+
 /// Softmax of three values, without shifting them
 pub fn softmax3(y: [f64; 3]) -> [f64; 3] {  // spec: SMO-3
     let e = [y[0].exp(), y[1].exp(), y[2].exp()];

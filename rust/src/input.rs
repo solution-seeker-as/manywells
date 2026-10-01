@@ -79,7 +79,7 @@ pub mod test_wells {
     use super::*;
     use crate::choke::{ChokeModel, Profile};
     use crate::geometry::tests::{survey, vertical};
-    use crate::pvt::fluid::FluidInputs;
+    use crate::pvt::fluid::{FluidInputs, SurfaceTensionModel};
     use crate::units::{P_REF, T_REF};
 
     /// A fluid in the v1.0.0 configuration from v1.0.0's parameters, as configurations.v1_fluid: dead oil of the
@@ -88,7 +88,8 @@ pub mod test_wells {
         let rho_g = P_REF / (r_s * T_REF);
         let gor = f_g * rho_l / ((1.0 - f_g) * rho_g);
         Fluid::new(FluidInputs { rho_o: rho_l, rho_g, rho_w: 999.1, gor, wlr: 0.0, cp_g, cp_o: cp_l, cp_w: 4184.0,
-                                 ideal_gas: true, black_oil: false, p_sep: P_REF / 1e5, t_sep: T_REF, p_bubble: None })
+                                 ideal_gas: true, black_oil: false, p_sep: P_REF / 1e5, t_sep: T_REF, p_bubble: None,
+                                 surface_tension: SurfaceTensionModel::Liquid })
     }
 
     pub fn w1(n_cells: usize) -> (WellSpec, OperatingPoint) {
@@ -148,7 +149,8 @@ pub mod test_wells {
     /// (007, 008)
     pub fn w1_black_oil(n_cells: usize) -> (WellSpec, OperatingPoint) {
         let (mut spec, op) = w1_real_gas(n_cells);
-        spec.fluid = Fluid::new(FluidInputs { black_oil: true, wlr: 0.3, ..spec.fluid.inputs });
+        spec.fluid = Fluid::new(FluidInputs { black_oil: true, wlr: 0.3, surface_tension: SurfaceTensionModel::Oil,
+                                              ..spec.fluid.inputs });
         (spec, op)
     }
 

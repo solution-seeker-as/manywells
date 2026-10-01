@@ -227,7 +227,7 @@ impl<'a> Marcher<'a> {
         let (w_g, w_l) = fluid.phase_rates(p, t, w_res, self.op.w_lg);
         let rho_g = fluid.gas_density(p, t);
         let rho_l = fluid.liquid_density(p, t);
-        let sigma = fluid.surface_tension(rho_l, t);
+        let sigma = fluid.surface_tension(p, t, rho_l);
         let alpha = self.void_fraction(w_g / (a * rho_g), w_l / (a * rho_l), rho_g, rho_l, sigma, cos_incl)?;
         let v_g = w_g / (a * alpha * rho_g);
         let v_l = w_l / (a * (1.0 - alpha) * rho_l);

@@ -136,7 +136,7 @@ pub fn choke_row(spec: &WellSpec, op: &OperatingPoint, s: &State) -> f64 {  // s
 /// Closure relations at a point in a cell of inclination cos_incl: the slip law (m/s), the gas law (bar) and the liquid
 /// density (kg/m³)
 pub fn closure_rows(spec: &WellSpec, s: &State, cos_incl: f64) -> [f64; 3] {
-    let sigma = spec.fluid.surface_tension(s.rho_l, s.t);
+    let sigma = spec.fluid.surface_tension(s.p, s.t, s.rho_l);
     let (c_0, v_inf) = spec.slip.identify_parameters(s.v_g, s.v_l, s.alpha, s.rho_g, s.rho_l, sigma, spec.geometry.d,
                                                      cos_incl);
     [
@@ -188,7 +188,7 @@ pub fn rows(spec: &WellSpec, op: &OperatingPoint, x: &[f64]) -> Vec<(&'static st
 /// The regime label at each point (SLIP-8)
 pub fn flow_regimes(spec: &WellSpec, x: &[f64]) -> Vec<&'static str> {
     x.chunks_exact(DIM_X).map(State::of).enumerate().map(|(i, s)| {
-        let sigma = spec.fluid.surface_tension(s.rho_l, s.t);
+        let sigma = spec.fluid.surface_tension(s.p, s.t, s.rho_l);
         let cos_incl = spec.geometry.point_cos(i);
         slip::regime_label(spec.slip.classify(s.v_g, s.v_l, s.alpha, s.rho_g, s.rho_l, sigma, spec.geometry.d, cos_incl))
     }).collect()

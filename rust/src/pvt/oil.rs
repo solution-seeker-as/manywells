@@ -8,7 +8,7 @@
 //! src/manywells/pvt/black_oil.py and dead_oil.py. The correlations are in field units (psia, °F, scf/STB), with the
 //! conversions at their boundaries.
 
-use crate::smoothing::min_approx;
+use crate::smoothing::{max_approx, min_approx, sigmoid};
 use crate::units::{kelvin_to_fahrenheit, CF_PSI, CF_RS};
 
 /// Density of water at standard conditions (kg/m³), the reference of the specific gravity
@@ -27,6 +27,17 @@ pub fn dead_oil_surface_tension(rho: f64, t: f64) -> f64 {  // spec: PVT-OIL-3
     let t_deg_c = t - 273.15;
     let api = api_from_density(rho);
     cf * (1.11591 - 0.00305 * t_deg_c) * (38.085 - 0.259 * api)
+}
+
+/// Live-oil surface tension (J/m²) from the dead oil's, sigma_dead (J/m²), at a solution gas-oil ratio rs_scf
+/// (scf/STB), Abdul-Majeed and Al-Soof (2000), whose two branches a sigmoid blends at R_so = 50 Sm³/Sm³
+pub fn live_oil_surface_tension(sigma_dead: f64, rs_scf: f64) -> f64 {  // spec: PVT-OIL-12
+    let rs_vol = rs_scf * CF_RS;
+    let rs_safe = max_approx(rs_vol, 1e-6, 1e-6);
+    let sigma_low = sigma_dead / (1.0 + 0.02549 * rs_safe.powf(1.0157));
+    let sigma_high = sigma_dead * 32.0436 * rs_safe.powf(-1.1367);
+    let blend = sigmoid(rs_vol, 50.0, 0.5);
+    (1.0 - blend) * sigma_low + blend * sigma_high
 }
 
 /// Gas specific gravity corrected to a reference separator at 114.7 psia, from the separator's pressure p_sep (Pa)

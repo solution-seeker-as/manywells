@@ -14,7 +14,16 @@
 use crate::pvt::oil::BlackOil;
 use crate::pvt::{gas, mixture, oil};
 use crate::smoothing::{max_approx, min_approx};
-use crate::units::{CF_BAR, M_AIR, P_REF, R_UNIVERSAL, T_REF};
+use crate::units::{CF_BAR, CF_RS, M_AIR, P_REF, R_UNIVERSAL, T_REF};
+
+/// The density at which the dead-oil surface tension correlation is evaluated
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SurfaceTensionModel {
+    /// The oil's at standard conditions, with the live-oil correction for black oil
+    Oil,
+    /// The local liquid density, as in v1.0.0
+    Liquid,
+}
 
 /// The oil: dead, or black oil with gas dissolving into it
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -48,6 +57,7 @@ pub struct FluidInputs {
     pub p_sep: f64,             // Separator pressure (bar) and temperature (K) of the black-oil correlations
     pub t_sep: f64,
     pub p_bubble: Option<f64>,  // Bubble point pressure (bar), or none
+    pub surface_tension: SurfaceTensionModel,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -68,7 +78,7 @@ pub struct Fluid {
 
 impl Fluid {
     pub fn new(inputs: FluidInputs) -> Self {
-        let FluidInputs { rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, black_oil, p_sep, t_sep, p_bubble } =
+        let FluidInputs { rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, black_oil, p_sep, t_sep, p_bubble, .. } =
             inputs;
         let sg_gas = rho_g * R_UNIVERSAL * T_REF / (P_REF * M_AIR); // spec: PVT-GAS-6
         let rho_l = wlr * rho_w + (1.0 - wlr) * rho_o;               // spec: PVT-MIX-10
@@ -143,8 +153,18 @@ impl Fluid {
         mixture::liquid_density_row(rho_l_state, self.liquid_density(p, t))
     }
 
-    pub fn surface_tension(&self, rho_l: f64, t: f64) -> f64 {
-        mixture::liquid_surface_tension(rho_l, t)
+    /// Gas-liquid surface tension (J/m²) at p (bar), T (K) and the point's liquid density rho_l (kg/m³)
+    pub fn surface_tension(&self, p: f64, t: f64, rho_l: f64) -> f64 {
+        match self.inputs.surface_tension {
+            SurfaceTensionModel::Liquid => mixture::liquid_surface_tension(rho_l, t),
+            SurfaceTensionModel::Oil => {
+                let sigma = oil::dead_oil_surface_tension(self.inputs.rho_o, t); // spec: PVT-MIX-7
+                match self.oil {
+                    OilModel::DeadOil => sigma,
+                    OilModel::BlackOil(_) => oil::live_oil_surface_tension(sigma, self.rs(p, t) / CF_RS),
+                }
+            }
+        }
     }
 
     /// Whether gas dissolves into the liquid, so that the phase rates vary along the well

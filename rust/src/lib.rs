@@ -44,7 +44,7 @@ mod _core {
     use crate::discretization::State;
     use crate::input::{OperatingPoint, WellSpec};
     use crate::march::Marcher;
-    use crate::pvt::fluid::{Fluid, FluidInputs};
+    use crate::pvt::fluid::{Fluid, FluidInputs, SurfaceTensionModel};
     use crate::pvt::{gas, oil};
     use crate::shoot;
     use crate::slip::{self, Slip};
@@ -82,13 +82,13 @@ mod _core {
     #[pymethods]
     impl Well {
         #[new]
-        #[pyo3(signature = (*, md, tvd, D, rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, oil_model, p_sep, T_sep, p_bubble, f_D, h, frictional_heating,
+        #[pyo3(signature = (*, md, tvd, D, rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, oil_model, p_sep, T_sep, p_bubble, surface_tension_model, f_D, h, frictional_heating,
                             gravity_term, C_0_annular, C_0_slug, C_0_bubbly, v_inf_annular, inflow, inflow_coefficient,
                             choke, K_c, profile))]
         #[allow(non_snake_case, clippy::too_many_arguments)]
         fn new(md: Vec<f64>, tvd: Vec<f64>, D: f64, rho_o: f64, rho_g: f64, rho_w: f64, gor: f64, wlr: f64, cp_g: f64,
                cp_o: f64, cp_w: f64, ideal_gas: bool, oil_model: &str, p_sep: f64, T_sep: f64, p_bubble: Option<f64>,
-               f_D: f64, h: f64, frictional_heating: bool, gravity_term: bool, C_0_annular: f64,
+               surface_tension_model: &str, f_D: f64, h: f64, frictional_heating: bool, gravity_term: bool, C_0_annular: f64,
                C_0_slug: f64, C_0_bubbly: f64, v_inf_annular: f64, inflow: &str, inflow_coefficient: f64, choke: &str,
                K_c: f64, profile: &str) -> PyResult<Self> {
             let inflow = match inflow {
@@ -107,10 +107,15 @@ mod _core {
                 "black_oil" => true,
                 _ => return Err(PyValueError::new_err(format!("oil model {oil_model:?} is not 'dead_oil' or 'black_oil'"))),
             };
+            let surface_tension = match surface_tension_model {
+                "oil" => SurfaceTensionModel::Oil,
+                "liquid" => SurfaceTensionModel::Liquid,
+                m => return Err(PyValueError::new_err(format!("surface tension model {m:?} is not 'oil' or 'liquid'"))),
+            };
             let spec = WellSpec {
                 geometry: Geometry::from_grid(&md, &tvd, D).map_err(PyValueError::new_err)?,
                 fluid: Fluid::new(FluidInputs { rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, black_oil, p_sep,
-                                                t_sep: T_sep, p_bubble }),
+                                                t_sep: T_sep, p_bubble, surface_tension }),
                 f_d: f_D,
                 thermal: Thermal { h, frictional_heating, gravity_term },
                 slip: Slip { c_0_annular: C_0_annular, c_0_slug: C_0_slug, c_0_bubbly: C_0_bubbly, v_inf_annular },
@@ -261,6 +266,11 @@ mod _core {
                 let [api, sg_gas, p_sep, t_sep] = take(name, a)?;
                 vec![oil::separator_gravity(api, sg_gas, p_sep * crate::units::CF_BAR, t_sep)]
             }
+            "live_oil_surface_tension" => {
+                let [sigma_od, rs_scf] = take(name, a)?;
+                vec![oil::live_oil_surface_tension(sigma_od, rs_scf)]
+            }
+            "surface_tension" => { let [p, t, rho_l] = take(name, a)?; vec![spec.fluid.surface_tension(p, t, rho_l)] }
             "rs" => { let [p, t] = take(name, a)?; vec![spec.fluid.rs(p, t)] }
             "bo" => { let [p, t] = take(name, a)?; vec![spec.fluid.bo(p, t)] }
             "liquid_density" => { let [p, t] = take(name, a)?; vec![spec.fluid.liquid_density(p, t)] }
