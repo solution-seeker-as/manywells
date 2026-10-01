@@ -6,7 +6,7 @@ ManyWells is a steady-state drift-flux simulator for multiphase (gas + liquid) f
 
 ## Environment and commands
 
-The environment is defined by `pyproject.toml` + `uv.lock`. Use [uv](https://docs.astral.sh/uv/):
+The environment is defined by `pyproject.toml` + `uv.lock`. Use [uv](https://docs.astral.sh/uv/). The package is built by maturin, which compiles the Rust core in `rust/` as the extension `manywells._core`, so `uv sync` needs a Rust toolchain (stable, at least 1.85, from [rustup](https://rustup.rs)). uv rebuilds the extension on the next `uv sync` or `uv run` after a file in `rust/src/` changes.
 
 ```console
 uv sync                                              # install the environment (the dev group adds pytest and the verifier)
@@ -14,6 +14,7 @@ uv run pytest                                        # full test suite: tests/ a
 uv run pytest -m "not slow"                          # skip the slow tests (full solves, the examples)
 uv run pytest tests/test_simulator.py::test_name     # one test
 uv run python -m scripts.sim_examples.vertical_well  # run an example
+cargo test --manifest-path rust/Cargo.toml --no-default-features   # the Rust core's own tests, without Python
 ```
 
 Run the verifier from the project root (see The verifier below):
@@ -43,6 +44,8 @@ On top of them:
 - `sampling/`, `datasets/`: the ported dataset sampler (`specs/sampling.md`) and the rows and files of a dataset.
 - `calibration/`: fitting model parameters to data. `closed_loop/`: closed-loop control, out of v2, on a frozen copy of the old simulator (`closed_loop/_base.py`); leave it alone.
 
+`rust/` is the Rust core (crate `manywells-core`, built as `manywells._core`): the same model parts, one module per spec file, with `// spec:` tags, the rows of each point defined once in `discretization.rs`, and a shooting search on the bottomhole pressure (`march.rs`, `shoot.rs`). It covers the `v1.0.0` configuration only so far (`specs/features/014-rust-solver.md`). `solvers/rust.py` converts a well to its inputs and builds the `RootSet` from its roots; the bindings in `lib.rs` sit behind the crate's `python` feature.
+
 `scripts/` is research code, not library API. `sim_examples/` is the best reference for setting up and running a simulation; `data_generation/` holds the dataset generators, thin callers of `manywells.sampling`; `verification/` the scripts that run `develop` for the verifier. Tests in `tests/` follow the module layout.
 
 `specs/` holds the decided specifications: goals, the constitution, the model, sampling, verification, the architecture and the feature specs (`specs/features/`). `verification/` is the verifier, a separate package. `plans/` holds the plan of work and the backlog; plans are drafts, not specs.
@@ -50,6 +53,8 @@ On top of them:
 ## How a simulation runs
 
 The pipe is discretized into `n_cells` cells, and each grid point carries the seven state variables listed under Contracts. `SSDFSimulator(wp)` builds the well's system once (`discretization.build_system`): inflow rows at the bottom, mass, momentum and energy rows for each cell, the choke row at the top and closure relations at every point, with the boundary conditions as parameters, and an Ipopt feasibility NLP on it. `simulate(bc)` runs the root search (`solvers/roots.py`): marches from several bottomhole pressures (Newton per point, Ipopt where Newton fails) give starts for Ipopt, the solutions are merged into roots, and each root is labelled stable or unstable from the residual's Jacobian. It returns the operating point, the stable root, as a `Root`, and raises `NoOperatingPoint` (a `SimError`) if there is none; `root_set(bc)` returns every root found. `solution_as_df` turns a root into a DataFrame with a flow regime per grid point. The two-argument constructor `SSDFSimulator(wp, bc)` with `simulate()` still works, with a `DeprecationWarning`.
+
+`SSDFSimulator(wp, backend='rust')` solves the same model with the Rust core instead, for wells in the `v1.0.0` configuration (other wells raise `ValueError`), with the same inputs and outputs. It builds no CasADi system: given $p_0$ it marches the rows from the bottomhole to the wellhead, so the choke row is the only one left, and it scans that residual over $(p_s, p_r)$ for its roots. It is about 20 times faster per case than the CasADi backend.
 
 ## Contracts to preserve
 
@@ -71,6 +76,13 @@ The command under Environment and commands checks v1.0.0's own solutions, the ba
   ```console
   uv run python -m scripts.verification.develop_candidate develop.parquet
   uv run manywells-verify develop.parquet --data verification/data --name "develop (v1.0.0 configuration)"
+  ```
+
+  With `--backend rust` it writes the Rust core's roots instead, in about 10 s on one core. The CI job runs that too, and the report must also say `Verdict: PASS` with 0 failures and a stable-root rate of 100%; its one finding, a second root at `fold-1503` that the reference lacks, is known (`specs/verification.md`).
+
+  ```console
+  uv run python -m scripts.verification.develop_candidate rust.parquet --backend rust
+  uv run manywells-verify rust.parquet --data verification/data --name "Rust core (v1.0.0 configuration)"
   ```
 - **Distributions.** `uv run manywells-verify-distributions ROWS --dataset sol-1` (or `nsol-1`) compares a regenerated dataset (parquet or CSV with the datasets' feature columns and the published wells' `ID`) with the stable-root reference of the published one, weighting the candidate's rows so that its wells mix as the reference's do. `scripts/verification/regenerate_distributions.py` regenerates samples at the stable root for the published `sol-1` wells and runs the check; at 5 samples per well it takes about 17 minutes on 24 cores.
 - **Expected failures.** `verification/expected_failures.csv` lists v1.0.0's known defects on the case set: cases where its default guess reaches the trickle root or fails. `verification/build/expected_failures.py` writes it. Never add an entry to make a candidate pass.
@@ -96,7 +108,7 @@ All reference data is built from v1.0.0, which is frozen. A rebuild reproduces t
 | test vectors in `specs/model/` and `specs/model/vectors/v1_rows.json` | `specs/tools/make_v1_vectors.py` | v1.0.0 | `specs/model/README.md`, Test vectors |
 | `verification/tests/data/fixtures.npz` | `verification/build/make_test_fixtures.py` | v1.0.0 | `verification/build/README.md` |
 
-The v1.0.0 environment is a git worktree of the tag in `.worktrees/v1.0.0`, set up as `verification/build/README.md` describes. Run its scripts from the project root with `.worktrees/v1.0.0/.venv/bin/python`, never with `uv run`, because `develop`'s package has the same name.
+The v1.0.0 environment is a git worktree of the tag in `.worktrees/v1.0.0`, set up as `verification/build/README.md` describes. The Rust environment is a worktree of the old port, `rust_implementation` at `0e9e98b`, in `.worktrees/rust`: the reference's second search uses that port, never the Rust core in `rust/`, so that the reference stays independent of the core it checks. Run its scripts from the project root with `.worktrees/v1.0.0/.venv/bin/python`, never with `uv run`, because `develop`'s package has the same name.
 
 ## Done means
 
@@ -104,6 +116,7 @@ The v1.0.0 environment is a git worktree of the tag in `.worktrees/v1.0.0`, set 
 - New physics or a new model comes with a test, and with its spec change in `specs/model/` in the same commit: equation IDs, `# spec:` tags in the code and test vectors (`specs/model/README.md`; a new option's vectors come from `specs/tools/make_develop_vectors.py`). `tests/test_spec_traceability.py` and `tests/test_spec_vectors.py` pass.
 - A change to the model keeps the `v1.0.0` configuration's rows exactly v1.0.0's (the row vectors) and its verifier report at PASS with no expected failures; a new option is off in that configuration.
 - The examples in `scripts/sim_examples/` still run if you changed the public API. `tests/test_examples.py` (slow) runs each one headless.
+- A change to the Rust core keeps `cargo test --no-default-features`, the Rust row vectors in `tests/test_spec_vectors.py`, `tests/test_rust_backend.py` and the Rust candidate's verifier report (PASS, 100%, no expected failures) passing. Physics in `rust/` carries `// spec:` tags, as in Python.
 - A change to `verification/` keeps `uv run pytest verification/tests` passing and the verifier's baseline report unchanged, unless changing it was the point.
 - If the change adds a solver routine or path (a subroutine, a special-case path, a fallback, a tuning constant), state its measured gain in speed or robustness on the verifier's case set (constitution, principle 7). Bjarne decides whether the gain is large enough.
 - Your summary or PR description names every change that needs sign-off (next section).

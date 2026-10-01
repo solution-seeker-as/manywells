@@ -45,6 +45,8 @@ following command from the project root folder:
 ```console
 uv sync
 ``` 
+The package includes a Rust core (`rust/`), which `uv sync` compiles, so building from source needs a Rust toolchain
+(stable, at least 1.85, installed with [rustup](https://rustup.rs)). The same holds for the `pip install` below.
 
 ### Installation
 If you do not plan on modifying the ManyWells files, you can optionally install ManyWells as a Python package by running the following command:

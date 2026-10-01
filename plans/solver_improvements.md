@@ -4,6 +4,15 @@
 
 This note lists what a review of the Rust shooting solver found, with the evidence for each item and a proposed change. It feeds into Step 8 of `manywells-v2-plan.md` (bringing the Rust port under the verifier).
 
+**Status (2026-10-01, Step 8).** Items 1 to 5 are resolved in the Rust core (`rust/`, `specs/features/014-rust-solver.md`):
+1. each root has a label, and nothing picks roots by position;
+2. the void fraction comes from a bracketed solve, without the acceleration;
+3. the outer Brent runs in the drawdown, with a relative tolerance;
+4. a root is accepted only where $|R| \le 10^{-3} w_m$, and a cell only where its row is zero;
+5. every sign change of the scan is bracketed, and local minima are refined.
+
+Item 6 lapses: `docs/simulator_in_rust.md` was not carried over. The text below describes the port at `0e9e98b`.
+
 ## How the findings were obtained
 
 - A line-by-line JavaScript port of `manywells_rs/src/*.rs` was checked against the compiled crate on all 2,000 wells of `manywells-sol-1_config` (from Hugging Face) plus the default `WellProperties()`/`BoundaryConditions()`. The two agree on the number of roots for every well and on every root to within 1.1e-13 bar. All statistics below come from that port, run on the sol-1 configs.

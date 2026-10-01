@@ -22,7 +22,9 @@ points of the same well reuse its system: `sim.simulate(bc2)`, optionally with `
 `scripts/sim_examples/` has complete examples.
 
 A well in the `v1.0.0` configuration, which reproduces ManyWells v1.0.0 and the published datasets, is built from
-v1.0.0's parameters by `manywells.configurations.v1_well`.
+v1.0.0's parameters by `manywells.configurations.v1_well`. Such a well can also be solved by the Rust core,
+`SSDFSimulator(wp, backend='rust')`, which takes the same inputs and returns the same root set about 20 times faster;
+it refuses wells outside the `v1.0.0` configuration (`specs/features/014-rust-solver.md`).
 
 ### Multiple datapoints from multiple wells
 In order to simulate datasets similar to those provided with the publication, refer to the following scripts:

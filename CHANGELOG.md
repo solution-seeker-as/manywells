@@ -11,6 +11,8 @@ v2.0.0 may break any part of the API; every break is listed here with an old→n
 - The slip model's inclination factor no longer adds $10^{-9}$ to $\cos\theta$, so a vertical well is exactly v1.0.0's (`specs/features/002-slip-inclination.md`).
 - `water_fvf` has the right sign: water shrinks under pressure (not used by the simulator).
 - The Vazquez–Beggs separator gas-gravity correction takes $\log_{10}$ of $p_\text{sep}/114.7$, as the source does, not the natural log. `develop`'s black-oil $R_{so}$ at standard separator conditions rises by about 16% (`specs/features/007-black-oil.md`).
+- A Rust core (`rust/`, built as `manywells._core`) solves wells in the `v1.0.0` configuration: `SSDFSimulator(wp, backend='rust')`. It returns every reference root of the verifier's case set with its label, and is about 20 times faster per case than the CasADi backend (`specs/features/014-rust-solver.md`). The port it comes from (`rust_implementation`) is replaced: it used the exact solution of the energy ODE instead of v1.0.0's rows, and returned at most two unlabelled roots.
+- Installing from source needs a Rust toolchain: the package is built by maturin instead of setuptools.
 
 ### API breaks
 

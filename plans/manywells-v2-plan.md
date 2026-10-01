@@ -198,6 +198,27 @@ The checks above establish that a candidate solves the model and returns its sta
 - **Output.** Rust implementation passing CI; a list of spec/harness gaps found during the pilot, fixed before Step 9.
 - **Done when.** The verifier, not a person, is what says the Rust port is correct.
 - **Who.** Agent implements; Bjarne reviews, and adjudicates only where the Rust port and the verifier disagree on a root or a label.
+- **Status.** Implemented 2026-10-01 (`specs/features/014-rust-solver.md`, a draft for Bjarne). The port is merged into `rust/`: the crate only, keeping Kajrakso's commits. It is built as `manywells._core` by maturin and restructured into the architecture's modules, with each point's rows defined once. It runs as `SSDFSimulator(wp, backend='rust')` for wells in the `v1.0.0` configuration.
+  - **Verifier.** The core passes with no expected failures. Every one of the 200 reference roots is matched with its label (median distance 7e-14), and the stable-root rate is 136/136. The search takes 65 ms per case (median, one core), 23× faster than `develop`'s CasADi backend. The core's rows match v1.0.0's row vectors to 1e-10. The CI job `verify` runs it.
+  - **Changes from the port**, each with its measured gain in the feature spec, for Bjarne under principle 7:
+    - v1.0.0's energy rows, which the port's exact ODE solution missed by up to 0.43 K;
+    - Brent on the slip row for the void fraction, instead of a stop on the step size;
+    - the canonical choke row, with an exact stop below $p_s$;
+    - a full scan with every bracket, refinement near folds, and a drawdown ladder near $p_r$;
+    - Brent in the drawdown, with an $\lvert R\rvert$ acceptance;
+    - a check that each cell's row is zero, so that a jump is not taken for a root;
+    - a central-difference slope, labelled as the CasADi backend labels.
+
+    The port's early-stop scan, with the refinement and the ladder, also passes, at 18 ms per case, but assumes at most one negative region of $R$.
+  - **Datasets.** The branch's Rust datasets were local and never published. Regenerated with the core instead: 5 samples per published `sol-1` well, 9,920 rows in 49 s on 24 cores. The Distributions check fails narrowly: CDF gap 0.021 for PWH against a bound of 0.02 (`develop`: 0.0196). The extra rows are samples the CasADi search does not solve.
+  - **Spec and harness gaps**, to settle before Step 9 (feature spec, Findings):
+    1. `fold-1503`'s reference misses a v1.0.0 root (unstable, 128.0882 bar).
+    2. The slip law can have three void fractions at sampled states, so the root set contains roots that differ in the branch. Neither backend finds them all, and the spec says nothing about which branch is physical: a model question.
+    3. `develop`'s CasADi search misses roots that the core finds.
+    4. The case set has no low-$u$ wells with both roots within a scan step of $p_r$, no states with several void fractions, and no case with more than two roots. Its near-fold cases were placed with the old port's grid.
+    5. The Distributions check counts against a solver every row that v1.0.0 failed to solve.
+
+    `specs/verification.md`'s "Rust returns at most two roots" and `specs/architecture.md`'s "Step 7 adds the `backend` argument" are corrected.
 
 ### Step 9 — Prove the loop: add one new equation
 
