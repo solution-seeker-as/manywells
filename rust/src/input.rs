@@ -186,6 +186,13 @@ pub mod test_wells {
         (spec, op)
     }
 
+    /// W2 L-shaped at its bubble point with Haaland friction, at a fixed liquid rate of 25 kg/s (011)
+    pub fn w2_fixed_rate(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let (mut spec, op) = w2_haaland(n_cells);
+        spec.inflow = Inflow::FixedRate { w_l: 25.0 };
+        (spec, op)
+    }
+
     /// Every test well
     pub fn all(n_cells: usize) -> Vec<(&'static str, WellSpec, OperatingPoint)> {
         let named = |name, (spec, op)| (name, spec, op);
@@ -193,7 +200,8 @@ pub mod test_wells {
              named("w1_deviated", w1_deviated(n_cells)), named("w2_l_shaped", w2_l_shaped(n_cells)),
              named("w1_real_gas", w1_real_gas(n_cells)), named("w1_black_oil", w1_black_oil(n_cells)),
              named("w2_bubble_point", w2_bubble_point(n_cells)), named("w1_develop", w1_develop(n_cells)),
-             named("w2_haaland", w2_haaland(n_cells)), named("w1_cold_lift_gas", w1_cold_lift_gas(n_cells))]
+             named("w2_haaland", w2_haaland(n_cells)), named("w1_cold_lift_gas", w1_cold_lift_gas(n_cells)),
+             named("w2_fixed_rate", w2_fixed_rate(n_cells))]
     }
 }
 

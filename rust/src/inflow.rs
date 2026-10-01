@@ -4,8 +4,8 @@
 //
 // Created 17 July 2026 (Rust port, rust_implementation), restructured 01 October 2026
 
-//! The bottom boundary (specs/model/inflow.md): the reservoir liquid rate at the bottomhole pressure. The gas rate
-//! follows from the fluid (INF-4, pvt/fluid.rs).
+//! The bottom boundary (specs/model/inflow.md): the reservoir liquid rate at the bottomhole pressure, or a fixed one.
+//! The gas rate follows from the fluid (INF-4, pvt/fluid.rs).
 
 #[derive(Clone, Copy, Debug)]
 pub enum Inflow {
@@ -13,6 +13,8 @@ pub enum Inflow {
     Vogel { w_l_max: f64 },
     /// Linear inflow, with the liquid productivity index (kg/s/bar)
     ProductivityIndex { k_l: f64 },
+    /// A fixed liquid rate (kg/s), whatever the bottomhole pressure
+    FixedRate { w_l: f64 },
 }
 
 impl Inflow {
@@ -24,6 +26,7 @@ impl Inflow {
                 w_l_max * (1.0 - 0.2 * r - 0.8 * (r * r)) // spec: INF-1
             }
             Inflow::ProductivityIndex { k_l } => k_l * (p_r - p), // spec: INF-2
+            Inflow::FixedRate { w_l } => w_l,                     // spec: INF-8
         }
     }
 }
@@ -36,6 +39,11 @@ mod tests {
     fn no_flow_at_reservoir_pressure() {
         assert_eq!(Inflow::Vogel { w_l_max: 30.0 }.liquid_rate(170.0, 170.0), 0.0);
         assert_eq!(Inflow::ProductivityIndex { k_l: 0.5 }.liquid_rate(170.0, 170.0), 0.0);
+    }
+
+    #[test]
+    fn a_fixed_rate_does_not_depend_on_the_pressure() {
+        assert_eq!(Inflow::FixedRate { w_l: 12.0 }.liquid_rate(170.0, 170.0), 12.0);
     }
 
     #[test]

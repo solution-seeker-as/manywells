@@ -23,7 +23,7 @@ from dataclasses import replace
 
 from manywells.choke import BernoulliChokeModel, SimpsonChokeModel
 from manywells.configurations import v1_well
-from manywells.inflow import FixedFlowRate, InflowModel, ProductivityIndex, Vogel
+from manywells.inflow import InflowModel, ProductivityIndex, Vogel
 from manywells.pvt.dead_oil import dead_oil_surface_tension
 from manywells.simulator import BoundaryConditions, NoOperatingPoint, SSDFSimulator, WellProperties
 from manywells.slip import SlipModel
@@ -124,8 +124,6 @@ def test_the_rust_backend_refuses_what_it_does_not_cover():
         SSDFSimulator(replace(wp, inflow=LinearInflow()), backend='rust')
     with pytest.raises(ValueError, match='C_0 >= 1'):
         SSDFSimulator(replace(wp, slip=SlipModel(C_0_annular=0.9)), backend='rust')
-    with pytest.raises(ValueError, match='Rust core cannot solve'):
-        SSDFSimulator(replace(wp, inflow=FixedFlowRate(w_l_const=10.0)), backend='rust')  # Step 9: not ported yet
     with pytest.raises(ValueError, match='backend'):
         SSDFSimulator(wp, backend='fortran')
 

@@ -90,7 +90,9 @@ fn shoot(m: &Marcher) -> Vec<(f64, bool)> {
     }
     let xtol_refine = REFINE_XTOL * (op.p_r - op.p_s);
     for j in 1..n {
-        if r[j] >= 0.0 && r[j - 1] >= r[j] && r[j + 1] >= r[j] {
+        // A local minimum, strict on one side at least: with a fixed rate (INF-8), R is the same constant at every
+        // sample whose march falls below p_s, a flat stretch that holds no root
+        if r[j] >= 0.0 && r[j - 1] >= r[j] && r[j + 1] >= r[j] && (r[j - 1] > r[j] || r[j + 1] > r[j]) {
             let mut f = |p: f64| residual(p).unwrap_or(f64::INFINITY);
             let (q, r_q) = minimize(&mut f, p[j - 1], p[j + 1], xtol_refine, 200, 0.0);
             if r_q < 0.0 {

@@ -40,26 +40,16 @@ CORE_CLASSES = {'geometry': (WellGeometry,), 'fluid': (FluidModel,), 'friction':
                 'choke': (SimpsonChokeModel, BernoulliChokeModel)}
 
 
-def _not_yet_ported(wp) -> list:
-    """The options of wp that the core does not implement yet. Step 9 ports them one feature spec at a time."""
-    geo, fluid, thermal, out = wp.geometry, wp.fluid, wp.thermal, []
-    if type(wp.inflow) is FixedFlowRate:
-        out.append('a fixed liquid rate (011)')
-    return out
-
-
 def not_in_core(wp) -> list:
     """Every part of wp that the core cannot solve, as readable strings (empty if it can solve the well)."""
     out = [f'{name}: {type(getattr(wp, name)).__name__} is not one of the core\'s classes'
            for name, classes in CORE_CLASSES.items() if type(getattr(wp, name)) not in classes]
-    if out:
-        return out
     # The core's void-fraction solve brackets the slip law on [0, 1], which needs C_0 >= 1 and v_inf >= 0 in every
     # regime (manywells._core, march.rs)
     slip = wp.slip
-    if min(slip.C_0_annular, slip.C_0_slug, slip.C_0_bubbly) < 1 or slip.v_inf_annular < 0:
+    if type(slip) is SlipModel and (min(slip.C_0_annular, slip.C_0_slug, slip.C_0_bubbly) < 1 or slip.v_inf_annular < 0):
         out.append(f'slip: the core needs every C_0 >= 1 and v_inf_annular >= 0 ({slip})')
-    return out + _not_yet_ported(wp)
+    return out
 
 
 def core_well(wp) -> '_core.Well':
@@ -67,21 +57,28 @@ def core_well(wp) -> '_core.Well':
     missing = not_in_core(wp)
     if missing:
         raise ValueError('the Rust core cannot solve this well: ' + '; '.join(missing) + '. Use backend="casadi".')
-    geo, fluid, inflow, choke = wp.geometry, wp.fluid, wp.inflow, wp.choke
-    vogel = isinstance(inflow, Vogel)
+    geo, fluid, thermal, slip, choke = wp.geometry, wp.fluid, wp.thermal, wp.slip, wp.choke
     return _core.Well(md=list(geo.md), tvd=list(geo.tvd), D=geo.D,
                       rho_o=fluid.rho_o, rho_g=fluid.rho_g, rho_w=fluid.rho_w, gor=fluid.gor, wlr=fluid.wlr,
                       cp_g=fluid.cp_g, cp_o=fluid.cp_o, cp_w=fluid.cp_w, ideal_gas=fluid.ideal_gas,
-                      oil_model=fluid.oil_model, p_sep=fluid.p_sep, T_sep=fluid.T_sep, p_bubble=fluid.p_bubble,
-                      surface_tension_model=fluid.surface_tension_model,
-                      **_friction(wp.friction), h=wp.thermal.h,
-                      frictional_heating=wp.thermal.frictional_heating, gravity_term=wp.thermal.gravity_term,
-                      lift_gas_mixing=wp.thermal.lift_gas_mixing,
-                      C_0_annular=wp.slip.C_0_annular, C_0_slug=wp.slip.C_0_slug, C_0_bubbly=wp.slip.C_0_bubbly,
-                      v_inf_annular=wp.slip.v_inf_annular,
-                      inflow='vogel' if vogel else 'pi', inflow_coefficient=inflow.w_l_max if vogel else inflow.k_l,
-                      choke='simpson' if isinstance(choke, SimpsonChokeModel) else 'bernoulli', K_c=choke.K_c,
+                      oil_model=fluid.oil_model, surface_tension_model=fluid.surface_tension_model, p_sep=fluid.p_sep,
+                      T_sep=fluid.T_sep, p_bubble=fluid.p_bubble,
+                      **_friction(wp.friction),
+                      h=thermal.h, frictional_heating=thermal.frictional_heating, gravity_term=thermal.gravity_term,
+                      lift_gas_mixing=thermal.lift_gas_mixing,
+                      C_0_annular=slip.C_0_annular, C_0_slug=slip.C_0_slug, C_0_bubbly=slip.C_0_bubbly,
+                      v_inf_annular=slip.v_inf_annular,
+                      **_inflow(wp.inflow),
+                      choke='simpson' if type(choke) is SimpsonChokeModel else 'bernoulli', K_c=choke.K_c,
                       profile=choke.chk_profile)
+
+
+def _inflow(inflow) -> dict:
+    if type(inflow) is Vogel:
+        return {'inflow': 'vogel', 'inflow_coefficient': inflow.w_l_max}
+    if type(inflow) is ProductivityIndex:
+        return {'inflow': 'pi', 'inflow_coefficient': inflow.k_l}
+    return {'inflow': 'fixed', 'inflow_coefficient': inflow.w_l_const}
 
 
 def _friction(friction) -> dict:

@@ -312,20 +312,9 @@ RUST_NOT_IN_CORE = {
     'INF-3': NOT_ON_DEVELOP['INF-3'],
 }
 
-# Step 9 ports develop's model to the core one feature spec at a time: the tables whose functions it has not got yet
-RUST_NOT_PORTED = {}
-
-
 def rust_vector_params():
-    out = []
-    for table in vector_tables():
-        if table.heading in RUST_NOT_IN_CORE:
-            continue
-        marks = ([pytest.mark.xfail(strict=True, raises=ValueError,
-                                    reason=f'not in the core until feature {RUST_NOT_PORTED[table.heading]}')]
-                 if table.heading in RUST_NOT_PORTED else [])
-        out.append(pytest.param(table, id=f'{table.source}: {table.heading}', marks=marks))
-    return out
+    return [pytest.param(table, id=f'{table.source}: {table.heading}') for table in vector_tables()
+            if table.heading not in RUST_NOT_IN_CORE]
 
 
 @pytest.mark.parametrize('table', rust_vector_params())
@@ -338,7 +327,6 @@ def test_every_table_has_a_rust_adapter():
     headings = {t.heading for t in vector_tables()}
     assert not set(RUST_ADAPTERS) & set(RUST_NOT_IN_CORE)
     assert headings == set(RUST_ADAPTERS) | set(RUST_NOT_IN_CORE), headings ^ (set(RUST_ADAPTERS) | set(RUST_NOT_IN_CORE))
-    assert set(RUST_NOT_PORTED) <= set(RUST_ADAPTERS)
 
 
 # Row vectors (specs/model/discretization.md), on develop's v1.0.0 configuration. develop's rows that generalize

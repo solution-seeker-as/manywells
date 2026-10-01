@@ -30,27 +30,13 @@ from manywells.solvers.rust import RustRootFinder
 from .backend_cases import (COMPARISON, FEATURES, OVERLAYS, ROOT_ROW, ROW_REL, casadi_rows, compare_case,
                             comparison_set, features, matrix, report, row_difference, trial_state)
 
-# Step 9 ports develop's model one feature spec at a time: the features whose options the core refuses so far. A well
-# that uses one of them must be refused, and once a feature is ported its number must go from here.
-NOT_YET_PORTED = {'011'}
-
 MATRIX = matrix()
-
-
-def refused(wp) -> bool:
-    if features(wp) & NOT_YET_PORTED:
-        with pytest.raises(ValueError, match='Rust core cannot solve'):
-            RustRootFinder(wp)
-        return True
-    return False
 
 
 @pytest.mark.parametrize('configuration', MATRIX, ids=lambda c: c.name)
 def test_rows_agree(configuration):
     """The core's rows are the CasADi system's at the same state, with the same IDs in the same order."""
     wp, bc = configuration.inputs()
-    if refused(wp):
-        return
     X = trial_state(wp, bc)
     ids, rust = RustRootFinder(wp).rows(bc, X)
     casadi_ids, casadi = casadi_rows(build_system(wp), bc, X)
@@ -63,8 +49,6 @@ def test_rows_agree(configuration):
 def test_the_cores_march_zeroes_the_casadi_rows(configuration):
     """The core's march from p_0 solves every row of the system but the choke row; the CasADi rows agree."""
     wp, bc = configuration.inputs()
-    if refused(wp):
-        return
     finder, system = RustRootFinder(wp), build_system(wp)
     for fraction in (0.7, 0.85, 0.5, 0.95, 0.3):
         x, failed, below = finder.march(bc, bc.p_s + fraction * (bc.p_r - bc.p_s))
@@ -90,7 +74,7 @@ def test_the_matrix_switches_every_option():
 
 @pytest.fixture(scope='module')
 def comparisons():
-    cases = [c for c in comparison_set() if not features(c.inputs()[0]) & NOT_YET_PORTED]
+    cases = comparison_set()
     with multiprocessing.Pool(min(len(cases), os.cpu_count() or 1)) as pool:
         return pool.map(compare_case, cases, chunksize=1)
 

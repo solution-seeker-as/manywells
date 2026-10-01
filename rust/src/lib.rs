@@ -129,7 +129,8 @@ mod _core {
             let inflow = match inflow {
                 "vogel" => Inflow::Vogel { w_l_max: inflow_coefficient },
                 "pi" => Inflow::ProductivityIndex { k_l: inflow_coefficient },
-                m => return Err(PyValueError::new_err(format!("inflow {m:?} is not 'vogel' or 'pi'"))),
+                "fixed" => Inflow::FixedRate { w_l: inflow_coefficient },
+                m => return Err(PyValueError::new_err(format!("inflow {m:?} is not 'vogel', 'pi' or 'fixed'"))),
             };
             let model = match choke {
                 "simpson" => ChokeModel::Simpson,

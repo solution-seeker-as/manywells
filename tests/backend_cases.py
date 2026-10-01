@@ -134,8 +134,8 @@ def lift_gas_temperature(wp, bc):
 
 
 def fixed_rate(wp, bc):
-    """The liquid rate the inflow gives at 60% of the way from p_s to p_r, fixed."""
-    w = float(wp.inflow.liquid_mass_flow_rate(bc.p_s + 0.6 * (bc.p_r - bc.p_s), bc.p_r))
+    """The liquid rate the inflow gives at 85% of the way from p_s to p_r, fixed: a rate the well can lift."""
+    w = float(wp.inflow.liquid_mass_flow_rate(bc.p_s + 0.85 * (bc.p_r - bc.p_s), bc.p_r))
     return replace(wp, inflow=FixedFlowRate(w_l_const=w)), bc
 
 
