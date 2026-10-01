@@ -38,16 +38,21 @@ class WellDiscarded(Exception):
 
 @dataclass(frozen=True)
 class Settings:
-    """What a generator run needs besides the wells: the configuration, the grid and the dataset's seed (SMP-31)."""
+    """
+    What a generator run needs besides the wells: the configuration, the grid and the dataset's seed (SMP-31), and
+    the simulator backend, 'casadi' or 'rust' (the v1.0.0 configuration only), which solves the same model.
+    """
     seed: int
     configuration: str = V1
     n_cells: int = N_CELLS
+    backend: str = 'casadi'
 
 
 def solve(draw, fractions, bc, settings: Settings, x_guess=None):
     """The operating point of a draw's well at fractions and bc, or None if there is none (or the well is invalid)."""
     try:
-        sim = SSDFSimulator(well_properties(draw, fractions, settings.configuration, settings.n_cells))
+        sim = SSDFSimulator(well_properties(draw, fractions, settings.configuration, settings.n_cells),
+                            backend=settings.backend)
         return sim.simulate(bc, x_guess=x_guess)
     except (SimError, ValueError):
         return None

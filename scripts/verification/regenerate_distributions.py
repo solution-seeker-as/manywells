@@ -11,14 +11,15 @@ verifier's Distributions check on them (specs/verification.md, Distributions; pl
 item 7). From the project root:
 
     uv run python -m scripts.verification.regenerate_distributions --config <manywells-sol-1_config.zip> \
-        --samples 8 --out data/regenerated-sol-1.parquet
+        --samples 8 --out data/regenerated-sol-1.parquet [--backend rust]
 
 The wells are the published ones (not newly sampled), because the distribution reference is the published data
 (verification/build/distribution_reference.py). Each well's samples are drawn by the ported sampler (SMP-18 to
 SMP-22, seeded by SMP-31) and solved by develop's simulator from the well's operating point at u = 0.5, as
 SMP-28's generator started them; failed solves and rows with w_m < 0.1 kg/s are dropped, as there. The well-level
 filters of SMP-28 step 3 are not applied: the published wells passed them. Without --config, the config is fetched
-from the public Hugging Face dataset solution-seeker-as/manywells.
+from the public Hugging Face dataset solution-seeker-as/manywells. The draws do not depend on the backend or on
+the solves, so each row's ID and sample index k identify it across backends.
 """
 
 import argparse
@@ -57,7 +58,7 @@ def regenerate(task):
         if r['WTOT'] < 0.1:
             dropped += 1
             continue
-        rows.append(r | {'ID': row['ID']})
+        rows.append(r | {'ID': row['ID'], 'k': k})
     return rows, {'ID': row['ID'], 'first': True, 'failed': failed, 'dropped': dropped}
 
 
@@ -66,6 +67,7 @@ def main():
     parser.add_argument('--config', type=Path, help='manywells-sol-1_config.zip (default: from Hugging Face)')
     parser.add_argument('--samples', type=int, default=8, help='samples per well')
     parser.add_argument('--wells', type=int, help='only the first WELLS wells')
+    parser.add_argument('--backend', choices=('casadi', 'rust'), default='casadi')
     parser.add_argument('--processes', type=int, default=multiprocessing.cpu_count())
     parser.add_argument('--out', type=Path, required=True, help='parquet file for the regenerated rows')
     args = parser.parse_args()
@@ -75,12 +77,12 @@ def main():
         from huggingface_hub import hf_hub_download
         config = hf_hub_download('solution-seeker-as/manywells', 'data/manywells-sol-1_config.zip', repo_type='dataset')
     wells = pd.read_csv(config, compression='zip').to_dict('records')[:args.wells]
-    settings = Settings(seed=SEED)
+    settings = Settings(seed=SEED, backend=args.backend)
 
     t0 = time.perf_counter()
     with multiprocessing.Pool(args.processes) as pool:
         results = pool.map(regenerate, [(w, args.samples, settings) for w in wells], chunksize=1)
-    rows = pd.DataFrame([r for rs, _ in results for r in rs], columns=list(FEATURES) + ['ID'])
+    rows = pd.DataFrame([r for rs, _ in results for r in rs], columns=list(FEATURES) + ['ID', 'k'])
     counts = pd.DataFrame([c for _, c in results])
     args.out.parent.mkdir(parents=True, exist_ok=True)
     rows.to_parquet(args.out, index=False)
