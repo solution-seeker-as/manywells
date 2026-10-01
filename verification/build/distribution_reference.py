@@ -13,7 +13,8 @@ verification/data/distribution_reference.json. Runs in the develop environment:
 
 <dir> holds manywells-sol-1.zip, manywells-nsol-1.zip and manywells-nscl-1.zip from the
 solution-seeker-as/manywells dataset. For sol-1 and nsol-1, the rows on the trickle-root signature
-(PWH within 10 mbar of PDC) are removed and the rest summarized. The signature catches most trickle
+(PWH within 10 mbar of PDC) are removed and the rest summarized, with the rows of each well (for the
+check's weights). The signature catches most trickle
 rows but not all (47 of the 64 unstable roots in the verifier's case set, and none of its 136 stable
 roots), so the counts are lower bounds. The script also prints the counts for all three datasets,
 for docs/corrigendum.md, and how the check's bounds compare with sampling noise and with the
@@ -28,7 +29,7 @@ import numpy as np
 import pandas as pd
 
 from manywells_verify.distributions import (FEATURES, MAX_CDF_GAP, MAX_CORR_GAP, REFERENCE, TRICKLE_DP, compare,
-                                            summarize, trickle_signature)
+                                            summarize, trickle_signature, well_weights)
 
 
 def main():
@@ -61,6 +62,11 @@ def main():
         print(f'  published rows incl. signature rows: largest CDF gap {spike["worst_cdf"][1]:.4f} '
               f'({spike["worst_cdf"][0]}), rank correlation {spike["worst_corr"][2]:.4f}; '
               f'bounds {MAX_CDF_GAP}, {MAX_CORR_GAP}')
+        # A regeneration's design: five rows per well; unweighted, and weighted to the reference's mix of wells
+        five = stable.sample(frac=1, random_state=rng.integers(2**31)).groupby('ID').head(5)
+        equal, weighted = compare(ref, five), compare(ref, five, well_weights(ref, five))
+        print(f'  5 rows per well: unweighted CDF gap {equal["worst_cdf"][1]:.4f}, rank correlation '
+              f'{equal["worst_corr"][2]:.4f}; weighted {weighted["worst_cdf"][1]:.4f}, {weighted["worst_corr"][2]:.4f}')
 
     REFERENCE.write_text(json.dumps(out) + '\n')
     print(f'Wrote {REFERENCE} ({REFERENCE.stat().st_size / 1e3:.0f} kB)')

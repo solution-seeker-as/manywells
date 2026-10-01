@@ -17,6 +17,13 @@ if, for every feature, its empirical CDF differs from the reference's by at most
 values (a Kolmogorov-Smirnov distance on a 1% grid), and no rank correlation differs by more than
 MAX_CORR_GAP.
 
+The candidate's rows are weighted so that its wells mix as the reference's do (decided by Bjarne,
+2026-10-01): a row of well k weighs n_ref(k) / n_cand(k), its well's rows in the reference over its
+rows in the candidate, and a well with no reference rows weighs nothing. The reference weights each
+well by its published rows, which the trickle signature reduced in some wells, while a regeneration
+draws the same number of samples per well; unweighted, even the reference's own rows drawn that way
+fail. The candidate therefore needs the reference's well IDs, in an ID column.
+
     manywells-verify-distributions CANDIDATE --dataset sol-1
 """
 
@@ -43,24 +50,72 @@ def trickle_signature(df: pd.DataFrame) -> pd.Series:
 
 
 def summarize(df: pd.DataFrame) -> dict:
-    """Percentile values, the empirical CDF at them, and the Spearman correlation matrix."""
+    """Percentile values, the empirical CDF at them, the Spearman correlation matrix, and the rows per well."""
     features = {}
     for f in FEATURES:
         x = np.sort(df[f].to_numpy(dtype=float))
         q = np.percentile(x, PERCENTILES)
         features[f] = {'values': q.tolist(), 'cdf': (np.searchsorted(x, q, side='right') / len(x)).tolist()}
     corr = df[list(FEATURES)].corr(method='spearman').fillna(0.0)
-    return {'rows': int(len(df)), 'features': features, 'spearman': corr.to_numpy().round(6).tolist()}
+    out = {'rows': int(len(df)), 'features': features, 'spearman': corr.to_numpy().round(6).tolist()}
+    if 'ID' in df:
+        out['well_rows'] = {str(k): int(v) for k, v in df.groupby('ID').size().items()}
+    return out
 
 
-def compare(reference: dict, df: pd.DataFrame) -> dict:
-    """CDF gap per feature and the largest rank-correlation gap of a candidate against a reference summary."""
+def well_weights(reference: dict, df: pd.DataFrame) -> np.ndarray:
+    """Row weights that mix the candidate's wells as the reference's: n_ref(well) / n_cand(well) per row."""
+    if 'ID' not in df:
+        raise ValueError('the candidate rows need an ID column with the reference\'s well IDs')
+    n_ref = df['ID'].map(lambda k: reference['well_rows'].get(str(int(k)), 0)).to_numpy(dtype=float)
+    n_cand = df.groupby('ID')['ID'].transform('size').to_numpy(dtype=float)
+    return n_ref / n_cand
+
+
+def weighted_cdf(x, w, q) -> np.ndarray:
+    """The weighted empirical CDF of x at the points q (with equal weights, the empirical CDF)."""
+    order = np.argsort(x, kind='mergesort')
+    xs, cw = x[order], np.cumsum(w[order])
+    k = np.searchsorted(xs, q, side='right')
+    return np.where(k > 0, cw[np.maximum(k - 1, 0)], 0.0) / cw[-1]
+
+
+def weighted_ranks(x, w) -> np.ndarray:
+    """Weighted mid-ranks: the weight below each value plus half the weight at it (ties share one rank)."""
+    order = np.argsort(x, kind='mergesort')
+    xs, ws = x[order], w[order]
+    _, start, counts = np.unique(xs, return_index=True, return_counts=True)
+    cw = np.concatenate([[0.0], np.cumsum(ws)])
+    mid = cw[start] + (cw[start + counts] - cw[start]) / 2
+    ranks = np.empty(len(x))
+    ranks[order] = np.repeat(mid, counts)
+    return ranks
+
+
+def weighted_spearman(df: pd.DataFrame, w) -> np.ndarray:
+    """Spearman's rank correlation with row weights: the weighted Pearson correlation of weighted mid-ranks."""
+    R = np.column_stack([weighted_ranks(df[f].to_numpy(dtype=float), w) for f in FEATURES])
+    R = R - (w @ R) / w.sum()
+    C = (R * w[:, None]).T @ R
+    sd = np.sqrt(np.diag(C))
+    with np.errstate(invalid='ignore', divide='ignore'):
+        corr = C / np.outer(sd, sd)
+    return np.nan_to_num(corr, nan=0.0)
+
+
+def compare(reference: dict, df: pd.DataFrame, weights=None) -> dict:
+    """
+    CDF gap per feature and the largest rank-correlation gap of a candidate against a reference summary,
+    with optional row weights (well_weights); without them every row weighs the same.
+    """
+    w = np.ones(len(df)) if weights is None else np.asarray(weights, dtype=float)
+    keep = w > 0
+    df, w = df[keep], w[keep]
     gaps = {}
     for f in FEATURES:
-        x = np.sort(df[f].to_numpy(dtype=float))
         q, F_ref = np.array(reference['features'][f]['values']), np.array(reference['features'][f]['cdf'])
-        gaps[f] = float(np.max(np.abs(np.searchsorted(x, q, side='right') / len(x) - F_ref)))
-    corr = df[list(FEATURES)].corr(method='spearman').fillna(0.0).to_numpy()
+        gaps[f] = float(np.max(np.abs(weighted_cdf(df[f].to_numpy(dtype=float), w, q) - F_ref)))
+    corr = weighted_spearman(df, w)
     diff = np.abs(corr - np.array(reference['spearman']))
     i, j = np.unravel_index(np.argmax(diff), diff.shape)
     worst_cdf = max(gaps, key=gaps.get)
@@ -91,7 +146,7 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     reference = json.loads(args.reference.read_text())['datasets'][args.dataset]
     df = pd.read_parquet(args.candidate) if args.candidate.suffix == '.parquet' else pd.read_csv(args.candidate)
-    result = compare(reference, df)
+    result = compare(reference, df, well_weights(reference, df))
     print(report(result, args.dataset, len(df)))
     return 0 if result['passed'] else 1
 
