@@ -54,19 +54,17 @@ pub struct Search {
 /// of the top sample. A negative region narrower than the spacing, near the fold where two roots merge, leaves R
 /// positive at every sample but with a local minimum: a golden-section search between the minimum's neighbours looks
 /// for a negative R there, and Brent then runs on both sides of it.
-fn shoot(m: &Marcher) -> Result<Vec<(f64, bool)>, String> {
+///
+/// Where a march leaves the range of the closures, R is not finite, and the sample is left out: through choked cells
+/// just above p_s, frictional heating can heat the flow past the range of the surface tension correlation.
+fn shoot(m: &Marcher) -> Vec<(f64, bool)> {
     let op = m.op;
     let p_lo = op.p_s + 1e-3;
     let d_hi = 1e-6; // Drawdown of the top sample (bar)
     let p_hi = op.p_r - d_hi;
     let step = (p_hi - p_lo) / SCAN_INTERVALS as f64;
-    let residual = |p: f64| -> Result<f64, String> {
-        match m.residual(p) {
-            Some((r, _)) => Ok(r),
-            None => Err(format!("the shooting residual is not finite at p_0 = {p} bar")),
-        }
-    };
-    let brent_r = |p: f64| residual(p).map_err(|_| RootError::NoSignChange);
+    let residual = |p: f64| m.residual(p).map(|(r, _)| r);
+    let brent_r = |p: f64| residual(p).ok_or(RootError::NoSignChange);
 
     // The scan, from p_s up to p_r, with the ladder in the top interval
     let mut p: Vec<f64> = (0..=SCAN_INTERVALS).rev().map(|k| p_hi - step * k as f64).collect();
@@ -76,7 +74,12 @@ fn shoot(m: &Marcher) -> Result<Vec<(f64, bool)>, String> {
         d /= 2.0;
     }
     p.sort_by(f64::total_cmp);
-    let r: Vec<f64> = p.iter().map(|&p| residual(p)).collect::<Result<_, _>>()?;
+    let n_samples = p.len();
+    let (p, r): (Vec<f64>, Vec<f64>) = p.into_iter().filter_map(|p| residual(p).map(|r| (p, r))).unzip();
+    m.count(|c| c.non_finite += n_samples - p.len());
+    if p.len() < 2 {
+        return Vec::new();
+    }
     let n = p.len() - 1;
 
     let mut brackets = Vec::new(); // (a, b, rising): a sign change on [a, b], where R rises if it is negative at a
@@ -109,7 +112,7 @@ fn shoot(m: &Marcher) -> Result<Vec<(f64, bool)>, String> {
     }
     roots.sort_by(|x, y| x.0.total_cmp(&y.0));
     roots.dedup_by(|x, y| x.0 == y.0);
-    Ok(roots)
+    roots
 }
 
 /// A root at p_0, with its outputs, or None if its march fails or R is not close enough to zero there
@@ -145,7 +148,7 @@ pub fn root_set(spec: &WellSpec, op: &OperatingPoint) -> Result<Search, String> 
     spec.check()?;
     op.check()?;
     let m = Marcher::new(spec, op);
-    let found = shoot(&m)?;
+    let found = shoot(&m);
     let n = found.len();
     let roots: Vec<Root> = found.into_iter().filter_map(|(p_0, rising)| root_at(&m, p_0, rising)).collect();
     Ok(Search { rejected: n - roots.len(), roots, counts: m.counts() })

@@ -128,7 +128,8 @@ mod _core {
             let c = search.counts;
             let counts = HashMap::from([("marches", c.marches), ("states", c.states), ("rejected", search.rejected),
                                         ("temperature_solves", c.temperature_solves), ("step_outs", c.step_outs),
-                                        ("temperature_failures", c.temperature_failures)]);
+                                        ("temperature_failures", c.temperature_failures),
+                                        ("non_finite", c.non_finite)]);
             Ok((roots, counts))
         }
 

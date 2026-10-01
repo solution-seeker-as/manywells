@@ -73,6 +73,8 @@ pub struct Counts {
     /// Temperature solves whose bracket needed steps beyond max(T_{i-1}, T_a), and those that failed
     pub step_outs: usize,
     pub temperature_failures: usize,
+    /// Samples of the scan where R is not finite, which it leaves out (shoot.rs)
+    pub non_finite: usize,
 }
 
 pub struct Marcher<'a> {
@@ -90,7 +92,7 @@ impl<'a> Marcher<'a> {
         self.counts.get()
     }
 
-    fn count(&self, f: impl FnOnce(&mut Counts)) {
+    pub fn count(&self, f: impl FnOnce(&mut Counts)) {
         let mut c = self.counts.get();
         f(&mut c);
         self.counts.set(c);
