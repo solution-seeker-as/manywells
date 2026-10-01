@@ -87,8 +87,9 @@ def core_well(wp) -> '_core.Well':
         raise ValueError('the Rust core cannot solve this well: ' + '; '.join(missing) + '. Use backend="casadi".')
     geo, fluid, inflow, choke = wp.geometry, wp.fluid, wp.inflow, wp.choke
     vogel = isinstance(inflow, Vogel)
-    return _core.Well(L=geo.L, D=geo.D, n_cells=geo.n_cells, rho_l=fluid.rho_l, R_s=fluid.R_s, cp_g=fluid.cp_g,
-                      cp_l=fluid.cp_l, f_g=fluid.f_g, f_D=wp.friction.f_D, h=wp.thermal.h,
+    return _core.Well(L=geo.L, D=geo.D, n_cells=geo.n_cells,
+                      rho_o=fluid.rho_o, rho_g=fluid.rho_g, rho_w=fluid.rho_w, gor=fluid.gor, wlr=fluid.wlr,
+                      cp_g=fluid.cp_g, cp_o=fluid.cp_o, cp_w=fluid.cp_w, f_D=wp.friction.f_D, h=wp.thermal.h,
                       inflow='vogel' if vogel else 'pi', inflow_coefficient=inflow.w_l_max if vogel else inflow.k_l,
                       choke='simpson' if isinstance(choke, SimpsonChokeModel) else 'bernoulli', K_c=choke.K_c,
                       profile=choke.chk_profile)

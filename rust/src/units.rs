@@ -9,5 +9,15 @@
 /// Standard acceleration of gravity (m/s²)
 pub const STD_GRAVITY: f64 = 9.80665;
 
+/// Universal gas constant (J/(kmol K))
+pub const R_UNIVERSAL: f64 = 8314.46;
+
+/// Molecular weight of air (kg/kmol)
+pub const M_AIR: f64 = 28.97;
+
+/// Reference pressure (Pa) and temperature (K) of the standard conditions
+pub const P_REF: f64 = 101_325.0;
+pub const T_REF: f64 = 288.15;
+
 /// Pascal per bar
 pub const CF_BAR: f64 = 1e5;

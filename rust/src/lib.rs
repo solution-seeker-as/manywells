@@ -41,7 +41,8 @@ mod _core {
     use crate::inflow::Inflow;
     use crate::input::{OperatingPoint, WellSpec};
     use crate::march::Marcher;
-    use crate::pvt::{fluid::Fluid, gas, oil};
+    use crate::pvt::fluid::{Fluid, FluidInputs};
+    use crate::pvt::{gas, oil};
     use crate::shoot;
     use crate::slip;
     use crate::smoothing;
@@ -78,11 +79,12 @@ mod _core {
     #[pymethods]
     impl Well {
         #[new]
-        #[pyo3(signature = (*, L, D, n_cells, rho_l, R_s, cp_g, cp_l, f_g, f_D, h, inflow, inflow_coefficient, choke,
-                            K_c, profile))]
+        #[pyo3(signature = (*, L, D, n_cells, rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, f_D, h, inflow,
+                            inflow_coefficient, choke, K_c, profile))]
         #[allow(non_snake_case, clippy::too_many_arguments)]
-        fn new(L: f64, D: f64, n_cells: usize, rho_l: f64, R_s: f64, cp_g: f64, cp_l: f64, f_g: f64, f_D: f64, h: f64,
-               inflow: &str, inflow_coefficient: f64, choke: &str, K_c: f64, profile: &str) -> PyResult<Self> {
+        fn new(L: f64, D: f64, n_cells: usize, rho_o: f64, rho_g: f64, rho_w: f64, gor: f64, wlr: f64, cp_g: f64,
+               cp_o: f64, cp_w: f64, f_D: f64, h: f64, inflow: &str, inflow_coefficient: f64, choke: &str, K_c: f64,
+               profile: &str) -> PyResult<Self> {
             let inflow = match inflow {
                 "vogel" => Inflow::Vogel { w_l_max: inflow_coefficient },
                 "pi" => Inflow::ProductivityIndex { k_l: inflow_coefficient },
@@ -98,7 +100,7 @@ mod _core {
                 l: L,
                 d: D,
                 n_cells,
-                fluid: Fluid { rho_l, r_s: R_s, cp_g, cp_l, f_g },
+                fluid: Fluid::new(FluidInputs { rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w }),
                 f_d: f_D,
                 h,
                 inflow,
@@ -196,6 +198,11 @@ mod _core {
             "is_choked" => { let [p_in, p_out] = take(name, a)?; vec![spec.choke.is_choked(p_in, p_out) as u8 as f64] }
             "liquid_rate" => { let [p, p_r] = take(name, a)?; vec![spec.inflow.liquid_rate(p, p_r)] }
             "reservoir_gas_rate" => { let [w_res] = take(name, a)?; vec![spec.fluid.reservoir_gas_rate(w_res)] }
+            "gas_parameters" => { take::<0>(name, a)?; vec![spec.fluid.sg_gas, spec.fluid.m_g, spec.fluid.r_s] }
+            "fluid_parameters" => {
+                take::<0>(name, a)?;
+                vec![spec.fluid.f_g, spec.fluid.rho_l, spec.fluid.cp_l, spec.fluid.x_o]
+            }
             "slip_parameters" => {
                 let [v_g, v_l, alpha, rho_g, rho_l, sigma, d] = take(name, a)?;
                 let (c_0, v_inf) = slip::identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, d);

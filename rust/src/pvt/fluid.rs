@@ -5,20 +5,60 @@
 // Created 01 October 2026
 
 //! The fluid: the one interface to the fluid properties that the rest of the core calls, as FluidModel in
-//! src/manywells/pvt/fluid.py. So far the v1.0.0 configuration: an ideal gas, and a dead oil that is the whole liquid.
+//! src/manywells/pvt/fluid.py. It is given by the densities of oil, gas and water at standard conditions, the
+//! gas-oil and water-liquid ratios and the heat capacities, from which it derives the gas's specific gravity and gas
+//! constant, the liquid at standard conditions and the inflow's gas mass fraction, with the same arithmetic as
+//! FluidModel. So far an ideal gas, and a dead oil mixed with water as one incompressible liquid.
 
-use crate::pvt::{gas, mixture};
+use crate::pvt::{gas, mixture, oil};
+use crate::units::{M_AIR, P_REF, R_UNIVERSAL, T_REF};
+
+/// The fluid's fields, as FluidModel's
+#[derive(Clone, Copy, Debug)]
+pub struct FluidInputs {
+    pub rho_o: f64, // Oil density at standard conditions (kg/m³)
+    pub rho_g: f64, // Gas density at standard conditions (kg/m³)
+    pub rho_w: f64, // Water density at standard conditions (kg/m³)
+    pub gor: f64,   // Gas-oil ratio (Sm³/Sm³)
+    pub wlr: f64,   // Water-liquid ratio, in [0, 1)
+    pub cp_g: f64,  // Heat capacities (J/(kg K)) of gas, oil and water
+    pub cp_o: f64,
+    pub cp_w: f64,
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct Fluid {
-    pub rho_l: f64, // Liquid density (kg/m³)
-    pub r_s: f64,   // Specific gas constant (J/(kg K))
-    pub cp_g: f64,  // Gas heat capacity (J/(kg K))
-    pub cp_l: f64,  // Liquid heat capacity (J/(kg K))
-    pub f_g: f64,   // Gas mass fraction of the reservoir inflow, in (0, 1)
+    pub inputs: FluidInputs,
+    pub api: f64,    // Oil API gravity
+    pub sg_gas: f64, // Gas specific gravity relative to air
+    pub m_g: f64,    // Gas molecular weight (kg/kmol)
+    pub r_s: f64,    // Specific gas constant (J/(kg K))
+    pub rho_l: f64,  // Liquid density at standard conditions (kg/m³)
+    pub cp_g: f64,   // Gas heat capacity (J/(kg K))
+    pub cp_l: f64,   // Liquid heat capacity (J/(kg K)), volume-weighted
+    pub f_g: f64,    // Gas mass fraction of the reservoir inflow at standard conditions
+    pub x_o: f64,    // Oil mass fraction of the liquid at standard conditions
 }
 
 impl Fluid {
+    pub fn new(inputs: FluidInputs) -> Self {
+        let FluidInputs { rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w } = inputs;
+        let sg_gas = rho_g * R_UNIVERSAL * T_REF / (P_REF * M_AIR); // spec: PVT-GAS-6
+        let rho_l = wlr * rho_w + (1.0 - wlr) * rho_o;               // spec: PVT-MIX-10
+        Self {
+            inputs,
+            api: oil::api_from_density(rho_o),
+            sg_gas,
+            m_g: M_AIR * sg_gas,                 // spec: PVT-GAS-6
+            r_s: R_UNIVERSAL / (M_AIR * sg_gas), // spec: PVT-GAS-6
+            rho_l,
+            cp_g,
+            cp_l: wlr * cp_w + (1.0 - wlr) * cp_o,                                       // spec: PVT-MIX-10
+            f_g: rho_g * gor / (rho_g * gor + rho_o + rho_w * wlr / (1.0 - wlr)),        // spec: PVT-MIX-10
+            x_o: if rho_l == 0.0 { 0.0 } else { (1.0 - wlr) * rho_o / rho_l },           // spec: PVT-MIX-10
+        }
+    }
+
     pub fn gas_density(&self, p: f64, t: f64) -> f64 {
         gas::ideal_gas_density(p, t, self.r_s)
     }

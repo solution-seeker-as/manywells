@@ -81,11 +81,21 @@ impl OperatingPoint {
 pub mod test_wells {
     use super::*;
     use crate::choke::{ChokeModel, Profile};
+    use crate::pvt::fluid::FluidInputs;
+    use crate::units::{P_REF, T_REF};
+
+    /// A fluid in the v1.0.0 configuration from v1.0.0's parameters, as configurations.v1_fluid: dead oil of the
+    /// liquid's density and heat capacity, and the gas-oil ratio that gives the gas mass fraction f_g
+    pub fn v1_fluid(rho_l: f64, r_s: f64, cp_g: f64, cp_l: f64, f_g: f64) -> Fluid {
+        let rho_g = P_REF / (r_s * T_REF);
+        let gor = f_g * rho_l / ((1.0 - f_g) * rho_g);
+        Fluid::new(FluidInputs { rho_o: rho_l, rho_g, rho_w: 999.1, gor, wlr: 0.0, cp_g, cp_o: cp_l, cp_w: 4184.0 })
+    }
 
     pub fn w1(n_cells: usize) -> (WellSpec, OperatingPoint) {
         let spec = WellSpec {
             l: 2500.0, d: 0.127, n_cells,
-            fluid: Fluid { rho_l: 900.0, r_s: 420.0, cp_g: 2225.0, cp_l: 3000.0, f_g: 0.15 },
+            fluid: v1_fluid(900.0, 420.0, 2225.0, 3000.0, 0.15),
             f_d: 0.03, h: 25.0,
             inflow: Inflow::Vogel { w_l_max: 80.0 },
             choke: Choke::new(ChokeModel::Simpson, 0.0015201224372924933, Profile::Sigmoid),
@@ -96,11 +106,26 @@ pub mod test_wells {
     pub fn w2(n_cells: usize) -> (WellSpec, OperatingPoint) {
         let spec = WellSpec {
             l: 1800.0, d: 0.1524, n_cells,
-            fluid: Fluid { rho_l: 820.0, r_s: 500.0, cp_g: 2225.0, cp_l: 2200.0, f_g: 0.4 },
+            fluid: v1_fluid(820.0, 500.0, 2225.0, 2200.0, 0.4),
             f_d: 0.05, h: 15.0,
             inflow: Inflow::ProductivityIndex { k_l: 0.6 },
             choke: Choke::new(ChokeModel::Bernoulli, 0.001824146924750992, Profile::Linear),
         };
         (spec, OperatingPoint { p_r: 150.0, p_s: 20.0, t_r: 345.0, t_s: 277.15, t_lg: 345.0, u: 0.8, w_lg: 0.0 })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::test_wells::v1_fluid;
+
+    #[test]
+    fn a_v1_fluid_gives_back_v1s_parameters() {
+        let f = v1_fluid(900.0, 420.0, 2225.0, 3000.0, 0.15);
+        assert_eq!(f.rho_l, 900.0);
+        assert_eq!(f.cp_l, 3000.0);
+        assert!((f.r_s - 420.0).abs() < 1e-12 * 420.0);
+        assert!((f.f_g - 0.15).abs() < 1e-15);
+        assert_eq!(f.x_o, 1.0);
     }
 }
