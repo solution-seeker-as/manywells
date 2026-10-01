@@ -7,6 +7,10 @@ Created 16 December 2024
 Bjarne Grimstad, bjarne.grimstad@solutionseeker.no 
 
 Methods to generate a random well
+
+v1.0.0's sampler, against v1.0.0's API, kept for the generators that still use it (closed loop, out of v2;
+loaded wells). The ported sampler is manywells.sampling (specs/sampling.md), which the stationary and
+non-stationary open-loop generators call.
 """
 
 import typing as ty

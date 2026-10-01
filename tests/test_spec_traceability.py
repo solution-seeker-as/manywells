@@ -13,8 +13,6 @@ every ID is tagged in code or marked spec-only (specs/model/README.md).
 
 import collections
 
-import pytest
-
 from .spec_parse import (CHECK_KINDS, NAMESPACES, code_tags, coverage, definitions, namespace, retired_ids,
                          row_vectors, vector_tables)
 
@@ -90,7 +88,6 @@ def test_code_tags_name_defined_ids():
     assert not unknown, 'spec: tags that name no defined ID'
 
 
-@pytest.mark.xfail(strict=True, reason='Step 7 tags the v1-compatibility configuration and the sampler')
 def test_every_id_is_tagged_or_spec_only():
     tagged = {eq_id for _, _, eq_id in code_tags()}
     spec_only = {r.eq_id for r in coverage() if any(c.startswith('spec-only:') for c in r.checked_by)}

@@ -1,6 +1,6 @@
 # Sampling
 
-*Step 4 of `plans/manywells-v2-plan.md`. Owner: Bjarne Grimstad. Status: in use, 2026-09-30. The v1 procedure (SMP-1 to SMP-30) records v1.0.0's code, with the rulings of `specs/discrepancies.md`. SMP-31 and the extension to `develop`'s inputs (SMP-40 to SMP-44) are placeholders that Step 7 settles when it implements the sampler (Bjarne, 2026-09-30).*
+*Step 4 of `plans/manywells-v2-plan.md`. Owner: Bjarne Grimstad. Status: in use, 2026-09-30. The v1 procedure (SMP-1 to SMP-30) records v1.0.0's code, with the rulings of `specs/discrepancies.md`. Step 7 (2026-10-01) implemented the sampler (`manywells.sampling`, `manywells.datasets`) and wrote SMP-31 and SMP-40; Bjarne kept the starting points of SMP-41 to SMP-43 until the sampling redesign (2026-10-01).*
 
 How ManyWells draws wells and operating points for its datasets. This is not physics, so it lives outside `specs/model/`. It records v1.0.0's procedure, which generated `manywells-sol-1` and `manywells-nsol-1`, and extends it to the inputs that `develop`'s model adds: trajectory, black-oil parameters and pipe roughness. The approach stays the same, independent draws. In the v1-compatibility configuration the sampler draws v1's inputs as before, so that the Distributions check (`specs/verification.md`, Step 3) can compare regenerated samples with the published datasets. Closed loop (`manywells-nscl-1`) is out of scope for v2 (`specs/goals.md`).
 
@@ -147,6 +147,8 @@ $u$ and $w_{lg}$ as in SMP-18 and SMP-19, every week (open loop). Paper §4.5.1.
 
 The solves, starts and acceptance rules. They are part of the procedure because they shape the datasets' distributions: a filter that discards wells, or a start that lands on the trickle root, changes what is published.
 
+On `develop` (`sampling.generate`), every solve returns the well's operating point, the stable root (`specs/model/solution.md`), and the generator's start is an extra start of the root search (`x_guess`), not the only one; a solve without an operating point is a failed solve. Each sample's fractions change its fluid (SMP-22, SMP-24), so its well's system is built for the sample.
+
 ### SMP-28 · Stationary generation (`sol-1`)
 
 `open_loop_stationary/generate_well_data.py`, 2,000 wells of 500 samples.
@@ -171,16 +173,18 @@ Each accepted sample becomes one dataset row, computed from the root: the featur
 
 ### SMP-31 · Seeding
 
-**Placeholder for Step 7.** Every draw is seeded, and each dataset records its seeds (plan, Step 5). A starting point: every draw comes from a random generator seeded from the dataset name, the well index and the draw's index within the well, and each dataset records the seeds. v1.0.0 seeded NumPy from process ID × time for `sol-1` and from the process ID alone for `nsol-1` (S-9), so its datasets cannot be regenerated; that is why the Distributions check compares distributions, not rows.
+Every draw comes from a NumPy generator seeded from the dataset's seed and the draw's place in the dataset: well $k$'s v1 draws from $(\text{seed}, k, \texttt{well})$, its `develop` draws from $(\text{seed}, k, \texttt{develop})$, the $j$-th stationary sample from $(\text{seed}, k, j, \texttt{sample})$, and a non-stationary well's evolution, which is sequential, from $(\text{seed}, k, \texttt{nonstationary})$; a name is hashed to an integer by CRC-32 (`sampling.wells.rng_for`). A run gives the same draws whatever the order of the wells or the number of processes, and the `develop` draws do not shift the v1 draws. The generator draws wells $0, 1, 2, \dots$ and keeps the first it accepts, so the dataset does not depend on the number of processes either. Each dataset records its seed, its configuration, its grid and the code version (`datasets.io`).
+
+v1.0.0 seeded NumPy from process ID × time for `sol-1` and from the process ID alone for `nsol-1` (S-9), so its datasets cannot be regenerated; that is why the Distributions check compares distributions, not rows.
 
 ## Extension to `develop`'s inputs
 
-**Placeholders for Step 7** (Bjarne, 2026-09-30): the values below are starting points, which Step 7 sets when it implements the sampler and can look at the drawn distributions. `develop`'s model takes inputs that v1's does not. The sampler draws them as further independent draws, and draws v1's inputs exactly as above in both configurations, so that the two configurations share the v1 draws.
+`develop`'s model takes inputs that v1's does not. The sampler draws them as further independent draws, from their own generator (SMP-31), and draws v1's inputs exactly as above in both configurations, so that the two configurations share the v1 draws. The values of SMP-41 to SMP-43 are the starting points of Step 4, implemented as they stand; Bjarne kept them until the sampling redesign after the plan (2026-10-01).
 
 ### SMP-40 · Configurations and mapping
 
-- **v1-compatibility configuration.** Draw SMP-1 to SMP-29 and map them to `develop`'s inputs: a vertical `WellGeometry` of length $L$ and diameter $D$; a dead-oil, ideal-gas `FluidModel` with $\rho_{g,\text{sc}} = p_\text{ref}/(R_s T_\text{ref})$ (PVT-GAS-2), the water–liquid ratio $\alpha_{w,l}$ of PVT-MIX-2, and the gas–oil ratio $(f_g/\rho_{g,\text{sc}})/(f_o/\rho_o)$ at standard conditions, which give back $f_g$, $\rho_l$ and $c_{pl}$ exactly; and the fixed $f_D$ of SMP-3. The surface tension must then come from $\rho_l$ (PVT-MIX-5), which `develop`'s fluid model does not do today (`specs/discrepancies.md`, D-8).
-- **`develop` default.** The same draws, the same fluid mapping with black oil and real gas, and SMP-41 to SMP-44 in place of SMP-1 and SMP-3.
+- **`v1.0.0` configuration.** Draw SMP-1 to SMP-29 and map them to `develop`'s inputs with `configurations.v1_well`: a vertical `WellGeometry` of length $L$ and diameter $D$ with $N = 100$ cells; the fixed $f_D$ of SMP-3 and v1.0.0's thermal model with $h$; Vogel inflow and the Simpson choke; and the fluid of `configurations.v1_fluid`, a dead oil with the mixed liquid's $\rho_l$ and $c_{pl}$ (SMP-12) and no water, an ideal gas with $\rho_{g,\text{sc}} = p_\text{ref}/(R_s T_\text{ref})$ (PVT-GAS-2), the gas–oil ratio that gives $f_g$, and the surface tension from $\rho_l$ (PVT-MIX-5). It gives back $\rho_l$, $c_{pl}$, $f_g$ and $R_s$, to rounding. The liquid is mixed before the mapping, as v1.0.0 mixed it, so a sample whose liquid is all water (SMP-22 caps the water–liquid fraction at 1) maps as well.
+- **`develop` default.** The same draws, with the oil and the water by their own densities at standard conditions: $\rho_o$, $\rho_w$, the water–liquid ratio $\alpha_{w,l}$ of PVT-MIX-2 and the gas–oil ratio $(f_g/\rho_{g,\text{sc}})/(f_o/\rho_o)$, which give back $f_g$, $\rho_{l,\text{sc}}$ and $c_{pl}$ (PVT-MIX-10); black oil, real gas and the surface tension from the oil (PVT-MIX-7); SMP-41 for the trajectory, SMP-42 for friction, and `develop`'s thermal model with $h$. A sample without oil ($f_o = 0$) has no gas–oil ratio and is a failed solve.
 
 ### SMP-41 · Trajectory
 
@@ -189,7 +193,7 @@ The bottomhole's true vertical depth is drawn as SMP-1, and SMP-13 and SMP-14 us
 - **Deviated:** vertical down to a kickoff depth $U(0.1, 0.5)$ times the true vertical depth, then straight at an inclination $\theta \sim U(10°, 60°)$ to the bottomhole.
 - **L-shaped:** vertical to the bottomhole's depth, then a horizontal section of length $U(500, 2000)$ m.
 
-The grid is uniform in measured depth with $N = 100$ cells (`WellGeometry.from_survey`). The probabilities and ranges are placeholders for Bjarne to set.
+The grid is uniform in measured depth with $N = 100$ cells (`WellGeometry.from_survey`). Bjarne kept these probabilities and ranges until the redesign (2026-10-01).
 
 ### SMP-42 · Pipe roughness
 
@@ -197,7 +201,7 @@ $\varepsilon \sim \text{LogUniform}(1.5\cdot10^{-6},\ 1.5\cdot10^{-4})$ m, from 
 
 ### SMP-43 · Black-oil parameters
 
-No new draws: the API gravity from SMP-9 (21.3 to 39.9, inside the Vazquez–Beggs range of 10 to 40), the gas gravity from SMP-11 (0.55 to 0.90), and the gas–oil and water–liquid ratios from SMP-40's mapping. There is no bubble-point cap: gas dissolves up to the gas available. Separator conditions are standard conditions (`FluidModel`'s defaults). Wells with a small oil fraction get very high gas–oil ratios (above $10^4$ Sm³/Sm³), outside the correlations' range; Bjarne to decide whether to cap the ratio or accept it until the redesign.
+No new draws: the API gravity from SMP-9 (21.3 to 39.9, inside the Vazquez–Beggs range of 10 to 40), the gas gravity from SMP-11 (0.55 to 0.90), and the gas–oil and water–liquid ratios from SMP-40's mapping. There is no bubble-point cap: gas dissolves up to the gas available. Separator conditions are standard conditions (`FluidModel`'s defaults). Wells with a small oil fraction get very high gas–oil ratios (above $10^4$ Sm³/Sm³), outside the correlations' range; Bjarne accepted them until the redesign, with no cap (2026-10-01).
 
 ### SMP-44 · Lift-gas temperature
 
@@ -237,9 +241,9 @@ Not drawn: the lift gas enters at $T_r$, as in v1 (THM-3).
 | SMP-28 | §5.1 | `open_loop_stationary/generate_well_data.py` | verifier: Distributions |
 | SMP-29 | §5.2 | `open_loop_nonstationary/generate_open_loop_nonstationary_well_data.py`, `init_utils.py` | verifier: Distributions |
 | SMP-30 | Table 3 | `open_loop_stationary/generate_well_data.py` `simulate_well` | verifier: Distributions |
-| SMP-31 | — | none (S-9) | property: Step 7 checks that a rerun gives the same draws |
-| SMP-40 | — | — | property: Step 7 checks that the mapped well reproduces v1's inputs |
-| SMP-41 | — | — | property: Step 7 checks the drawn distributions |
-| SMP-42 | — | — | property: Step 7 checks the drawn distributions |
-| SMP-43 | — | — | property: Step 7 checks the drawn distributions |
+| SMP-31 | — | none (S-9) | property: tests/test_sampling.py (a rerun gives the same draws) |
+| SMP-40 | — | — | property: tests/test_sampling.py (the mapped well reproduces v1's inputs) |
+| SMP-41 | — | — | property: tests/test_sampling.py (the drawn distributions) |
+| SMP-42 | — | — | property: tests/test_sampling.py (the drawn distributions) |
+| SMP-43 | — | — | property: tests/test_sampling.py (the mapped fluid) |
 | SMP-44 | — | — | spec-only: a rule that nothing is drawn |
