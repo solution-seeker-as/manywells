@@ -38,6 +38,9 @@ const TEMPERATURE_TOL: f64 = 1e-8;
 /// Most doublings of the step beyond the upper end of the temperature bracket (Marcher::solve_temperature)
 const MAX_STEP_OUTS: usize = 30;
 
+/// Most steps of the chord iteration for the temperature before the bracketed solve takes over
+const CHORD_MAXITER: usize = 10;
+
 /// A march from p_0 to the wellhead
 pub struct March {
     /// The state at every point the march reached
@@ -70,6 +73,8 @@ pub struct Counts {
     pub states: usize,
     /// Temperature solves, where the energy row depends on the pressure (Marcher::solve_temperature)
     pub temperature_solves: usize,
+    /// Temperature solves that the chord iteration did not finish, so the bracketed solve took over
+    pub chord_fallbacks: usize,
     /// Temperature solves whose bracket needed steps beyond max(T_{i-1}, T_a), and those that failed
     pub step_outs: usize,
     pub temperature_failures: usize,
@@ -124,9 +129,28 @@ impl<'a> Marcher<'a> {
     /// Where the row jumps across zero instead of crossing it, as where the slip law switches between several void
     /// fractions, Brent converges onto the jump: the state there is returned, as not solved, so that the march can
     /// continue at it, as at a cell whose momentum row is not solved (CellStep::Unsolved). None if there is no state.
-    fn solve_temperature(&self, p: f64, cell: geometry::Cell, prev: &State, w_res: f64) -> Option<(State, bool)> {
+    fn solve_temperature(&self, p: f64, cell: geometry::Cell, prev: &State, w_res: f64, guess: f64)
+                         -> Option<(State, bool)> {
         self.count(|c| c.temperature_solves += 1);
         let (spec, op) = (self.spec, self.op);
+        // The chord iteration: Newton's method with the heat loss's slope 1 + ΔMD 4h / (D cp_flux), from the
+        // temperature of the cell's previous trial pressure, until the step is a few ulp
+        let mut t = guess;
+        let mut last_step = f64::INFINITY;
+        for _ in 0..CHORD_MAXITER {
+            let Some(s) = self.point_state(p, t, w_res) else { break };
+            let r = discretization::energy_row(spec, op, cell, &s, prev);
+            let capacity = thermal::heat_flux_capacity(&spec.fluid, &s);
+            let step = r / (1.0 + cell.delta_md * 4.0 * spec.thermal.h / (spec.geometry.d * capacity));
+            if step.abs() <= RTOL * t.abs() {
+                return Some((s, true));
+            }
+            if !(step.abs() < last_step) {
+                break;
+            }
+            (last_step, t) = (step.abs(), t - step);
+        }
+        self.count(|c| c.chord_fallbacks += 1);
         let mut row = |t: f64| -> Result<f64, RootError> {
             let s = self.point_state(p, t, w_res).ok_or(RootError::NoSignChange)?;
             Ok(discretization::energy_row(spec, op, cell, &s, prev))
@@ -168,11 +192,11 @@ impl<'a> Marcher<'a> {
 
     /// The state at point i at pressure p, and whether its energy row is solved: at the temperature t_fixed where the
     /// row is linear, and otherwise at the temperature that zeroes it at p
-    fn state_at(&self, p: f64, cell: geometry::Cell, t_fixed: Option<f64>, prev: &State, w_res: f64)
+    fn state_at(&self, p: f64, cell: geometry::Cell, t_fixed: Option<f64>, prev: &State, w_res: f64, guess: f64)
                 -> Option<(State, bool)> {
         match t_fixed {
             Some(t) => self.point_state(p, t, w_res).map(|s| (s, true)),
-            None => self.solve_temperature(p, cell, prev, w_res),
+            None => self.solve_temperature(p, cell, prev, w_res, guess),
         }
     }
 
@@ -211,40 +235,17 @@ impl<'a> Marcher<'a> {
     }
 
     /// The pressure at a point from the momentum row of the cell below it, given the state at the cell's lower point,
-    /// searched on [p_s, p_prev]; the temperature is t_fixed, or solved at each trial pressure
-    fn solve_cell(&self, cell: geometry::Cell, t_fixed: Option<f64>, s_prev: &State, w_res: f64) -> CellStep {
-        let (p_prev, p_s) = (s_prev.p, self.op.p_s);
+    /// searched on [p_s, p_prev]; the temperature is t_fixed, or solved at each trial pressure from the last trial's.
+    /// Also the temperature at the last trial pressure, the first guess for the state at the answer.
+    fn solve_cell(&self, cell: geometry::Cell, t_fixed: Option<f64>, s_prev: &State, w_res: f64) -> (CellStep, f64) {
+        let last_t = Cell::new(s_prev.t);
         let mut row = |p: f64| -> Result<f64, RootError> {
-            let (s, _) = self.state_at(p, cell, t_fixed, s_prev, w_res).ok_or(RootError::NoSignChange)?;
+            let (s, _) = self.state_at(p, cell, t_fixed, s_prev, w_res, last_t.get()).ok_or(RootError::NoSignChange)?;
+            last_t.set(s.t);
             Ok(discretization::momentum_row(self.spec, cell, &s, s_prev))
         };
-        // The row is U-shaped in p, with its minimum at the cell's sonic pressure p*, and positive at p_prev. Below
-        // zero at p_s: p_s lies right of p*, or left of it where the row still falls, so the only sign change on
-        // [p_s, p_prev] is the subsonic root
-        let solved = |(p, f): (f64, f64)| if f.abs() <= CELL_ROW_TOL { CellStep::Solved(p) } else { CellStep::Unsolved(p) };
-        let f_s = match row(p_s) {
-            Ok(f) => f,
-            Err(_) => return CellStep::Unsolved(p_prev),
-        };
-        if f_s < 0.0 {
-            return match brentq(&mut row, p_s, p_prev, CELL_XTOL, RTOL, 100) {
-                Ok(root) => solved(root),
-                Err(_) => CellStep::Unsolved(p_prev),
-            };
-        }
-        // Otherwise the row's minimum on [p_s, p_prev] decides: below zero, the subsonic root lies between it and
-        // p_prev; at p_s, the row falls all the way to p_s; elsewhere above zero, the cell is choked
-        let (p_star, f_star) = minimize(&mut |p| match row(p) {
-            Ok(v) if v.is_finite() => v,
-            _ => f64::INFINITY,
-        }, p_s, p_prev, 1e-2, 200, f64::NEG_INFINITY);
-        if f_star < 0.0 {
-            return match brentq(&mut row, p_star, p_prev, CELL_XTOL, RTOL, 100) {
-                Ok(root) => solved(root),
-                Err(_) => CellStep::Unsolved(p_star),
-            };
-        }
-        if f_s <= f_star { CellStep::BelowSeparator } else { CellStep::Unsolved(p_star) }
+        let step = cell_step(&mut row, self.op.p_s, s_prev.p);
+        (step, last_t.get())
     }
 
     /// March from p_0 to the wellhead
@@ -262,7 +263,8 @@ impl<'a> Marcher<'a> {
         for i in 1..=n {
             let cell = self.spec.geometry.cell(i);
             let t_fixed = self.linear_temperature(cell, &prev, w_res);
-            let p = match self.solve_cell(cell, t_fixed, &prev, w_res) {
+            let (step, guess) = self.solve_cell(cell, t_fixed, &prev, w_res);
+            let p = match step {
                 CellStep::Solved(p) => p,
                 CellStep::Unsolved(p) => {
                     failed = true;
@@ -270,7 +272,7 @@ impl<'a> Marcher<'a> {
                 }
                 CellStep::BelowSeparator => return March { x, w_res, failed: true, below_separator: true },
             };
-            let Some((s, solved)) = self.state_at(p, cell, t_fixed, &prev, w_res) else {
+            let Some((s, solved)) = self.state_at(p, cell, t_fixed, &prev, w_res, guess) else {
                 x.extend_from_slice(&[f64::NAN; DIM_X]);
                 return March { x, w_res, failed: true, below_separator: false };
             };
@@ -294,6 +296,37 @@ impl<'a> Marcher<'a> {
         };
         r.is_finite().then_some((r, m.failed))
     }
+}
+
+/// The pressure that zeroes a cell's momentum row(p) (bar) on [p_s, p_prev]
+fn cell_step(row: &mut impl FnMut(f64) -> Result<f64, RootError>, p_s: f64, p_prev: f64) -> CellStep {
+    // The row is U-shaped in p, with its minimum at the cell's sonic pressure p*, and positive at p_prev. Below
+    // zero at p_s: p_s lies right of p*, or left of it where the row still falls, so the only sign change on
+    // [p_s, p_prev] is the subsonic root
+    let solved = |(p, f): (f64, f64)| if f.abs() <= CELL_ROW_TOL { CellStep::Solved(p) } else { CellStep::Unsolved(p) };
+    let f_s = match row(p_s) {
+        Ok(f) => f,
+        Err(_) => return CellStep::Unsolved(p_prev),
+    };
+    if f_s < 0.0 {
+        return match brentq(row, p_s, p_prev, CELL_XTOL, RTOL, 100) {
+            Ok(root) => solved(root),
+            Err(_) => CellStep::Unsolved(p_prev),
+        };
+    }
+    // Otherwise the row's minimum on [p_s, p_prev] decides: below zero, the subsonic root lies between it and
+    // p_prev; at p_s, the row falls all the way to p_s; elsewhere above zero, the cell is choked
+    let (p_star, f_star) = minimize(&mut |p| match row(p) {
+        Ok(v) if v.is_finite() => v,
+        _ => f64::INFINITY,
+    }, p_s, p_prev, 1e-2, 200, f64::NEG_INFINITY);
+    if f_star < 0.0 {
+        return match brentq(row, p_star, p_prev, CELL_XTOL, RTOL, 100) {
+            Ok(root) => solved(root),
+            Err(_) => CellStep::Unsolved(p_star),
+        };
+    }
+    if f_s <= f_star { CellStep::BelowSeparator } else { CellStep::Unsolved(p_star) }
 }
 
 #[cfg(test)]
