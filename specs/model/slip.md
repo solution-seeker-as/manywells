@@ -110,6 +110,14 @@ so the transition from bubbly to slug flow comes at a lower void fraction in an 
 - The factor 2 in $c_2$ and $c_4$ steepens the transitions in $\alpha$ ("to increase sensitivity", v1.0.0's comment).
 - The softmax is evaluated without shifting the logits. $|c_k| \le 1$ bounds the logits to $|y| < 22$, so it cannot overflow.
 
+## Open question: several void fractions
+
+At fixed superficial velocities $j_g = \alpha v_g$ and $j_l = (1 - \alpha) v_l$, which the mass rows fix at a point, SLIP-1 is one equation in $\alpha$: $h(\alpha) = \alpha\,(C_0 j_m + v_\infty) - j_g = 0$, which is $-\alpha$ times its row. The classifier sees $\alpha$ only through $c_2$ and $c_4$, and $C_0 \ge 1$ and $v_\infty \ge 0$ for every mix of the regimes. So $h(0) < 0 < h(1)$, and a root always exists, but it need not be unique.
+- **Where it occurs.** Near the slug–annular transition with little liquid there can be three roots. In Step 8's regenerated `sol-1` samples, at well 44 (k = 4: $u$ = 0.056, 3.8 kg/s of lift gas, $j_l$ = 0.016 m/s), point 95 has $\alpha$ = 0.662, 0.915 and 0.920.
+- **Consequence for the root set.** SOL-2 then holds roots that differ only in the branch at some points, and which branch is physical is not specified (`solution.md`, informative section).
+- **The case set.** At every point of every reference root, the root is unique (`tests/test_rust_backend.py`).
+- **Status.** Open (Bjarne, 2026-10-01). It is to be ruled after the plan, with the new flow-regime model of `specs/goals.md`, which replaces this classifier.
+
 ## Sources
 
 - Paper (8), Appendix A.1–A.2, Table A.6, and `docs/corrigendum.md` for (A.10).

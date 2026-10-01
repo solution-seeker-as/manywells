@@ -78,6 +78,22 @@ Not part of the model: only the operating point and the root set are specified (
 - A solve is accepted if Ipopt reports `Solve_Succeeded`, as the verifier's reference build requires, and the state is admissible (SOL-1). Solutions within the verifier's `tol_x` of each other are one root. Each root is labelled by SOL-3 from the residual's Jacobian, with the verifier's `label_min`. `simulate(bc)` returns the operating point of the root set (SOL-4 to SOL-6) and raises `NoOperatingPoint` without one.
 - Measured on the verifier's case set in the `v1.0.0` configuration (2026-10-01): every reference root found with the right label and no other root, a stable-root rate of 100% against v1.0.0's 74.3%, at 0.8 s to build a well's system and 1.6 s to search, per case. The starts after v1.0.0's (method A of the reference build) and the march's fallback are solver machinery, with their measured gains in `manywells/solvers/roots.py` and `march.py` (`plans/manywells-v2-plan.md`, Step 7).
 
+## Informative: the Rust core's search
+
+Not part of the model; recorded so that a reader can follow `rust/src/shoot.rs` and `march.rs` next to this file (principle 7). Details and measured gains are in `specs/features/014-rust-solver.md`.
+
+- **The search.** `SSDFSimulator(wp, backend='rust')` covers the `v1.0.0` configuration only, and shoots on $p_0$:
+  - Given $p_0$, the march solves every row but CHK-1 point by point up the well, so $R(p_0)$, the CHK-1 row at the wellhead, is SOL-3's shooting residual.
+  - Once the pressure falls below $p_s$, $R = w_m$ exactly (CHK-11).
+  - The roots are the sign changes of $R$ on a scan of 101 points over $(p_s, p_r)$, with a ladder of halving drawdowns in the top interval and a search around each local minimum of $R \ge 0$.
+  - Brent refines each sign change in the drawdown $p_r - p_0$.
+- **Acceptance and label.** A root is accepted if its march solved every row and $|R| \le 10^{-3} w_m$. Its slope comes from a central difference of $R$, labelled by SOL-3 with the verifier's `label_min`.
+- **Measured** on the verifier's case set (2026-10-01): every reference root found with the right label, a stable-root rate of 100%, and 65 ms per case on one core, with no build.
+
+## Informative: roots on several void-fraction branches
+
+Where SLIP-1 has several roots in $\alpha$ (`slip.md`, Open question), the root set holds roots on different branches at some points. A march follows one root per point, so the Rust core and the CasADi backend's starts each find some of them, and neither finds them all. SOL-6's choice of the lowest stable root then depends on which roots were found: at `sol-1` wells 91 and 95 (k = 2) of Step 8's regenerated samples, the two backends' stable roots differ by 0.20 and 0.29 bar, and each is a root of every row. Open, with `slip.md`.
+
 ## Coverage
 
 | ID | Paper | v1.0.0 code | Checked by |
