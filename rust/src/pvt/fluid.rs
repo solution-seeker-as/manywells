@@ -8,10 +8,20 @@
 //! src/manywells/pvt/fluid.py. It is given by the densities of oil, gas and water at standard conditions, the
 //! gas-oil and water-liquid ratios and the heat capacities, from which it derives the gas's specific gravity and gas
 //! constant, the liquid at standard conditions and the inflow's gas mass fraction, with the same arithmetic as
-//! FluidModel. The gas is ideal or real (Papay); so far the liquid is a dead oil mixed with water, incompressible.
+//! FluidModel. The gas is ideal or real (Papay); the oil is dead, or black oil into which reservoir gas dissolves
+//! (Vazquez-Beggs), mixed with incompressible water as one liquid.
 
+use crate::pvt::oil::BlackOil;
 use crate::pvt::{gas, mixture, oil};
+use crate::smoothing::{max_approx, min_approx};
 use crate::units::{CF_BAR, M_AIR, P_REF, R_UNIVERSAL, T_REF};
+
+/// The oil: dead, or black oil with gas dissolving into it
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum OilModel {
+    DeadOil,
+    BlackOil(BlackOil),
+}
 
 /// The gas's compressibility factor
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -34,6 +44,10 @@ pub struct FluidInputs {
     pub cp_o: f64,
     pub cp_w: f64,
     pub ideal_gas: bool,
+    pub black_oil: bool,
+    pub p_sep: f64,             // Separator pressure (bar) and temperature (K) of the black-oil correlations
+    pub t_sep: f64,
+    pub p_bubble: Option<f64>,  // Bubble point pressure (bar), or none
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -49,16 +63,19 @@ pub struct Fluid {
     pub f_g: f64,    // Gas mass fraction of the reservoir inflow at standard conditions
     pub x_o: f64,    // Oil mass fraction of the liquid at standard conditions
     pub gas_law: GasLaw,
+    pub oil: OilModel,
 }
 
 impl Fluid {
     pub fn new(inputs: FluidInputs) -> Self {
-        let FluidInputs { rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas } = inputs;
+        let FluidInputs { rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, black_oil, p_sep, t_sep, p_bubble } =
+            inputs;
         let sg_gas = rho_g * R_UNIVERSAL * T_REF / (P_REF * M_AIR); // spec: PVT-GAS-6
         let rho_l = wlr * rho_w + (1.0 - wlr) * rho_o;               // spec: PVT-MIX-10
+        let api = oil::api_from_density(rho_o);
         Self {
             inputs,
-            api: oil::api_from_density(rho_o),
+            api,
             sg_gas,
             m_g: M_AIR * sg_gas,                 // spec: PVT-GAS-6
             r_s: R_UNIVERSAL / (M_AIR * sg_gas), // spec: PVT-GAS-6
@@ -73,6 +90,27 @@ impl Fluid {
                 let (ppc, tpc) = gas::sutton_pseudo_critical(sg_gas);
                 GasLaw::Papay { ppc, tpc }
             },
+            oil: if black_oil {
+                OilModel::BlackOil(BlackOil::new(api, sg_gas, p_sep * CF_BAR, t_sep, p_bubble.map(|p_b| p_b * CF_BAR)))
+            } else {
+                OilModel::DeadOil
+            },
+        }
+    }
+
+    /// Solution gas-oil ratio (Sm³/Sm³) at p (bar) and T (K): none in a dead oil
+    pub fn rs(&self, p: f64, t: f64) -> f64 {  // spec: PVT-OIL-4
+        match self.oil {
+            OilModel::DeadOil => 0.0,
+            OilModel::BlackOil(b) => b.rs(p * CF_BAR, t),
+        }
+    }
+
+    /// Oil formation volume factor at p (bar) and T (K): 1 for a dead oil
+    pub fn bo(&self, p: f64, t: f64) -> f64 {  // spec: PVT-OIL-4
+        match self.oil {
+            OilModel::DeadOil => 1.0,
+            OilModel::BlackOil(b) => b.bo(p * CF_BAR, t),
         }
     }
 
@@ -92,12 +130,17 @@ impl Fluid {
         gas::gas_law_row(p, t, rho_g, self.z_factor(p, t), self.r_s)
     }
 
-    pub fn liquid_density(&self) -> f64 {
-        self.rho_l
+    /// Liquid density (kg/m³) at p (bar) and T (K): the live oil's, with the dissolved gas and its formation volume
+    /// factor, mixed with water. A dead oil's is the liquid's density at standard conditions, exactly.
+    pub fn liquid_density(&self, p: f64, t: f64) -> f64 {  // spec: PVT-MIX-1, PVT-MIX-6, PVT-OIL-9
+        let FluidInputs { rho_o, rho_g, rho_w, wlr, .. } = self.inputs;
+        let rho_live_oil = (rho_o + self.rs(p, t) * rho_g) / self.bo(p, t);
+        wlr * rho_w + (1.0 - wlr) * rho_live_oil
     }
 
-    pub fn liquid_density_row(&self, rho_l_state: f64) -> f64 {
-        mixture::constant_liquid_density_row(rho_l_state, self.rho_l)
+    /// The liquid-density row (kg/m³)
+    pub fn liquid_density_row(&self, p: f64, t: f64, rho_l_state: f64) -> f64 {
+        mixture::liquid_density_row(rho_l_state, self.liquid_density(p, t))
     }
 
     pub fn surface_tension(&self, rho_l: f64, t: f64) -> f64 {
@@ -106,7 +149,7 @@ impl Fluid {
 
     /// Whether gas dissolves into the liquid, so that the phase rates vary along the well
     pub fn has_mass_transfer(&self) -> bool {
-        false
+        matches!(self.oil, OilModel::BlackOil(_))
     }
 
     /// Gas mass rate from the reservoir (kg/s) for a reservoir liquid rate w_res (kg/s)
@@ -115,8 +158,15 @@ impl Fluid {
     }
 
     /// Gas and liquid mass rates (kg/s) at a point at pressure p (bar) and temperature t (K), for a reservoir liquid
-    /// rate w_res and a lift gas rate w_lg (kg/s). Without mass transfer they are the same at every point.
-    pub fn phase_rates(&self, _p: f64, _t: f64, w_res: f64, w_lg: f64) -> (f64, f64) {  // spec: INF-5
-        (self.reservoir_gas_rate(w_res) + w_lg, w_res)
+    /// rate w_res and a lift gas rate w_lg (kg/s). Without mass transfer they are the same at every point; with black
+    /// oil, reservoir gas (not lift gas) dissolves into the oil up to its solution gas-oil ratio at (p, T).
+    pub fn phase_rates(&self, p: f64, t: f64, w_res: f64, w_lg: f64) -> (f64, f64) {
+        let w_g_res = self.reservoir_gas_rate(w_res);
+        if !self.has_mass_transfer() {
+            return (w_g_res + w_lg, w_res); // spec: INF-5
+        }
+        let w_o = w_res * self.x_o;
+        let w_d = min_approx(self.rs(p, t) * self.inputs.rho_g / self.inputs.rho_o * w_o, w_g_res, 1e-6);
+        (max_approx(w_g_res + w_lg - w_d, 0.0, 1e-6), w_res + w_d) // spec: PVT-OIL-13
     }
 }

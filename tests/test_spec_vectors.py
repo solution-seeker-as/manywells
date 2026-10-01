@@ -314,10 +314,8 @@ RUST_NOT_IN_CORE = {
 
 # Step 9 ports develop's model to the core one feature spec at a time: the tables whose functions it has not got yet
 RUST_NOT_PORTED = {
-    'SMO-2': '007', 'THM-5': '010', 'FRIC-3': '004', 'FRIC-4': '004', 'FRIC-5': '004', 'FRIC-6': '004',
-    'PVT-GAS-7': '004', 'PVT-OIL-5': '007',
-    'PVT-OIL-6, PVT-OIL-8': '007', 'PVT-OIL-7': '007', 'PVT-OIL-9': '007', 'PVT-OIL-10': '004', 'PVT-OIL-11': '004',
-    'PVT-OIL-12': '003', 'PVT-OIL-13': '008', 'PVT-WAT-3': '004', 'PVT-MIX-6': '007', 'PVT-MIX-7': '003',
+    'THM-5': '010', 'FRIC-3': '004', 'FRIC-4': '004', 'FRIC-5': '004', 'FRIC-6': '004', 'PVT-GAS-7': '004',
+    'PVT-OIL-10': '004', 'PVT-OIL-11': '004', 'PVT-OIL-12': '003', 'PVT-WAT-3': '004', 'PVT-MIX-7': '003',
     'PVT-MIX-8': '004', 'PVT-MIX-9': '004',
 }
 

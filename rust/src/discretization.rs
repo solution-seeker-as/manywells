@@ -142,7 +142,7 @@ pub fn closure_rows(spec: &WellSpec, s: &State, cos_incl: f64) -> [f64; 3] {
     [
         s.v_g - c_0 * s.v_m() - v_inf, // spec: SLIP-1
         spec.fluid.gas_law_row(s.p, s.t, s.rho_g),
-        spec.fluid.liquid_density_row(s.rho_l),
+        spec.fluid.liquid_density_row(s.p, s.t, s.rho_l),
     ]
 }
 
@@ -152,7 +152,8 @@ pub fn row_ids(spec: &WellSpec) -> Vec<&'static str> {  // spec: DISC-11
     let bottom = ["INF-6", "INF-7", "THM-3"];
     let cell = ["DISC-7", "DISC-8", "DISC-9", "DISC-10"];
     let gas_law = if spec.fluid.gas_law == GasLaw::Ideal { "PVT-GAS-1" } else { "PVT-GAS-3" };
-    let closures = ["SLIP-1", gas_law, "PVT-MIX-1"];
+    let liquid = if spec.fluid.has_mass_transfer() { "PVT-MIX-6" } else { "PVT-MIX-1" };
+    let closures = ["SLIP-1", gas_law, liquid];
     let mut ids = Vec::with_capacity(DIM_X * (n + 1));
     ids.extend(bottom);
     ids.extend(closures);

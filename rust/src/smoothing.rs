@@ -11,6 +11,11 @@ pub fn max_approx(x: f64, y: f64, eps: f64) -> f64 {  // spec: SMO-1
     0.5 * (x + y + ((x - y) * (x - y) + eps).sqrt())
 }
 
+/// Smooth min: (x + y - sqrt((x - y)² + eps)) / 2
+pub fn min_approx(x: f64, y: f64, eps: f64) -> f64 {  // spec: SMO-2
+    0.5 * (x + y - ((x - y) * (x - y) + eps).sqrt())
+}
+
 /// Softmax of three values, without shifting them
 pub fn softmax3(y: [f64; 3]) -> [f64; 3] {  // spec: SMO-3
     let e = [y[0].exp(), y[1].exp(), y[2].exp()];

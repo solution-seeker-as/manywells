@@ -22,3 +22,11 @@ pub const T_REF: f64 = 288.15;
 /// Pascal per bar and per psi
 pub const CF_BAR: f64 = 1e5;
 pub const CF_PSI: f64 = 6894.76;
+
+/// Sm³/Sm³ per scf/STB
+pub const CF_RS: f64 = 0.178108;
+
+/// Temperature (°F) of a temperature T (K)
+pub fn kelvin_to_fahrenheit(t: f64) -> f64 {
+    1.8 * (t - 273.15) + 32.0
+}

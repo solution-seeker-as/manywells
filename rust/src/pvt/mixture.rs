@@ -8,8 +8,8 @@
 
 use crate::pvt::oil::dead_oil_surface_tension;
 
-/// The constant-liquid-density row (kg/m³)
-pub fn constant_liquid_density_row(rho_l_state: f64, rho_l: f64) -> f64 {  // spec: PVT-MIX-1
+/// The liquid-density row (kg/m³), zero where the state's liquid density is rho_l
+pub fn liquid_density_row(rho_l_state: f64, rho_l: f64) -> f64 {  // spec: PVT-MIX-1, PVT-MIX-6
     rho_l_state - rho_l
 }
 

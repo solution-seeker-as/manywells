@@ -88,7 +88,7 @@ pub mod test_wells {
         let rho_g = P_REF / (r_s * T_REF);
         let gor = f_g * rho_l / ((1.0 - f_g) * rho_g);
         Fluid::new(FluidInputs { rho_o: rho_l, rho_g, rho_w: 999.1, gor, wlr: 0.0, cp_g, cp_o: cp_l, cp_w: 4184.0,
-                                 ideal_gas: true })
+                                 ideal_gas: true, black_oil: false, p_sep: P_REF / 1e5, t_sep: T_REF, p_bubble: None })
     }
 
     pub fn w1(n_cells: usize) -> (WellSpec, OperatingPoint) {
@@ -144,12 +144,29 @@ pub mod test_wells {
         (spec, op)
     }
 
+    /// W1 deviated with the energy terms, a real gas, and black oil of API 25.7 with water and dissolved gas
+    /// (007, 008)
+    pub fn w1_black_oil(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let (mut spec, op) = w1_real_gas(n_cells);
+        spec.fluid = Fluid::new(FluidInputs { black_oil: true, wlr: 0.3, ..spec.fluid.inputs });
+        (spec, op)
+    }
+
+    /// W2 L-shaped with black oil of API 35 capped at a bubble point of 80 bar
+    pub fn w2_bubble_point(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let (mut spec, op) = w2_l_shaped(n_cells);
+        let rho_o = 141.5 * 999.1 / (35.0 + 131.5);
+        spec.fluid = Fluid::new(FluidInputs { black_oil: true, rho_o, p_bubble: Some(80.0), ..spec.fluid.inputs });
+        (spec, op)
+    }
+
     /// Every test well
     pub fn all(n_cells: usize) -> Vec<(&'static str, WellSpec, OperatingPoint)> {
         let named = |name, (spec, op)| (name, spec, op);
         vec![named("w1", w1(n_cells)), named("w2", w2(n_cells)), named("w1_thermal", w1_thermal(n_cells)),
              named("w1_deviated", w1_deviated(n_cells)), named("w2_l_shaped", w2_l_shaped(n_cells)),
-             named("w1_real_gas", w1_real_gas(n_cells))]
+             named("w1_real_gas", w1_real_gas(n_cells)), named("w1_black_oil", w1_black_oil(n_cells)),
+             named("w2_bubble_point", w2_bubble_point(n_cells))]
     }
 }
 

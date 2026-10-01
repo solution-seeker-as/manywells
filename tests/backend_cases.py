@@ -43,7 +43,7 @@ from manywells.simulator import BoundaryConditions, SSDFSimulator, WellPropertie
 from manywells.slip import SlipModel
 from manywells.solvers.roots import TOL_X, state_distance
 
-ROW_REL = 1e-10       # rows at the same state: the same arithmetic, to rounding amplified by the rows' cancellations
+ROW_REL = 1e-10       # rows at the same state, relative to each row's scale: the same arithmetic, to rounding
 ROOT_ROW = 1e-8       # a core-only root zeroes every CasADi row but the choke row to this (bar, K, kg/(m² s), m/s)
 ROOT_CHOKE_REL = 1e-6  # and the choke row to this fraction of the wellhead rate, or to what p_0's resolution allows,
 ROOT_P0_ULPS = 8       # this many ulp of p_r times |dR/dp_0|, if more (steep at the trickle roots next to p_r)
@@ -284,10 +284,20 @@ def casadi_rows(system, bc, x) -> tuple:
 
 
 def row_difference(ids, rust, casadi) -> tuple:
-    """The largest relative difference between two backends' rows, and where: (difference, index, ID)."""
-    rel = np.abs(rust - casadi) / np.maximum(np.abs(casadi), np.finfo(float).tiny)
+    """
+    The largest difference between two backends' rows, relative to the row's scale, and where: (difference, index,
+    ID). A row's scale is its largest |value| along the well: at a single point a row can be small where its terms
+    cancel, as the mass rows can with dissolved gas, and a difference at rounding of the terms is then large relative
+    to the row itself.
+    """
+    ids = np.asarray(ids)
+    scale = np.zeros(len(casadi))
+    for eq_id in set(ids):
+        at = ids == eq_id
+        scale[at] = np.max(np.abs(casadi[at]))
+    rel = np.abs(rust - casadi) / np.maximum(scale, np.finfo(float).tiny)
     k = int(np.argmax(rel))
-    return float(rel[k]), k, ids[k]
+    return float(rel[k]), k, str(ids[k])
 
 
 # ---------------------------------------------------------------------------------------------
