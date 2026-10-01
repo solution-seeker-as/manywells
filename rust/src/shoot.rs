@@ -20,6 +20,10 @@ const SCAN_INTERVALS: usize = 100;
 /// concludes that R stays positive there. Two roots closer than this are 1/100 of the verifier's tol_x apart in p_0.
 const REFINE_XTOL: f64 = 1e-6;
 
+/// A root is accepted only where |R| is at most this fraction of the rate, so that a jump in R is not taken for a
+/// root. At the extreme trickle roots of the case set, one ulp of p_0 moves the choke rate by about 5e-5 of w_m.
+const ACCEPT_REL: f64 = 1e-3;
+
 /// A root and what it carries besides its state
 pub struct Root {
     pub x: Vec<f64>,
@@ -33,10 +37,12 @@ pub struct Root {
     pub w_g_res: f64,
 }
 
-/// The roots of a search, sorted by p_0, and the number of marches it took
+/// The roots of a search, sorted by p_0, the number of marches it took, and the number of sign changes of R that
+/// were not accepted as roots
 pub struct Search {
     pub roots: Vec<Root>,
     pub marches: usize,
+    pub rejected: usize,
 }
 
 /// p_0 of the roots, each with whether R rises through it. Samples R(p_0) on a uniform scan of (p_s, p_r) and runs
@@ -54,7 +60,7 @@ fn shoot(m: &Marcher) -> Result<Vec<(f64, bool)>, String> {
             None => Err(format!("the shooting residual is not finite at p_0 = {p} bar")),
         }
     };
-    let mut brent_r = |p: f64| residual(p).map_err(|_| RootError::NoSignChange);
+    let brent_r = |p: f64| residual(p).map_err(|_| RootError::NoSignChange);
 
     // The scan, from p_s up to p_r
     let p: Vec<f64> = (0..=SCAN_INTERVALS).rev().map(|k| p_hi - step * k as f64).collect();
@@ -78,12 +84,14 @@ fn shoot(m: &Marcher) -> Result<Vec<(f64, bool)>, String> {
         }
     }
 
+    // Brent in the drawdown d = p_r - p_0, so that its relative tolerance is relative to the drawdown, which a trickle
+    // root has little of; p_0 itself is resolved to a few ulp of p_r
+    let mut r_of_d = |d: f64| brent_r(op.p_r - d);
+    let xtol = 4.0 * f64::EPSILON * op.p_r;
     let mut roots = Vec::new();
     for (a, b, rising) in brackets {
-        if let Ok(root) = brentq(&mut brent_r, a, b, 1e-6, RTOL, 100) {
-            if matches!(m.residual(root), Some((_, false))) {
-                roots.push((root, rising));
-            }
+        if let Ok(d) = brentq(&mut r_of_d, op.p_r - b, op.p_r - a, xtol, RTOL, 100) {
+            roots.push((op.p_r - d, rising));
         }
     }
     roots.sort_by(|x, y| x.0.total_cmp(&y.0));
@@ -91,7 +99,7 @@ fn shoot(m: &Marcher) -> Result<Vec<(f64, bool)>, String> {
     Ok(roots)
 }
 
-/// A root at p_0, with its outputs, or None if its march fails
+/// A root at p_0, with its outputs, or None if its march fails or R is not close enough to zero there
 fn root_at(m: &Marcher, p_0: f64, rising: bool) -> Option<Root> {
     let (spec, op) = (m.spec, m.op);
     let march = m.march(p_0);
@@ -99,6 +107,9 @@ fn root_at(m: &Marcher, p_0: f64, rising: bool) -> Option<Root> {
         return None;
     }
     let top = State::of(&march.x[march.x.len() - DIM_X..]);
+    if discretization::choke_row(spec, op, &top).abs() > ACCEPT_REL * (march.rates.w_g + march.rates.w_l) {
+        return None;
+    }
     Some(Root {
         choked: spec.choke.is_choked(top.p, op.p_s),
         flow_regime: discretization::flow_regimes(spec, &march.x),
@@ -115,9 +126,10 @@ pub fn root_set(spec: &WellSpec, op: &OperatingPoint) -> Result<Search, String> 
     spec.check()?;
     op.check()?;
     let m = Marcher::new(spec, op);
-    let mut roots: Vec<Root> = shoot(&m)?.into_iter().filter_map(|(p_0, rising)| root_at(&m, p_0, rising)).collect();
-    roots.sort_by(|a, b| a.x[0].total_cmp(&b.x[0]));
-    Ok(Search { roots, marches: m.marches() })
+    let found = shoot(&m)?;
+    let n = found.len();
+    let roots: Vec<Root> = found.into_iter().filter_map(|(p_0, rising)| root_at(&m, p_0, rising)).collect();
+    Ok(Search { rejected: n - roots.len(), roots, marches: m.marches() })
 }
 
 /// The shooting residual R(p_0), for tests and diagnostics

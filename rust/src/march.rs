@@ -20,6 +20,9 @@ use crate::scalar::{brentq, minimize, RootError, RTOL};
 use crate::slip;
 use crate::thermal;
 
+/// Absolute tolerance of the cell's Brent on the pressure (bar): none, so that it converges to a few ulp
+const CELL_XTOL: f64 = 0.0;
+
 /// The phase rates of a march, the same at every point (BAL-3)
 #[derive(Clone, Copy, Debug)]
 pub struct Rates {
@@ -129,7 +132,7 @@ impl<'a> Marcher<'a> {
         // The row is U-shaped in p, with its minimum at the cell's sonic pressure p*, and positive at p_prev: the
         // subsonic root lies between p* and p_prev, usually close to p_prev, so a narrow bracket is tried first
         let lo = p_prev - 0.1 * (p_prev - p_s);
-        if let Ok(p) = brentq(&mut row, lo, p_prev, 1e-6, RTOL, 100) {
+        if let Ok(p) = brentq(&mut row, lo, p_prev, CELL_XTOL, RTOL, 100) {
             return CellStep::Solved(p);
         }
         // Below zero at p_s: p_s lies right of p*, or left of it where the row still falls, so the only sign change
@@ -139,7 +142,7 @@ impl<'a> Marcher<'a> {
             Err(_) => return CellStep::Choked(p_prev),
         };
         if f_s < 0.0 {
-            return match brentq(&mut row, p_s, p_prev, 1e-6, RTOL, 100) {
+            return match brentq(&mut row, p_s, p_prev, CELL_XTOL, RTOL, 100) {
                 Ok(p) => CellStep::Solved(p),
                 Err(_) => CellStep::Choked(p_prev),
             };
@@ -149,7 +152,7 @@ impl<'a> Marcher<'a> {
             _ => f64::INFINITY,
         }, p_s, p_prev, 1e-2, 200, 0.0);
         if f_star < 0.0 {
-            return match brentq(&mut row, p_star, p_prev, 1e-6, RTOL, 100) {
+            return match brentq(&mut row, p_star, p_prev, CELL_XTOL, RTOL, 100) {
                 Ok(p) => CellStep::Solved(p),
                 Err(_) => CellStep::Choked(p_star),
             };

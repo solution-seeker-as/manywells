@@ -102,8 +102,9 @@ mod _core {
             Ok(Self { spec })
         }
 
-        /// Every root the search finds at the operating point, sorted by p_0, and the number of marches it took
-        fn root_set(&self, py: Python<'_>, op: Op) -> PyResult<(Vec<Root>, usize)> {
+        /// Every root the search finds at the operating point, sorted by p_0, the number of marches it took, and the
+        /// number of sign changes of R that were not accepted as roots
+        fn root_set(&self, py: Python<'_>, op: Op) -> PyResult<(Vec<Root>, usize, usize)> {
             let (spec, op) = (self.spec, operating_point(op)?);
             let search = py.detach(|| shoot::root_set(&spec, &op)).map_err(PyRuntimeError::new_err)?;
             let roots = search.roots.into_iter().map(|r| Root {
@@ -115,7 +116,7 @@ mod _core {
                 w_res: r.w_res,
                 w_g_res: r.w_g_res,
             }).collect();
-            Ok((roots, search.marches))
+            Ok((roots, search.marches, search.rejected))
         }
 
         /// Every row of the system at state x, as (IDs, values), point by point in the order of DISC-6

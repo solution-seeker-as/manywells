@@ -56,7 +56,7 @@ class RustRootFinder:
     def find(self, bc, x_guess=None) -> RootSet:  # spec: SOL-2
         """Every root the core finds, labelled, with the operating point."""
         t0 = time.perf_counter()
-        found, marches = self.core.root_set(operating_point(bc))
+        found, marches, unresolved = self.core.root_set(operating_point(bc))
         roots, rejected = [], 0
         for r in found:
             x = np.asarray(r.x, dtype=float)
@@ -65,7 +65,8 @@ class RustRootFinder:
                 continue
             roots.append(Root(x=x, label='unstable' if r.rising else 'stable', slope=r.slope, choked=r.choked,
                               flow_regime=tuple(r.flow_regime), w_res=r.w_res, w_g_res=r.w_g_res))
-        outcome = f'{len(roots)} roots' + (f', {rejected} not admissible' if rejected else '')
+        outcome = (f'{len(roots)} roots' + (f', {rejected} not admissible' if rejected else '')
+                   + (f', {unresolved} sign changes of R not accepted' if unresolved else ''))
         search = [Attempt('shooting', np.nan, outcome, time.perf_counter() - t0, marches)]
         return RootSet.of(roots, search=search)
 
