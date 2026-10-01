@@ -1,9 +1,13 @@
 [build-system]
-requires = ["setuptools>=42", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["maturin>=1.9.4,<2.0"]
+build-backend = "maturin"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+# The Rust core (rust/) is built as the extension module manywells._core, next to the Python package in src/
+[tool.maturin]
+python-source = "src"
+module-name = "manywells._core"
+manifest-path = "rust/Cargo.toml"
+bindings = "pyo3"
 
 [project]
 name = "manywells"
@@ -37,6 +41,11 @@ dev = [
     "pytest>=7.0.0",
     "manywells-verify",
 ]
+
+[tool.uv]
+# Rebuild the extension when the Rust core changes
+cache-keys = [{ file = "pyproject.toml" }, { file = "rust/Cargo.toml" }, { file = "rust/Cargo.lock" },
+              { file = "rust/src/**/*.rs" }]
 
 [tool.uv.workspace]
 members = ["verification"]

@@ -31,14 +31,14 @@ pub mod simulator;
 pub mod slip;
 
 pyo3::create_exception!(
-    manywells_rs,
+    _core,
     SimError,
     pyo3::exceptions::PyException,
     "Exception caused by simulator"
 );
 
 #[pymodule]
-mod manywells_rs {
+mod _core {
     #[pymodule_export]
     use crate::simulator::{BoundaryConditions, SSDFSimulator, WellProperties};
 
