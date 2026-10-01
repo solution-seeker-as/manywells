@@ -18,11 +18,16 @@ jobs:
       - uses: astral-sh/setup-uv@v10.2.0
         with:
           python-version: ${{ matrix.python-version }}
+      # uv sync builds the Rust core (rust/) as manywells._core with the runner's Rust toolchain
+      - uses: Swatinem/rust-cache@v2.9.2
+        with:
+          workspaces: rust
       - run: uv sync --locked
       - run: uv run pytest
 
   # The verifier on the committed case set (specs/verification.md): v1.0.0's own solutions, with its
-  # expected failures, and develop in its v1.0.0 configuration, with none. The Rust port joins in Step 8.
+  # expected failures, and develop in its v1.0.0 configuration with each backend, CasADi and the Rust
+  # core, with none.
   verify:
     runs-on: ubuntu-latest
     defaults:
@@ -34,6 +39,11 @@ jobs:
       - uses: astral-sh/setup-uv@v10.2.0
         with:
           python-version: "3.11"
+      - uses: Swatinem/rust-cache@v2.9.2
+        with:
+          workspaces: rust
+      # The core's own tests, without the Python bindings
+      - run: cargo test --manifest-path rust/Cargo.toml --no-default-features
       - run: uv sync --locked
       - run: >
           uv run manywells-verify verification/data/v1_cold.parquet --data verification/data
@@ -43,4 +53,9 @@ jobs:
       - run: >
           uv run manywells-verify develop.parquet --data verification/data
           --name "develop (v1.0.0 configuration)"
+          | tee -a "$GITHUB_STEP_SUMMARY"
+      - run: uv run python -m scripts.verification.develop_candidate rust.parquet --backend rust
+      - run: >
+          uv run manywells-verify rust.parquet --data verification/data
+          --name "Rust core (v1.0.0 configuration)"
           | tee -a "$GITHUB_STEP_SUMMARY"
