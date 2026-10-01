@@ -7,7 +7,10 @@
 //! The march: given the bottomhole pressure p_0, the inflow gives the phase rates, and the state at every point
 //! follows from the rows of discretization.rs, point by point up the well. At each point the closures give the
 //! densities and the void fraction at a trial pressure, and the cell's momentum row is solved for the pressure.
-//! What is left at the wellhead is the choke row, whose value is the shooting residual R(p_0) (shoot.rs).
+//! What is left at the wellhead is the choke row (CHK-1), whose value is the shooting residual R(p_0) (shoot.rs).
+//!
+//! The pressure falls up the well, so once it falls below the separator pressure p_s it stays there: the wellhead
+//! is then at or below the critical pressure, the choke passes no flow (CHK-11), and R = w_m without marching on.
 
 use std::cell::Cell;
 
@@ -16,9 +19,6 @@ use crate::input::{OperatingPoint, WellSpec};
 use crate::scalar::{brentq, minimize, RootError, RTOL};
 use crate::slip;
 use crate::thermal;
-
-/// Lowest trial pressure of a cell solve (bar)
-const P_MIN: f64 = 1e-3;
 
 /// The phase rates of a march, the same at every point (BAL-3)
 #[derive(Clone, Copy, Debug)]
@@ -30,18 +30,24 @@ pub struct Rates {
 
 /// A march from p_0 to the wellhead
 pub struct March {
+    /// The state at every point the march reached
     pub x: Vec<f64>,
     pub rates: Rates,
-    /// A cell had no subsonic root (choked), or a state could not be computed, so x is not a solution of the rows
+    /// A cell had no subsonic root (choked), a state could not be computed, or the march fell below p_s, so x is
+    /// not a solution of the rows
     pub failed: bool,
+    /// The pressure fell below p_s, and the march stopped there
+    pub below_separator: bool,
 }
 
 enum CellStep {
     /// The cell's momentum row is zero at this pressure
     Solved(f64),
-    /// No subsonic root: the march continues at the pressure p* where the row is smallest, so that R stays continuous
-    /// in p_0, but it is not a solution
+    /// No subsonic root above p_s: the march continues at the pressure p* where the row is smallest, so that R stays
+    /// continuous in p_0, but it is not a solution
     Choked(f64),
+    /// The row is positive down to p_s, so its subsonic root, if any, lies below p_s
+    BelowSeparator,
 }
 
 pub struct Marcher<'a> {
@@ -113,31 +119,42 @@ impl<'a> Marcher<'a> {
     }
 
     /// The pressure at a point at temperature t from the momentum row of the cell below it, given the state at the
-    /// cell's lower point
+    /// cell's lower point, searched on [p_s, p_prev]
     fn solve_cell(&self, t: f64, s_prev: &State, rates: &Rates) -> CellStep {
-        let p_prev = s_prev.p;
+        let (p_prev, p_s) = (s_prev.p, self.op.p_s);
         let mut row = |p: f64| -> Result<f64, RootError> {
             let s = self.point_state(p, t, rates).ok_or(RootError::NoSignChange)?;
             Ok(discretization::momentum_row(self.spec, &s, s_prev))
         };
-        // The row is U-shaped in p, with its minimum at the cell's sonic pressure p*: the subsonic root lies between
-        // p* and p_prev, usually close to p_prev, so a narrow bracket is tried first
-        let lo = (p_prev - 0.1 * (p_prev - self.op.p_s)).max(P_MIN);
-        if lo < p_prev {
-            if let Ok(p) = brentq(&mut row, lo, p_prev, 1e-6, RTOL, 100) {
-                if p > 0.0 {
-                    return CellStep::Solved(p);
-                }
-            }
+        // The row is U-shaped in p, with its minimum at the cell's sonic pressure p*, and positive at p_prev: the
+        // subsonic root lies between p* and p_prev, usually close to p_prev, so a narrow bracket is tried first
+        let lo = p_prev - 0.1 * (p_prev - p_s);
+        if let Ok(p) = brentq(&mut row, lo, p_prev, 1e-6, RTOL, 100) {
+            return CellStep::Solved(p);
         }
-        let p_star = minimize(&mut |p| match row(p) {
+        // Below zero at p_s: p_s lies right of p*, or left of it where the row still falls, so the only sign change
+        // on [p_s, p_prev] is the subsonic root
+        let f_s = match row(p_s) {
+            Ok(f) => f,
+            Err(_) => return CellStep::Choked(p_prev),
+        };
+        if f_s < 0.0 {
+            return match brentq(&mut row, p_s, p_prev, 1e-6, RTOL, 100) {
+                Ok(p) => CellStep::Solved(p),
+                Err(_) => CellStep::Choked(p_prev),
+            };
+        }
+        let (p_star, f_star) = minimize(&mut |p| match row(p) {
             Ok(v) if v.is_finite() => v,
             _ => f64::INFINITY,
-        }, P_MIN, p_prev, 1e-2, 200).0;
-        match brentq(&mut row, p_star, p_prev, 1e-6, RTOL, 100) {
-            Ok(p) if p > 0.0 => CellStep::Solved(p),
-            _ => CellStep::Choked(p_star),
+        }, p_s, p_prev, 1e-2, 200);
+        if f_star < 0.0 {
+            return match brentq(&mut row, p_star, p_prev, 1e-6, RTOL, 100) {
+                Ok(p) => CellStep::Solved(p),
+                Err(_) => CellStep::Choked(p_star),
+            };
         }
+        if f_s <= f_star { CellStep::BelowSeparator } else { CellStep::Choked(p_star) }
     }
 
     /// March from p_0 to the wellhead
@@ -148,56 +165,38 @@ impl<'a> Marcher<'a> {
         let t = self.temperatures(&rates);
         let mut x = Vec::with_capacity(DIM_X * (n + 1));
         let mut failed = false;
-        let mut prev = self.point_state(p_0, t[0], &rates);
-        match prev {
-            Some(s) => x.extend_from_slice(&s.to_array()),
-            None => x.extend_from_slice(&[f64::NAN; DIM_X]),
-        }
+        let Some(mut prev) = self.point_state(p_0, t[0], &rates) else {
+            x.extend_from_slice(&[f64::NAN; DIM_X]);
+            return March { x, rates, failed: true, below_separator: false };
+        };
+        x.extend_from_slice(&prev.to_array());
         for i in 1..=n {
-            // After a state could not be computed, the last computed state is copied to every point above
-            let state = prev.and_then(|s_prev| {
-                let p = match self.solve_cell(t[i], &s_prev, &rates) {
-                    CellStep::Solved(p) => p,
-                    CellStep::Choked(p) => {
-                        failed = true;
-                        p
-                    }
-                };
-                self.point_state(p, t[i], &rates)
-            });
-            match state.or(prev) {
-                Some(s) => x.extend_from_slice(&s.to_array()),
-                None => x.extend_from_slice(&[f64::NAN; DIM_X]),
-            }
-            if state.is_none() {
-                failed = true;
-            }
-            prev = state.or(prev);
+            let p = match self.solve_cell(t[i], &prev, &rates) {
+                CellStep::Solved(p) => p,
+                CellStep::Choked(p) => {
+                    failed = true;
+                    p
+                }
+                CellStep::BelowSeparator => return March { x, rates, failed: true, below_separator: true },
+            };
+            let Some(s) = self.point_state(p, t[i], &rates) else {
+                x.extend_from_slice(&[f64::NAN; DIM_X]);
+                return March { x, rates, failed: true, below_separator: false };
+            };
+            x.extend_from_slice(&s.to_array());
+            prev = s;
         }
-        March { x, rates, failed: failed || prev.is_none() }
+        March { x, rates, failed, below_separator: false }
     }
 
-    /// The shooting residual R(p_0) and whether the march failed, or None if R is not finite: the choke row, squared
+    /// The shooting residual R(p_0) (kg/s), the choke row at the wellhead, and whether the march failed; None if R
+    /// is not finite
     pub fn residual(&self, p_0: f64) -> Option<(f64, bool)> {
         let m = self.march(p_0);
-        let s = State::of(&m.x[m.x.len() - DIM_X..]);
-        let (spec, op) = (self.spec, self.op);
-        let (w_g, w_l) = s.rates(spec.a());
-        let w_m = w_g + w_l;
-        let w_c = spec.choke.mass_flow_rate(op.u, s.p, op.p_s, w_g, w_l, s.alpha, s.rho_g, s.rho_l);
-        let r = if w_c > 0.0 { w_m * w_m - w_c * w_c } else {
-            // Below the critical pressure, the port's squared row: w_m² - (K_c σ(u))² 2 ρ Δp / Φ with Δp <= 0
-            let p_c = spec.choke.critical_pressure(s.p, op.p_s);
-            let dp = crate::units::CF_BAR * (s.p - p_c);
-            let (rho, phi) = match spec.choke.model {
-                crate::choke::ChokeModel::Simpson => {
-                    let x_g = w_g / w_m;
-                    (s.rho_l, crate::choke::simpson_multiplier(x_g, s.rho_g, s.rho_l))
-                }
-                crate::choke::ChokeModel::Bernoulli => (s.rho_m(), 1.0),
-            };
-            let kc = spec.choke.k_c * spec.choke.profile.opening(op.u);
-            w_m * w_m - kc * kc * (2.0 * rho * dp) / phi
+        let r = if m.below_separator {
+            m.rates.w_g + m.rates.w_l // spec: CHK-11
+        } else {
+            discretization::choke_row(self.spec, self.op, &State::of(&m.x[m.x.len() - DIM_X..]))
         };
         r.is_finite().then_some((r, m.failed))
     }
