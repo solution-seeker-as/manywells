@@ -2,7 +2,7 @@
 
 *Step 6 of `plans/manywells-v2-plan.md`. Owner: Bjarne Grimstad. Status: decided, 2026-09-30; Bjarne ruled on its five open decisions (Decisions, below). Step 7 implemented the Python side (2026-10-01); its changes to this file are marked "Step 7", and Bjarne signed them off on 2026-10-01.*
 
-This file fixes the module boundaries, the interfaces between modules and the extension points of ManyWells v2, and the design of the Rust core for `develop`'s model. It does not define physics (`specs/model/`), the sampling procedure (`specs/sampling.md`), the checks (`specs/verification.md`), the v2 dataset schema (release work, `specs/goals.md`) or the calibration contract (before `v2.0.0`). Step 7 implements the Python side, and the Rust core follows after the plan.
+This file fixes the module boundaries, the interfaces between modules and the extension points of ManyWells v2, and the design of the Rust core for `develop`'s model. It does not define physics (`specs/model/`), the sampling procedure (`specs/sampling.md`), the checks (`specs/verification.md`), the v2 dataset schema (release work, `specs/goals.md`) or the calibration contract (before `v2.0.0`). Step 7 implements the Python side, and the Rust core follows in Steps 8 and 9.
 
 A **module** is one part of the code with one job: for a model part, its spec file, its Python module and, in the core, its Rust module of the same name. The solvers are the exception, because the two backends solve differently (`solvers/` in Python, `march.rs` and `shoot.rs` in the core). A feature belongs to exactly one module (feature map, below).
 
@@ -18,7 +18,7 @@ simulator       SSDFSimulator: the public API over one backend           Python
 on top          sampling, datasets, calibration (later)
 ```
 
-The **backend** is the part that holds the model equations: components, discretization and solvers. There are two: `develop`'s Python/CasADi code, and the Rust core, which covers the `v1.0.0` configuration since Step 8 and the whole model after the plan. Both are kept and developed together (`specs/goals.md`, 2026-10-01). Everything else is Python and is shared by both backends, so switching backends changes no input, output or selection rule.
+The **backend** is the part that holds the model equations: components, discretization and solvers. There are two: `develop`'s Python/CasADi code, and the Rust core, which covers the `v1.0.0` configuration since Step 8 and the whole model from Step 9 on. Both are kept and developed together (`specs/goals.md`, 2026-10-01). Everything else is Python and is shared by both backends, so switching backends changes no input, output or selection rule.
 
 Dependency rules, checked in review:
 
@@ -164,7 +164,7 @@ A new option is a contributor's change, not a runtime plug-in (decision 1): new 
 
 ## Rust core
 
-The core implements `develop`'s model, every option in `specs/model/`, including the `v1.0.0` configuration that the Step 8 port covers first. Step 8 built it for that configuration (`specs/features/014-rust-solver.md`); the rest of `develop`'s model is ported after the plan.
+The core implements `develop`'s model, every option in `specs/model/`, including the `v1.0.0` configuration that the Step 8 port covers first. Step 8 built it for that configuration (`specs/features/014-rust-solver.md`); the rest of `develop`'s model is ported in the plan's Step 9.
 
 ### Layout
 
@@ -211,7 +211,7 @@ Every planned v2 feature, from `specs/goals.md` and the plan's "After this plan"
 | Deviated and L-shaped wells | `geometry` |
 | Inclination in the slip model | `slip` |
 | Four-regime flow-regime model | `slip` |
-| Friction from roughness (Chen, Haaland); the Step 9 correlation | `friction` |
+| Friction from roughness (Chen, Haaland); the Step 10 correlation | `friction` |
 | Frictional heating, gravity term in the energy balance | `thermal` |
 | Lift-gas temperature | `thermal` |
 | Fixed-rate inflow | `inflow` |

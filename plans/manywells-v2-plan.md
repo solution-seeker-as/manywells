@@ -1,8 +1,8 @@
 # ManyWells v2 foundation — Spec-Driven Development Plan
 
-*Draft 2026-09-29, revised 2026-09-30 (multiple roots and stability; work continues on `develop`; scope decisions; foundation step towards v2; Step 1 decisions; lean verification). Owner: Bjarne Grimstad. Status: proposal.*
+*Draft 2026-09-29, revised 2026-09-30 (multiple roots and stability; work continues on `develop`; scope decisions; foundation step towards v2; Step 1 decisions; lean verification) and 2026-10-01 (the port of `develop`'s model to the Rust core becomes Step 9, before the new equation, now Step 10). Owner: Bjarne Grimstad. Status: proposal.*
 
-This plan is a step towards v2, not the release plan. v2 will be a major release with new datasets and perhaps a new paper. This plan brings the repo to a state where new equations are easy to add and test: `develop`'s model is specified in `specs/model/`, the verifier covers it, and v1's sampling procedure runs on the new code. It ends when one new equation has gone through the whole loop (Step 9). What follows is listed under After this plan.
+This plan is a step towards v2, not the release plan. v2 will be a major release with new datasets and perhaps a new paper. This plan brings the repo to a state where new equations are easy to add and test: `develop`'s model is specified in `specs/model/`, the verifier covers it, v1's sampling procedure runs on the new code, and both backends implement the model (Step 9). It ends when one new equation has gone through the whole loop (Step 10). What follows is listed under After this plan.
 
 ## Starting point
 
@@ -56,7 +56,7 @@ Because the problem is a nonconvex feasibility NLP with multiple roots and a 95.
 
 ### New model versions
 
-A change on `develop`, and any new equation (Step 9), comes in as an option that is off in the v1-compatibility configuration. That configuration must keep passing against the v1.0.0 reference; a change that alters it is a regression and fails by design. With an option on, there is no reference root set and no second implementation of the model. The option is checked by:
+A change on `develop`, and any new equation (Step 10), comes in as an option that is off in the v1-compatibility configuration. That configuration must keep passing against the v1.0.0 reference; a change that alters it is a regression and fails by design. With an option on, there is no reference root set and no second implementation of the model. The option is checked by:
 
 - test vectors for each component function (friction, PVT, slip, …) in its spec file;
 - Invariants, dropping those that assume dead oil where gas dissolves into the oil;
@@ -185,7 +185,7 @@ The checks above establish that a candidate solves the model and returns its sta
 ### Step 8 — Pilot: bring the Rust implementation under the verifier
 
 - **Goal.** Run the full loop once on a bounded, high-value target and learn what the spec and harness are missing.
-- **Work.** Treat the `rust_implementation` branch as the first candidate against the v1.0.0 model. It must be shown to return v1's reference roots and pick the stable one, not to reproduce v1's default choice of root. The pilot exercises the verifier and gives a fast v1-compatible solver. Step 1 made the port the v2 core; extending it to `develop`'s model is designed in Step 6 and done after this plan. Write its feature spec (`specs/features/NNN-rust-solver.md`): scope, acceptance = passes the verifier on the full case set, stable-root rate ≥ v1, performance target. Principle 7 decides between the options in `plans/solver_improvements.md`: for example, the bracketed α solve alone is the default over Aitken acceleration with a bracketed fallback (item 2), unless its 3.1x slowdown in the JavaScript port matters; and the scan refinement (item 5) is added only if the case set has wells near the fold. In scope, from `plans/solver_improvements.md`:
+- **Work.** Treat the `rust_implementation` branch as the first candidate against the v1.0.0 model. It must be shown to return v1's reference roots and pick the stable one, not to reproduce v1's default choice of root. The pilot exercises the verifier and gives a fast v1-compatible solver. Step 1 made the port the v2 core; extending it to `develop`'s model is designed in Step 6 and done in Step 9. Write its feature spec (`specs/features/NNN-rust-solver.md`): scope, acceptance = passes the verifier on the full case set, stable-root rate ≥ v1, performance target. Principle 7 decides between the options in `plans/solver_improvements.md`: for example, the bracketed α solve alone is the default over Aitken acceleration with a bracketed fallback (item 2), unless its 3.1x slowdown in the JavaScript port matters; and the scan refinement (item 5) is added only if the case set has wells near the fold. In scope, from `plans/solver_improvements.md`:
   - a stability label on every returned root, and no positional `simulate()[0]` picks in the scripts (item 1);
   - the α stopping rule (item 2), with well 977 as the regression test: the current Rust code puts its stable root at `p_0` = 169.13 bar, v1 at 169.00 bar;
   - a tolerance relative to drawdown for trickle roots, and a check of R before a root is accepted (items 3–4), without which many trickle roots miss the reference root by more than `tol_x`;
@@ -226,10 +226,39 @@ The checks above establish that a candidate solves the model and returns its sta
 
     `specs/verification.md`'s "Rust returns at most two roots" and `specs/architecture.md`'s "Step 7 adds the `backend` argument" are corrected.
 
-### Step 9 — Prove the loop: add one new equation
+### Step 9 — Port `develop`'s model to the Rust core
+
+- **Goal.** Both backends implement `develop`'s whole model before any new equation goes in.
+- **Why before a new equation** (Bjarne, 2026-10-01):
+  - `develop`'s model has no second implementation. Its changes since v1.0.0 came in without specs and were specified after the fact in Step 7. They are checked by component vectors, invariants, spot checks, convergence and the property checks, which do not catch a self-consistent assembly error (New model versions). Comparing the two backends' rows at the same states does, and the core is the only second implementation the plan has.
+  - Each equation goes into both backends (`specs/goals.md`). With the core at the `v1.0.0` configuration only, Step 10's equation would go into the core as the one option on top of v1.0.0's model, a configuration nobody uses, and the backends could be compared on it only there. The loop Step 10 proves would not be the one v2 work uses.
+  - The port is needed for v2.0.0 anyway. It lies on the path to the v2 datasets, the sampling redesign and calibration, which need the full model at the core's speed; a new equation lies on none of them. Moving the port earlier changes the order of the work, not its amount.
+- **Work.**
+  1. Port every option in `specs/model/` that the core lacks (about 45 equation IDs: geometry, inclination in the slip law, friction from roughness, real gas, black oil and dissolved gas, water, mixing, the energy terms, lift-gas temperature, fixed-rate inflow), each as an enum variant (`specs/architecture.md`, Rust core, design point 1) with `// spec:` tags, checked against `develop`'s vectors (`specs/tools/make_develop_vectors.py`). One PR per feature spec, 001 to 011, in dependency order. Each PR compares the two backends in the `v1.0.0` configuration with its option on, before options are combined.
+  2. Make the two changes to the core's method that `specs/architecture.md` gives (Rust core, design points 4 and 5): a temperature solve per cell, because frictional heating (THM-6) and the gravity term (THM-7) make the energy row depend on $p_i$; and the phase rates at each point, because dissolved gas (PVT-OIL-13) makes them vary along the well. Methods and constants are decided under principle 7, with measured gains, as in `specs/features/014-rust-solver.md`. Measure the temperature solve first. It nests a scalar solve inside the pressure solve, and the void fraction is solved inside it at each trial, so it decides whether the core keeps its speed advantage over the CasADi backend (23× at the median in the `v1.0.0` configuration). That advantage is the main reason to have the core.
+  3. Check the method's assumptions on the full model by a test or a measured property, not by argument: that [0, 1] brackets the void fraction (it holds while $C_0 \ge 1$ and $v_\infty \ge 0$, which $\cos\theta \in [0, 1]$ in `WellGeometry` keeps); that the momentum row is U-shaped in $p_i$, which the cell's golden-section search assumes; that the energy row has one root in $T_i$ in its bracket; and that the shooting on $p_0$ and its label still hold with fixed-rate inflow (INF-8), where $w_\text{res}$ does not depend on $p_0$.
+  4. Check the core against the CasADi backend, since `develop`'s full model has no reference root sets. The checks, strongest first:
+     - the rows at the same states agree in every configuration the core covers (design point 2);
+     - on a comparison set of wells drawn with the ported sampler, SMP-40 to SMP-44 included (deviated and L-shaped wells, black oil, real gas, roughness, gas lift with lift-gas temperature, fixed-rate inflow), the core finds every root the CasADi backend finds, with the same label, and every root only the core finds zeroes every CasADi row. Step 8 used the same rule. Roots only the core finds are recorded (`plans/improvements.md` §2.9), not fixed. The set lives in `tests/`, not in `verification/`, whose references all come from v1.0.0;
+     - the property checks of `tests/test_model_properties.py` pass on the core's roots.
+
+     At states where the slip law has several void fractions, the backends are compared on rows only. Which branch is physical is an open model question (Step 8, gap 2).
+  5. Keep the `v1.0.0` configuration exactly as it is: the core's rows match v1.0.0's row vectors, and its verifier report stays at PASS, 100%, with no expected failures.
+  6. Bjarne sets the performance target that `specs/features/014-rust-solver.md` deferred to this step.
+- **Out of scope.** The batch API (`plans/improvements.md` §4.3), prebuilt wheels, the CasADi search's missed roots (§2.9), a ruling on the void-fraction branch, the four-regime flow-regime model, and making the fluid's fractions parameters (§4.5), which the port makes unnecessary unless datasets are generated on the CasADi backend.
+- **Output.** The core implements every option in `specs/model/`, and `SSDFSimulator(wp, backend='rust')` accepts every well. A feature spec, `specs/features/015-rust-develop-model.md`, gives the methods and their measured gains. The comparison set and its tests are committed, and `AGENTS.md` describes the core as covering the whole model.
+- **Done when.** The two backends agree on the rows in every configuration and on the comparison set as above, the `v1.0.0` configuration's verifier reports are unchanged, and the traceability test passes.
+- **Who.** Agent implements and drafts the feature spec; Bjarne signs off the method changes under principle 7, sets the performance target, and adjudicates where the backends disagree.
+- **Status.** Not started. Bjarne signed off the step on 2026-10-01:
+  - the reordering, with its change to `specs/goals.md`;
+  - the checks against the CasADi backend, with the comparison set in `tests/`; its tolerances come to him during the step;
+  - one PR per feature spec, the temperature solve measured first, and the scope above;
+  - Finding 4's ruling in `specs/features/014-rust-solver.md`, renumbered so that the case set stays as it is through Step 10.
+
+### Step 10 — Prove the loop: add one new equation
 
 - **Goal.** Show that the repo has reached this plan's end state, in which a new equation is easy to add and test.
-- **Work.** Pick one small, self-contained addition, for example another friction-factor correlation as an option in `friction.md`. Take it the whole way through the loop that v2 work will use: feature spec (`specs/features/NNN-<name>.md`: motivation, delta to the component files in `specs/model/` with new equation IDs, acceptance tests, out of scope) → agent plan → implementation in the Python simulator and in the Rust core (which then covers v1.0.0's model, so the equation goes in as an option there), with `spec:` tags and test vectors in both → spot and property checks for the new option → verifier (the v1-compatibility configuration unchanged) → human review → merge, with spec and code in the same PR. Record every step that needed more than `AGENTS.md` and the specs describe.
+- **Work.** Pick one small, self-contained addition, for example another friction-factor correlation as an option in `friction.md`. Take it the whole way through the loop that v2 work will use: feature spec (`specs/features/NNN-<name>.md`: motivation, delta to the component files in `specs/model/` with new equation IDs, acceptance tests, out of scope) → agent plan → implementation in both backends, with `spec:` tags and test vectors in both → spot and property checks for the new option → the two backends compared with the option on, as in Step 9 → verifier (the v1-compatibility configuration unchanged) → human review → merge, with spec and code in the same PR. Record every step that needed more than `AGENTS.md` and the specs describe.
 - **Output.** The new equation, merged; a list of the gaps found, each fixed; a "how to add an equation" section in `AGENTS.md`, checked against what was actually done.
 - **Done when.** The addition went through the loop with no undocumented steps left, and CI is green, including the traceability test.
 - **Who.** Agent implements, working only from `AGENTS.md` and the specs; Bjarne reviews the spec delta.
@@ -238,8 +267,8 @@ The checks above establish that a candidate solves the model and returns its sta
 
 v2 is a major release with new datasets and perhaps a new paper. After this plan, the remaining work is:
 
-- **New equations and models** through the loop proven in Step 9, in parallel where modules are independent. Each is an option that is off in the v1-compatibility configuration, so the reference root sets stay valid.
-- **Rust core.** Port `develop`'s model to the Rust core designed in Step 6. The Python/CasADi simulator stays: the two backends are developed together, each equation in both, and checked against each other (`specs/goals.md`, decided 2026-10-01). Publish prebuilt wheels on PyPI, so installing needs no Rust toolchain.
+- **New equations and models** through the loop proven in Step 10, in parallel where modules are independent. Each is an option that is off in the v1-compatibility configuration, so the reference root sets stay valid.
+- **Rust core.** The core covers `develop`'s model from Step 9 on. The Python/CasADi simulator stays: the two backends are developed together, each equation in both, and checked against each other (`specs/goals.md`, decided 2026-10-01). Publish prebuilt wheels on PyPI, so installing needs no Rust toolchain.
 - **Verifier coverage** (Step 8, gaps 2 and 4): cases for low-$u$ wells whose roots lie within one scan step of $p_r$, states with several void fractions, and wells with more than two roots. The old port, method B, misses the first kind, so the build needs a search that finds them, such as v1.0.0 solved from the Rust core's roots. Then a ruling on the void-fraction branch (`specs/model/slip.md`, Open question), with the new flow-regime model.
 - **Sampling redesign.** A new procedure for v2 datasets that differ significantly from v1's; it can address the unrealistic-wells limitation. `specs/sampling.md` gets a new version, and the distribution check keeps covering the v1-compatibility configuration.
 - **Calibration.** A spec for `calibration/` (with `plans/improvements.md` §2.8), which must work with the Rust core, then the private real-well accuracy check on the release candidate, with its aggregate results recorded.
@@ -257,11 +286,11 @@ Decisions for v2.0.0, not needed in this plan:
 
 ```
 Step 1 ─┬─▶ Step 2 ─▶ Step 3 ───────────┐   ┌─▶ Step 7 ─┐
-        │                               ├───┤           ├─▶ Step 9
+        │                               ├───┤           ├─▶ Step 9 ─▶ Step 10
         └─▶ Step 4 ─▶ Step 5 ─▶ Step 6 ─┘   └─▶ Step 8 ─┘
 ```
 
-Steps 2–3 (verifier + data) and Steps 4–6 (specs) can run in parallel after Step 1. Steps 7 (`develop`) and 8 (Rust pilot) can run in parallel once both branches are done. Step 9 waits for Step 8, since Step 1 made the Rust port the v2 core. Nothing in Steps 7–9 starts until Step 2 is green on v1.0.0.
+Steps 2–3 (verifier + data) and Steps 4–6 (specs) can run in parallel after Step 1. Steps 7 (`develop`) and 8 (Rust pilot) can run in parallel once both branches are done. Step 9 waits for both: it ports the model that Step 7 specified to the core that Step 8 built. Step 10 waits for Step 9, so that its equation goes into both backends. Nothing in Steps 7–10 starts until Step 2 is green on v1.0.0.
 
 ## Proposed repository layout
 
@@ -296,7 +325,7 @@ manywells/
     architecture.md              # Step 6
     verification.md              # Step 2 — checks, tolerances, case set
     features/
-      NNN-<name>.md              # Steps 7–9, one per feature (after the fact for changes since v1.0.0)
+      NNN-<name>.md              # Steps 7–10, one per feature (after the fact for changes since v1.0.0)
   verification/                  # manywells-verify package (Step 2)
     data/                        # case set and reference root sets from v1.0.0
   src/manywells/                 # Python package: develop's simulator now; Python bindings over the Rust core in v2

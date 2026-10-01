@@ -4,7 +4,7 @@
 
 ## Motivation
 
-`specs/goals.md` makes a Rust core with Python bindings the v2 implementation, and the plan's Step 9 adds an equation to it. The port solved v1.0.0's model by shooting on the bottomhole pressure, about 100 times faster than v1.0.0, but no candidate check said it was right. On the verifier's case set its roots failed: none was labelled, its stable-root rate was 0%, and only 5 of the 200 reference roots were within `tol_x` (median distance 1.8e-3). Its temperatures came from the exact solution of the energy ODE instead of v1.0.0's rows, its void fractions stopped on the iteration's step size, its outer tolerance was 1e-6 bar on $p_0$, and its scan assumed at most two roots.
+`specs/goals.md` makes a Rust core with Python bindings the v2 implementation, and the plan's Steps 9 and 10 port `develop`'s model to it and add an equation. The port solved v1.0.0's model by shooting on the bottomhole pressure, about 100 times faster than v1.0.0, but no candidate check said it was right. On the verifier's case set its roots failed: none was labelled, its stable-root rate was 0%, and only 5 of the 200 reference roots were within `tol_x` (median distance 1.8e-3). Its temperatures came from the exact solution of the energy ODE instead of v1.0.0's rows, its void fractions stopped on the iteration's step size, its outer tolerance was 1e-6 bar on $p_0$, and its scan assumed at most two roots.
 
 ## Delta
 
@@ -57,7 +57,7 @@ With the last row the verifier reports PASS with no expected failures: every ref
 
 ## Off in the `v1.0.0` configuration
 
-Not a model option. The core covers the `v1.0.0` configuration only, and refuses any other well. `develop`'s model in Rust comes after the plan (`specs/architecture.md`).
+Not a model option. The core covers the `v1.0.0` configuration only, and refuses any other well. `develop`'s model in Rust comes in the plan's Step 9 (`specs/architecture.md`).
 
 ## Acceptance
 
@@ -82,7 +82,7 @@ Not a model option. The core covers the `v1.0.0` configuration only, and refuses
    - states with several void fractions;
    - wells with more than two roots, which were left out as disagreements, so an early-stop scan is untested.
 
-   Its near-fold cases were placed with the old port's scan grid (`verification/build/rust_roots.py`, `fold`), which biases them towards that grid. Method B, the old port, misses the first kind too, so under the build's rule such cases would be left out as disagreements. **Ruling (2026-10-01):** after the plan; the case set stays as it is through Step 9.
+   Its near-fold cases were placed with the old port's scan grid (`verification/build/rust_roots.py`, `fold`), which biases them towards that grid. Method B, the old port, misses the first kind too, so under the build's rule such cases would be left out as disagreements. **Ruling (2026-10-01):** after the plan; the case set stays as it is through Step 10.
 5. **Distributions.** Regenerated with the core at 5 samples per published `sol-1` well: 9,920 rows in 49 s on 24 cores. The check fails narrowly: CDF gap 0.021 for PWH (bound 0.02), rank-correlation gap 0.035 (bound 0.05). `develop`'s CasADi regeneration (9,879 rows) passed at 0.0196. On the first 200 wells, the two backends' rows agree to 1e-6 in 986 of 988 common samples. The other two are finding 2's, and the core solves 3 samples the CasADi search does not (finding 3). So the core's extra rows are mostly samples that the CasADi search, and likely v1.0.0's generator, did not solve, and that the published reference does not have. **Ruling (2026-10-01):** a known result, decided together with Step 7's open item on the check's margin.
 
 ## Out of scope
