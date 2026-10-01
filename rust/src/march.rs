@@ -80,33 +80,25 @@ impl<'a> Marcher<'a> {
         t
     }
 
-    /// The void fraction that zeroes the slip row, by fixed-point iteration on alpha = w_g / (A rho_g (C_0 v_m + v_inf))
+    /// The void fraction that zeroes the slip row (SLIP-1) at a point where the mass rows fix the superficial
+    /// velocities j_g and j_l (m/s): Brent on h(α) = α (C_0 j_m + v_inf) - j_g, which is -α times the slip row with
+    /// v_g = j_g / α. The classifier sees α only through its features c_2 and c_4, and C_0 >= 1 and v_inf >= 0 for
+    /// every mix of the regimes, so h(0) = -j_g < 0 and h(1) >= j_l + v_inf > 0: the bracket [0, 1] always holds a
+    /// root. None where the rise velocities are not real (rho_g >= rho_l).
     fn void_fraction(&self, rates: &Rates, rho_g: f64, rho_l: f64, t: f64) -> Option<f64> {
-        const ALPHA_LO: f64 = 1e-6;
-        const ALPHA_HI: f64 = 1.0 - 1e-6;
-        const ALPHA_TOL: f64 = 1e-3;
-        const MAX_ITER: usize = 100;
-        let (a, w_g, w_l) = (self.spec.a(), rates.w_g, rates.w_l);
-        let rho_g = if rho_g <= 0.0 { 1e-3 } else { rho_g };
-        if w_g <= 0.0 {
-            return Some(ALPHA_LO);
+        if !(rho_g > 0.0 && rho_g < rho_l) {
+            return None;
         }
+        let a = self.spec.a();
+        let (j_g, j_l) = (rates.w_g / (a * rho_g), rates.w_l / (a * rho_l));
+        let j_m = j_g + j_l;
         let sigma = self.spec.fluid.surface_tension(rho_l, t);
-        let vm = w_g / (a * rho_g) + w_l / (a * rho_l);
-        let mut alpha = (w_g / (a * rho_g * (1.1 * vm + 0.5 + 1e-6))).clamp(ALPHA_LO, ALPHA_HI);
-        let mut converged = false;
-        for _ in 0..MAX_ITER {
-            let v_g = w_g / (a * alpha * rho_g);
-            let v_l = w_l / (a * (1.0 - alpha) * rho_l);
-            let (c_0, v_inf) = slip::identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, self.spec.d);
-            let next = (w_g / (a * rho_g * (c_0 * vm + v_inf + 1e-6))).clamp(ALPHA_LO, ALPHA_HI);
-            converged = (next - alpha).abs() < ALPHA_TOL;
-            alpha = next;
-            if converged {
-                break;
-            }
-        }
-        (converged && alpha.is_finite()).then_some(alpha)
+        let terms = slip::SlipTerms::new(j_g, j_l, rho_g, rho_l, sigma, self.spec.d);
+        let mut h = |alpha: f64| -> Result<f64, RootError> {
+            let (c_0, v_inf) = terms.parameters(alpha);
+            Ok(alpha * (c_0 * j_m + v_inf) - j_g)
+        };
+        brentq(&mut h, 0.0, 1.0, 0.0, RTOL, 100).ok()
     }
 
     /// The state at a point at pressure p and temperature t: the closures at the march's rates
@@ -227,14 +219,14 @@ mod tests {
     }
 
     #[test]
-    fn a_march_zeroes_the_inflow_mass_and_energy_rows() {
+    fn a_march_zeroes_the_inflow_mass_energy_and_closure_rows() {
         for (spec, op) in [w1(20), w2(20)] {
             let m = Marcher::new(&spec, &op);
             let p_0 = op.p_s + 0.8 * (op.p_r - op.p_s);
             let march = m.march(p_0);
             assert!(!march.failed);
             let rows = largest_rows(&spec, &op, &march.x);
-            for id in ["INF-6", "INF-7", "THM-3", "PVT-GAS-1", "PVT-MIX-1", "DISC-2", "DISC-3", "DISC-5"] {
+            for id in ["INF-6", "INF-7", "THM-3", "SLIP-1", "PVT-GAS-1", "PVT-MIX-1", "DISC-2", "DISC-3", "DISC-5"] {
                 assert!(rows[id] < 1e-10, "{id}: {}", rows[id]);
             }
         }
