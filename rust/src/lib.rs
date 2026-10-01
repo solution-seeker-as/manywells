@@ -82,12 +82,12 @@ mod _core {
     #[pymethods]
     impl Well {
         #[new]
-        #[pyo3(signature = (*, md, tvd, D, rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, f_D, h, frictional_heating,
+        #[pyo3(signature = (*, md, tvd, D, rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, f_D, h, frictional_heating,
                             gravity_term, C_0_annular, C_0_slug, C_0_bubbly, v_inf_annular, inflow, inflow_coefficient,
                             choke, K_c, profile))]
         #[allow(non_snake_case, clippy::too_many_arguments)]
         fn new(md: Vec<f64>, tvd: Vec<f64>, D: f64, rho_o: f64, rho_g: f64, rho_w: f64, gor: f64, wlr: f64, cp_g: f64,
-               cp_o: f64, cp_w: f64, f_D: f64, h: f64, frictional_heating: bool, gravity_term: bool, C_0_annular: f64,
+               cp_o: f64, cp_w: f64, ideal_gas: bool, f_D: f64, h: f64, frictional_heating: bool, gravity_term: bool, C_0_annular: f64,
                C_0_slug: f64, C_0_bubbly: f64, v_inf_annular: f64, inflow: &str, inflow_coefficient: f64, choke: &str,
                K_c: f64, profile: &str) -> PyResult<Self> {
             let inflow = match inflow {
@@ -103,7 +103,7 @@ mod _core {
             let profile = Profile::from_name(profile).map_err(PyValueError::new_err)?;
             let spec = WellSpec {
                 geometry: Geometry::from_grid(&md, &tvd, D).map_err(PyValueError::new_err)?,
-                fluid: Fluid::new(FluidInputs { rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w }),
+                fluid: Fluid::new(FluidInputs { rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas }),
                 f_d: f_D,
                 thermal: Thermal { h, frictional_heating, gravity_term },
                 slip: Slip { c_0_annular: C_0_annular, c_0_slug: C_0_slug, c_0_bubbly: C_0_bubbly, v_inf_annular },
@@ -241,6 +241,13 @@ mod _core {
                 let [p, v_g, v_l, alpha, rho_g, rho_l, t, t_a, f, cos_incl] = take(name, a)?;
                 let s = State { p, v_g, v_l, alpha, rho_g, rho_l, t };
                 vec![spec.thermal.temperature_gradient(&s, &spec.fluid, t_a, f, cos_incl, spec.geometry.d)]
+            }
+            "gas_density" => { let [p, t] = take(name, a)?; vec![spec.fluid.gas_density(p, t)] }
+            "z_factor" => { let [p, t] = take(name, a)?; vec![spec.fluid.z_factor(p, t)] }
+            "sutton_pseudo_critical" => {
+                let [sg_gas] = take(name, a)?;
+                let (ppc, tpc) = gas::sutton_pseudo_critical(sg_gas);
+                vec![ppc, tpc]
             }
             "ideal_gas_density" => { let [p, t, r_s] = take(name, a)?; vec![gas::ideal_gas_density(p, t, r_s)] }
             "api_from_density" => { let [rho] = take(name, a)?; vec![oil::api_from_density(rho)] }

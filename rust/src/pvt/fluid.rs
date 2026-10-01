@@ -8,10 +8,19 @@
 //! src/manywells/pvt/fluid.py. It is given by the densities of oil, gas and water at standard conditions, the
 //! gas-oil and water-liquid ratios and the heat capacities, from which it derives the gas's specific gravity and gas
 //! constant, the liquid at standard conditions and the inflow's gas mass fraction, with the same arithmetic as
-//! FluidModel. So far an ideal gas, and a dead oil mixed with water as one incompressible liquid.
+//! FluidModel. The gas is ideal or real (Papay); so far the liquid is a dead oil mixed with water, incompressible.
 
 use crate::pvt::{gas, mixture, oil};
-use crate::units::{M_AIR, P_REF, R_UNIVERSAL, T_REF};
+use crate::units::{CF_BAR, M_AIR, P_REF, R_UNIVERSAL, T_REF};
+
+/// The gas's compressibility factor
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum GasLaw {
+    /// Z = 1
+    Ideal,
+    /// Z from Papay's correlation, with the pseudo-critical pressure (Pa) and temperature (K) of the gas
+    Papay { ppc: f64, tpc: f64 },
+}
 
 /// The fluid's fields, as FluidModel's
 #[derive(Clone, Copy, Debug)]
@@ -24,6 +33,7 @@ pub struct FluidInputs {
     pub cp_g: f64,  // Heat capacities (J/(kg K)) of gas, oil and water
     pub cp_o: f64,
     pub cp_w: f64,
+    pub ideal_gas: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -38,11 +48,12 @@ pub struct Fluid {
     pub cp_l: f64,   // Liquid heat capacity (J/(kg K)), volume-weighted
     pub f_g: f64,    // Gas mass fraction of the reservoir inflow at standard conditions
     pub x_o: f64,    // Oil mass fraction of the liquid at standard conditions
+    pub gas_law: GasLaw,
 }
 
 impl Fluid {
     pub fn new(inputs: FluidInputs) -> Self {
-        let FluidInputs { rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w } = inputs;
+        let FluidInputs { rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas } = inputs;
         let sg_gas = rho_g * R_UNIVERSAL * T_REF / (P_REF * M_AIR); // spec: PVT-GAS-6
         let rho_l = wlr * rho_w + (1.0 - wlr) * rho_o;               // spec: PVT-MIX-10
         Self {
@@ -56,15 +67,29 @@ impl Fluid {
             cp_l: wlr * cp_w + (1.0 - wlr) * cp_o,                                       // spec: PVT-MIX-10
             f_g: rho_g * gor / (rho_g * gor + rho_o + rho_w * wlr / (1.0 - wlr)),        // spec: PVT-MIX-10
             x_o: if rho_l == 0.0 { 0.0 } else { (1.0 - wlr) * rho_o / rho_l },           // spec: PVT-MIX-10
+            gas_law: if ideal_gas {
+                GasLaw::Ideal
+            } else {
+                let (ppc, tpc) = gas::sutton_pseudo_critical(sg_gas);
+                GasLaw::Papay { ppc, tpc }
+            },
+        }
+    }
+
+    /// The gas's compressibility factor at p (bar) and T (K)
+    pub fn z_factor(&self, p: f64, t: f64) -> f64 {
+        match self.gas_law {
+            GasLaw::Ideal => 1.0,
+            GasLaw::Papay { ppc, tpc } => gas::papay_z_factor(p * CF_BAR, t, ppc, tpc),
         }
     }
 
     pub fn gas_density(&self, p: f64, t: f64) -> f64 {
-        gas::ideal_gas_density(p, t, self.r_s)
+        gas::gas_density(p, t, self.z_factor(p, t), self.r_s)
     }
 
     pub fn gas_law_row(&self, p: f64, t: f64, rho_g: f64) -> f64 {
-        gas::ideal_gas_row(p, t, rho_g, self.r_s)
+        gas::gas_law_row(p, t, rho_g, self.z_factor(p, t), self.r_s)
     }
 
     pub fn liquid_density(&self) -> f64 {

@@ -15,6 +15,7 @@
 use crate::friction;
 use crate::geometry::Cell;
 use crate::input::{OperatingPoint, WellSpec};
+use crate::pvt::fluid::GasLaw;
 use crate::slip;
 use crate::thermal;
 use crate::units::{CF_BAR, STD_GRAVITY};
@@ -150,7 +151,8 @@ pub fn row_ids(spec: &WellSpec) -> Vec<&'static str> {  // spec: DISC-11
     let n = spec.n_cells();
     let bottom = ["INF-6", "INF-7", "THM-3"];
     let cell = ["DISC-7", "DISC-8", "DISC-9", "DISC-10"];
-    let closures = ["SLIP-1", "PVT-GAS-1", "PVT-MIX-1"];
+    let gas_law = if spec.fluid.gas_law == GasLaw::Ideal { "PVT-GAS-1" } else { "PVT-GAS-3" };
+    let closures = ["SLIP-1", gas_law, "PVT-MIX-1"];
     let mut ids = Vec::with_capacity(DIM_X * (n + 1));
     ids.extend(bottom);
     ids.extend(closures);

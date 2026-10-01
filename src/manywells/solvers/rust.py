@@ -43,8 +43,6 @@ CORE_CLASSES = {'geometry': (WellGeometry,), 'fluid': (FluidModel,), 'friction':
 def _not_yet_ported(wp) -> list:
     """The options of wp that the core does not implement yet. Step 9 ports them one feature spec at a time."""
     geo, fluid, thermal, out = wp.geometry, wp.fluid, wp.thermal, []
-    if not fluid.ideal_gas:
-        out.append('a real gas (006)')
     if fluid.oil_model != 'dead_oil':
         out.append('black oil (007, 008)')
     if fluid.surface_tension_model != 'liquid':
@@ -81,7 +79,8 @@ def core_well(wp) -> '_core.Well':
     vogel = isinstance(inflow, Vogel)
     return _core.Well(md=list(geo.md), tvd=list(geo.tvd), D=geo.D,
                       rho_o=fluid.rho_o, rho_g=fluid.rho_g, rho_w=fluid.rho_w, gor=fluid.gor, wlr=fluid.wlr,
-                      cp_g=fluid.cp_g, cp_o=fluid.cp_o, cp_w=fluid.cp_w, f_D=wp.friction.f_D, h=wp.thermal.h,
+                      cp_g=fluid.cp_g, cp_o=fluid.cp_o, cp_w=fluid.cp_w, ideal_gas=fluid.ideal_gas,
+                      f_D=wp.friction.f_D, h=wp.thermal.h,
                       frictional_heating=wp.thermal.frictional_heating, gravity_term=wp.thermal.gravity_term,
                       C_0_annular=wp.slip.C_0_annular, C_0_slug=wp.slip.C_0_slug, C_0_bubbly=wp.slip.C_0_bubbly,
                       v_inf_annular=wp.slip.v_inf_annular,

@@ -87,7 +87,8 @@ pub mod test_wells {
     pub fn v1_fluid(rho_l: f64, r_s: f64, cp_g: f64, cp_l: f64, f_g: f64) -> Fluid {
         let rho_g = P_REF / (r_s * T_REF);
         let gor = f_g * rho_l / ((1.0 - f_g) * rho_g);
-        Fluid::new(FluidInputs { rho_o: rho_l, rho_g, rho_w: 999.1, gor, wlr: 0.0, cp_g, cp_o: cp_l, cp_w: 4184.0 })
+        Fluid::new(FluidInputs { rho_o: rho_l, rho_g, rho_w: 999.1, gor, wlr: 0.0, cp_g, cp_o: cp_l, cp_w: 4184.0,
+                                 ideal_gas: true })
     }
 
     pub fn w1(n_cells: usize) -> (WellSpec, OperatingPoint) {
@@ -136,11 +137,19 @@ pub mod test_wells {
         (spec, op)
     }
 
+    /// W1 deviated with the energy terms, and a real gas (006)
+    pub fn w1_real_gas(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let (mut spec, op) = w1_deviated(n_cells);
+        spec.fluid = Fluid::new(FluidInputs { ideal_gas: false, ..spec.fluid.inputs });
+        (spec, op)
+    }
+
     /// Every test well
     pub fn all(n_cells: usize) -> Vec<(&'static str, WellSpec, OperatingPoint)> {
         let named = |name, (spec, op)| (name, spec, op);
         vec![named("w1", w1(n_cells)), named("w2", w2(n_cells)), named("w1_thermal", w1_thermal(n_cells)),
-             named("w1_deviated", w1_deviated(n_cells)), named("w2_l_shaped", w2_l_shaped(n_cells))]
+             named("w1_deviated", w1_deviated(n_cells)), named("w2_l_shaped", w2_l_shaped(n_cells)),
+             named("w1_real_gas", w1_real_gas(n_cells))]
     }
 }
 

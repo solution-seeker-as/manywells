@@ -19,5 +19,6 @@ pub const M_AIR: f64 = 28.97;
 pub const P_REF: f64 = 101_325.0;
 pub const T_REF: f64 = 288.15;
 
-/// Pascal per bar
+/// Pascal per bar and per psi
 pub const CF_BAR: f64 = 1e5;
+pub const CF_PSI: f64 = 6894.76;
