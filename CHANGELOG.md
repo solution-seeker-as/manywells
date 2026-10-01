@@ -103,14 +103,14 @@ sim._gas_and_liquid_flow_rate(p, T, w_l_inflow)
 fluid.phase_rates(p, T, w_res, w_lg)          # and fluid.reservoir_gas_rate(w_res)
 ```
 
-**Closed loop** runs on a frozen copy of the old simulator; import its inputs from it.
+**Closed loop** is removed: closed-loop simulation is out of scope for v2 (`specs/goals.md`). `manywells.closed_loop`, the closed-loop and loaded-wells generators, and the v1.0.0 sampler they used (`scripts/data_generation/well.py`, `nonstationary_well.py`) are gone; v1.0.0 has them, and generated the published `manywells-nscl-1`.
 
 ```python
 # old
-from manywells.simulator import WellProperties, BoundaryConditions
+from manywells.closed_loop.cl_simulator import ClosedLoopWellSimulator
 
-# new
-from manywells.closed_loop.cl_simulator import ClosedLoopWellSimulator, WellProperties, BoundaryConditions
+# new: use v1.0.0
+#   pip install git+ssh://git@github.com/solution-seeker-as/manywells.git@v1.0.0
 ```
 
 ### Breaks since v1.0.0 that predate this list

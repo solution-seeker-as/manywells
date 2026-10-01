@@ -22,7 +22,6 @@ Project folder
 |-- docs                    # Documentation
 |-- src/manywells           # Implementation of simulator
 |   |-- calibration         # Code for calibration to data
-|   |-- closed_loop         # Simulation with closed-loop control
 |-- scripts                 # Various scripts and examples
 |   |-- data_generation     # Scripts used to generate the ManyWells datasets
 |   |-- flow_regimes        # Scripts to develop a flow regime classifier

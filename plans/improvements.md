@@ -188,7 +188,7 @@ can run quietly.
 ### 2.3 `isinstance`-based choke dispatch blocks extension
 
 **[done 2026-10-01 in Step 7]** `ChokeModel.mass_flow_rate(u, p_s, s, A)`, with each
-model's `density_and_multiplier`. Closed loop keeps its own dispatch, on its frozen base.
+model's `density_and_multiplier`. Closed loop kept its own dispatch, on its frozen base, until it was retired (2026-10-01).
 
 **[plan: Step 6]** Interface contracts. Settled in `specs/architecture.md`:
 `ChokeModel.mass_flow_rate(u, p_s, s, A)` takes the wellhead state. Step 7
@@ -231,7 +231,7 @@ needed from `x_0` — the expression is cheap and symbolic anyway.
 
 **[plan: Step 6]** The `SSDFSimulator` part, settled in `specs/architecture.md`:
 frozen inputs, and the default choke set in `WellProperties.__post_init__`.
-Step 7 implements it. The `ClosedLoopWellSimulator` part is **[out of v2]**.
+Step 7 implements it. The `ClosedLoopWellSimulator` part is **[out of v2]**, and lapsed with closed loop's retirement (2026-10-01).
 
 - `SSDFSimulator.__init__` writes the default choke back into the *caller's*
   `WellProperties` (`simulator.py:126-127`).
@@ -246,7 +246,7 @@ dataclasses as immutable (consider `frozen=True` like `WellGeometry`).
 
 ### 2.6 `ClosedLoopWellSimulator` cleanups
 
-**[out of v2]** Closed loop is out of scope for v2 (plan, Scope decisions), and `closed_loop/` is retired after the plan (Bjarne, 2026-10-01), so these cleanups lapse.
+**[out of v2]** Closed loop is out of scope for v2 (plan, Scope decisions), and `closed_loop/` was retired on 2026-10-01 (Bjarne), so these cleanups lapse.
 
 - `import matplotlib.pyplot as plt` at module level (`cl_simulator.py:20`)
   drags a GUI dependency into library code and breaks headless use; it is only

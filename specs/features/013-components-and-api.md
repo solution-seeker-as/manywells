@@ -13,12 +13,12 @@
 - **Frozen inputs** (§2.5, §2.1): every input dataclass is frozen and raises `ValueError` in `__post_init__`; the default Bernoulli choke is set by `WellProperties`, not by the simulator.
 - **Discretization** (`discretization.py`): `build_system(wp)`, with the rows of DISC-11 defined once and used by the full residual and by the march; the operating point is the parameter vector $[p_r, p_s, T_r, T_s, T_{lg}, u, w_{lg}]$ (§4.1).
 - **Configurations** (`configurations.py`): `v1_well(...)` from v1.0.0's parameters, and `check(wp, 'v1.0.0' | 'develop')`.
-- **Closed loop** keeps a frozen copy of the old simulator as its private base (`closed_loop/_base.py`; decision 2), pinned by `tests/test_closed_loop.py`.
+- **Closed loop** kept a frozen copy of the old simulator as its private base (`closed_loop/_base.py`; decision 2), pinned by `tests/test_closed_loop.py`, until `closed_loop/` was retired on 2026-10-01.
 - **Logging**: no prints; failed starts are logged to `logging.getLogger('manywells')` (§2.2).
 
 ## Acceptance
 
-`tests/test_simulator.py`, `tests/test_configurations.py`, `tests/test_closed_loop.py`, the row vectors, the verifier. Build-once speed-up: measured on the case set (`plans/manywells-v2-plan.md`, Step 7 status).
+`tests/test_simulator.py`, `tests/test_configurations.py`, `tests/test_closed_loop.py` (until closed loop's retirement), the row vectors, the verifier. Build-once speed-up: measured on the case set (`plans/manywells-v2-plan.md`, Step 7 status).
 
 ## Breaking changes
 

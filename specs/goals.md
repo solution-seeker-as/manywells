@@ -38,7 +38,7 @@ The new flow-regime model and the port of `develop`'s model to Rust come after t
 - **Implementation.** Two backends behind one Python API, `SSDFSimulator(wp, backend=...)`: `develop`'s Python/CasADi simulator, and a Rust core with Python bindings. The Rust core covers the full model after this plan, before v2.0.0.
   - **Developed together.** Both backends are kept and developed together (Bjarne, 2026-10-01). Each equation is implemented in both, under the same spec ID.
   - **Checked against each other.** The two backends are compared on the component vectors, on the rows at the same states, and on the operating point for the same cases. The verifier does not re-implement the model.
-  - **`closed_loop/`** is retired after this plan; closed loop can return in a later version.
+  - **`closed_loop/`** was retired on 2026-10-01 (it remains in v1.0.0); closed loop can return in a later version.
   - **Calibration** must work with the Rust core; its spec decides how.
 - **Distribution.** Prebuilt wheels on PyPI, so `pip install manywells` needs no Rust toolchain.
 - **Release.** Besides the model and the Rust core, v2.0.0 needs calibration, checked privately against real-well data, and new datasets. There is no closed-loop dataset. Whether there is a new paper is open.

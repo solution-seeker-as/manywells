@@ -35,14 +35,12 @@ Project folder
 │ ├── data_generation # Data generation folder
 │ │ ├── open_loop_stationary # Folder data generation open-loop stationary data
 │ │ │  └── generate_well_data.py # Data generation script stationary open-loop data
-│ │ ├── open_loop_nonstationary # Folder data generation open-loop stationary data
+│ │ ├── open_loop_nonstationary # Folder data generation open-loop nonstationary data
 │ │ │  └── generate_open_loop_nonstationary_well_data.py # Data generation script nonstationary open-loop data
-│ │ ├── open_loop_nonstationary # Folder data generation closed-loop stationary data
-│ │ │  └── generate_closed_loop_nonstationary_well_data.py # Data generation script nonstationary closed-loop data
 ```
-Hence, `generate_well_data.py` generates open-loop stationary data, `generate_open_loop_nonstationary_well_data.py` 
-generates open-loop nonstationary, and `generate_closed_loop_nonstationary_well_data.py` 
-generates closed-loop nonstationary  data. Then, do the following steps:
+Hence, `generate_well_data.py` generates open-loop stationary data, and `generate_open_loop_nonstationary_well_data.py` 
+generates open-loop nonstationary data. Closed-loop data (`manywells-nscl-1`) was generated with v1.0.0, whose
+closed-loop simulator and generator are no longer on `develop`. Then, do the following steps:
 ```
 1. Define n_wells (int, number of wells to be simulated)
 2. Define n_sim (int, number of datapoints per well)

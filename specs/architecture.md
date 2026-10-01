@@ -15,7 +15,7 @@ discretization  the rows of each point, in DISC-6 order                  ├ bac
 solvers         march, root search, stability label; Ipopt adapter      ┘
 solution        Root, RootSet, operating point (SOL-4 to SOL-6)          Python
 simulator       SSDFSimulator: the public API over one backend           Python
-on top          sampling, datasets, calibration (later), closed_loop (out of v2)
+on top          sampling, datasets, calibration (later)
 ```
 
 The **backend** is the part that holds the model equations: components, discretization and solvers. There are two: `develop`'s Python/CasADi code, and the Rust core, which covers the `v1.0.0` configuration since Step 8 and the whole model after the plan. Both are kept and developed together (`specs/goals.md`, 2026-10-01). Everything else is Python and is shared by both backends, so switching backends changes no input, output or selection rule.
@@ -24,7 +24,7 @@ Dependency rules, checked in review:
 
 - Components import only `units`, `ca_functions` and, within `pvt/`, each other. A component that needs another one's output receives it as an argument or as the component object; it does not import it.
 - `discretization` imports the components. `solvers` import `discretization` and `solution` and know nothing about the physics.
-- Nothing in the backend imports `simulator`, `sampling`, `datasets`, `calibration` or `closed_loop`. Nothing in `src/` imports `scripts/` or `verification/`, and `verification/` imports nothing from `manywells` (`specs/verification.md`).
+- Nothing in the backend imports `simulator`, `sampling`, `datasets` or `calibration`. Nothing in `src/` imports `scripts/` or `verification/`, and `verification/` imports nothing from `manywells` (`specs/verification.md`).
 - No model equation is in the shared Python layer: each is in both backends, under the same spec ID. The backend returns what the Python layer would otherwise have to recompute (below).
 
 ## Modules
@@ -47,7 +47,6 @@ Dependency rules, checked in review:
 | `sampling/` | `wells.py`, `conditions.py`, `generate.py`: well draws, operating-point draws, the generation procedure | `sampling.md` | new (Step 7), ported from `scripts/data_generation/` |
 | `datasets/` | `schema.py`, `rows.py`, `io.py`: feature definitions, the features of a solved sample, writers and readers | `docs/datasets.md`; the v2 schema is release work | new |
 | `calibration/` | fitting inflow and choke models to data | its spec, before `v2.0.0` | exists, unchanged |
-| `closed_loop/` | closed-loop simulation | none: out of v2 | exists; Step 7 gives it a verbatim copy of today's `SSDFSimulator` as its private base (decision 2), and it is retired after the plan (`specs/goals.md`) |
 
 The sampler lives in `src/`, not in `scripts/`, because the traceability test looks for the SMP tags in `src/` and `rust/`. The generator scripts become thin callers of `sampling.generate`. The candidate adapter that runs `develop` on the verifier's case set imports both `manywells` and `manywells_verify`, so it is a script, `scripts/verification/develop_candidate.py` (Step 7).
 
@@ -254,7 +253,7 @@ Prebuilt wheels are packaging (`pyproject.toml` and a release workflow), not a m
 Decided by Bjarne, 2026-09-30, each as recommended:
 
 1. **Extension by contributors, not by runtime plug-ins.** A new option is a spec change and code in one module of each backend; the Rust core has a closed set of options per module. A user's Python subclass of a component ABC runs only on the CasADi backend. Python callbacks from the core were rejected: they would cost the core's speed and add a second code path.
-2. **`closed_loop/` gets a frozen private base.** It subclasses `SSDFSimulator` and overrides `_compute_left_boundary_state`, `_initial_guess` and `simulate`, which Step 7 restructures, and no test covers it. Before restructuring, Step 7 copies today's `SSDFSimulator` verbatim into `closed_loop/` as its private base, so its behaviour does not change until `closed_loop/` is retired after the plan (`specs/goals.md`, 2026-10-01). Letting it break, and removing it in Step 7, were rejected.
+2. **`closed_loop/` gets a frozen private base.** It subclasses `SSDFSimulator` and overrides `_compute_left_boundary_state`, `_initial_guess` and `simulate`, which Step 7 restructures, and no test covers it. Before restructuring, Step 7 copies today's `SSDFSimulator` verbatim into `closed_loop/` as its private base, so its behaviour does not change until `closed_loop/` is retired. Letting it break, and removing it in Step 7, were rejected. Bjarne retired `closed_loop/`, its frozen base and its generators on 2026-10-01 (`specs/goals.md`).
 3. **API breaks**, all four accepted, each to be listed in the v2 CHANGELOG with an old→new snippet (`specs/goals.md`): `SSDFSimulator(wp)` with `simulate(bc)` returning a `Root`, and the two-argument constructor deprecated until v2.0.0; `friction` and `thermal` objects in `WellProperties` in place of `f_D`, `roughness` and `h`; frozen inputs; `p_sep` and `p_bubble` in bar.
 4. **The flux-difference mass-row form** (Discretization, above), one form for every fluid. Two forms, v1's flux continuity for `v1.0.0` and `develop`'s local-rate rows for mass transfer, were rejected. It is a change to `specs/model/`, so Step 7's spec text with its new IDs comes to Bjarne for sign-off.
 5. **The root search uses the verifier's thresholds:** roots within `tol_x` in the verifier's state distance are merged, and a label is indeterminate at a normalized slope of at most `label_min`, so the library and the verifier agree on what counts as a root and a label. Step 7 proposes the starts and any early exit from measurements.
