@@ -129,14 +129,9 @@ impl<'a> Marcher<'a> {
             let s = self.point_state(p, t, rates).ok_or(RootError::NoSignChange)?;
             Ok(discretization::momentum_row(self.spec, &s, s_prev))
         };
-        // The row is U-shaped in p, with its minimum at the cell's sonic pressure p*, and positive at p_prev: the
-        // subsonic root lies between p* and p_prev, usually close to p_prev, so a narrow bracket is tried first
-        let lo = p_prev - 0.1 * (p_prev - p_s);
-        if let Ok(p) = brentq(&mut row, lo, p_prev, CELL_XTOL, RTOL, 100) {
-            return CellStep::Solved(p);
-        }
-        // Below zero at p_s: p_s lies right of p*, or left of it where the row still falls, so the only sign change
-        // on [p_s, p_prev] is the subsonic root
+        // The row is U-shaped in p, with its minimum at the cell's sonic pressure p*, and positive at p_prev. Below
+        // zero at p_s: p_s lies right of p*, or left of it where the row still falls, so the only sign change on
+        // [p_s, p_prev] is the subsonic root
         let f_s = match row(p_s) {
             Ok(f) => f,
             Err(_) => return CellStep::Choked(p_prev),
@@ -147,10 +142,12 @@ impl<'a> Marcher<'a> {
                 Err(_) => CellStep::Choked(p_prev),
             };
         }
+        // Otherwise the row's minimum on [p_s, p_prev] decides: below zero, the subsonic root lies between it and
+        // p_prev; at p_s, the row falls all the way to p_s; elsewhere above zero, the cell is choked
         let (p_star, f_star) = minimize(&mut |p| match row(p) {
             Ok(v) if v.is_finite() => v,
             _ => f64::INFINITY,
-        }, p_s, p_prev, 1e-2, 200, 0.0);
+        }, p_s, p_prev, 1e-2, 200, f64::NEG_INFINITY);
         if f_star < 0.0 {
             return match brentq(&mut row, p_star, p_prev, CELL_XTOL, RTOL, 100) {
                 Ok(p) => CellStep::Solved(p),
