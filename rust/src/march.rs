@@ -15,6 +15,7 @@ use crate::discretization::{self, State, DIM_X};
 use crate::input::{OperatingPoint, WellSpec};
 use crate::scalar::{brentq, minimize, RootError, RTOL};
 use crate::slip;
+use crate::thermal;
 
 /// Lowest trial pressure of a cell solve (bar)
 const P_MIN: f64 = 1e-3;
@@ -65,12 +66,18 @@ impl<'a> Marcher<'a> {
         Rates { w_res, w_g, w_l }
     }
 
-    /// Temperature at point i: the exact solution of the energy balance's ODE with T(0) = T_r
-    fn temperature(&self, i: usize, rates: &Rates) -> f64 {
+    /// Temperature at every point: the inflow temperature at the bottomhole, and each cell's energy row solved for
+    /// the temperature at its upper point. It does not depend on the pressure, so it is computed once per march.
+    fn temperatures(&self, rates: &Rates) -> Vec<f64> {
         let (spec, op) = (self.spec, self.op);
-        let k = std::f64::consts::PI * spec.h * spec.d / (spec.fluid.cp_g * rates.w_g + spec.fluid.cp_l * rates.w_l);
-        let z = i as f64 * spec.delta_z();
-        op.t_r - z / spec.l * (op.t_r - op.t_s) + 1.0 / (spec.l * k) * (op.t_r - op.t_s) * (1.0 - (-k * z).exp())
+        let a = spec.a();
+        let capacity = spec.fluid.cp_g * (rates.w_g / a) + spec.fluid.cp_l * (rates.w_l / a);
+        let mut t = vec![thermal::inflow_temperature(op.t_r)];
+        for i in 1..=spec.n_cells {
+            let t_a = thermal::ambient_temperature(i, spec.n_cells, op.t_r, op.t_s);
+            t.push(thermal::energy_step(t[i - 1], t_a, spec.delta_z(), spec.h, spec.d, capacity));
+        }
+        t
     }
 
     /// The void fraction that zeroes the slip row, by fixed-point iteration on alpha = w_g / (A rho_g (C_0 v_m + v_inf))
@@ -102,10 +109,9 @@ impl<'a> Marcher<'a> {
         (converged && alpha.is_finite()).then_some(alpha)
     }
 
-    /// The state at point i at pressure p: the closures at the point's temperature and the march's rates
-    fn point_state(&self, i: usize, p: f64, rates: &Rates) -> Option<State> {
+    /// The state at a point at pressure p and temperature t: the closures at the march's rates
+    fn point_state(&self, p: f64, t: f64, rates: &Rates) -> Option<State> {
         let (a, fluid) = (self.spec.a(), &self.spec.fluid);
-        let t = self.temperature(i, rates);
         let rho_g = fluid.gas_density(p, t);
         let rho_l = fluid.liquid_density();
         let alpha = self.void_fraction(rates, rho_g, rho_l, t)?;
@@ -114,11 +120,12 @@ impl<'a> Marcher<'a> {
         Some(State { p, v_g, v_l, alpha, rho_g, rho_l, t })
     }
 
-    /// The pressure at point i from the momentum row of cell i, given the state at point i - 1
-    fn solve_cell(&self, i: usize, s_prev: &State, rates: &Rates) -> CellStep {
+    /// The pressure at a point at temperature t from the momentum row of the cell below it, given the state at the
+    /// cell's lower point
+    fn solve_cell(&self, t: f64, s_prev: &State, rates: &Rates) -> CellStep {
         let p_prev = s_prev.p;
         let mut row = |p: f64| -> Result<f64, RootError> {
-            let s = self.point_state(i, p, rates).ok_or(RootError::NoSignChange)?;
+            let s = self.point_state(p, t, rates).ok_or(RootError::NoSignChange)?;
             Ok(discretization::momentum_row(self.spec, &s, s_prev))
         };
         // The row is U-shaped in p, with its minimum at the cell's sonic pressure p*: the subsonic root lies between
@@ -146,9 +153,10 @@ impl<'a> Marcher<'a> {
         self.marches.set(self.marches.get() + 1);
         let n = self.spec.n_cells;
         let rates = self.rates(p_0);
+        let t = self.temperatures(&rates);
         let mut x = Vec::with_capacity(DIM_X * (n + 1));
         let mut failed = false;
-        let mut prev = self.point_state(0, p_0, &rates);
+        let mut prev = self.point_state(p_0, t[0], &rates);
         match prev {
             Some(s) => x.extend_from_slice(&s.to_array()),
             None => x.extend_from_slice(&[f64::NAN; DIM_X]),
@@ -156,14 +164,14 @@ impl<'a> Marcher<'a> {
         for i in 1..=n {
             // After a state could not be computed, the last computed state is copied to every point above
             let state = prev.and_then(|s_prev| {
-                let p = match self.solve_cell(i, &s_prev, &rates) {
+                let p = match self.solve_cell(t[i], &s_prev, &rates) {
                     CellStep::Solved(p) => p,
                     CellStep::Choked(p) => {
                         failed = true;
                         p
                     }
                 };
-                self.point_state(i, p, &rates)
+                self.point_state(p, t[i], &rates)
             });
             match state.or(prev) {
                 Some(s) => x.extend_from_slice(&s.to_array()),
@@ -200,5 +208,35 @@ impl<'a> Marcher<'a> {
             w_m * w_m - kc * kc * (2.0 * rho * dp) / phi
         };
         r.is_finite().then_some((r, m.failed))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::input::test_wells::{w1, w2};
+
+    /// The largest |row| of each ID over a march's state
+    fn largest_rows(spec: &WellSpec, op: &OperatingPoint, x: &[f64]) -> std::collections::HashMap<&'static str, f64> {
+        let mut out = std::collections::HashMap::new();
+        for (id, v) in discretization::rows(spec, op, x) {
+            let e = out.entry(id).or_insert(0.0_f64);
+            *e = e.max(v.abs());
+        }
+        out
+    }
+
+    #[test]
+    fn a_march_zeroes_the_inflow_mass_and_energy_rows() {
+        for (spec, op) in [w1(20), w2(20)] {
+            let m = Marcher::new(&spec, &op);
+            let p_0 = op.p_s + 0.8 * (op.p_r - op.p_s);
+            let march = m.march(p_0);
+            assert!(!march.failed);
+            let rows = largest_rows(&spec, &op, &march.x);
+            for id in ["INF-6", "INF-7", "THM-3", "PVT-GAS-1", "PVT-MIX-1", "DISC-2", "DISC-3", "DISC-5"] {
+                assert!(rows[id] < 1e-10, "{id}: {}", rows[id]);
+            }
+        }
     }
 }

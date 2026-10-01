@@ -72,3 +72,38 @@ impl OperatingPoint {
         Ok(())
     }
 }
+
+/// Wells for the tests: W1 of specs/model/vectors/v1_rows.json (Vogel inflow, Simpson choke, sigmoid profile, lift
+/// gas) and W2 (productivity index, Bernoulli choke, linear profile, choked at its root), on n cells
+#[cfg(test)]
+pub mod test_wells {
+    use super::*;
+    use crate::choke::{ChokeModel, Profile};
+
+    fn cpr() -> f64 {
+        let gamma: f64 = 1.307;
+        (2.0 / (gamma + 1.0)).powf(gamma / (gamma - 1.0))
+    }
+
+    pub fn w1(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let spec = WellSpec {
+            l: 2500.0, d: 0.127, n_cells,
+            fluid: Fluid { rho_l: 900.0, r_s: 420.0, cp_g: 2225.0, cp_l: 3000.0, f_g: 0.15 },
+            f_d: 0.03, h: 25.0,
+            inflow: Inflow::Vogel { w_l_max: 80.0 },
+            choke: Choke { model: ChokeModel::Simpson, k_c: 0.0015201224372924933, cpr: cpr(), profile: Profile::Sigmoid },
+        };
+        (spec, OperatingPoint { p_r: 249.2, p_s: 30.0, t_r: 363.15, t_s: 277.15, u: 0.6, w_lg: 0.8 })
+    }
+
+    pub fn w2(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let spec = WellSpec {
+            l: 1800.0, d: 0.1524, n_cells,
+            fluid: Fluid { rho_l: 820.0, r_s: 500.0, cp_g: 2225.0, cp_l: 2200.0, f_g: 0.4 },
+            f_d: 0.05, h: 15.0,
+            inflow: Inflow::ProductivityIndex { k_l: 0.6 },
+            choke: Choke { model: ChokeModel::Bernoulli, k_c: 0.001824146924750992, cpr: cpr(), profile: Profile::Linear },
+        };
+        (spec, OperatingPoint { p_r: 150.0, p_s: 20.0, t_r: 345.0, t_s: 277.15, u: 0.8, w_lg: 0.0 })
+    }
+}
