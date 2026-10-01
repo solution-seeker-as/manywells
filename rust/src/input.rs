@@ -8,16 +8,14 @@
 //! operating point. Validation stays in the dataclasses; the core checks only what it needs to run.
 
 use crate::choke::Choke;
-use crate::geometry;
+use crate::geometry::Geometry;
 use crate::inflow::Inflow;
 use crate::pvt::fluid::Fluid;
 
-/// A well in the v1.0.0 configuration
-#[derive(Clone, Copy, Debug)]
+/// A well: one part per model part, as WellProperties
+#[derive(Clone, Debug)]
 pub struct WellSpec {
-    pub l: f64,        // Pipe length (m), vertical
-    pub d: f64,        // Inner pipe diameter (m)
-    pub n_cells: usize,
+    pub geometry: Geometry,
     pub fluid: Fluid,
     pub f_d: f64,      // Darcy friction factor
     pub h: f64,        // Heat transfer coefficient (W/(m² K))
@@ -27,9 +25,6 @@ pub struct WellSpec {
 
 impl WellSpec {
     pub fn check(&self) -> Result<(), String> {
-        if !(self.l > 0.0 && self.d > 0.0 && self.n_cells > 0) {
-            return Err("the well needs a positive length, diameter and number of cells".into());
-        }
         if !(self.fluid.f_g > 0.0 && self.fluid.f_g < 1.0) {
             return Err("the gas mass fraction must be in (0, 1)".into());
         }
@@ -38,17 +33,16 @@ impl WellSpec {
 
     /// Cross-section (m²)
     pub fn a(&self) -> f64 {
-        geometry::cross_section(self.d)
+        self.geometry.a()
     }
 
-    /// Cell length (m)
-    pub fn delta_z(&self) -> f64 {
-        geometry::cell_length(self.l, self.n_cells)
+    pub fn n_cells(&self) -> usize {
+        self.geometry.n_cells()
     }
 
     /// Number of state values, 7 (N + 1)
     pub fn n_x(&self) -> usize {
-        crate::discretization::DIM_X * (self.n_cells + 1)
+        crate::discretization::DIM_X * (self.n_cells() + 1)
     }
 }
 
@@ -81,6 +75,7 @@ impl OperatingPoint {
 pub mod test_wells {
     use super::*;
     use crate::choke::{ChokeModel, Profile};
+    use crate::geometry::tests::vertical;
     use crate::pvt::fluid::FluidInputs;
     use crate::units::{P_REF, T_REF};
 
@@ -94,7 +89,7 @@ pub mod test_wells {
 
     pub fn w1(n_cells: usize) -> (WellSpec, OperatingPoint) {
         let spec = WellSpec {
-            l: 2500.0, d: 0.127, n_cells,
+            geometry: vertical(2500.0, n_cells, 0.127),
             fluid: v1_fluid(900.0, 420.0, 2225.0, 3000.0, 0.15),
             f_d: 0.03, h: 25.0,
             inflow: Inflow::Vogel { w_l_max: 80.0 },
@@ -105,7 +100,7 @@ pub mod test_wells {
 
     pub fn w2(n_cells: usize) -> (WellSpec, OperatingPoint) {
         let spec = WellSpec {
-            l: 1800.0, d: 0.1524, n_cells,
+            geometry: vertical(1800.0, n_cells, 0.1524),
             fluid: v1_fluid(820.0, 500.0, 2225.0, 2200.0, 0.4),
             f_d: 0.05, h: 15.0,
             inflow: Inflow::ProductivityIndex { k_l: 0.6 },
@@ -118,6 +113,14 @@ pub mod test_wells {
 #[cfg(test)]
 mod tests {
     use super::test_wells::v1_fluid;
+    use super::WellSpec;
+
+    fn assert_send_sync<T: Send + Sync>() {}
+
+    #[test]
+    fn a_well_can_be_shared_between_threads() {
+        assert_send_sync::<WellSpec>();  // The bindings lend it to the search with the GIL released
+    }
 
     #[test]
     fn a_v1_fluid_gives_back_v1s_parameters() {

@@ -16,6 +16,7 @@
 use std::cell::Cell;
 
 use crate::discretization::{self, State, DIM_X};
+use crate::geometry;
 use crate::input::{OperatingPoint, WellSpec};
 use crate::scalar::{brentq, minimize, RootError, RTOL};
 use crate::slip;
@@ -85,13 +86,13 @@ impl<'a> Marcher<'a> {
     /// The temperature at point i that zeroes the energy row of cell i, given the state at point i - 1. Without mass
     /// transfer the phase rates are the same at every point, so the row's heat flux capacity is fixed by them, and
     /// the row is linear in the temperature and does not depend on the pressure (thermal::energy_step).
-    fn temperature(&self, i: usize, prev: &State, w_res: f64) -> f64 {
+    fn temperature(&self, cell: geometry::Cell, prev: &State, w_res: f64) -> f64 {
         let (spec, op) = (self.spec, self.op);
         let a = spec.a();
         let (w_g, w_l) = spec.fluid.phase_rates(prev.p, prev.t, w_res, op.w_lg);
         let capacity = spec.fluid.cp_g * (w_g / a) + spec.fluid.cp_l * (w_l / a);
-        let t_a = thermal::ambient_temperature(i, spec.n_cells, op.t_r, op.t_s);
-        thermal::energy_step(prev.t, t_a, spec.delta_z(), spec.h, spec.d, capacity)
+        let t_a = thermal::ambient_temperature(cell.tvd_frac, op.t_r, op.t_s);
+        thermal::energy_step(prev.t, t_a, cell.delta_md, spec.h, spec.geometry.d, capacity)
     }
 
     /// The void fraction that zeroes the slip row (SLIP-1) at a point where the phase rates fix the superficial
@@ -104,7 +105,7 @@ impl<'a> Marcher<'a> {
             return None;
         }
         let j_m = j_g + j_l;
-        let terms = slip::SlipTerms::new(j_g, j_l, rho_g, rho_l, sigma, self.spec.d);
+        let terms = slip::SlipTerms::new(j_g, j_l, rho_g, rho_l, sigma, self.spec.geometry.d);
         let mut h = |alpha: f64| -> Result<f64, RootError> {
             let (c_0, v_inf) = terms.parameters(alpha);
             Ok(alpha * (c_0 * j_m + v_inf) - j_g)
@@ -130,11 +131,11 @@ impl<'a> Marcher<'a> {
 
     /// The pressure at a point at temperature t from the momentum row of the cell below it, given the state at the
     /// cell's lower point, searched on [p_s, p_prev]
-    fn solve_cell(&self, t: f64, s_prev: &State, w_res: f64) -> CellStep {
+    fn solve_cell(&self, cell: geometry::Cell, t: f64, s_prev: &State, w_res: f64) -> CellStep {
         let (p_prev, p_s) = (s_prev.p, self.op.p_s);
         let mut row = |p: f64| -> Result<f64, RootError> {
             let s = self.point_state(p, t, w_res).ok_or(RootError::NoSignChange)?;
-            Ok(discretization::momentum_row(self.spec, &s, s_prev))
+            Ok(discretization::momentum_row(self.spec, cell, &s, s_prev))
         };
         // The row is U-shaped in p, with its minimum at the cell's sonic pressure p*, and positive at p_prev. Below
         // zero at p_s: p_s lies right of p*, or left of it where the row still falls, so the only sign change on
@@ -168,7 +169,7 @@ impl<'a> Marcher<'a> {
     /// March from p_0 to the wellhead
     pub fn march(&self, p_0: f64) -> March {
         self.count(|c| c.marches += 1);
-        let n = self.spec.n_cells;
+        let n = self.spec.n_cells();
         let w_res = discretization::reservoir_rate(self.spec, self.op, p_0);
         let mut x = Vec::with_capacity(DIM_X * (n + 1));
         let mut failed = false;
@@ -178,8 +179,9 @@ impl<'a> Marcher<'a> {
         };
         x.extend_from_slice(&prev.to_array());
         for i in 1..=n {
-            let t = self.temperature(i, &prev, w_res);
-            let p = match self.solve_cell(t, &prev, w_res) {
+            let cell = self.spec.geometry.cell(i);
+            let t = self.temperature(cell, &prev, w_res);
+            let p = match self.solve_cell(cell, t, &prev, w_res) {
                 CellStep::Solved(p) => p,
                 CellStep::Unsolved(p) => {
                     failed = true;

@@ -38,7 +38,9 @@ mod _core {
 
     use crate::choke::{self, Choke, ChokeModel, Profile};
     use crate::discretization;
+    use crate::geometry::Geometry;
     use crate::inflow::Inflow;
+    use crate::thermal;
     use crate::input::{OperatingPoint, WellSpec};
     use crate::march::Marcher;
     use crate::pvt::fluid::{Fluid, FluidInputs};
@@ -79,10 +81,10 @@ mod _core {
     #[pymethods]
     impl Well {
         #[new]
-        #[pyo3(signature = (*, L, D, n_cells, rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, f_D, h, inflow,
+        #[pyo3(signature = (*, md, tvd, D, rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, f_D, h, inflow,
                             inflow_coefficient, choke, K_c, profile))]
         #[allow(non_snake_case, clippy::too_many_arguments)]
-        fn new(L: f64, D: f64, n_cells: usize, rho_o: f64, rho_g: f64, rho_w: f64, gor: f64, wlr: f64, cp_g: f64,
+        fn new(md: Vec<f64>, tvd: Vec<f64>, D: f64, rho_o: f64, rho_g: f64, rho_w: f64, gor: f64, wlr: f64, cp_g: f64,
                cp_o: f64, cp_w: f64, f_D: f64, h: f64, inflow: &str, inflow_coefficient: f64, choke: &str, K_c: f64,
                profile: &str) -> PyResult<Self> {
             let inflow = match inflow {
@@ -97,9 +99,7 @@ mod _core {
             };
             let profile = Profile::from_name(profile).map_err(PyValueError::new_err)?;
             let spec = WellSpec {
-                l: L,
-                d: D,
-                n_cells,
+                geometry: Geometry::from_grid(&md, &tvd, D).map_err(PyValueError::new_err)?,
                 fluid: Fluid::new(FluidInputs { rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w }),
                 f_d: f_D,
                 h,
@@ -113,8 +113,8 @@ mod _core {
         /// Every root the search finds at the operating point, sorted by p_0, and the work it took: the marches, the
         /// states computed, and the sign changes of R that were not accepted as roots (rejected)
         fn root_set(&self, py: Python<'_>, op: Op) -> PyResult<(Vec<Root>, HashMap<&'static str, usize>)> {
-            let (spec, op) = (self.spec, operating_point(op)?);
-            let search = py.detach(|| shoot::root_set(&spec, &op)).map_err(PyRuntimeError::new_err)?;
+            let (spec, op) = (&self.spec, operating_point(op)?);
+            let search = py.detach(|| shoot::root_set(spec, &op)).map_err(PyRuntimeError::new_err)?;
             let roots = search.roots.into_iter().map(|r| Root {
                 x: r.x,
                 rising: r.rising,
@@ -210,11 +210,12 @@ mod _core {
             }
             "regime_probabilities" => {
                 let [v_g, v_l, alpha, rho_g, rho_l, sigma] = take(name, a)?;
-                slip::classify(v_g, v_l, alpha, rho_g, rho_l, sigma, spec.d).to_vec()
+                slip::classify(v_g, v_l, alpha, rho_g, rho_l, sigma, spec.geometry.d).to_vec()
             }
             "regime" => {
                 let [v_g, v_l, alpha, rho_g, rho_l, sigma] = take(name, a)?;
-                vec![regime_index(slip::regime_label(slip::classify(v_g, v_l, alpha, rho_g, rho_l, sigma, spec.d)))]
+                let probs = slip::classify(v_g, v_l, alpha, rho_g, rho_l, sigma, spec.geometry.d);
+                vec![regime_index(slip::regime_label(probs))]
             }
             "harmathy_rise_velocity" => {
                 let [rho_g, rho_l, sigma] = take(name, a)?;
@@ -223,6 +224,10 @@ mod _core {
             "taylor_rise_velocity" => {
                 let [rho_g, rho_l, d] = take(name, a)?;
                 vec![slip::taylor_rise_velocity(rho_g, rho_l, d)]
+            }
+            "ambient_temperature" => {
+                let [tvd_frac, t_r, t_s] = take(name, a)?;
+                vec![thermal::ambient_temperature(tvd_frac, t_r, t_s)]
             }
             "ideal_gas_density" => { let [p, t, r_s] = take(name, a)?; vec![gas::ideal_gas_density(p, t, r_s)] }
             "api_from_density" => { let [rho] = take(name, a)?; vec![oil::api_from_density(rho)] }

@@ -13,6 +13,7 @@
 //! The reservoir liquid rate w_res, from the inflow at p_0, enters every point's rows through the phase rates.
 
 use crate::friction;
+use crate::geometry::Cell;
 use crate::input::{OperatingPoint, WellSpec};
 use crate::slip;
 use crate::thermal;
@@ -88,12 +89,13 @@ pub fn bottom_rows(spec: &WellSpec, op: &OperatingPoint, s: &State, w_res: f64) 
     ]
 }
 
-/// The momentum row of cell i (bar), between points i - 1 (s_prev) and i (s): implicit Euler, with friction and
-/// gravity at point i
-pub fn momentum_row(spec: &WellSpec, s: &State, s_prev: &State) -> f64 {  // spec: DISC-4, BAL-4
-    let f = friction::pressure_gradient(spec.f_d, spec.d, s.rho_m(), s.v_m());
+/// The momentum row of cell i (bar), between points i - 1 (s_prev) and i (s): implicit Euler, with friction along the
+/// flow path and gravity along the vertical, at point i
+pub fn momentum_row(spec: &WellSpec, cell: Cell, s: &State, s_prev: &State) -> f64 {
+    let f = friction::pressure_gradient(spec.f_d, spec.geometry.d, s.rho_m(), s.v_m());
     let g = STD_GRAVITY * s.rho_m(); // spec: BAL-6
-    (s.momentum_flux() / CF_BAR + s.p) - (s_prev.momentum_flux() / CF_BAR + s_prev.p) + spec.delta_z() * (f + g) / CF_BAR
+    (s.momentum_flux() / CF_BAR + s.p) - (s_prev.momentum_flux() / CF_BAR + s_prev.p)
+        + cell.delta_md * (f + cell.cos_incl * g) / CF_BAR // spec: DISC-9
 }
 
 /// The heat flux capacities cp_g α ρ_g v_g and cp_l (1 - α) ρ_l v_l (W/(m² K)) at a point
@@ -102,23 +104,23 @@ pub fn heat_capacities(spec: &WellSpec, s: &State) -> (f64, f64) {
 }
 
 /// The energy row of cell i (K): implicit Euler, with the heat loss at point i
-pub fn energy_row(spec: &WellSpec, op: &OperatingPoint, i: usize, s: &State, s_prev: &State) -> f64 {  // spec: DISC-5, BAL-5
-    let t_a = thermal::ambient_temperature(i, spec.n_cells, op.t_r, op.t_s);
+pub fn energy_row(spec: &WellSpec, op: &OperatingPoint, cell: Cell, s: &State, s_prev: &State) -> f64 {
+    let t_a = thermal::ambient_temperature(cell.tvd_frac, op.t_r, op.t_s);
     let (c_g, c_l) = heat_capacities(spec, s);
-    s.t - s_prev.t + spec.delta_z() * thermal::heat_loss(spec.h, spec.d, s.t, t_a, c_g, c_l)
+    s.t - s_prev.t + cell.delta_md * thermal::heat_loss(spec.h, spec.geometry.d, s.t, t_a, c_g, c_l) // spec: DISC-10
 }
 
 /// Balance rows of cell i: gas and liquid mass (kg/(m² s)), momentum (bar) and energy (K). The change in each mass
 /// flux equals the change in the phase rate, which is zero without mass transfer.
-pub fn cell_rows(spec: &WellSpec, op: &OperatingPoint, i: usize, s: &State, s_prev: &State, w_res: f64) -> [f64; 4] {
+pub fn cell_rows(spec: &WellSpec, op: &OperatingPoint, cell: Cell, s: &State, s_prev: &State, w_res: f64) -> [f64; 4] {
     let a = spec.a();
     let (w_g, w_l) = spec.fluid.phase_rates(s.p, s.t, w_res, op.w_lg);
     let (w_g_prev, w_l_prev) = spec.fluid.phase_rates(s_prev.p, s_prev.t, w_res, op.w_lg);
     [
         s.gas_flux() - s_prev.gas_flux() - (w_g - w_g_prev) / a,          // spec: DISC-7
         s.liquid_flux() - s_prev.liquid_flux() - (w_l - w_l_prev) / a,    // spec: DISC-8
-        momentum_row(spec, s, s_prev),
-        energy_row(spec, op, i, s, s_prev),
+        momentum_row(spec, cell, s, s_prev),
+        energy_row(spec, op, cell, s, s_prev),
     ]
 }
 
@@ -132,7 +134,7 @@ pub fn choke_row(spec: &WellSpec, op: &OperatingPoint, s: &State) -> f64 {  // s
 /// Closure relations at a point: the slip law (m/s), the gas law (bar) and the liquid density (kg/m³)
 pub fn closure_rows(spec: &WellSpec, s: &State) -> [f64; 3] {
     let sigma = spec.fluid.surface_tension(s.rho_l, s.t);
-    let (c_0, v_inf) = slip::identify_parameters(s.v_g, s.v_l, s.alpha, s.rho_g, s.rho_l, sigma, spec.d);
+    let (c_0, v_inf) = slip::identify_parameters(s.v_g, s.v_l, s.alpha, s.rho_g, s.rho_l, sigma, spec.geometry.d);
     [
         s.v_g - c_0 * s.v_m() - v_inf, // spec: SLIP-1
         spec.fluid.gas_law_row(s.p, s.t, s.rho_g),
@@ -142,7 +144,7 @@ pub fn closure_rows(spec: &WellSpec, s: &State) -> [f64; 3] {
 
 /// The spec ID of every row of the system, in order: the rows of each point depend on the well's options
 pub fn row_ids(spec: &WellSpec) -> Vec<&'static str> {  // spec: DISC-11
-    let n = spec.n_cells;
+    let n = spec.n_cells();
     let bottom = ["INF-6", "INF-7", "THM-3"];
     let cell = ["DISC-7", "DISC-8", "DISC-9", "DISC-10"];
     let closures = ["SLIP-1", "PVT-GAS-1", "PVT-MIX-1"];
@@ -161,14 +163,14 @@ pub fn row_ids(spec: &WellSpec) -> Vec<&'static str> {  // spec: DISC-11
 
 /// Every row of the system at state x, with its ID, point by point in the order of DISC-11
 pub fn rows(spec: &WellSpec, op: &OperatingPoint, x: &[f64]) -> Vec<(&'static str, f64)> {
-    let n = spec.n_cells;
+    let n = spec.n_cells();
     let points: Vec<State> = x.chunks_exact(DIM_X).map(State::of).collect();
     let w_res = reservoir_rate(spec, op, points[0].p);
     let mut values = Vec::with_capacity(DIM_X * (n + 1));
     values.extend(bottom_rows(spec, op, &points[0], w_res));
     values.extend(closure_rows(spec, &points[0]));
     for i in 1..=n {
-        values.extend(cell_rows(spec, op, i, &points[i], &points[i - 1], w_res));
+        values.extend(cell_rows(spec, op, spec.geometry.cell(i), &points[i], &points[i - 1], w_res));
         if i == n {
             values.push(choke_row(spec, op, &points[n]));
         }
@@ -181,6 +183,6 @@ pub fn rows(spec: &WellSpec, op: &OperatingPoint, x: &[f64]) -> Vec<(&'static st
 pub fn flow_regimes(spec: &WellSpec, x: &[f64]) -> Vec<&'static str> {
     x.chunks_exact(DIM_X).map(State::of).map(|s| {
         let sigma = spec.fluid.surface_tension(s.rho_l, s.t);
-        slip::regime_label(slip::classify(s.v_g, s.v_l, s.alpha, s.rho_g, s.rho_l, sigma, spec.d))
+        slip::regime_label(slip::classify(s.v_g, s.v_l, s.alpha, s.rho_g, s.rho_l, sigma, spec.geometry.d))
     }).collect()
 }

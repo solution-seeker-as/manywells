@@ -314,7 +314,7 @@ RUST_NOT_IN_CORE = {
 
 # Step 9 ports develop's model to the core one feature spec at a time: the tables whose functions it has not got yet
 RUST_NOT_PORTED = {
-    'SMO-2': '007', 'THM-4': '001', 'THM-5': '010', 'THM-6': '009', 'THM-7': '009', 'SLIP-10, SLIP-11': '002',
+    'SMO-2': '007', 'THM-5': '010', 'THM-6': '009', 'THM-7': '009', 'SLIP-10, SLIP-11': '002',
     'SLIP-11 (classifier)': '002', 'FRIC-3': '004', 'FRIC-4': '004', 'FRIC-5': '004', 'FRIC-6': '004',
     'PVT-GAS-3': '006', 'PVT-GAS-4, PVT-GAS-5': '006', 'PVT-GAS-7': '004', 'PVT-OIL-5': '007',
     'PVT-OIL-6, PVT-OIL-8': '007', 'PVT-OIL-7': '007', 'PVT-OIL-9': '007', 'PVT-OIL-10': '004', 'PVT-OIL-11': '004',
