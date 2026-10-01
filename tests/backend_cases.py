@@ -166,6 +166,7 @@ OVERLAYS = {
     'water': fluid(wlr=0.3),
     'frictional heating': thermal(frictional_heating=True),
     'gravity term': thermal(gravity_term=True),
+    'energy terms': thermal(frictional_heating=True, gravity_term=True),
     'real gas': fluid(ideal_gas=False),
     'black oil': black_oil,
     'bubble point': bubble_point,
@@ -212,7 +213,7 @@ BASES = {
 }
 
 V1_OVERLAYS = ('non-uniform grid', 'deviated', 'L-shaped', 'slip constants', 'water', 'frictional heating',
-               'gravity term', 'real gas', 'black oil', 'bubble point', 'oil surface tension', 'chen', 'haaland',
+               'gravity term', 'energy terms', 'real gas', 'black oil', 'bubble point', 'oil surface tension', 'chen', 'haaland',
                'lift-gas temperature', 'fixed rate')
 DEVELOP_OVERLAYS = ('dead oil', 'ideal gas', 'liquid surface tension', 'fixed f_D', 'haaland', 'no frictional heating',
                     'no gravity term', 'no lift-gas mixing', 'deviated', 'L-shaped', 'non-uniform grid',

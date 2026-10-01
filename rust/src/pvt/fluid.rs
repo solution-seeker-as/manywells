@@ -79,6 +79,11 @@ impl Fluid {
         mixture::liquid_surface_tension(rho_l, t)
     }
 
+    /// Whether gas dissolves into the liquid, so that the phase rates vary along the well
+    pub fn has_mass_transfer(&self) -> bool {
+        false
+    }
+
     /// Gas mass rate from the reservoir (kg/s) for a reservoir liquid rate w_res (kg/s)
     pub fn reservoir_gas_rate(&self, w_res: f64) -> f64 {  // spec: INF-4
         (self.f_g / (1.0 - self.f_g)) * w_res

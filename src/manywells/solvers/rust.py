@@ -47,8 +47,6 @@ def _not_yet_ported(wp) -> list:
         out.append('an inclined well (002)')
     if wp.slip != SlipModel():
         out.append('slip parameters other than the defaults (002)')
-    if thermal.frictional_heating or thermal.gravity_term:
-        out.append('frictional heating or the gravity term (009)')
     if not fluid.ideal_gas:
         out.append('a real gas (006)')
     if fluid.oil_model != 'dead_oil':
@@ -88,6 +86,7 @@ def core_well(wp) -> '_core.Well':
     return _core.Well(md=list(geo.md), tvd=list(geo.tvd), D=geo.D,
                       rho_o=fluid.rho_o, rho_g=fluid.rho_g, rho_w=fluid.rho_w, gor=fluid.gor, wlr=fluid.wlr,
                       cp_g=fluid.cp_g, cp_o=fluid.cp_o, cp_w=fluid.cp_w, f_D=wp.friction.f_D, h=wp.thermal.h,
+                      frictional_heating=wp.thermal.frictional_heating, gravity_term=wp.thermal.gravity_term,
                       inflow='vogel' if vogel else 'pi', inflow_coefficient=inflow.w_l_max if vogel else inflow.k_l,
                       choke='simpson' if isinstance(choke, SimpsonChokeModel) else 'bernoulli', K_c=choke.K_c,
                       profile=choke.chk_profile)

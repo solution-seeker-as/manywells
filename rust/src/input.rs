@@ -11,6 +11,7 @@ use crate::choke::Choke;
 use crate::geometry::Geometry;
 use crate::inflow::Inflow;
 use crate::pvt::fluid::Fluid;
+use crate::thermal::Thermal;
 
 /// A well: one part per model part, as WellProperties
 #[derive(Clone, Debug)]
@@ -18,7 +19,7 @@ pub struct WellSpec {
     pub geometry: Geometry,
     pub fluid: Fluid,
     pub f_d: f64,      // Darcy friction factor
-    pub h: f64,        // Heat transfer coefficient (W/(m² K))
+    pub thermal: Thermal,
     pub inflow: Inflow,
     pub choke: Choke,
 }
@@ -91,7 +92,7 @@ pub mod test_wells {
         let spec = WellSpec {
             geometry: vertical(2500.0, n_cells, 0.127),
             fluid: v1_fluid(900.0, 420.0, 2225.0, 3000.0, 0.15),
-            f_d: 0.03, h: 25.0,
+            f_d: 0.03, thermal: Thermal { h: 25.0, frictional_heating: false, gravity_term: false },
             inflow: Inflow::Vogel { w_l_max: 80.0 },
             choke: Choke::new(ChokeModel::Simpson, 0.0015201224372924933, Profile::Sigmoid),
         };
@@ -102,11 +103,24 @@ pub mod test_wells {
         let spec = WellSpec {
             geometry: vertical(1800.0, n_cells, 0.1524),
             fluid: v1_fluid(820.0, 500.0, 2225.0, 2200.0, 0.4),
-            f_d: 0.05, h: 15.0,
+            f_d: 0.05, thermal: Thermal { h: 15.0, frictional_heating: false, gravity_term: false },
             inflow: Inflow::ProductivityIndex { k_l: 0.6 },
             choke: Choke::new(ChokeModel::Bernoulli, 0.001824146924750992, Profile::Linear),
         };
         (spec, OperatingPoint { p_r: 150.0, p_s: 20.0, t_r: 345.0, t_s: 277.15, t_lg: 345.0, u: 0.8, w_lg: 0.0 })
+    }
+
+    /// W1 with frictional heating and the gravity term (009), so that the energy row depends on the pressure
+    pub fn w1_thermal(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let (mut spec, op) = w1(n_cells);
+        spec.thermal = Thermal { h: 25.0, frictional_heating: true, gravity_term: true };
+        (spec, op)
+    }
+
+    /// Every test well
+    pub fn all(n_cells: usize) -> Vec<(&'static str, WellSpec, OperatingPoint)> {
+        let named = |name, (spec, op)| (name, spec, op);
+        vec![named("w1", w1(n_cells)), named("w2", w2(n_cells)), named("w1_thermal", w1_thermal(n_cells))]
     }
 }
 

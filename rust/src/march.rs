@@ -30,6 +30,14 @@ const CELL_XTOL: f64 = 0.0;
 /// across zero instead of crossing it, by far more than this, and the cell is not solved.
 const CELL_ROW_TOL: f64 = 1e-8;
 
+/// Largest error (K) of a solved temperature: |energy row| over the row's slope in T from the heat loss,
+/// 1 + ΔMD 4h / (D cp_flux), which is large where the heat flux capacity is small. At a root, Brent leaves about 1e-13 K;
+/// a jump in the closures, as in the slip law with several void fractions, leaves far more, as for CELL_ROW_TOL.
+const TEMPERATURE_TOL: f64 = 1e-8;
+
+/// Most doublings of the step beyond the upper end of the temperature bracket (Marcher::solve_temperature)
+const MAX_STEP_OUTS: usize = 30;
+
 /// A march from p_0 to the wellhead
 pub struct March {
     /// The state at every point the march reached
@@ -60,6 +68,11 @@ pub struct Counts {
     pub marches: usize,
     /// States computed from the closures at a trial pressure and temperature
     pub states: usize,
+    /// Temperature solves, where the energy row depends on the pressure (Marcher::solve_temperature)
+    pub temperature_solves: usize,
+    /// Temperature solves whose bracket needed steps beyond max(T_{i-1}, T_a), and those that failed
+    pub step_outs: usize,
+    pub temperature_failures: usize,
 }
 
 pub struct Marcher<'a> {
@@ -83,16 +96,82 @@ impl<'a> Marcher<'a> {
         self.counts.set(c);
     }
 
-    /// The temperature at point i that zeroes the energy row of cell i, given the state at point i - 1. Without mass
-    /// transfer the phase rates are the same at every point, so the row's heat flux capacity is fixed by them, and
-    /// the row is linear in the temperature and does not depend on the pressure (thermal::energy_step).
-    fn temperature(&self, cell: geometry::Cell, prev: &State, w_res: f64) -> f64 {
+    /// The temperature at point i that zeroes the energy row of cell i, given the state at point i - 1, where the row
+    /// is linear in the temperature and does not depend on the pressure (Thermal::is_linear): heat loss alone, with
+    /// a heat flux capacity that the phase rates fix (thermal::energy_step). None where the row depends on the state.
+    fn linear_temperature(&self, cell: geometry::Cell, prev: &State, w_res: f64) -> Option<f64> {
         let (spec, op) = (self.spec, self.op);
+        if !spec.thermal.is_linear(&spec.fluid) {
+            return None;
+        }
         let a = spec.a();
         let (w_g, w_l) = spec.fluid.phase_rates(prev.p, prev.t, w_res, op.w_lg);
         let capacity = spec.fluid.cp_g * (w_g / a) + spec.fluid.cp_l * (w_l / a);
         let t_a = thermal::ambient_temperature(cell.tvd_frac, op.t_r, op.t_s);
-        thermal::energy_step(prev.t, t_a, cell.delta_md, spec.h, spec.geometry.d, capacity)
+        Some(thermal::energy_step(prev.t, t_a, cell.delta_md, spec.thermal.h, spec.geometry.d, capacity))
+    }
+
+    /// The state at point i at pressure p whose temperature zeroes the energy row of cell i, given the state prev at
+    /// point i - 1 (specs/architecture.md, Rust core, design point 4): Brent on the row r_T(T), with the closures at
+    /// (p, T), on a bracket where it changes sign. With dT/dMD = -H + Φ_f - Φ_g, the row is
+    /// r_T = T - T_{i-1} + ΔMD (H - Φ_f + Φ_g), where the heat loss H has the sign of T - T_a, frictional heating
+    /// Φ_f >= 0, and the gravity term 0 <= Φ_g <= Φ_max (Thermal::gravity_term_bound) at every state. So r_T <= 0 at
+    /// T_lo = min(T_{i-1}, T_a) - ΔMD Φ_max, and r_T >= 0 at max(T_{i-1}, T_a) without frictional heating; where
+    /// frictional heating keeps r_T negative there, the upper end steps out by doubling steps until it is not.
+    ///
+    /// Where the row jumps across zero instead of crossing it, as where the slip law switches between several void
+    /// fractions, Brent converges onto the jump: the state there is returned, as not solved, so that the march can
+    /// continue at it, as at a cell whose momentum row is not solved (CellStep::Unsolved). None if there is no state.
+    fn solve_temperature(&self, p: f64, cell: geometry::Cell, prev: &State, w_res: f64) -> Option<(State, bool)> {
+        self.count(|c| c.temperature_solves += 1);
+        let (spec, op) = (self.spec, self.op);
+        let mut row = |t: f64| -> Result<f64, RootError> {
+            let s = self.point_state(p, t, w_res).ok_or(RootError::NoSignChange)?;
+            Ok(discretization::energy_row(spec, op, cell, &s, prev))
+        };
+        let t_a = thermal::ambient_temperature(cell.tvd_frac, op.t_r, op.t_s);
+        let t_lo = prev.t.min(t_a) - cell.delta_md * spec.thermal.gravity_term_bound(&spec.fluid, cell.cos_incl);
+        let (mut a, mut b) = (t_lo, prev.t.max(t_a));
+        let f_lo = row(a).ok()?;
+        let mut f_b = row(b).ok()?;
+        if f_lo > 0.0 {
+            self.count(|c| c.temperature_failures += 1);
+            return None;
+        }
+        if f_b < 0.0 {
+            self.count(|c| c.step_outs += 1);
+            let mut step = -f_b;
+            for k in 0..=MAX_STEP_OUTS {
+                (a, b) = (b, b + step);
+                f_b = row(b).ok()?;
+                if f_b >= 0.0 {
+                    break;
+                }
+                if k == MAX_STEP_OUTS {
+                    self.count(|c| c.temperature_failures += 1);
+                    return None;
+                }
+                step *= 2.0;
+            }
+        }
+        let (t, f) = brentq(&mut row, a, b, 0.0, RTOL, 100).ok()?;
+        let s = self.point_state(p, t, w_res)?;
+        let capacity = thermal::heat_flux_capacity(&spec.fluid, &s);
+        let solved = f.abs() <= TEMPERATURE_TOL * (1.0 + cell.delta_md * 4.0 * spec.thermal.h / (spec.geometry.d * capacity));
+        if !solved {
+            self.count(|c| c.temperature_failures += 1);
+        }
+        Some((s, solved))
+    }
+
+    /// The state at point i at pressure p, and whether its energy row is solved: at the temperature t_fixed where the
+    /// row is linear, and otherwise at the temperature that zeroes it at p
+    fn state_at(&self, p: f64, cell: geometry::Cell, t_fixed: Option<f64>, prev: &State, w_res: f64)
+                -> Option<(State, bool)> {
+        match t_fixed {
+            Some(t) => self.point_state(p, t, w_res).map(|s| (s, true)),
+            None => self.solve_temperature(p, cell, prev, w_res),
+        }
     }
 
     /// The void fraction that zeroes the slip row (SLIP-1) at a point where the phase rates fix the superficial
@@ -129,12 +208,12 @@ impl<'a> Marcher<'a> {
         Some(State { p, v_g, v_l, alpha, rho_g, rho_l, t })
     }
 
-    /// The pressure at a point at temperature t from the momentum row of the cell below it, given the state at the
-    /// cell's lower point, searched on [p_s, p_prev]
-    fn solve_cell(&self, cell: geometry::Cell, t: f64, s_prev: &State, w_res: f64) -> CellStep {
+    /// The pressure at a point from the momentum row of the cell below it, given the state at the cell's lower point,
+    /// searched on [p_s, p_prev]; the temperature is t_fixed, or solved at each trial pressure
+    fn solve_cell(&self, cell: geometry::Cell, t_fixed: Option<f64>, s_prev: &State, w_res: f64) -> CellStep {
         let (p_prev, p_s) = (s_prev.p, self.op.p_s);
         let mut row = |p: f64| -> Result<f64, RootError> {
-            let s = self.point_state(p, t, w_res).ok_or(RootError::NoSignChange)?;
+            let (s, _) = self.state_at(p, cell, t_fixed, s_prev, w_res).ok_or(RootError::NoSignChange)?;
             Ok(discretization::momentum_row(self.spec, cell, &s, s_prev))
         };
         // The row is U-shaped in p, with its minimum at the cell's sonic pressure p*, and positive at p_prev. Below
@@ -180,8 +259,8 @@ impl<'a> Marcher<'a> {
         x.extend_from_slice(&prev.to_array());
         for i in 1..=n {
             let cell = self.spec.geometry.cell(i);
-            let t = self.temperature(cell, &prev, w_res);
-            let p = match self.solve_cell(cell, t, &prev, w_res) {
+            let t_fixed = self.linear_temperature(cell, &prev, w_res);
+            let p = match self.solve_cell(cell, t_fixed, &prev, w_res) {
                 CellStep::Solved(p) => p,
                 CellStep::Unsolved(p) => {
                     failed = true;
@@ -189,10 +268,11 @@ impl<'a> Marcher<'a> {
                 }
                 CellStep::BelowSeparator => return March { x, w_res, failed: true, below_separator: true },
             };
-            let Some(s) = self.point_state(p, t, w_res) else {
+            let Some((s, solved)) = self.state_at(p, cell, t_fixed, &prev, w_res) else {
                 x.extend_from_slice(&[f64::NAN; DIM_X]);
                 return March { x, w_res, failed: true, below_separator: false };
             };
+            failed |= !solved;
             x.extend_from_slice(&s.to_array());
             prev = s;
         }
@@ -217,7 +297,7 @@ impl<'a> Marcher<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::input::test_wells::{w1, w2};
+    use crate::input::test_wells::all;
 
     /// The largest |row| of each ID over a march's state
     fn largest_rows(spec: &WellSpec, op: &OperatingPoint, x: &[f64]) -> std::collections::HashMap<&'static str, f64> {
@@ -230,15 +310,15 @@ mod tests {
     }
 
     #[test]
-    fn a_march_zeroes_the_inflow_mass_energy_and_closure_rows() {
-        for (spec, op) in [w1(20), w2(20)] {
+    fn a_march_zeroes_every_row_but_the_choke_row() {
+        for (name, spec, op) in all(20) {
             let m = Marcher::new(&spec, &op);
             let p_0 = op.p_s + 0.8 * (op.p_r - op.p_s);
             let march = m.march(p_0);
-            assert!(!march.failed);
-            let rows = largest_rows(&spec, &op, &march.x);
-            for id in ["INF-6", "INF-7", "THM-3", "SLIP-1", "PVT-GAS-1", "PVT-MIX-1", "DISC-7", "DISC-8", "DISC-10"] {
-                assert!(rows[id] < 1e-10, "{id}: {}", rows[id]);
+            assert!(!march.failed, "{name}");
+            for (id, largest) in largest_rows(&spec, &op, &march.x) {
+                let bound = if id == "DISC-9" { 1e-8 } else { 1e-10 };
+                assert!(id == "CHK-1" || largest < bound, "{name} {id}: {largest}");
             }
         }
     }

@@ -89,25 +89,26 @@ pub fn bottom_rows(spec: &WellSpec, op: &OperatingPoint, s: &State, w_res: f64) 
     ]
 }
 
+/// The viscous pressure gradient (Pa/m) at a point, which the momentum and energy rows share
+pub fn friction_gradient(spec: &WellSpec, s: &State) -> f64 {
+    friction::pressure_gradient(spec.f_d, spec.geometry.d, s.rho_m(), s.v_m())
+}
+
 /// The momentum row of cell i (bar), between points i - 1 (s_prev) and i (s): implicit Euler, with friction along the
 /// flow path and gravity along the vertical, at point i
 pub fn momentum_row(spec: &WellSpec, cell: Cell, s: &State, s_prev: &State) -> f64 {
-    let f = friction::pressure_gradient(spec.f_d, spec.geometry.d, s.rho_m(), s.v_m());
+    let f = friction_gradient(spec, s);
     let g = STD_GRAVITY * s.rho_m(); // spec: BAL-6
     (s.momentum_flux() / CF_BAR + s.p) - (s_prev.momentum_flux() / CF_BAR + s_prev.p)
         + cell.delta_md * (f + cell.cos_incl * g) / CF_BAR // spec: DISC-9
 }
 
-/// The heat flux capacities cp_g α ρ_g v_g and cp_l (1 - α) ρ_l v_l (W/(m² K)) at a point
-pub fn heat_capacities(spec: &WellSpec, s: &State) -> (f64, f64) {
-    (spec.fluid.cp_g * s.alpha * s.rho_g * s.v_g, spec.fluid.cp_l * (1.0 - s.alpha) * s.rho_l * s.v_l)
-}
-
-/// The energy row of cell i (K): implicit Euler, with the heat loss at point i
+/// The energy row of cell i (K): implicit Euler, with the temperature gradient at point i
 pub fn energy_row(spec: &WellSpec, op: &OperatingPoint, cell: Cell, s: &State, s_prev: &State) -> f64 {
     let t_a = thermal::ambient_temperature(cell.tvd_frac, op.t_r, op.t_s);
-    let (c_g, c_l) = heat_capacities(spec, s);
-    s.t - s_prev.t + cell.delta_md * thermal::heat_loss(spec.h, spec.geometry.d, s.t, t_a, c_g, c_l) // spec: DISC-10
+    let dt = spec.thermal.temperature_gradient(s, &spec.fluid, t_a, friction_gradient(spec, s), cell.cos_incl,
+                                               spec.geometry.d);
+    s.t - s_prev.t - cell.delta_md * dt // spec: DISC-10
 }
 
 /// Balance rows of cell i: gas and liquid mass (kg/(m² s)), momentum (bar) and energy (K). The change in each mass

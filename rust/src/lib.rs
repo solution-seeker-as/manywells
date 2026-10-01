@@ -40,7 +40,8 @@ mod _core {
     use crate::discretization;
     use crate::geometry::Geometry;
     use crate::inflow::Inflow;
-    use crate::thermal;
+    use crate::thermal::{self, Thermal};
+    use crate::discretization::State;
     use crate::input::{OperatingPoint, WellSpec};
     use crate::march::Marcher;
     use crate::pvt::fluid::{Fluid, FluidInputs};
@@ -81,12 +82,12 @@ mod _core {
     #[pymethods]
     impl Well {
         #[new]
-        #[pyo3(signature = (*, md, tvd, D, rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, f_D, h, inflow,
-                            inflow_coefficient, choke, K_c, profile))]
+        #[pyo3(signature = (*, md, tvd, D, rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, f_D, h, frictional_heating,
+                            gravity_term, inflow, inflow_coefficient, choke, K_c, profile))]
         #[allow(non_snake_case, clippy::too_many_arguments)]
         fn new(md: Vec<f64>, tvd: Vec<f64>, D: f64, rho_o: f64, rho_g: f64, rho_w: f64, gor: f64, wlr: f64, cp_g: f64,
-               cp_o: f64, cp_w: f64, f_D: f64, h: f64, inflow: &str, inflow_coefficient: f64, choke: &str, K_c: f64,
-               profile: &str) -> PyResult<Self> {
+               cp_o: f64, cp_w: f64, f_D: f64, h: f64, frictional_heating: bool, gravity_term: bool, inflow: &str,
+               inflow_coefficient: f64, choke: &str, K_c: f64, profile: &str) -> PyResult<Self> {
             let inflow = match inflow {
                 "vogel" => Inflow::Vogel { w_l_max: inflow_coefficient },
                 "pi" => Inflow::ProductivityIndex { k_l: inflow_coefficient },
@@ -102,7 +103,7 @@ mod _core {
                 geometry: Geometry::from_grid(&md, &tvd, D).map_err(PyValueError::new_err)?,
                 fluid: Fluid::new(FluidInputs { rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w }),
                 f_d: f_D,
-                h,
+                thermal: Thermal { h, frictional_heating, gravity_term },
                 inflow,
                 choke: Choke::new(model, K_c, profile),
             };
@@ -125,7 +126,9 @@ mod _core {
                 w_g_res: r.w_g_res,
             }).collect();
             let c = search.counts;
-            let counts = HashMap::from([("marches", c.marches), ("states", c.states), ("rejected", search.rejected)]);
+            let counts = HashMap::from([("marches", c.marches), ("states", c.states), ("rejected", search.rejected),
+                                        ("temperature_solves", c.temperature_solves), ("step_outs", c.step_outs),
+                                        ("temperature_failures", c.temperature_failures)]);
             Ok((roots, counts))
         }
 
@@ -228,6 +231,11 @@ mod _core {
             "ambient_temperature" => {
                 let [tvd_frac, t_r, t_s] = take(name, a)?;
                 vec![thermal::ambient_temperature(tvd_frac, t_r, t_s)]
+            }
+            "temperature_gradient" => {
+                let [p, v_g, v_l, alpha, rho_g, rho_l, t, t_a, f, cos_incl] = take(name, a)?;
+                let s = State { p, v_g, v_l, alpha, rho_g, rho_l, t };
+                vec![spec.thermal.temperature_gradient(&s, &spec.fluid, t_a, f, cos_incl, spec.geometry.d)]
             }
             "ideal_gas_density" => { let [p, t, r_s] = take(name, a)?; vec![gas::ideal_gas_density(p, t, r_s)] }
             "api_from_density" => { let [rho] = take(name, a)?; vec![oil::api_from_density(rho)] }

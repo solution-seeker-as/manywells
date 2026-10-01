@@ -159,20 +159,20 @@ pub fn residual(spec: &WellSpec, op: &OperatingPoint, p_0: f64) -> Option<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::input::test_wells::{w1, w2};
+    use crate::input::test_wells::all;
 
     #[test]
     fn every_root_zeroes_every_row() {
-        for (spec, op) in [w1(20), w2(20)] {
+        for (name, spec, op) in all(20) {
             let search = root_set(&spec, &op).unwrap();
-            assert!(!search.roots.is_empty());
+            assert!(!search.roots.is_empty(), "{name}");
             for root in &search.roots {
                 // The choke row is as small as p_0's resolution allows, times dR/dp_0, which is steep at a trickle root:
                 // at W2's, 4e-7 of the rate
                 let (w_g, w_l) = State::of(&root.x[root.x.len() - DIM_X..]).rates(spec.a());
                 for (id, v) in discretization::rows(&spec, &op, &root.x) {
                     let bound = if id == "CHK-1" { 1e-6 * (w_g + w_l) } else { 1e-8 };
-                    assert!(v.abs() < bound, "{id}: {v}");
+                    assert!(v.abs() < bound, "{name} {id}: {v}");
                 }
             }
         }
@@ -180,9 +180,9 @@ mod tests {
 
     #[test]
     fn the_slope_has_the_sign_of_the_bracket() {
-        for (spec, op) in [w1(20), w2(20)] {
+        for (name, spec, op) in all(20) {
             for root in root_set(&spec, &op).unwrap().roots {
-                assert_eq!(root.slope > 0.0, root.rising, "slope {} at p_0 = {}", root.slope, root.x[0]);
+                assert_eq!(root.slope > 0.0, root.rising, "{name}: slope {} at p_0 = {}", root.slope, root.x[0]);
             }
         }
     }
