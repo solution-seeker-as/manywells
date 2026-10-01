@@ -8,6 +8,7 @@
 //! operating point. Validation stays in the dataclasses; the core checks only what it needs to run.
 
 use crate::choke::Choke;
+use crate::friction::Friction;
 use crate::geometry::Geometry;
 use crate::inflow::Inflow;
 use crate::pvt::fluid::Fluid;
@@ -19,7 +20,7 @@ use crate::thermal::Thermal;
 pub struct WellSpec {
     pub geometry: Geometry,
     pub fluid: Fluid,
-    pub f_d: f64,      // Darcy friction factor
+    pub friction: Friction,
     pub thermal: Thermal,
     pub slip: Slip,
     pub inflow: Inflow,
@@ -96,7 +97,7 @@ pub mod test_wells {
         let spec = WellSpec {
             geometry: vertical(2500.0, n_cells, 0.127),
             fluid: v1_fluid(900.0, 420.0, 2225.0, 3000.0, 0.15),
-            f_d: 0.03, thermal: Thermal { h: 25.0, frictional_heating: false, gravity_term: false },
+            friction: Friction::FixedFactor { f_d: 0.03 }, thermal: Thermal { h: 25.0, frictional_heating: false, gravity_term: false },
             slip: Slip::default(),
             inflow: Inflow::Vogel { w_l_max: 80.0 },
             choke: Choke::new(ChokeModel::Simpson, 0.0015201224372924933, Profile::Sigmoid),
@@ -108,7 +109,7 @@ pub mod test_wells {
         let spec = WellSpec {
             geometry: vertical(1800.0, n_cells, 0.1524),
             fluid: v1_fluid(820.0, 500.0, 2225.0, 2200.0, 0.4),
-            f_d: 0.05, thermal: Thermal { h: 15.0, frictional_heating: false, gravity_term: false },
+            friction: Friction::FixedFactor { f_d: 0.05 }, thermal: Thermal { h: 15.0, frictional_heating: false, gravity_term: false },
             slip: Slip::default(),
             inflow: Inflow::ProductivityIndex { k_l: 0.6 },
             choke: Choke::new(ChokeModel::Bernoulli, 0.001824146924750992, Profile::Linear),
@@ -162,13 +163,29 @@ pub mod test_wells {
         (spec, op)
     }
 
+    /// W1 deviated with develop's model: black oil, real gas, oil surface tension, the energy terms, and friction
+    /// from roughness by Chen's correlation (004)
+    pub fn w1_develop(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let (mut spec, op) = w1_black_oil(n_cells);
+        spec.friction = Friction::Roughness { roughness: 4.5e-5, correlation: crate::friction::Correlation::Chen };
+        (spec, op)
+    }
+
+    /// W2 L-shaped at its bubble point, with friction from roughness by Haaland's correlation
+    pub fn w2_haaland(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let (mut spec, op) = w2_bubble_point(n_cells);
+        spec.friction = Friction::Roughness { roughness: 1.5e-5, correlation: crate::friction::Correlation::Haaland };
+        (spec, op)
+    }
+
     /// Every test well
     pub fn all(n_cells: usize) -> Vec<(&'static str, WellSpec, OperatingPoint)> {
         let named = |name, (spec, op)| (name, spec, op);
         vec![named("w1", w1(n_cells)), named("w2", w2(n_cells)), named("w1_thermal", w1_thermal(n_cells)),
              named("w1_deviated", w1_deviated(n_cells)), named("w2_l_shaped", w2_l_shaped(n_cells)),
              named("w1_real_gas", w1_real_gas(n_cells)), named("w1_black_oil", w1_black_oil(n_cells)),
-             named("w2_bubble_point", w2_bubble_point(n_cells))]
+             named("w2_bubble_point", w2_bubble_point(n_cells)), named("w1_develop", w1_develop(n_cells)),
+             named("w2_haaland", w2_haaland(n_cells))]
     }
 }
 

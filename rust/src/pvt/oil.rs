@@ -29,6 +29,23 @@ pub fn dead_oil_surface_tension(rho: f64, t: f64) -> f64 {  // spec: PVT-OIL-3
     cf * (1.11591 - 0.00305 * t_deg_c) * (38.085 - 0.259 * api)
 }
 
+/// Dead-oil viscosity (Pa s) at API gravity api and T (K), Beggs and Robinson (1975)
+pub fn dead_oil_viscosity(api: f64, t: f64) -> f64 {  // spec: PVT-OIL-10
+    let t_f = kelvin_to_fahrenheit(t);
+    let y = 10f64.powf(3.0324 - 0.02023 * api);
+    let x = y * t_f.powf(-1.163);
+    (10f64.powf(x) - 1.0) * 1e-3
+}
+
+/// Live-oil viscosity (Pa s) from the dead oil's, mu_dead (Pa s), at a solution gas-oil ratio rs_scf (scf/STB),
+/// Beggs and Robinson (1975)
+pub fn live_oil_viscosity(mu_dead: f64, rs_scf: f64) -> f64 {  // spec: PVT-OIL-11
+    let mu_dead_cp = mu_dead / 1e-3;
+    let a = 10.715 * (rs_scf + 100.0).powf(-0.515);
+    let b = 5.44 * (rs_scf + 150.0).powf(-0.338);
+    a * mu_dead_cp.powf(b) * 1e-3
+}
+
 /// Live-oil surface tension (J/m²) from the dead oil's, sigma_dead (J/m²), at a solution gas-oil ratio rs_scf
 /// (scf/STB), Abdul-Majeed and Al-Soof (2000), whose two branches a sigmoid blends at R_so = 50 Sm³/Sm³
 pub fn live_oil_surface_tension(sigma_dead: f64, rs_scf: f64) -> f64 {  // spec: PVT-OIL-12

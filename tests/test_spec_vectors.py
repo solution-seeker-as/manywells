@@ -313,11 +313,7 @@ RUST_NOT_IN_CORE = {
 }
 
 # Step 9 ports develop's model to the core one feature spec at a time: the tables whose functions it has not got yet
-RUST_NOT_PORTED = {
-    'THM-5': '010', 'FRIC-3': '004', 'FRIC-4': '004', 'FRIC-5': '004', 'FRIC-6': '004', 'PVT-GAS-7': '004',
-    'PVT-OIL-10': '004', 'PVT-OIL-11': '004', 'PVT-WAT-3': '004', 
-    'PVT-MIX-8': '004', 'PVT-MIX-9': '004',
-}
+RUST_NOT_PORTED = {'THM-5': '010'}
 
 
 def rust_vector_params():

@@ -12,7 +12,6 @@
 //! [p, v_g, v_l, alpha, rho_g, rho_l, T] (bar, m/s, m/s, -, kg/m³, kg/m³, K). Cell i lies between points i - 1 and i.
 //! The reservoir liquid rate w_res, from the inflow at p_0, enters every point's rows through the phase rates.
 
-use crate::friction;
 use crate::geometry::Cell;
 use crate::input::{OperatingPoint, WellSpec};
 use crate::pvt::fluid::GasLaw;
@@ -92,7 +91,7 @@ pub fn bottom_rows(spec: &WellSpec, op: &OperatingPoint, s: &State, w_res: f64) 
 
 /// The viscous pressure gradient (Pa/m) at a point, which the momentum and energy rows share
 pub fn friction_gradient(spec: &WellSpec, s: &State) -> f64 {
-    friction::pressure_gradient(spec.f_d, spec.geometry.d, s.rho_m(), s.v_m())
+    spec.friction.pressure_gradient(s, &spec.fluid, spec.geometry.d)
 }
 
 /// The momentum row of cell i (bar), between points i - 1 (s_prev) and i (s): implicit Euler, with friction along the

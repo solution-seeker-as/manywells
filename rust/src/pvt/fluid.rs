@@ -12,7 +12,7 @@
 //! (Vazquez-Beggs), mixed with incompressible water as one liquid.
 
 use crate::pvt::oil::BlackOil;
-use crate::pvt::{gas, mixture, oil};
+use crate::pvt::{gas, mixture, oil, water};
 use crate::smoothing::{max_approx, min_approx};
 use crate::units::{CF_BAR, CF_RS, M_AIR, P_REF, R_UNIVERSAL, T_REF};
 
@@ -151,6 +151,27 @@ impl Fluid {
     /// The liquid-density row (kg/m³)
     pub fn liquid_density_row(&self, p: f64, t: f64, rho_l_state: f64) -> f64 {
         mixture::liquid_density_row(rho_l_state, self.liquid_density(p, t))
+    }
+
+    /// Liquid viscosity (Pa s) at p (bar) and T (K): the dead oil's, corrected for the dissolved gas in black oil,
+    /// mixed with water's by the water-liquid ratio
+    pub fn liquid_viscosity(&self, p: f64, t: f64) -> f64 {  // spec: PVT-MIX-8
+        let mut mu_o = oil::dead_oil_viscosity(self.api, t);
+        if let OilModel::BlackOil(_) = self.oil {
+            mu_o = oil::live_oil_viscosity(mu_o, self.rs(p, t) / CF_RS);
+        }
+        let wlr = self.inputs.wlr;
+        wlr * water::water_viscosity(t) + (1.0 - wlr) * mu_o
+    }
+
+    /// Gas viscosity (Pa s) at T (K) and density rho_g (kg/m³)
+    pub fn gas_viscosity(&self, t: f64, rho_g: f64) -> f64 {
+        gas::gas_viscosity(t, rho_g, self.m_g)
+    }
+
+    /// Gas-liquid mixture viscosity (Pa s) at a point
+    pub fn mixture_viscosity(&self, p: f64, t: f64, alpha: f64, rho_g: f64, rho_l: f64) -> f64 {
+        mixture::mixture_viscosity(self.liquid_viscosity(p, t), self.gas_viscosity(t, rho_g), alpha, rho_l, rho_g)
     }
 
     /// Gas-liquid surface tension (J/m²) at p (bar), T (K) and the point's liquid density rho_l (kg/m³)

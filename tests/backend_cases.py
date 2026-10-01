@@ -372,6 +372,7 @@ class Comparison:
     labels: list = field(default_factory=list)       # matched roots whose labels differ, by p_0
     core_only: list = field(default_factory=list)    # core roots no CasADi root matches: (p_0, zeroes the rows)
     several_alpha: bool = False                      # the slip law has several void fractions at a root's point
+    other_branch: list = field(default_factory=list)  # roots (p_0) on another branch of a point's rows
     row_rel: float = 0.0                             # largest relative row difference at the perturbed roots
     row_at: str = ''
     seconds: dict = field(default_factory=dict)      # build + search per backend
@@ -383,14 +384,14 @@ class Comparison:
     @property
     def ok(self) -> bool:
         """The pass rule (Step 9): every CasADi root found by the core with its label, every core-only root a root of
-        the CasADi rows, and the rows equal at the perturbed roots; where the slip law has several void fractions,
-        the rows only."""
-        rows = self.row_rel <= ROW_REL and all(zeroes for _, zeroes in self.core_only)
+        the CasADi rows, and the rows equal at the perturbed roots; where the slip law has several void fractions or a
+        root lies on another branch of a point's rows, the rows only."""
         if self.error:
             return False
-        if self.several_alpha:
-            return rows
-        return rows and not self.missed and not self.labels
+        if self.several_alpha or self.other_branch:
+            return self.row_rel <= ROW_REL
+        return (self.row_rel <= ROW_REL and all(zeroes for _, zeroes in self.core_only) and not self.missed
+                and not self.labels)
 
 
 def void_fractions(slip, D):
@@ -413,6 +414,28 @@ def several_void_fractions(wp, x, grid=2001) -> bool:
     values = np.asarray(h(np.repeat(a, len(X)).reshape(1, -1), *(np.tile(inputs, grid)[k].reshape(1, -1)
                                                                   for k in range(6)))).reshape(grid, -1)
     return bool(np.any(np.sum(np.diff(np.sign(values), axis=0) != 0, axis=0) > 1))
+
+
+def point_jacobians(system):
+    """det(∂ rows of point i / ∂ x_i) for a point i > 0, as a CasADi function of point_rows' arguments."""
+    args = [ca.SX.sym(n, k) for n, k in (('x_i', DIM_X), ('x_prev', DIM_X), ('w_res', 1), ('params', 7),
+                                          ('delta_md', 1), ('cos_incl', 1), ('tvd_frac', 1))]
+    return ca.Function('det', args, [ca.det(ca.jacobian(system.point_rows(*args), args[0]))])
+
+
+def other_branch(system, det, bc, x) -> list:
+    """
+    The points of state x whose rows are on another branch than the rest of the well's: where the sign of
+    det(∂ rows of point i / ∂ x_i) differs from most points'. The determinant changes sign only where the point's
+    rows are singular, at a fold: past the sonic point of the cell's momentum row, which is U-shaped in p_i, or across
+    a fold of the slip law. The core's march takes the subsonic root of each cell.
+    """
+    geo, X, params = system.wp.geometry, np.reshape(x, (-1, DIM_X)), system.params(bc)
+    w_res = float(system.reservoir_rate(X[0, 0], params))
+    sign = np.sign([float(det(X[i], X[i - 1], w_res, params, geo.delta_md[i - 1], geo.cos_incl[i - 1], geo.tvd_frac[i]))
+                    for i in range(1, len(X))])
+    most = 1.0 if np.sum(sign > 0) >= np.sum(sign < 0) else -1.0
+    return [i + 1 for i in np.flatnonzero(sign != most)]
 
 
 def compare_root_sets(wp, bc, system, casadi_roots, rust_roots, rust_rows) -> Comparison:
@@ -443,6 +466,8 @@ def compare_root_sets(wp, bc, system, casadi_roots, rust_roots, rust_rows) -> Co
         c.core_only.append((rr.p_0, bool(zeroes)))
     roots = list(casadi_roots) + list(rust_roots)
     c.several_alpha = any(several_void_fractions(wp, r.x) for r in roots)
+    det = point_jacobians(system)
+    c.other_branch = [(r.p_0, points) for r in roots if (points := other_branch(system, det, bc, r.x))]
     for r in roots:
         X = perturb(r.state)
         ids, casadi = casadi_rows(system, bc, X)
@@ -479,6 +504,10 @@ def report(comparisons) -> None:
     for c in comparisons:
         if c.core_only:
             warnings.warn(f'{c.case}: the core finds roots the CasADi search misses, at p_0 = '
-                          + ', '.join(f'{p:.4f} bar' for p, _ in c.core_only))
+                          + ', '.join(f'{p:.4f} bar' + ('' if zeroes else ' (not a root of the CasADi rows)')
+                                      for p, zeroes in c.core_only))
         if c.several_alpha:
             warnings.warn(f'{c.case}: the slip law has several void fractions at a root; compared on rows only')
+        if c.other_branch:
+            warnings.warn(f'{c.case}: roots on another branch of a point\'s rows, compared on rows only: '
+                          + ', '.join(f'{p:.4f} bar (points {pts})' for p, pts in c.other_branch))

@@ -88,13 +88,14 @@ def run(case, backends):
 
 def agreement_table(results) -> str:
     rows = ['| Configuration | Cases | CasADi roots | Core roots | Missed | Labels differ | Core-only (zero the rows) '
-            '| Several α | Largest row difference | Errors |', '|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|']
+            '| Several α | Other branch | Largest row difference | Errors |', '|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|']
     for conf in dict.fromkeys(k for _, k in results):
         cs = [c for c, k in results if k == conf]
         core_only = [z for c in cs for _, z in c.core_only]
         rows.append(f'| {conf} | {len(cs)} | {sum(len(c.casadi) for c in cs)} | {sum(len(c.rust) for c in cs)} '
                     f'| {sum(len(c.missed) for c in cs)} | {sum(len(c.labels) for c in cs)} '
                     f'| {len(core_only)} ({sum(core_only)}) | {sum(c.several_alpha for c in cs)} '
+                    f'| {sum(bool(c.other_branch) for c in cs)} '
                     f'| {max((c.row_rel for c in cs), default=0):.1e} | {sum(bool(c.error) for c in cs)} |')
     return '\n'.join(rows)
 
@@ -140,6 +141,7 @@ def main():
         print(f'{len(results) - len(failed)} of {len(results)} cases pass the rule of test_backend_comparison.py'
               + ''.join(f'\n  {c.case}: missed {c.missed}, labels {c.labels}, core-only {c.core_only}, '
                         f'rows {c.row_rel:.1e} {c.row_at} {c.error.splitlines()[0] if c.error else ""}' for c in failed)
+              + ''.join(f'\n  {c.case}: other branch at {c.other_branch}' for c, _ in results if c.other_branch)
               + '\n')
     print(timing_table(results, backends))
     args.out.write_text(json.dumps([{**asdict(c), 'configuration': k} for c, k in results], indent=1, default=str))

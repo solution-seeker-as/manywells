@@ -39,6 +39,17 @@ pub fn papay_z_factor(p_pa: f64, t: f64, ppc: f64, tpc: f64) -> f64 {  // spec: 
     1.0 - 3.52 * ppr * 10f64.powf(-0.9813 * tpr) + 0.274 * (ppr * ppr) * 10f64.powf(-0.8157 * tpr)
 }
 
+/// Gas viscosity (Pa s) at T (K) and density rho_g (kg/m³), for molecular weight m_g (kg/kmol), by the
+/// Lee-Gonzalez-Eakin (1966) correlation
+pub fn gas_viscosity(t: f64, rho_g: f64, m_g: f64) -> f64 {  // spec: PVT-GAS-7
+    let t_r = 1.8 * t;
+    let rho_gcc = rho_g * 1e-3;
+    let k = (9.4 + 0.02 * m_g) * t_r.powf(1.5) / (209.0 + 19.0 * m_g + t_r);
+    let x = 3.5 + 986.0 / t_r + 0.01 * m_g;
+    let y = 2.4 - 0.2 * x;
+    k * (x * rho_gcc.powf(y)).exp() * 1e-7
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

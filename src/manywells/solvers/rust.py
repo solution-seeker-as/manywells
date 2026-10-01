@@ -43,8 +43,6 @@ CORE_CLASSES = {'geometry': (WellGeometry,), 'fluid': (FluidModel,), 'friction':
 def _not_yet_ported(wp) -> list:
     """The options of wp that the core does not implement yet. Step 9 ports them one feature spec at a time."""
     geo, fluid, thermal, out = wp.geometry, wp.fluid, wp.thermal, []
-    if type(wp.friction) is not FixedFrictionFactor:
-        out.append('friction from roughness (004)')
     if thermal.lift_gas_mixing:
         out.append('lift-gas mixing (010)')
     if type(wp.inflow) is FixedFlowRate:
@@ -78,13 +76,19 @@ def core_well(wp) -> '_core.Well':
                       cp_g=fluid.cp_g, cp_o=fluid.cp_o, cp_w=fluid.cp_w, ideal_gas=fluid.ideal_gas,
                       oil_model=fluid.oil_model, p_sep=fluid.p_sep, T_sep=fluid.T_sep, p_bubble=fluid.p_bubble,
                       surface_tension_model=fluid.surface_tension_model,
-                      f_D=wp.friction.f_D, h=wp.thermal.h,
+                      **_friction(wp.friction), h=wp.thermal.h,
                       frictional_heating=wp.thermal.frictional_heating, gravity_term=wp.thermal.gravity_term,
                       C_0_annular=wp.slip.C_0_annular, C_0_slug=wp.slip.C_0_slug, C_0_bubbly=wp.slip.C_0_bubbly,
                       v_inf_annular=wp.slip.v_inf_annular,
                       inflow='vogel' if vogel else 'pi', inflow_coefficient=inflow.w_l_max if vogel else inflow.k_l,
                       choke='simpson' if isinstance(choke, SimpsonChokeModel) else 'bernoulli', K_c=choke.K_c,
                       profile=choke.chk_profile)
+
+
+def _friction(friction) -> dict:
+    if type(friction) is FixedFrictionFactor:
+        return {'friction': 'fixed', 'f_D': friction.f_D}
+    return {'friction': 'roughness', 'roughness': friction.roughness, 'correlation': friction.correlation}
 
 
 def operating_point(bc) -> tuple:

@@ -38,6 +38,7 @@ mod _core {
 
     use crate::choke::{self, Choke, ChokeModel, Profile};
     use crate::discretization;
+    use crate::friction::{self, Correlation, Friction};
     use crate::geometry::Geometry;
     use crate::inflow::Inflow;
     use crate::thermal::{self, Thermal};
@@ -45,7 +46,7 @@ mod _core {
     use crate::input::{OperatingPoint, WellSpec};
     use crate::march::Marcher;
     use crate::pvt::fluid::{Fluid, FluidInputs, SurfaceTensionModel};
-    use crate::pvt::{gas, oil};
+    use crate::pvt::{gas, mixture, oil, water};
     use crate::shoot;
     use crate::slip::{self, Slip};
     use crate::smoothing;
@@ -81,42 +82,66 @@ mod _core {
 
     #[pymethods]
     impl Well {
+        /// A well from the fields of WellProperties' components (src/manywells/solvers/rust.py, core_well), each
+        /// option by its name, as in the Python classes
         #[new]
-        #[pyo3(signature = (*, md, tvd, D, rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, oil_model, p_sep, T_sep, p_bubble, surface_tension_model, f_D, h, frictional_heating,
-                            gravity_term, C_0_annular, C_0_slug, C_0_bubbly, v_inf_annular, inflow, inflow_coefficient,
-                            choke, K_c, profile))]
+        #[pyo3(signature = (
+            *,
+            md, tvd, D,
+            rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, oil_model, surface_tension_model, p_sep, T_sep,
+            p_bubble=None,
+            friction, f_D=None, roughness=None, correlation=None,
+            h, frictional_heating, gravity_term,
+            C_0_annular, C_0_slug, C_0_bubbly, v_inf_annular,
+            inflow, inflow_coefficient,
+            choke, K_c, profile
+        ))]
         #[allow(non_snake_case, clippy::too_many_arguments)]
-        fn new(md: Vec<f64>, tvd: Vec<f64>, D: f64, rho_o: f64, rho_g: f64, rho_w: f64, gor: f64, wlr: f64, cp_g: f64,
-               cp_o: f64, cp_w: f64, ideal_gas: bool, oil_model: &str, p_sep: f64, T_sep: f64, p_bubble: Option<f64>,
-               surface_tension_model: &str, f_D: f64, h: f64, frictional_heating: bool, gravity_term: bool, C_0_annular: f64,
-               C_0_slug: f64, C_0_bubbly: f64, v_inf_annular: f64, inflow: &str, inflow_coefficient: f64, choke: &str,
-               K_c: f64, profile: &str) -> PyResult<Self> {
-            let inflow = match inflow {
-                "vogel" => Inflow::Vogel { w_l_max: inflow_coefficient },
-                "pi" => Inflow::ProductivityIndex { k_l: inflow_coefficient },
-                _ => return Err(PyValueError::new_err(format!("inflow {inflow:?} is not 'vogel' or 'pi'"))),
-            };
-            let model = match choke {
-                "simpson" => ChokeModel::Simpson,
-                "bernoulli" => ChokeModel::Bernoulli,
-                _ => return Err(PyValueError::new_err(format!("choke {choke:?} is not 'simpson' or 'bernoulli'"))),
-            };
-            let profile = Profile::from_name(profile).map_err(PyValueError::new_err)?;
+        fn new(md: Vec<f64>, tvd: Vec<f64>, D: f64,
+               rho_o: f64, rho_g: f64, rho_w: f64, gor: f64, wlr: f64, cp_g: f64, cp_o: f64, cp_w: f64, ideal_gas: bool,
+               oil_model: &str, surface_tension_model: &str, p_sep: f64, T_sep: f64, p_bubble: Option<f64>,
+               friction: &str, f_D: Option<f64>, roughness: Option<f64>, correlation: Option<&str>,
+               h: f64, frictional_heating: bool, gravity_term: bool,
+               C_0_annular: f64, C_0_slug: f64, C_0_bubbly: f64, v_inf_annular: f64,
+               inflow: &str, inflow_coefficient: f64,
+               choke: &str, K_c: f64, profile: &str) -> PyResult<Self> {
             let black_oil = match oil_model {
                 "dead_oil" => false,
                 "black_oil" => true,
-                _ => return Err(PyValueError::new_err(format!("oil model {oil_model:?} is not 'dead_oil' or 'black_oil'"))),
+                m => return Err(PyValueError::new_err(format!("oil model {m:?} is not 'dead_oil' or 'black_oil'"))),
             };
             let surface_tension = match surface_tension_model {
                 "oil" => SurfaceTensionModel::Oil,
                 "liquid" => SurfaceTensionModel::Liquid,
                 m => return Err(PyValueError::new_err(format!("surface tension model {m:?} is not 'oil' or 'liquid'"))),
             };
+            let friction = match (friction, f_D, roughness, correlation) {
+                ("fixed", Some(f_d), _, _) => Friction::FixedFactor { f_d },
+                ("roughness", _, Some(roughness), Some("chen")) => {
+                    Friction::Roughness { roughness, correlation: Correlation::Chen }
+                }
+                ("roughness", _, Some(roughness), Some("haaland")) => {
+                    Friction::Roughness { roughness, correlation: Correlation::Haaland }
+                }
+                _ => return Err(PyValueError::new_err(
+                    "friction is 'fixed' with f_D, or 'roughness' with roughness and correlation 'chen' or 'haaland'")),
+            };
+            let inflow = match inflow {
+                "vogel" => Inflow::Vogel { w_l_max: inflow_coefficient },
+                "pi" => Inflow::ProductivityIndex { k_l: inflow_coefficient },
+                m => return Err(PyValueError::new_err(format!("inflow {m:?} is not 'vogel' or 'pi'"))),
+            };
+            let model = match choke {
+                "simpson" => ChokeModel::Simpson,
+                "bernoulli" => ChokeModel::Bernoulli,
+                m => return Err(PyValueError::new_err(format!("choke {m:?} is not 'simpson' or 'bernoulli'"))),
+            };
+            let profile = Profile::from_name(profile).map_err(PyValueError::new_err)?;
             let spec = WellSpec {
                 geometry: Geometry::from_grid(&md, &tvd, D).map_err(PyValueError::new_err)?,
                 fluid: Fluid::new(FluidInputs { rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, black_oil, p_sep,
                                                 t_sep: T_sep, p_bubble, surface_tension }),
-                f_d: f_D,
+                friction,
                 thermal: Thermal { h, frictional_heating, gravity_term },
                 slip: Slip { c_0_annular: C_0_annular, c_0_slug: C_0_slug, c_0_bubbly: C_0_bubbly, v_inf_annular },
                 inflow,
@@ -278,6 +303,30 @@ mod _core {
                 let [p, t, w_res, w_lg] = take(name, a)?;
                 let (w_g, w_l) = spec.fluid.phase_rates(p, t, w_res, w_lg);
                 vec![w_g, w_l]
+            }
+            "friction" => {
+                let [p, v_g, v_l, alpha, rho_g, rho_l, t] = take(name, a)?;
+                let s = State { p, v_g, v_l, alpha, rho_g, rho_l, t };
+                let d = spec.geometry.d;
+                vec![spec.friction.friction_factor(&s, &spec.fluid, d), spec.friction.pressure_gradient(&s, &spec.fluid, d)]
+            }
+            "chen_friction_factor" => { let [re, eps] = take(name, a)?; vec![friction::chen_friction_factor(re, eps)] }
+            "haaland_friction_factor" => { let [re, eps] = take(name, a)?; vec![friction::haaland_friction_factor(re, eps)] }
+            "friction_factor_of_re" => {
+                let [re, eps] = take(name, a)?;
+                let Friction::Roughness { correlation, .. } = spec.friction else {
+                    return Err("the well's friction is not from roughness".into());
+                };
+                vec![friction::friction_factor_of_re(re, eps, correlation)]
+            }
+            "gas_viscosity" => { let [t, rho_g, m_g] = take(name, a)?; vec![gas::gas_viscosity(t, rho_g, m_g)] }
+            "dead_oil_viscosity" => { let [api, t] = take(name, a)?; vec![oil::dead_oil_viscosity(api, t)] }
+            "live_oil_viscosity" => { let [mu, rs_scf] = take(name, a)?; vec![oil::live_oil_viscosity(mu, rs_scf)] }
+            "water_viscosity" => { let [t] = take(name, a)?; vec![water::water_viscosity(t)] }
+            "liquid_viscosity" => { let [p, t] = take(name, a)?; vec![spec.fluid.liquid_viscosity(p, t)] }
+            "mixture_viscosity" => {
+                let [mu_l, mu_g, alpha, rho_l, rho_g] = take(name, a)?;
+                vec![mixture::mixture_viscosity(mu_l, mu_g, alpha, rho_l, rho_g)]
             }
             "ideal_gas_density" => { let [p, t, r_s] = take(name, a)?; vec![gas::ideal_gas_density(p, t, r_s)] }
             "api_from_density" => { let [rho] = take(name, a)?; vec![oil::api_from_density(rho)] }
