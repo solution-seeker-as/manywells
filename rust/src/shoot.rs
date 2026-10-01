@@ -49,13 +49,16 @@ pub struct Search {
 }
 
 /// p_0 of the roots, each with whether R rises through it. Samples R(p_0) on a uniform scan of (p_s, p_r) and runs
-/// Brent on every sign change between neighbouring samples. A negative region narrower than the scan's step, near
-/// the fold where two roots merge, leaves R positive at every sample but with a local minimum: a golden-section
-/// search between the minimum's neighbours looks for a negative R there, and Brent then runs on both sides of it.
+/// Brent on every sign change between neighbouring samples. Trickle roots, and both roots of a nearly closed choke,
+/// can lie within one step of p_r, so the top interval gets a ladder of samples whose drawdown halves down to that
+/// of the top sample. A negative region narrower than the spacing, near the fold where two roots merge, leaves R
+/// positive at every sample but with a local minimum: a golden-section search between the minimum's neighbours looks
+/// for a negative R there, and Brent then runs on both sides of it.
 fn shoot(m: &Marcher) -> Result<Vec<(f64, bool)>, String> {
     let op = m.op;
     let p_lo = op.p_s + 1e-3;
-    let p_hi = op.p_r - 1e-6;
+    let d_hi = 1e-6; // Drawdown of the top sample (bar)
+    let p_hi = op.p_r - d_hi;
     let step = (p_hi - p_lo) / SCAN_INTERVALS as f64;
     let residual = |p: f64| -> Result<f64, String> {
         match m.residual(p) {
@@ -65,18 +68,25 @@ fn shoot(m: &Marcher) -> Result<Vec<(f64, bool)>, String> {
     };
     let brent_r = |p: f64| residual(p).map_err(|_| RootError::NoSignChange);
 
-    // The scan, from p_s up to p_r
-    let p: Vec<f64> = (0..=SCAN_INTERVALS).rev().map(|k| p_hi - step * k as f64).collect();
+    // The scan, from p_s up to p_r, with the ladder in the top interval
+    let mut p: Vec<f64> = (0..=SCAN_INTERVALS).rev().map(|k| p_hi - step * k as f64).collect();
+    let mut d = step / 2.0;
+    while d > 2.0 * d_hi {
+        p.push(op.p_r - d);
+        d /= 2.0;
+    }
+    p.sort_by(f64::total_cmp);
     let r: Vec<f64> = p.iter().map(|&p| residual(p)).collect::<Result<_, _>>()?;
+    let n = p.len() - 1;
 
     let mut brackets = Vec::new(); // (a, b, rising): a sign change on [a, b], where R rises if it is negative at a
-    for j in 0..SCAN_INTERVALS {
+    for j in 0..n {
         if (r[j] < 0.0) != (r[j + 1] < 0.0) {
             brackets.push((p[j], p[j + 1], r[j] < 0.0));
         }
     }
     let xtol_refine = REFINE_XTOL * (op.p_r - op.p_s);
-    for j in 1..SCAN_INTERVALS {
+    for j in 1..n {
         if r[j] >= 0.0 && r[j - 1] >= r[j] && r[j + 1] >= r[j] {
             let mut f = |p: f64| residual(p).unwrap_or(f64::INFINITY);
             let (q, r_q) = minimize(&mut f, p[j - 1], p[j + 1], xtol_refine, 200, 0.0);
