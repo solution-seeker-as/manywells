@@ -9,16 +9,19 @@ Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 develop's root sets on the verifier's case set, in the v1.0.0 configuration (specs/verification.md), as a
 candidate file for manywells-verify. Run from the project root:
 
-    uv run python -m scripts.verification.develop_candidate verification/data/develop.parquet
-    uv run manywells-verify verification/data/develop.parquet --data verification/data \
-        --expected-failures verification/expected_failures.csv --name "develop (v1.0.0 configuration)"
+    uv run python -m scripts.verification.develop_candidate develop.parquet
+    uv run manywells-verify develop.parquet --data verification/data --name "develop (v1.0.0 configuration)"
 
-Each case is mapped to develop's inputs by manywells.configurations.v1_well, and every root the search finds is
-written with its label, CHOKED flag and whether it is the operating point. It imports both manywells and
+    uv run python -m scripts.verification.develop_candidate rust.parquet --backend rust
+    uv run manywells-verify rust.parquet --data verification/data --name "Rust core (v1.0.0 configuration)"
+
+Each case is mapped to develop's inputs by manywells.configurations.v1_well, and every root the backend's search
+finds is written with its label, CHOKED flag and whether it is the operating point. It imports both manywells and
 manywells_verify, so it is a script, not part of either package (specs/architecture.md).
 """
 
 import argparse
+import functools
 import json
 import multiprocessing
 import os
@@ -49,11 +52,11 @@ def well_of(case):
     return wp, bc
 
 
-def solve_case(case):
+def solve_case(case, backend='casadi'):
     """The root set of one case, as candidate roots, and timings (s)."""
     wp, bc = well_of(case)
     t0 = time.perf_counter()
-    sim = SSDFSimulator(wp)
+    sim = SSDFSimulator(wp, backend=backend)
     t1 = time.perf_counter()
     rs = sim.root_set(bc)
     t2 = time.perf_counter()
@@ -68,6 +71,7 @@ def main():
     parser.add_argument('out', type=Path, help='candidate parquet file to write')
     parser.add_argument('--data', type=Path, default=DATA, help='directory with cases.parquet')
     parser.add_argument('--cases', nargs='*', help='only these case ids')
+    parser.add_argument('--backend', choices=('casadi', 'rust'), default='casadi')
     parser.add_argument('--processes', type=int, default=os.cpu_count())
     parser.add_argument('--log', type=Path, help='JSON file for timings and every start of every search')
     args = parser.parse_args()
@@ -76,14 +80,14 @@ def main():
     todo = [c for k, c in cases.items() if not args.cases or k in args.cases]
     t0 = time.perf_counter()
     with multiprocessing.Pool(args.processes) as pool:
-        results = pool.map(solve_case, todo, chunksize=1)
+        results = pool.map(functools.partial(solve_case, backend=args.backend), todo, chunksize=1)
     wall = time.perf_counter() - t0
 
     write_roots({cid: roots for cid, roots, _ in results}, args.out)
     build = sum(r[2]['build'] for r in results)
     search = sum(r[2]['search'] for r in results)
     print(f'{len(results)} cases in {wall:.1f} s wall time ({args.processes} processes); per case: '
-          f'build {build / len(results):.2f} s, search {search / len(results):.2f} s')
+          f'build {build / len(results):.4f} s, search {search / len(results):.4f} s')
     if args.log:
         args.log.write_text(json.dumps({cid: info for cid, _, info in results}, indent=1))
 

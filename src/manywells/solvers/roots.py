@@ -71,6 +71,13 @@ def label_of(slope: float) -> str:
     return 'indeterminate' if abs(slope) <= LABEL_MIN else ('unstable' if slope > 0 else 'stable')
 
 
+def normalized_slope(slope: float, x, p_r: float, p_s: float, A: float) -> float:
+    """dR/dp_0 (kg/s per bar) at a root x, normalized by (p_r - p_s) / w_m with w_m the rate at the wellhead."""
+    p, v_g, v_l, alpha, rho_g, rho_l, T = np.asarray(x)[-DIM_X:]
+    w_m = A * (alpha * rho_g * v_g + (1 - alpha) * rho_l * v_l)
+    return slope * (p_r - p_s) / max(w_m, 1e-3)
+
+
 class StabilitySlope:  # spec: SOL-3
     """
     dR/dp_0 at a root (SOL-3): drop the choke row (CHK-1), treat p_0 as a parameter, and solve one linear system
@@ -90,10 +97,7 @@ class StabilitySlope:  # spec: SOL-3
         c, rows, cols = self._choke, self._rows, self._cols
         dy = -ca.solve(J[rows, cols], J[rows, 0], 'csparse')
         slope = float(J[c, 0] + ca.mtimes(J[c, cols], dy))
-        p, v_g, v_l, alpha, rho_g, rho_l, T = np.asarray(x)[-DIM_X:]
-        w_m = self._A * (alpha * rho_g * v_g + (1 - alpha) * rho_l * v_l)
-        p_r, p_s = params[0], params[1]
-        return slope * (p_r - p_s) / max(w_m, 1e-3)
+        return normalized_slope(slope, x, params[0], params[1], self._A)
 
 
 @dataclass(frozen=True)
@@ -157,3 +161,7 @@ class RootFinder:
             slope = self.slope(x, params)
             roots.append(Root(x=x, label=label_of(slope), slope=slope, **self.system.root_outputs(x, params)))
         return RootSet.of(roots, search=attempts)
+
+    def flow_regimes(self, x) -> tuple:
+        """The flow-regime label at each point of a state (SLIP-8)."""
+        return self.system.flow_regimes(x)

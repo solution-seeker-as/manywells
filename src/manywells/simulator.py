@@ -123,6 +123,10 @@ class SSDFSimulator:
         rs = sim.root_set(bc)            # every root found, labelled; empty if the well cannot flow
         df = sim.solution_as_df(op)      # per point: state, md, tvd, flow regime
 
+    The backend solves the system: 'casadi', the multi-start Ipopt search on the CasADi graph (manywells.solvers.roots),
+    or 'rust', the shooting search of the Rust core (manywells.solvers.rust), which covers wells in the v1.0.0
+    configuration only. Both take the same inputs and return the same types.
+
     The pipe is discretized into n cells (see WellGeometry object). The state holds the following variables at each
     of the n + 1 grid points (in the given order), from the bottomhole to the wellhead:
         x = [p, v_g, v_l, alpha, rho_g, rho_l, T],
@@ -133,10 +137,12 @@ class SSDFSimulator:
     state as a flat list. It is removed with the CasADi backend.
     """
 
-    def __init__(self, well_properties: WellProperties, boundary_conditions: BoundaryConditions = None):
+    def __init__(self, well_properties: WellProperties, boundary_conditions: BoundaryConditions = None,
+                 backend: str = 'casadi'):
         """
         :param well_properties: Well properties (object of type WellProperties)
         :param boundary_conditions: Deprecated; pass the boundary conditions to simulate() instead
+        :param backend: 'casadi' or 'rust' (wells in the v1.0.0 configuration only)
         """
         if boundary_conditions is not None:
             warnings.warn('SSDFSimulator(wp, bc) is deprecated: use SSDFSimulator(wp) and simulate(bc), which returns '
@@ -150,8 +156,16 @@ class SSDFSimulator:
         self.dim_x = DIM_X
         self.variable_names = list(STATE)  # Ordering is important
 
-        self.system = build_system(well_properties)
-        self._roots = RootFinder(self.system)
+        self.backend = backend
+        if backend == 'casadi':
+            self.system = build_system(well_properties)
+            self._roots = RootFinder(self.system)
+        elif backend == 'rust':
+            from manywells.solvers.rust import RustRootFinder  # Imported here: it imports configurations, which imports this module
+            self.system = None
+            self._roots = RustRootFinder(well_properties)
+        else:
+            raise ValueError(f"backend must be 'casadi' or 'rust', not {backend!r}")
 
     def root_set(self, bc: BoundaryConditions, x_guess=None) -> RootSet:
         """
@@ -204,7 +218,7 @@ class SSDFSimulator:
             X = x.state
         else:
             X = np.asarray(x, dtype=float).reshape(-1, DIM_X)
-            regimes = self.system.flow_regimes(X.ravel())
+            regimes = self._roots.flow_regimes(X.ravel())
 
         df = pd.DataFrame(X, columns=self.variable_names)
 

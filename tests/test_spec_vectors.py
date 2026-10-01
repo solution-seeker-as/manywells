@@ -14,7 +14,8 @@ develop is known not to reproduce is a strict expected failure, so it fails once
 reproduce it and the entry has to go.
 
 The row vectors are checked on develop's v1.0.0 configuration (manywells.configurations), which must
-reproduce v1.0.0's rows as functions of the state (specs/model/discretization.md, Interface).
+reproduce v1.0.0's rows as functions of the state (specs/model/discretization.md, Interface), with each backend:
+the CasADi system and the Rust core's rows.
 """
 
 import math
@@ -176,16 +177,33 @@ ROWS_NOT_COMPARABLE = {}
 ROW_DEVIATIONS = {}
 
 
-def v1_case(w):
-    """develop's system in the v1.0.0 configuration, and the parameters, for a well of v1_rows.json."""
+def v1_inputs(w):
+    """develop's inputs in the v1.0.0 configuration for a well of v1_rows.json."""
     inflow = Vogel(w['w_l_max']) if w['inflow'] == 'vogel' else ProductivityIndex(w['k_l'])
     model = SimpsonChokeModel if w['choke'] == 'simpson' else BernoulliChokeModel
     wp = v1_well(L=w['L'], D=w['D'], rho_l=w['rho_l'], R_s=w['R_s'], cp_g=w['cp_g'], cp_l=w['cp_l'], f_D=w['f_D'],
                  h=w['h'], f_g=w['f_g'], inflow=inflow, choke=model(K_c=w['K_c'], chk_profile=w['profile']),
                  n_cells=w['n_cells'])
     bc = BoundaryConditions(p_r=w['p_r'], p_s=w['p_s'], T_r=w['T_r'], T_s=w['T_s'], u=w['u'], w_lg=w['w_lg'])
+    return wp, bc
+
+
+def v1_case(w):
+    """develop's system in the v1.0.0 configuration, and the parameters, for a well of v1_rows.json."""
+    wp, bc = v1_inputs(w)
     system = build_system(wp)
     return system, system.params(bc)
+
+
+def rust_rows(w, X):
+    """The Rust core's rows at every point, as {ID: [value per point]}, with v1.0.0's IDs."""
+    from manywells.solvers.rust import RustRootFinder
+    wp, bc = v1_inputs(w)
+    ids, values = RustRootFinder(wp).rows(bc, X)
+    out = {}
+    for eq_id, v in zip(ids, values):
+        out.setdefault(eq_id, []).append(float(v))
+    return out
 
 
 def develop_rows(system, params, X):
@@ -215,6 +233,21 @@ def test_row_vector(well, eq_id, expected):
     system, params = v1_case(well['params'])
     got = develop_rows(system, params, np.array(well['x']))[DEVELOP_ROW.get(eq_id, eq_id)]
     np.testing.assert_allclose(got, expected, rtol=ROW_REL, atol=0)
+
+
+@pytest.mark.parametrize('well, eq_id, expected', row_params())
+def test_rust_row_vector(well, eq_id, expected):
+    got = rust_rows(well['params'], np.array(well['x']))[eq_id]
+    np.testing.assert_allclose(got, expected, rtol=ROW_REL, atol=0)
+
+
+def test_rust_rows_follow_the_v1_row_order():
+    """The Rust core's rows are v1.0.0's, point by point in DISC-6's order."""
+    from manywells.solvers.rust import RustRootFinder
+    for well in row_vectors()['wells']:
+        wp, bc = v1_inputs(well['params'])
+        ids, _ = RustRootFinder(wp).rows(bc, np.array(well['x']))
+        assert list(ids) == [eq_id for point in well['rows'] for eq_id, _ in point]
 
 
 def test_v1_configuration_rows_follow_the_v1_row_order():
