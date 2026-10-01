@@ -24,12 +24,15 @@ const REFINE_XTOL: f64 = 1e-6;
 /// root. At the extreme trickle roots of the case set, one ulp of p_0 moves the choke rate by about 5e-5 of w_m.
 const ACCEPT_REL: f64 = 1e-3;
 
+/// Step of the central difference for dR/dp_0 at a root, relative to its distance from p_r and from p_s
+const SLOPE_STEP: f64 = 1e-4;
+
 /// A root and what it carries besides its state
 pub struct Root {
     pub x: Vec<f64>,
     /// R rises with p_0 through the root: dR/dp_0 > 0, unstable (SOL-3)
     pub rising: bool,
-    /// dR/dp_0 at the root (kg/s per bar), NaN if not computed
+    /// dR/dp_0 at the root (kg/s per bar), by a central difference; NaN if R is not finite on either side
     pub slope: f64,
     pub choked: bool,
     pub flow_regime: Vec<&'static str>,
@@ -110,13 +113,18 @@ fn root_at(m: &Marcher, p_0: f64, rising: bool) -> Option<Root> {
     if discretization::choke_row(spec, op, &top).abs() > ACCEPT_REL * (march.rates.w_g + march.rates.w_l) {
         return None;
     }
+    let h = SLOPE_STEP * (op.p_r - p_0).min(p_0 - op.p_s);
+    let slope = match (m.residual(p_0 + h), m.residual(p_0 - h)) { // spec: SOL-3
+        (Some((above, _)), Some((below, _))) => (above - below) / (2.0 * h),
+        _ => f64::NAN,
+    };
     Some(Root {
         choked: spec.choke.is_choked(top.p, op.p_s),
         flow_regime: discretization::flow_regimes(spec, &march.x),
         w_res: march.rates.w_res,
         w_g_res: spec.fluid.reservoir_gas_rate(march.rates.w_res),
         rising,
-        slope: f64::NAN,
+        slope,
         x: march.x,
     })
 }
@@ -135,4 +143,36 @@ pub fn root_set(spec: &WellSpec, op: &OperatingPoint) -> Result<Search, String> 
 /// The shooting residual R(p_0), for tests and diagnostics
 pub fn residual(spec: &WellSpec, op: &OperatingPoint, p_0: f64) -> Option<f64> {
     Marcher::new(spec, op).residual(p_0).map(|(r, _)| r)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::input::test_wells::{w1, w2};
+
+    #[test]
+    fn every_root_zeroes_every_row() {
+        for (spec, op) in [w1(20), w2(20)] {
+            let search = root_set(&spec, &op).unwrap();
+            assert!(!search.roots.is_empty());
+            for root in &search.roots {
+                // The choke row is as small as p_0's resolution allows, times dR/dp_0, which is steep at a trickle root:
+                // at W2's, 4e-7 of the rate
+                let (w_g, w_l) = State::of(&root.x[root.x.len() - DIM_X..]).rates(spec.a());
+                for (id, v) in discretization::rows(&spec, &op, &root.x) {
+                    let bound = if id == "CHK-1" { 1e-6 * (w_g + w_l) } else { 1e-8 };
+                    assert!(v.abs() < bound, "{id}: {v}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_slope_has_the_sign_of_the_bracket() {
+        for (spec, op) in [w1(20), w2(20)] {
+            for root in root_set(&spec, &op).unwrap().roots {
+                assert_eq!(root.slope > 0.0, root.rising, "slope {} at p_0 = {}", root.slope, root.x[0]);
+            }
+        }
+    }
 }

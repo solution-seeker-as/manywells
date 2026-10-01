@@ -10,9 +10,9 @@ The Rust core (rust/, built as manywells._core) as the root finder of SSDFSimula
 (specs/architecture.md, Rust core). It covers wells in the v1.0.0 configuration (manywells.configurations).
 
 The well is converted to the core's inputs once, when the finder is built. A search returns every root the core's
-shooting search finds, each a full state with its slope dR/dp_0; the label (SOL-3), the admissibility check (SOL-1)
-and the operating point (SOL-4 to SOL-6) are the same functions as for the CasADi backend. The core needs no
-initial guess, so x_guess is ignored.
+shooting search finds, each a full state with its slope dR/dp_0; the slope's normalization and label (SOL-3), the
+admissibility check (SOL-1) and the operating point (SOL-4 to SOL-6) are the same functions as for the CasADi
+backend. The core needs no initial guess, so x_guess is ignored.
 """
 
 import time
@@ -24,7 +24,7 @@ from manywells.choke import SimpsonChokeModel
 from manywells.configurations import V1, differences
 from manywells.inflow import Vogel
 from manywells.solution import Root, RootSet
-from manywells.solvers.roots import Attempt, admissible
+from manywells.solvers.roots import Attempt, admissible, label_of, normalized_slope
 
 
 def core_well(wp) -> '_core.Well':
@@ -63,8 +63,10 @@ class RustRootFinder:
             if not admissible(x, bc):
                 rejected += 1
                 continue
-            roots.append(Root(x=x, label='unstable' if r.rising else 'stable', slope=r.slope, choked=r.choked,
-                              flow_regime=tuple(r.flow_regime), w_res=r.w_res, w_g_res=r.w_g_res))
+            slope = normalized_slope(r.slope, x, bc.p_r, bc.p_s, self.wp.geometry.A)
+            label = label_of(slope) if np.isfinite(slope) else 'indeterminate'
+            roots.append(Root(x=x, label=label, slope=slope, choked=r.choked, flow_regime=tuple(r.flow_regime),
+                              w_res=r.w_res, w_g_res=r.w_g_res))
         outcome = (f'{len(roots)} roots' + (f', {rejected} not admissible' if rejected else '')
                    + (f', {unresolved} sign changes of R not accepted' if unresolved else ''))
         search = [Attempt('shooting', np.nan, outcome, time.perf_counter() - t0, marches)]
