@@ -398,6 +398,51 @@ Python loop, building CasADi expressions each iteration. Build one
 `ca.Function` for `classify_flow_regime` and `.map(n)` it over the grid. Minor,
 but it is called after every simulation in the data-generation loop.
 
+### 4.5 Make the fluid's fractions parameters of the system (dataset generation)
+
+**[after the plan]** With the v2 dataset generation (§4.3), and only if datasets
+are generated on the CasADi backend before the Rust core covers `develop`'s
+model. It changes the contract of `System.params` in `specs/architecture.md`,
+whose parameters are the operating point, so it needs Bjarne's sign-off.
+
+*Found in Step 7, 2026-10-01.* The build-once speed-up of §4.1 does not reach
+dataset generation. Every sample redraws the inflow's mass fractions (SMP-22 for
+`sol-1`, the random walk of SMP-24 for `nsol-1`). The fractions set the fluid:
+$f_g$, and the liquid's density and heat capacity; in `develop`'s fluid model,
+the gas–oil and water–liquid ratios. The fluid is a constant of a well's system,
+so `sampling.generate.solve` builds a new system for every sample and runs the
+full root search on it.
+
+Measured on 8 verifier wells at N = 100, single runs, all versions in the same
+CasADi and Ipopt:
+
+| Per sample | Time |
+|---|--:|
+| `develop` today: build 0.31 s + search 0.56 s (median; mean 1.28 s) | 0.87 s |
+| `develop`, regenerating `sol-1` at the stable root (12,000 solves in 1,025 s on 24 processes) | about 2 s per core |
+| v1.0.0 (`main`): warm start from the well's root, rebuilt on every call | 0.26 s |
+| `develop` once a well is built: warm solve / cold solve (march + Ipopt) | 3 ms / 17 ms |
+| `rust_implementation`: `simulate()`, every root | 3.6 ms |
+
+Proposal: add the quantities that the fractions set to the system's parameters,
+next to the operating point. In the `v1.0.0` configuration these are $f_g$,
+$\rho_l$ and $c_{pl}$ (INF-4, PVT-MIX-1, THM-1). In `develop`'s fluid model they
+are the gas–oil and water–liquid ratios, from which $f_g$, $x_o$, $\rho_{l,\text{sc}}$
+and $c_{pl}$ follow (PVT-MIX-10). The oil and gas themselves (API gravity, gas
+gravity, the black-oil coefficients) stay constants of the well. A well's system
+is then built once for all its samples, and a sample costs the search on a
+built system. With the previous sample as `x_guess` and an early exit in the
+search, it would be about a warm solve and a stability label: tens of
+milliseconds instead of seconds. The early exit is solver policy and needs its
+own measurement, because SOL-6 picks the lowest-$p_0$ stable root of several.
+
+Cost: `FluidModel`'s derived quantities (`f_g`, `rho_l`, `cp_l`,
+`f_o_in_liquid`) must accept CasADi symbols, the fluid's validation stays on
+the well's base values, and the sampler passes the sample's fractions as
+parameters instead of building a `WellProperties` per sample. In the Rust core
+a well's build is cheap (the port's whole `simulate()` is 3.6 ms), so the change
+matters only on the CasADi backend.
+
 ## 5. Open-source friendliness
 
 - ~~**CI**: there is no `.github/workflows`. A minimal GitHub Actions job —
