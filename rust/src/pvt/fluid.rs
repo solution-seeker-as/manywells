@@ -44,8 +44,9 @@ impl Fluid {
         (self.f_g / (1.0 - self.f_g)) * w_res
     }
 
-    /// Gas and liquid mass rates (kg/s), the same at every point without mass transfer
-    pub fn phase_rates(&self, w_res: f64, w_lg: f64) -> (f64, f64) {  // spec: INF-5, BAL-3
+    /// Gas and liquid mass rates (kg/s) at a point at pressure p (bar) and temperature t (K), for a reservoir liquid
+    /// rate w_res and a lift gas rate w_lg (kg/s). Without mass transfer they are the same at every point.
+    pub fn phase_rates(&self, _p: f64, _t: f64, w_res: f64, w_lg: f64) -> (f64, f64) {  // spec: INF-5
         (self.reservoir_gas_rate(w_res) + w_lg, w_res)
     }
 }

@@ -10,7 +10,7 @@
 
 use crate::discretization::{self, State, DIM_X};
 use crate::input::{OperatingPoint, WellSpec};
-use crate::march::Marcher;
+use crate::march::{Counts, Marcher};
 use crate::scalar::{brentq, minimize, RootError, RTOL};
 
 /// Number of scan intervals on (p_s, p_r)
@@ -40,11 +40,11 @@ pub struct Root {
     pub w_g_res: f64,
 }
 
-/// The roots of a search, sorted by p_0, the number of marches it took, and the number of sign changes of R that
-/// were not accepted as roots
+/// The roots of a search, sorted by p_0, the work it took, and the number of sign changes of R that were not accepted
+/// as roots
 pub struct Search {
     pub roots: Vec<Root>,
-    pub marches: usize,
+    pub counts: Counts,
     pub rejected: usize,
 }
 
@@ -120,7 +120,8 @@ fn root_at(m: &Marcher, p_0: f64, rising: bool) -> Option<Root> {
         return None;
     }
     let top = State::of(&march.x[march.x.len() - DIM_X..]);
-    if discretization::choke_row(spec, op, &top).abs() > ACCEPT_REL * (march.rates.w_g + march.rates.w_l) {
+    let (w_g, w_l) = spec.fluid.phase_rates(top.p, top.t, march.w_res, op.w_lg);
+    if discretization::choke_row(spec, op, &top).abs() > ACCEPT_REL * (w_g + w_l) {
         return None;
     }
     let h = SLOPE_STEP * (op.p_r - p_0).min(p_0 - op.p_s);
@@ -131,8 +132,8 @@ fn root_at(m: &Marcher, p_0: f64, rising: bool) -> Option<Root> {
     Some(Root {
         choked: spec.choke.is_choked(top.p, op.p_s),
         flow_regime: discretization::flow_regimes(spec, &march.x),
-        w_res: march.rates.w_res,
-        w_g_res: spec.fluid.reservoir_gas_rate(march.rates.w_res),
+        w_res: march.w_res,
+        w_g_res: spec.fluid.reservoir_gas_rate(march.w_res),
         rising,
         slope,
         x: march.x,
@@ -147,7 +148,7 @@ pub fn root_set(spec: &WellSpec, op: &OperatingPoint) -> Result<Search, String> 
     let found = shoot(&m)?;
     let n = found.len();
     let roots: Vec<Root> = found.into_iter().filter_map(|(p_0, rising)| root_at(&m, p_0, rising)).collect();
-    Ok(Search { rejected: n - roots.len(), roots, marches: m.marches() })
+    Ok(Search { rejected: n - roots.len(), roots, counts: m.counts() })
 }
 
 /// The shooting residual R(p_0), for tests and diagnostics

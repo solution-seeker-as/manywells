@@ -52,13 +52,15 @@ impl WellSpec {
     }
 }
 
-/// The operating point: the boundary conditions and the controls
+/// The operating point: the boundary conditions and the controls, the parameters of the Python system
+/// (discretization.PARAMS) in their order
 #[derive(Clone, Copy, Debug)]
 pub struct OperatingPoint {
     pub p_r: f64,  // Reservoir pressure (bar)
     pub p_s: f64,  // Separator pressure (bar)
     pub t_r: f64,  // Reservoir temperature (K)
     pub t_s: f64,  // Ambient temperature at the wellhead (K)
+    pub t_lg: f64, // Lift gas temperature (K) at the bottomhole
     pub u: f64,    // Choke position in [0, 1]
     pub w_lg: f64, // Lift gas rate (kg/s), injected at the bottomhole
 }
@@ -80,20 +82,15 @@ pub mod test_wells {
     use super::*;
     use crate::choke::{ChokeModel, Profile};
 
-    fn cpr() -> f64 {
-        let gamma: f64 = 1.307;
-        (2.0 / (gamma + 1.0)).powf(gamma / (gamma - 1.0))
-    }
-
     pub fn w1(n_cells: usize) -> (WellSpec, OperatingPoint) {
         let spec = WellSpec {
             l: 2500.0, d: 0.127, n_cells,
             fluid: Fluid { rho_l: 900.0, r_s: 420.0, cp_g: 2225.0, cp_l: 3000.0, f_g: 0.15 },
             f_d: 0.03, h: 25.0,
             inflow: Inflow::Vogel { w_l_max: 80.0 },
-            choke: Choke { model: ChokeModel::Simpson, k_c: 0.0015201224372924933, cpr: cpr(), profile: Profile::Sigmoid },
+            choke: Choke::new(ChokeModel::Simpson, 0.0015201224372924933, Profile::Sigmoid),
         };
-        (spec, OperatingPoint { p_r: 249.2, p_s: 30.0, t_r: 363.15, t_s: 277.15, u: 0.6, w_lg: 0.8 })
+        (spec, OperatingPoint { p_r: 249.2, p_s: 30.0, t_r: 363.15, t_s: 277.15, t_lg: 363.15, u: 0.6, w_lg: 0.8 })
     }
 
     pub fn w2(n_cells: usize) -> (WellSpec, OperatingPoint) {
@@ -102,8 +99,8 @@ pub mod test_wells {
             fluid: Fluid { rho_l: 820.0, r_s: 500.0, cp_g: 2225.0, cp_l: 2200.0, f_g: 0.4 },
             f_d: 0.05, h: 15.0,
             inflow: Inflow::ProductivityIndex { k_l: 0.6 },
-            choke: Choke { model: ChokeModel::Bernoulli, k_c: 0.001824146924750992, cpr: cpr(), profile: Profile::Linear },
+            choke: Choke::new(ChokeModel::Bernoulli, 0.001824146924750992, Profile::Linear),
         };
-        (spec, OperatingPoint { p_r: 150.0, p_s: 20.0, t_r: 345.0, t_s: 277.15, u: 0.8, w_lg: 0.0 })
+        (spec, OperatingPoint { p_r: 150.0, p_s: 20.0, t_r: 345.0, t_s: 277.15, t_lg: 345.0, u: 0.8, w_lg: 0.0 })
     }
 }

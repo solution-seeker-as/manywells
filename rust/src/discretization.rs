@@ -5,11 +5,12 @@
 // Created 01 October 2026
 
 //! The discretized system of a well (specs/model/discretization.md): the rows at each grid point, in the order of
-//! DISC-6, as functions of the state. Each row is defined once, here; the march (march.rs) solves them point by
-//! point, and the bindings evaluate them for the tests against v1.0.0's row vectors.
+//! DISC-11, as functions of the state. Each row is defined once, here; the march (march.rs) solves them point by
+//! point, and the bindings evaluate them for the tests against v1.0.0's row vectors and the CasADi backend's rows.
 //!
 //! The state holds seven values at each of the N + 1 points, from the bottomhole (point 0) to the wellhead (point N):
 //! [p, v_g, v_l, alpha, rho_g, rho_l, T] (bar, m/s, m/s, -, kg/m³, kg/m³, K). Cell i lies between points i - 1 and i.
+//! The reservoir liquid rate w_res, from the inflow at p_0, enters every point's rows through the phase rates.
 
 use crate::friction;
 use crate::input::{OperatingPoint, WellSpec};
@@ -77,9 +78,9 @@ pub fn reservoir_rate(spec: &WellSpec, op: &OperatingPoint, p_0: f64) -> f64 {
 }
 
 /// Rows at the bottomhole, point 0: the gas and liquid inflow (kg/s) and the inflow temperature (K)
-pub fn bottom_rows(spec: &WellSpec, op: &OperatingPoint, s: &State) -> [f64; 3] {
+pub fn bottom_rows(spec: &WellSpec, op: &OperatingPoint, s: &State, w_res: f64) -> [f64; 3] {
     let a = spec.a();
-    let (w_g, w_l) = spec.fluid.phase_rates(reservoir_rate(spec, op, s.p), op.w_lg);
+    let (w_g, w_l) = spec.fluid.phase_rates(s.p, s.t, w_res, op.w_lg);
     [
         a * s.alpha * s.rho_g * s.v_g - w_g,         // spec: INF-6
         a * (1.0 - s.alpha) * s.rho_l * s.v_l - w_l, // spec: INF-7
@@ -107,11 +108,15 @@ pub fn energy_row(spec: &WellSpec, op: &OperatingPoint, i: usize, s: &State, s_p
     s.t - s_prev.t + spec.delta_z() * thermal::heat_loss(spec.h, spec.d, s.t, t_a, c_g, c_l)
 }
 
-/// Balance rows of cell i: gas and liquid mass (kg/(m² s)), momentum (bar) and energy (K)
-pub fn cell_rows(spec: &WellSpec, op: &OperatingPoint, i: usize, s: &State, s_prev: &State) -> [f64; 4] {
+/// Balance rows of cell i: gas and liquid mass (kg/(m² s)), momentum (bar) and energy (K). The change in each mass
+/// flux equals the change in the phase rate, which is zero without mass transfer.
+pub fn cell_rows(spec: &WellSpec, op: &OperatingPoint, i: usize, s: &State, s_prev: &State, w_res: f64) -> [f64; 4] {
+    let a = spec.a();
+    let (w_g, w_l) = spec.fluid.phase_rates(s.p, s.t, w_res, op.w_lg);
+    let (w_g_prev, w_l_prev) = spec.fluid.phase_rates(s_prev.p, s_prev.t, w_res, op.w_lg);
     [
-        s.gas_flux() - s_prev.gas_flux(),       // spec: DISC-2, BAL-1, BAL-3
-        s.liquid_flux() - s_prev.liquid_flux(), // spec: DISC-3, BAL-2, BAL-3
+        s.gas_flux() - s_prev.gas_flux() - (w_g - w_g_prev) / a,          // spec: DISC-7
+        s.liquid_flux() - s_prev.liquid_flux() - (w_l - w_l_prev) / a,    // spec: DISC-8
         momentum_row(spec, s, s_prev),
         energy_row(spec, op, i, s, s_prev),
     ]
@@ -135,23 +140,41 @@ pub fn closure_rows(spec: &WellSpec, s: &State) -> [f64; 3] {
     ]
 }
 
-/// Every row of the system at state x, with its ID, point by point in the order of DISC-6
-pub fn rows(spec: &WellSpec, op: &OperatingPoint, x: &[f64]) -> Vec<(&'static str, f64)> {  // spec: DISC-6
+/// The spec ID of every row of the system, in order: the rows of each point depend on the well's options
+pub fn row_ids(spec: &WellSpec) -> Vec<&'static str> {  // spec: DISC-11
+    let n = spec.n_cells;
+    let bottom = ["INF-6", "INF-7", "THM-3"];
+    let cell = ["DISC-7", "DISC-8", "DISC-9", "DISC-10"];
+    let closures = ["SLIP-1", "PVT-GAS-1", "PVT-MIX-1"];
+    let mut ids = Vec::with_capacity(DIM_X * (n + 1));
+    ids.extend(bottom);
+    ids.extend(closures);
+    for i in 1..=n {
+        ids.extend(cell);
+        if i == n {
+            ids.push("CHK-1");
+        }
+        ids.extend(closures);
+    }
+    ids
+}
+
+/// Every row of the system at state x, with its ID, point by point in the order of DISC-11
+pub fn rows(spec: &WellSpec, op: &OperatingPoint, x: &[f64]) -> Vec<(&'static str, f64)> {
     let n = spec.n_cells;
     let points: Vec<State> = x.chunks_exact(DIM_X).map(State::of).collect();
-    let closure_ids = ["SLIP-1", "PVT-GAS-1", "PVT-MIX-1"];
-    let mut out = Vec::with_capacity(DIM_X * (n + 1));
-    out.extend(["INF-6", "INF-7", "THM-3"].into_iter().zip(bottom_rows(spec, op, &points[0])));
-    out.extend(closure_ids.into_iter().zip(closure_rows(spec, &points[0])));
+    let w_res = reservoir_rate(spec, op, points[0].p);
+    let mut values = Vec::with_capacity(DIM_X * (n + 1));
+    values.extend(bottom_rows(spec, op, &points[0], w_res));
+    values.extend(closure_rows(spec, &points[0]));
     for i in 1..=n {
-        out.extend(["DISC-2", "DISC-3", "DISC-4", "DISC-5"].into_iter()
-            .zip(cell_rows(spec, op, i, &points[i], &points[i - 1])));
+        values.extend(cell_rows(spec, op, i, &points[i], &points[i - 1], w_res));
         if i == n {
-            out.push(("CHK-1", choke_row(spec, op, &points[n])));
+            values.push(choke_row(spec, op, &points[n]));
         }
-        out.extend(closure_ids.into_iter().zip(closure_rows(spec, &points[i])));
+        values.extend(closure_rows(spec, &points[i]));
     }
-    out
+    row_ids(spec).into_iter().zip(values).collect()
 }
 
 /// The regime label at each point (SLIP-8)

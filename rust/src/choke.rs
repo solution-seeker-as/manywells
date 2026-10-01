@@ -12,6 +12,14 @@ use crate::units::CF_BAR;
 /// Smoothing parameter of the critical downstream pressure (bar²)
 pub const CRITICAL_PRESSURE_EPS: f64 = 1e-6;
 
+/// Heat capacity ratio of the gas in the choke (specs/model/nomenclature.md), as in the Python choke
+pub const GAMMA: f64 = 1.307;
+
+/// Critical pressure ratio r_c = p_crit / p_in of a gas with heat capacity ratio gamma
+pub fn critical_pressure_ratio(gamma: f64) -> f64 {  // spec: CHK-4
+    (2.0 / (gamma + 1.0)).powf(gamma / (gamma - 1.0))
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ChokeModel {
     /// Liquid density with Simpson's two-phase multiplier
@@ -63,7 +71,7 @@ impl Profile {
 pub struct Choke {
     pub model: ChokeModel,
     pub k_c: f64,         // Choke coefficient (m²)
-    pub cpr: f64,         // Critical pressure ratio r_c, from the Python choke (CHK-4)
+    pub cpr: f64,         // Critical pressure ratio r_c (CHK-4)
     pub profile: Profile,
 }
 
@@ -74,6 +82,11 @@ pub fn simpson_multiplier(x_g: f64, rho_g: f64, rho_l: f64) -> f64 {  // spec: C
 }
 
 impl Choke {
+    /// A choke with choke coefficient k_c (m²); its critical pressure ratio is that of GAMMA
+    pub fn new(model: ChokeModel, k_c: f64, profile: Profile) -> Self {
+        Self { model, k_c, cpr: critical_pressure_ratio(GAMMA), profile }
+    }
+
     /// Critical downstream pressure (bar): the smooth max of r_c p_in and p_out
     pub fn critical_pressure(&self, p_in: f64, p_out: f64) -> f64 {  // spec: CHK-3
         max_approx(self.cpr * p_in, p_out, CRITICAL_PRESSURE_EPS)
@@ -116,8 +129,12 @@ mod tests {
     use super::*;
 
     fn choke(model: ChokeModel, profile: Profile) -> Choke {
-        let gamma: f64 = 1.307;
-        Choke { model, k_c: 0.002, cpr: (2.0 / (gamma + 1.0)).powf(gamma / (gamma - 1.0)), profile }
+        Choke::new(model, 0.002, profile)
+    }
+
+    #[test]
+    fn methane_has_the_critical_ratio_of_the_vectors() {
+        assert!((critical_pressure_ratio(GAMMA) - 0.544465891827854).abs() < 1e-15);
     }
 
     #[test]

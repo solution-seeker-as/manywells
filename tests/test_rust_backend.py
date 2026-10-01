@@ -6,10 +6,11 @@ terms of the CC BY-NC 4.0 International Public License.
 Created 01 October 2026
 Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
-The Rust core as the simulator's backend (manywells.solvers.rust, rust/), in the v1.0.0 configuration. The verifier
-checks it on the case set (scripts/verification/develop_candidate.py --backend rust); these tests check it against
-the CasADi backend, which is independent code: the same roots, and every CasADi row zero at the core's roots.
-The core's rows are checked against v1.0.0's row vectors in test_spec_vectors.py.
+The Rust core as the simulator's backend (manywells.solvers.rust, rust/). The verifier checks it on the case set
+in the v1.0.0 configuration (scripts/verification/develop_candidate.py --backend rust); these tests check it against
+the CasADi backend, which is independent code, on v1.0.0's wells: the same roots, and every CasADi row zero at the
+core's roots. The core's rows are checked against v1.0.0's row vectors and its components against the vector tables
+in test_spec_vectors.py, and both against the CasADi backend in every configuration in test_backend_comparison.py.
 """
 
 from pathlib import Path
@@ -18,9 +19,11 @@ import casadi as ca
 import numpy as np
 import pytest
 
+from dataclasses import replace
+
 from manywells.choke import BernoulliChokeModel, SimpsonChokeModel
 from manywells.configurations import v1_well
-from manywells.inflow import ProductivityIndex, Vogel
+from manywells.inflow import InflowModel, ProductivityIndex, Vogel
 from manywells.pvt.dead_oil import dead_oil_surface_tension
 from manywells.simulator import BoundaryConditions, NoOperatingPoint, SSDFSimulator, WellProperties
 from manywells.slip import SlipModel
@@ -108,11 +111,42 @@ def test_casadi_rows_vanish_at_the_cores_roots(name):
         assert abs(rows[ids == 'CHK-1'][0]) < 1e-6 * w_m  # p_0's resolution times dR/dp_0, steep at a trickle root
 
 
-def test_the_rust_backend_takes_the_v1_configuration_only():
-    with pytest.raises(ValueError, match='v1.0.0 configuration'):
-        SSDFSimulator(WellProperties(), backend='rust')
+class LinearInflow(InflowModel):
+    """A user's inflow model: the core cannot run Python code, so the CasADi backend solves such a well."""
+
+    def liquid_mass_flow_rate(self, p, p_r):
+        return 0.5 * (p_r - p)
+
+
+def test_the_rust_backend_refuses_what_it_does_not_cover():
+    wp = well_977()[0]
+    with pytest.raises(ValueError, match='inflow: LinearInflow is not one of the core'):
+        SSDFSimulator(replace(wp, inflow=LinearInflow()), backend='rust')
+    with pytest.raises(ValueError, match='C_0 >= 1'):
+        SSDFSimulator(replace(wp, slip=SlipModel(C_0_annular=0.9)), backend='rust')
+    with pytest.raises(ValueError, match='Rust core cannot solve'):
+        SSDFSimulator(WellProperties(), backend='rust')  # Step 9: develop's model is not ported yet
     with pytest.raises(ValueError, match='backend'):
-        SSDFSimulator(well_977()[0], backend='fortran')
+        SSDFSimulator(wp, backend='fortran')
+
+
+def test_the_slip_law_brackets_the_void_fraction():
+    """
+    The core solves the slip law for α by Brent on [0, 1]: h(α) = α (C_0 j_m + v_inf) - j_g needs h(0) < 0 < h(1),
+    which holds because C_0 >= 1 and v_inf >= 0 for every mix of the regimes and every inclination in [0, 1]. Checked
+    on random states, with the slip constants the core accepts.
+    """
+    rng = np.random.default_rng(20261002)
+    h = void_fraction_residual(SlipModel())
+    n = 10_000
+    j_g, j_l = 10 ** rng.uniform(-3, 1.5, n), 10 ** rng.uniform(-3, 1, n)
+    rho_l = rng.uniform(600, 1050, n)
+    rho_g = rho_l * 10 ** rng.uniform(-4, -0.05, n)
+    sigma, D = rng.uniform(0.005, 0.04, n), rng.uniform(0.05, 0.2, n)
+    cos_incl = np.concatenate([[0.0, 1.0], rng.uniform(0, 1, n - 2)])
+    args = [j_g, j_l, rho_g, rho_l, sigma, D, cos_incl]
+    at = lambda alpha: np.asarray(h.map(n)(np.full((1, n), alpha), *(a.reshape(1, -1) for a in args))).ravel()
+    assert np.all(at(1e-12) < 0) and np.all(at(1 - 1e-12) > 0)  # α = 0 and 1 divide by zero in v_g or v_l
 
 
 def test_solution_as_df_with_the_rust_backend():
@@ -151,21 +185,21 @@ def test_the_slope_has_the_sign_of_the_bracket_on_the_case_set():
     from manywells.solvers.rust import RustRootFinder, operating_point
     n = 0
     for cid, (wp, bc) in case_set().items():
-        found, _, _ = RustRootFinder(wp).core.root_set(operating_point(bc))
+        found, _ = RustRootFinder(wp).core.root_set(operating_point(bc))
         for r in found:
             assert (r.slope > 0) == r.rising, (cid, r.x[0])
             n += 1
     assert n >= 200
 
 
-def void_fraction_residual():
+def void_fraction_residual(slip=SlipModel()):
     """h(α) = α (C_0 j_m + v_inf) - j_g, the slip row times -α at fixed superficial velocities, as a CasADi function
-    of (α, j_g, j_l, rho_g, rho_l, sigma, D) on develop's slip model."""
-    alpha, j_g, j_l, rho_g, rho_l, sigma, D = (ca.SX.sym(n) for n in ('alpha', 'j_g', 'j_l', 'rho_g', 'rho_l',
-                                                                      'sigma', 'D'))
-    C_0, v_inf = SlipModel().identify_parameters(j_g / alpha, j_l / (1 - alpha), alpha, rho_g, rho_l, sigma, D,
-                                                 cos_incl=1.0)
-    return ca.Function('h', [alpha, j_g, j_l, rho_g, rho_l, sigma, D], [alpha * (C_0 * (j_g + j_l) + v_inf) - j_g])
+    of (α, j_g, j_l, rho_g, rho_l, sigma, D, cos_incl) on develop's slip model."""
+    alpha, j_g, j_l, rho_g, rho_l, sigma, D, cos_incl = (ca.SX.sym(n) for n in ('alpha', 'j_g', 'j_l', 'rho_g',
+                                                                                'rho_l', 'sigma', 'D', 'cos_incl'))
+    C_0, v_inf = slip.identify_parameters(j_g / alpha, j_l / (1 - alpha), alpha, rho_g, rho_l, sigma, D, cos_incl)
+    return ca.Function('h', [alpha, j_g, j_l, rho_g, rho_l, sigma, D, cos_incl],
+                       [alpha * (C_0 * (j_g + j_l) + v_inf) - j_g])
 
 
 @pytest.mark.slow
@@ -183,7 +217,7 @@ def test_the_slip_row_has_one_root_in_alpha_at_every_reference_point():
     D = np.concatenate([np.full(len(x) // 7, cases[cid].params['D']) for cid, x in zip(ref.case_id, ref.x)])
     p, v_g, v_l, alpha, rho_g, rho_l, T = X.T
     sigma = np.array([dead_oil_surface_tension(r, t) for r, t in zip(rho_l, T)], dtype=float)
-    inputs = np.vstack([alpha * v_g, (1 - alpha) * v_l, rho_g, rho_l, sigma, D])
+    inputs = np.vstack([alpha * v_g, (1 - alpha) * v_l, rho_g, rho_l, sigma, D, np.ones_like(D)])
     grid = np.linspace(1e-9, 1 - 1e-9, 201)
     h = void_fraction_residual().map(len(grid) * X.shape[0])
     args = [np.repeat(grid, X.shape[0])] + list(np.tile(inputs, len(grid)))
