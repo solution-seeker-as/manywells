@@ -40,7 +40,7 @@ class WellDiscarded(Exception):
 class Settings:
     """
     What a generator run needs besides the wells: the configuration, the grid and the dataset's seed (SMP-31), and
-    the simulator backend, 'casadi' or 'rust' (the v1.0.0 configuration only), which solves the same model.
+    the simulator backend, 'casadi' or 'rust', which solve the same model.
     """
     seed: int
     configuration: str = V1

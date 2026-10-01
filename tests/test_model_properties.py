@@ -15,6 +15,8 @@ Checked at every root: the verifier's Invariants that do not assume dead oil (to
 each phase's); spot checks of the relations that need no closure (the inflow rows at the bottom, the choke row at
 the top, the phase rates of the fluid model at every point, non-negative friction, heat flowing from the fluid to
 colder surroundings); and the stability property of two-root wells. Convergence at first order on N, 2N and 4N.
+Every check runs on both backends, the CasADi system and the Rust core (specs/features/015-rust-develop-model.md), and
+the two must find the same roots.
 """
 
 import dataclasses
@@ -27,6 +29,8 @@ from manywells.geometry import WellGeometry
 from manywells.pvt import density_from_api, gas_density_from_sg
 from manywells.pvt.fluid import FluidModel
 from manywells.simulator import BoundaryConditions, SSDFSimulator, WellProperties
+
+from .backend_cases import compare_root_sets
 
 pytestmark = pytest.mark.slow
 
@@ -68,13 +72,17 @@ WELLS = {
 }
 
 
+BACKENDS = ('casadi', 'rust')
+
+
 @pytest.fixture(scope='module')
 def solved():
-    """Every well's root set at 100 cells, and its simulator."""
+    """Every well's root set at 100 cells, and its simulator, with each backend."""
     out = {}
     for name, (make, bc) in WELLS.items():
-        sim = SSDFSimulator(make(100))
-        out[name] = (sim, bc, sim.root_set(bc))
+        for backend in BACKENDS:
+            sim = SSDFSimulator(make(100), backend=backend)
+            out[name, backend] = (sim, bc, sim.root_set(bc))
     return out
 
 
@@ -82,17 +90,19 @@ def points(sim, x):
     return [PointState.of(row) for row in np.reshape(x, (-1, DIM_X))]
 
 
+@pytest.mark.parametrize('backend', BACKENDS)
 @pytest.mark.parametrize('name', WELLS)
-def test_well_has_a_stable_operating_point(solved, name):
-    sim, bc, rs = solved[name]
+def test_well_has_a_stable_operating_point(solved, name, backend):
+    sim, bc, rs = solved[name, backend]
     assert rs.operating_point is not None, [a.outcome for a in rs.search]
     assert rs.operating_point.label == 'stable'
 
 
+@pytest.mark.parametrize('backend', BACKENDS)
 @pytest.mark.parametrize('name', WELLS)
-def test_invariants(solved, name):
+def test_invariants(solved, name, backend):
     """The verifier's Invariants, with the total mass rate constant instead of each phase's (with dissolved gas)."""
-    sim, bc, rs = solved[name]
+    sim, bc, rs = solved[name, backend]
     A = sim.wp.geometry.A
     for root in rs.roots:
         X = root.state
@@ -106,11 +116,12 @@ def test_invariants(solved, name):
         assert root.choked == (bc.p_s <= sim.wp.choke.cpr * p[-1])
 
 
+@pytest.mark.parametrize('backend', BACKENDS)
 @pytest.mark.parametrize('name', WELLS)
-def test_spot_checks(solved, name):
+def test_spot_checks(solved, name, backend):
     """Relations that need no closure: the inflow rows (INF-6, INF-7), the choke row (CHK-1), and at every point
     the phase rates of the fluid model (DISC-7, DISC-8) and non-negative friction (FRIC-1)."""
-    sim, bc, rs = solved[name]
+    sim, bc, rs = solved[name, backend]
     wp = sim.wp
     A, D, fluid = wp.geometry.A, wp.geometry.D, wp.fluid
     for root in rs.roots:
@@ -126,11 +137,12 @@ def test_spot_checks(solved, name):
         assert w_m == pytest.approx(float(wp.choke.mass_flow_rate(bc.u, bc.p_s, S[-1], A)), rel=TOL_RATE)
 
 
+@pytest.mark.parametrize('backend', BACKENDS)
 @pytest.mark.parametrize('name', [n for n in WELLS if WELLS[n][1].w_lg == 0])
-def test_heat_flows_from_the_fluid_to_the_surroundings(solved, name):
+def test_heat_flows_from_the_fluid_to_the_surroundings(solved, name, backend):
     """Without lift gas the fluid enters at T_r, the ambient temperature at the bottomhole, and is warmer than its
     surroundings everywhere above: the heat loss carries heat outwards, against frictional heating and gravity."""
-    sim, bc, rs = solved[name]
+    sim, bc, rs = solved[name, backend]
     geo = sim.wp.geometry
     T_a = np.array([sim.wp.thermal.ambient_temperature(f, bc.T_r, bc.T_s) for f in geo.tvd_frac])
     for root in rs.roots:
@@ -139,44 +151,59 @@ def test_heat_flows_from_the_fluid_to_the_surroundings(solved, name):
         assert np.all(T[1:] - T_a[1:] > 0)
 
 
-def test_cold_lift_gas_cools_the_inflow(solved):
+@pytest.mark.parametrize('backend', BACKENDS)
+def test_cold_lift_gas_cools_the_inflow(solved, backend):
     """THM-5: lift gas colder than the reservoir lowers the bottomhole temperature, but not below T_lg."""
-    sim, bc, rs = solved['deviated, cold lift gas']
+    sim, bc, rs = solved['deviated, cold lift gas', backend]
     T_0 = rs.operating_point.state[0, 6]
     assert bc.T_lg < T_0 < bc.T_r
 
 
-def test_gas_comes_out_of_solution_up_the_well(solved):
+@pytest.mark.parametrize('backend', BACKENDS)
+def test_gas_comes_out_of_solution_up_the_well(solved, backend):
     """BAL-10: with black oil the free-gas rate grows as the pressure falls towards the wellhead."""
-    sim, bc, rs = solved['deviated black oil']
+    sim, bc, rs = solved['deviated black oil', backend]
     X = rs.operating_point.state
     w_g = sim.wp.geometry.A * X[:, 3] * X[:, 4] * X[:, 1]
     assert np.all(np.diff(w_g) > 0)
 
 
-def test_two_root_well_stability():
+@pytest.mark.parametrize('backend', BACKENDS)
+def test_two_root_well_stability(backend):
     """A two-root well has one stable and one unstable root, the unstable one at higher p_0 (plan, "New model
     versions"), here on develop's full model in a deviated well."""
     fl = FluidModel(rho_o=density_from_api(25.0), rho_g=gas_density_from_sg(0.7), gor=60.0, wlr=0.6)
     wp = WellProperties(geometry=deviated(60, tvd=2200.0), fluid=fl)
     bc = BoundaryConditions(p_r=225.0, p_s=25.0, T_r=360.0, T_s=280.0, u=0.6)
     assert bc.p_r - bc.p_s < fl.rho_l * 9.80665 * 2200.0 / 1e5  # the static column cannot reach the separator (SOL-7)
-    rs = SSDFSimulator(wp).root_set(bc)
+    rs = SSDFSimulator(wp, backend=backend).root_set(bc)
     assert [r.label for r in rs.roots] == ['stable', 'unstable'], [(r.p_0, r.label) for r in rs.roots]
     assert rs.operating_point is rs.roots[0]
     assert rs.roots[0].slope < 0 < rs.roots[1].slope
 
 
+@pytest.mark.parametrize('backend', BACKENDS)
 @pytest.mark.parametrize('name', ['deviated black oil', 'L-shaped black oil'])
-def test_convergence(name):
+def test_convergence(name, backend):
     """Outputs change at first order as the grid is refined (implicit Euler), within the verifier's order bounds."""
     make, bc = WELLS[name]
     outputs = []
     for n in (50, 100, 200):
-        op = SSDFSimulator(make(n)).simulate(bc)
+        op = SSDFSimulator(make(n), backend=backend).simulate(bc)
         X = op.state
         outputs.append(np.array([X[0, 0], X[-1, 0], X[-1, 6], op.w_res]))  # PBH, PWH, TWH, liquid rate
     d1, d2 = np.abs(outputs[0] - outputs[1]), np.abs(outputs[1] - outputs[2])
     used = d2 > 1e-9 * np.abs(outputs[2])
     order = np.log2(d1[used] / d2[used])
     assert used.any() and np.all((0.8 <= order) & (order <= 1.25)), order
+
+
+@pytest.mark.parametrize('name', WELLS)
+def test_the_backends_find_the_same_roots(solved, name):
+    """The Rust core finds every root of the CasADi backend with its label, and every root it finds is one of the CasADi
+    system's, by the pass rule of test_backend_comparison.py."""
+    casadi, bc, rs_casadi = solved[name, 'casadi']
+    rust, _, rs_rust = solved[name, 'rust']
+    c = compare_root_sets(casadi.wp, bc, casadi.system, rs_casadi.roots, rs_rust.roots,
+                          lambda x: rust._roots.rows(bc, x)[1])
+    assert c.ok, c

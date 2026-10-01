@@ -140,8 +140,10 @@ mod _core {
             let profile = Profile::from_name(profile).map_err(PyValueError::new_err)?;
             let spec = WellSpec {
                 geometry: Geometry::from_grid(&md, &tvd, D).map_err(PyValueError::new_err)?,
-                fluid: Fluid::new(FluidInputs { rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, black_oil, p_sep,
-                                                t_sep: T_sep, p_bubble, surface_tension }),
+                fluid: Fluid::new(FluidInputs {
+                    rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, black_oil, p_sep, t_sep: T_sep,
+                    p_bubble, surface_tension,
+                }),
                 friction,
                 thermal: Thermal { h, frictional_heating, gravity_term, lift_gas_mixing },
                 slip: Slip { c_0_annular: C_0_annular, c_0_slug: C_0_slug, c_0_bubbly: C_0_bubbly, v_inf_annular },
@@ -313,10 +315,14 @@ mod _core {
                 let [p, v_g, v_l, alpha, rho_g, rho_l, t] = take(name, a)?;
                 let s = State { p, v_g, v_l, alpha, rho_g, rho_l, t };
                 let d = spec.geometry.d;
-                vec![spec.friction.friction_factor(&s, &spec.fluid, d), spec.friction.pressure_gradient(&s, &spec.fluid, d)]
+                let (fr, fl) = (&spec.friction, &spec.fluid);
+                vec![fr.friction_factor(&s, fl, d), fr.pressure_gradient(&s, fl, d)]
             }
             "chen_friction_factor" => { let [re, eps] = take(name, a)?; vec![friction::chen_friction_factor(re, eps)] }
-            "haaland_friction_factor" => { let [re, eps] = take(name, a)?; vec![friction::haaland_friction_factor(re, eps)] }
+            "haaland_friction_factor" => {
+                let [re, eps] = take(name, a)?;
+                vec![friction::haaland_friction_factor(re, eps)]
+            }
             "friction_factor_of_re" => {
                 let [re, eps] = take(name, a)?;
                 let Friction::Roughness { correlation, .. } = spec.friction else {

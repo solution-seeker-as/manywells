@@ -59,6 +59,7 @@ pub struct SlipTerms {
 impl SlipTerms {
     /// v_gs and v_ls are the superficial gas and liquid velocities (m/s), sigma the surface tension (J/m²), d the
     /// pipe's inner diameter (m) and cos_incl the cosine of the cell's inclination from vertical
+    #[allow(clippy::too_many_arguments)]
     pub fn new(v_gs: f64, v_ls: f64, rho_g: f64, rho_l: f64, sigma: f64, d: f64, cos_incl: f64, slip: &Slip) -> Self {
         let annular_boundary = 3.1 * (STD_GRAVITY * sigma * (rho_l - rho_g) / (rho_g * rho_g)).powf(0.25);
         Self {
@@ -94,12 +95,14 @@ impl SlipTerms {
 
 impl Slip {
     /// Regime probabilities [p_annular, p_slug, p_bubbly] at a point in a cell of inclination cos_incl
+    #[allow(clippy::too_many_arguments)]
     pub fn classify(&self, v_g: f64, v_l: f64, alpha: f64, rho_g: f64, rho_l: f64, sigma: f64, d: f64,
                     cos_incl: f64) -> [f64; 3] {
         SlipTerms::new(alpha * v_g, (1.0 - alpha) * v_l, rho_g, rho_l, sigma, d, cos_incl, self).probabilities(alpha)
     }
 
     /// The slip parameters (C_0, v_inf) at a point in a cell of inclination cos_incl
+    #[allow(clippy::too_many_arguments)]
     pub fn identify_parameters(&self, v_g: f64, v_l: f64, alpha: f64, rho_g: f64, rho_l: f64, sigma: f64, d: f64,
                                cos_incl: f64) -> (f64, f64) {
         SlipTerms::new(alpha * v_g, (1.0 - alpha) * v_l, rho_g, rho_l, sigma, d, cos_incl, self).parameters(alpha)

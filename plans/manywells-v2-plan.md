@@ -239,7 +239,7 @@ The checks above establish that a candidate solves the model and returns its sta
   3. Check the method's assumptions on the full model by a test or a measured property, not by argument: that [0, 1] brackets the void fraction (it holds while $C_0 \ge 1$ and $v_\infty \ge 0$, which $\cos\theta \in [0, 1]$ in `WellGeometry` keeps); that the momentum row is U-shaped in $p_i$, which the cell's golden-section search assumes; that the energy row has one root in $T_i$ in its bracket; and that the shooting on $p_0$ and its label still hold with fixed-rate inflow (INF-8), where $w_\text{res}$ does not depend on $p_0$.
   4. Check the core against the CasADi backend, since `develop`'s full model has no reference root sets. The checks, strongest first:
      - the rows at the same states agree in every configuration the core covers (design point 2);
-     - on a comparison set of wells drawn with the ported sampler, SMP-40 to SMP-44 included (deviated and L-shaped wells, black oil, real gas, roughness, gas lift with lift-gas temperature, fixed-rate inflow), the core finds every root the CasADi backend finds, with the same label, and every root only the core finds zeroes every CasADi row. Step 8 used the same rule. Roots only the core finds are recorded (`plans/improvements.md` §2.9), not fixed. The set lives in `tests/`, not in `verification/`, whose references all come from v1.0.0;
+     - on a comparison set of wells drawn with the ported sampler, SMP-40 to SMP-44 included (deviated and L-shaped wells, black oil, real gas, roughness, gas lift), with overlays for what the sampler does not draw (lift-gas temperature, fixed-rate inflow, PI inflow, a Bernoulli choke, each of `develop`'s options switched off), the core finds every root the CasADi backend finds, with the same label, and every root only the core finds zeroes every CasADi row. Step 8 used the same rule. Roots only the core finds are recorded (`plans/improvements.md` §2.9), not fixed. The set lives in `tests/`, not in `verification/`, whose references all come from v1.0.0;
      - the property checks of `tests/test_model_properties.py` pass on the core's roots.
 
      At states where the slip law has several void fractions, the backends are compared on rows only. Which branch is physical is an open model question (Step 8, gap 2).
@@ -249,11 +249,18 @@ The checks above establish that a candidate solves the model and returns its sta
 - **Output.** The core implements every option in `specs/model/`, and `SSDFSimulator(wp, backend='rust')` accepts every well. A feature spec, `specs/features/015-rust-develop-model.md`, gives the methods and their measured gains. The comparison set and its tests are committed, and `AGENTS.md` describes the core as covering the whole model.
 - **Done when.** The two backends agree on the rows in every configuration and on the comparison set as above, the `v1.0.0` configuration's verifier reports are unchanged, and the traceability test passes.
 - **Who.** Agent implements and drafts the feature spec; Bjarne signs off the method changes under principle 7, sets the performance target, and adjudicates where the backends disagree.
-- **Status.** Not started. Bjarne signed off the step on 2026-10-01:
+- **Status.** Bjarne signed off the step on 2026-10-01:
   - the reordering, with its change to `specs/goals.md`;
   - the checks against the CasADi backend, with the comparison set in `tests/`; its tolerances come to him during the step;
   - one PR per feature spec, the temperature solve measured first, and the scope above;
   - Finding 4's ruling in `specs/features/014-rust-solver.md`, renumbered so that the case set stays as it is through Step 10.
+
+  Implemented 2026-10-02 on the branch `step9-rust-develop-model`, one commit per feature spec, with 007 and 008 in one because Python's black oil always has dissolved gas (`specs/features/015-rust-develop-model.md`). For Bjarne's sign-off, collected at the end: the methods and constants (015, solver machinery), the comparison's tolerances, the findings, the performance target, the edits to `specs/architecture.md`, and the merge.
+  - **The core** implements every option a row uses; the equations no row uses stay in Python only (Bjarne, 2026-10-02). The `v1.0.0` configuration's verifier report is unchanged (PASS, 100%, 0.066 s per case), its roots identical but for rounding where the grid became Python's.
+  - **The temperature solve** (item 2): a chord iteration from the previous trial's temperature, with a bracketed Brent as fallback, 2.9× faster than Brent alone at the median. The scan leaves out samples where $R$ is not finite, and refines only strict local minima.
+  - **The comparison** (item 4): rows at the same state on a matrix of 55 configurations, the component vectors, and the root sets on the comparison set. At 20 wells for each of 26 configurations, all 520 cases pass: no label differs, and every root the core misses is in a case where the slip law has several void fractions or on another branch of a point's rows; core 20× faster than the CasADi backend at the median.
+  - **The assumptions** (item 3): checked at every cell of every root of 13 test wells, which together cover every option; the void-fraction bracket on random states.
+  - **Findings:** a CasADi root past the sonic point of a cell's momentum row, a second branch question beside Step 8's finding 2; the core accepting a jump in $R$ as a root where the void fraction switches branch; and what the label means with a fixed rate.
 
 ### Step 10 — Prove the loop: add one new equation
 

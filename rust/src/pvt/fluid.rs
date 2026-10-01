@@ -78,8 +78,8 @@ pub struct Fluid {
 
 impl Fluid {
     pub fn new(inputs: FluidInputs) -> Self {
-        let FluidInputs { rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, black_oil, p_sep, t_sep, p_bubble, .. } =
-            inputs;
+        let FluidInputs { rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, black_oil, p_sep, t_sep, p_bubble,
+                          .. } = inputs;
         let sg_gas = rho_g * R_UNIVERSAL * T_REF / (P_REF * M_AIR); // spec: PVT-GAS-6
         let rho_l = wlr * rho_w + (1.0 - wlr) * rho_o;               // spec: PVT-MIX-10
         let api = oil::api_from_density(rho_o);

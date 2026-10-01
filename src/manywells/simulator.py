@@ -124,8 +124,9 @@ class SSDFSimulator:
         df = sim.solution_as_df(op)      # per point: state, md, tvd, flow regime
 
     The backend solves the system: 'casadi', the multi-start Ipopt search on the CasADi graph (manywells.solvers.roots),
-    or 'rust', the shooting search of the Rust core (manywells.solvers.rust), which covers wells in the v1.0.0
-    configuration only. Both take the same inputs and return the same types.
+    or 'rust', the shooting search of the Rust core (manywells.solvers.rust), which implements the same model with
+    every option. Both take the same inputs and return the same types. The Rust core has a closed set of component
+    classes, so a well with a user's subclass of a component (an InflowModel, say) needs the CasADi backend.
 
     The pipe is discretized into n cells (see WellGeometry object). The state holds the following variables at each
     of the n + 1 grid points (in the given order), from the bottomhole to the wellhead:
@@ -142,7 +143,7 @@ class SSDFSimulator:
         """
         :param well_properties: Well properties (object of type WellProperties)
         :param boundary_conditions: Deprecated; pass the boundary conditions to simulate() instead
-        :param backend: 'casadi' or 'rust' (wells in the v1.0.0 configuration only)
+        :param backend: 'casadi' or 'rust' (the core's component classes only)
         """
         if boundary_conditions is not None:
             warnings.warn('SSDFSimulator(wp, bc) is deprecated: use SSDFSimulator(wp) and simulate(bc), which returns '
@@ -161,7 +162,7 @@ class SSDFSimulator:
             self.system = build_system(well_properties)
             self._roots = RootFinder(self.system)
         elif backend == 'rust':
-            from manywells.solvers.rust import RustRootFinder  # Imported here: it imports configurations, which imports this module
+            from manywells.solvers.rust import RustRootFinder  # Imported here, so that only this backend loads the core
             self.system = None
             self._roots = RustRootFinder(well_properties)
         else:

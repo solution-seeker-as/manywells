@@ -41,13 +41,13 @@ impl Geometry {
         if md.len() != tvd.len() || md.len() < 2 {
             return Err("the grid needs the same number (at least two) of measured and vertical depths".into());
         }
-        if !(d > 0.0) {
+        if d.is_nan() || d <= 0.0 {
             return Err("the pipe diameter must be positive".into());
         }
         let n = md.len() - 1;
         let delta_md: Vec<f64> = (0..n).map(|j| md[j] - md[j + 1]).collect();
         let cos_incl: Vec<f64> = (0..n).map(|j| (tvd[j] - tvd[j + 1]) / delta_md[j]).collect();
-        if delta_md.iter().any(|&l| !(l > 0.0)) || cos_incl.iter().any(|&c| !(0.0..=1.0).contains(&c)) {
+        if delta_md.iter().any(|&l| l.is_nan() || l <= 0.0) || cos_incl.iter().any(|&c| !(0.0..=1.0).contains(&c)) {
             return Err("the measured depth must fall towards the wellhead, and each cell's inclination lie in [0, 1]"
                 .into());
         }

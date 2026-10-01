@@ -31,8 +31,9 @@ const CELL_XTOL: f64 = 0.0;
 const CELL_ROW_TOL: f64 = 1e-8;
 
 /// Largest error (K) of a solved temperature: |energy row| over the row's slope in T from the heat loss,
-/// 1 + ΔMD 4h / (D cp_flux), which is large where the heat flux capacity is small. At a root, Brent leaves about 1e-13 K;
-/// a jump in the closures, as in the slip law with several void fractions, leaves far more, as for CELL_ROW_TOL.
+/// 1 + ΔMD 4h / (D cp_flux), which is large where the heat flux capacity is small. At a root, Brent leaves about
+/// 1e-13 K; a jump in the closures, as in the slip law with several void fractions, leaves far more, as for
+/// CELL_ROW_TOL.
 const TEMPERATURE_TOL: f64 = 1e-8;
 
 /// Most doublings of the step beyond the upper end of the temperature bracket (Marcher::solve_temperature)
@@ -118,13 +119,23 @@ impl<'a> Marcher<'a> {
         Some(thermal::energy_step(prev.t, t_a, cell.delta_md, spec.thermal.h, spec.geometry.d, capacity))
     }
 
+    /// The slope of cell i's energy row in the temperature from the heat loss alone, 1 + ΔMD 4h / (D cp_flux), at s
+    fn heat_loss_slope(&self, cell: geometry::Cell, s: &State) -> f64 {
+        let spec = self.spec;
+        1.0 + cell.delta_md * 4.0 * spec.thermal.h / (spec.geometry.d * thermal::heat_flux_capacity(&spec.fluid, s))
+    }
+
     /// The state at point i at pressure p whose temperature zeroes the energy row of cell i, given the state prev at
-    /// point i - 1 (specs/architecture.md, Rust core, design point 4): Brent on the row r_T(T), with the closures at
-    /// (p, T), on a bracket where it changes sign. With dT/dMD = -H + Φ_f - Φ_g, the row is
-    /// r_T = T - T_{i-1} + ΔMD (H - Φ_f + Φ_g), where the heat loss H has the sign of T - T_a, frictional heating
-    /// Φ_f >= 0, and the gravity term 0 <= Φ_g <= Φ_max (Thermal::gravity_term_bound) at every state. So r_T <= 0 at
-    /// T_lo = min(T_{i-1}, T_a) - ΔMD Φ_max, and r_T >= 0 at max(T_{i-1}, T_a) without frictional heating; where
-    /// frictional heating keeps r_T negative there, the upper end steps out by doubling steps until it is not.
+    /// point i - 1 (specs/architecture.md, Rust core, design point 4).
+    ///
+    /// First a chord iteration: Newton's method with the heat loss's slope (heat_loss_slope) for the derivative, from
+    /// guess, the temperature at the cell's previous trial pressure, until its step is a few ulp. Where it does not
+    /// converge, Brent on the row r_T(T), with the closures at (p, T), on a bracket where it changes sign. With
+    /// dT/dMD = -H + Φ_f - Φ_g, the row is r_T = T - T_{i-1} + ΔMD (H - Φ_f + Φ_g), where the heat loss H has the sign
+    /// of T - T_a, frictional heating Φ_f >= 0, and the gravity term 0 <= Φ_g <= Φ_max (Thermal::gravity_term_bound)
+    /// at every state. So r_T <= 0 at T_lo = min(T_{i-1}, T_a) - ΔMD Φ_max, and r_T >= 0 at max(T_{i-1}, T_a) without
+    /// frictional heating; where frictional heating keeps r_T negative there, the upper end steps out by doubling
+    /// steps until it is not.
     ///
     /// Where the row jumps across zero instead of crossing it, as where the slip law switches between several void
     /// fractions, Brent converges onto the jump: the state there is returned, as not solved, so that the march can
@@ -133,19 +144,15 @@ impl<'a> Marcher<'a> {
                          -> Option<(State, bool)> {
         self.count(|c| c.temperature_solves += 1);
         let (spec, op) = (self.spec, self.op);
-        // The chord iteration: Newton's method with the heat loss's slope 1 + ΔMD 4h / (D cp_flux), from the
-        // temperature of the cell's previous trial pressure, until the step is a few ulp
         let mut t = guess;
         let mut last_step = f64::INFINITY;
         for _ in 0..CHORD_MAXITER {
             let Some(s) = self.point_state(p, t, w_res, cell.cos_incl) else { break };
-            let r = discretization::energy_row(spec, op, cell, &s, prev);
-            let capacity = thermal::heat_flux_capacity(&spec.fluid, &s);
-            let step = r / (1.0 + cell.delta_md * 4.0 * spec.thermal.h / (spec.geometry.d * capacity));
+            let step = discretization::energy_row(spec, op, cell, &s, prev) / self.heat_loss_slope(cell, &s);
             if step.abs() <= RTOL * t.abs() {
                 return Some((s, true));
             }
-            if !(step.abs() < last_step) {
+            if step.is_nan() || step.abs() >= last_step {
                 break;
             }
             (last_step, t) = (step.abs(), t - step);
@@ -182,8 +189,7 @@ impl<'a> Marcher<'a> {
         }
         let (t, f) = brentq(&mut row, a, b, 0.0, RTOL, 100).ok()?;
         let s = self.point_state(p, t, w_res, cell.cos_incl)?;
-        let capacity = thermal::heat_flux_capacity(&spec.fluid, &s);
-        let solved = f.abs() <= TEMPERATURE_TOL * (1.0 + cell.delta_md * 4.0 * spec.thermal.h / (spec.geometry.d * capacity));
+        let solved = f.abs() <= TEMPERATURE_TOL * self.heat_loss_slope(cell, &s);
         if !solved {
             self.count(|c| c.temperature_failures += 1);
         }
@@ -210,7 +216,8 @@ impl<'a> Marcher<'a> {
             return None;
         }
         let j_m = j_g + j_l;
-        let terms = slip::SlipTerms::new(j_g, j_l, rho_g, rho_l, sigma, self.spec.geometry.d, cos_incl, &self.spec.slip);
+        let spec = self.spec;
+        let terms = slip::SlipTerms::new(j_g, j_l, rho_g, rho_l, sigma, spec.geometry.d, cos_incl, &spec.slip);
         let mut h = |alpha: f64| -> Result<f64, RootError> {
             let (c_0, v_inf) = terms.parameters(alpha);
             Ok(alpha * (c_0 * j_m + v_inf) - j_g)
@@ -256,7 +263,8 @@ impl<'a> Marcher<'a> {
         let mut x = Vec::with_capacity(DIM_X * (n + 1));
         let mut failed = false;
         let cos_0 = self.spec.geometry.point_cos(0);
-        let t_0 = self.spec.thermal.inflow_temperature(w_res, self.op.w_lg, self.op.t_r, self.op.t_lg, &self.spec.fluid);
+        let (spec, op) = (self.spec, self.op);
+        let t_0 = spec.thermal.inflow_temperature(w_res, op.w_lg, op.t_r, op.t_lg, &spec.fluid);
         let Some(mut prev) = self.point_state(p_0, t_0, w_res, cos_0) else {
             x.extend_from_slice(&[f64::NAN; DIM_X]);
             return March { x, w_res, failed: true, below_separator: false };
@@ -335,6 +343,7 @@ fn cell_step(row: &mut impl FnMut(f64) -> Result<f64, RootError>, p_s: f64, p_pr
 mod tests {
     use super::*;
     use crate::input::test_wells::all;
+    use crate::shoot;
 
     /// The largest |row| of each ID over a march's state
     fn largest_rows(spec: &WellSpec, op: &OperatingPoint, x: &[f64]) -> std::collections::HashMap<&'static str, f64> {
@@ -356,6 +365,49 @@ mod tests {
             for (id, largest) in largest_rows(&spec, &op, &march.x) {
                 let bound = if id == "DISC-9" { 1e-8 } else { 1e-10 };
                 assert!(id == "CHK-1" || largest < bound, "{name} {id}: {largest}");
+            }
+        }
+    }
+
+    /// The number of sign changes of the differences of a sampled function that exceed its rounding: a U-shaped
+    /// function has at most one, from falling to rising
+    fn turns(values: &[f64]) -> (usize, bool) {
+        let scale = values.iter().fold(0.0_f64, |m, v| m.max(v.abs()));
+        let rising: Vec<bool> = values.windows(2).filter(|w| (w[1] - w[0]).abs() > 1e-12 * scale)
+            .map(|w| w[1] > w[0]).collect();
+        let changes = rising.windows(2).filter(|w| w[0] != w[1]).count();
+        (changes, rising.first().copied().unwrap_or(true))
+    }
+
+    /// What the cell solve assumes (specs/features/015-rust-develop-model.md): at every cell of every root of the
+    /// test wells, which cover every option, the cell's momentum row, with the temperature solved at each pressure, is
+    /// U-shaped in the pressure on [p_s, p_{i-1}] and positive at p_{i-1}; and where the energy row depends on the
+    /// pressure, it has one root in the temperature at the root's pressure.
+    #[test]
+    fn the_cell_rows_have_the_shapes_the_cell_solve_assumes() {
+        for (name, spec, op) in all(20) {
+            let m = Marcher::new(&spec, &op);
+            for root in shoot::root_set(&spec, &op).unwrap().roots {
+                let points: Vec<State> = root.x.chunks_exact(DIM_X).map(State::of).collect();
+                for i in 1..points.len() {
+                    let (cell, prev, s) = (spec.geometry.cell(i), points[i - 1], points[i]);
+                    let t_fixed = m.linear_temperature(cell, &prev, root.w_res);
+                    let row = |p: f64| m.state_at(p, cell, t_fixed, &prev, root.w_res, s.t)
+                        .map(|(s, _)| discretization::momentum_row(&spec, cell, &s, &prev));
+                    let rows: Vec<f64> = (0..=200).filter_map(|k| row(op.p_s + (prev.p - op.p_s) * k as f64 / 200.0))
+                        .collect();
+                    let (changes, rising_first) = turns(&rows);
+                    assert!(changes == 0 || (changes == 1 && !rising_first),
+                            "{name}, root {}, cell {i}: {changes} turns", root.x[0]);
+                    assert!(row(prev.p).unwrap() > 0.0, "{name}, root {}, cell {i}: row at p_prev", root.x[0]);
+                    if t_fixed.is_none() {
+                        let r_t: Vec<f64> = (0..=200).map(|k| s.t - 40.0 + 80.0 * k as f64 / 200.0)
+                            .filter_map(|t| m.point_state(s.p, t, root.w_res, cell.cos_incl))
+                            .map(|st| discretization::energy_row(&spec, &op, cell, &st, &prev)).collect();
+                        let crossings = r_t.windows(2).filter(|w| (w[0] < 0.0) != (w[1] < 0.0)).count();
+                        assert_eq!(crossings, 1, "{name}, root {}, cell {i}: energy row", root.x[0]);
+                    }
+                }
             }
         }
     }

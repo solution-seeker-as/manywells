@@ -172,7 +172,7 @@ mod tests {
             let search = root_set(&spec, &op).unwrap();
             assert!(!search.roots.is_empty(), "{name}");
             for root in &search.roots {
-                // The choke row is as small as p_0's resolution allows, times dR/dp_0, which is steep at a trickle root:
+                // The choke row is as small as p_0's resolution allows, times dR/dp_0, steep at a trickle root:
                 // at W2's, 4e-7 of the rate
                 let (w_g, w_l) = State::of(&root.x[root.x.len() - DIM_X..]).rates(spec.a());
                 for (id, v) in discretization::rows(&spec, &op, &root.x) {

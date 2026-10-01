@@ -57,7 +57,7 @@ With the last row the verifier reports PASS with no expected failures: every ref
 
 ## Off in the `v1.0.0` configuration
 
-Not a model option. The core covers the `v1.0.0` configuration only, and refuses any other well. `develop`'s model in Rust comes in the plan's Step 9 (`specs/architecture.md`).
+Not a model option. In Step 8 the core covered the `v1.0.0` configuration only, and refused any other well. Step 9 ported the rest of `develop`'s model to it (`specs/features/015-rust-develop-model.md`).
 
 ## Acceptance
 

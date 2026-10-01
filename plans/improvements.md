@@ -295,6 +295,7 @@ free by reusing a parameterized objective.
 - In Step 8's regenerated `sol-1` samples (first 200 wells, 1,000 samples), the Rust core has an operating point in 3 samples where the multi-start search has none: IDs 16, 70 and 130. Each is a genuine root: every CasADi row is about 1e-13 there, and Ipopt started there stays.
 - At ID 67, k = 0, the core also finds an unstable root the CasADi search misses.
 - The case set does not show this: both backends pass it at 100%.
+- *Step 9, 2026-10-02* (`specs/features/015-rust-develop-model.md`): on the comparison set at 20 wells per configuration (520 cases, every option of `develop`'s model switched on and off), the core finds 21 roots the CasADi search misses, 20 of which zero every CasADi row; 17 of them are in cases where the slip law has one void fraction, mostly low-rate roots near $p_r$ (develop's well 15 in every develop configuration, L-shaped v1.0.0 wells). The 21st is the core's jump root at `v1.0.0+deviated#17` (015, Findings).
 - An option, in the `v1.0.0` configuration and later in every configuration the core covers: use the core's roots as extra starts for Ipopt, and record which roots only one backend finds. That is a comparison between the backends, not an independent search, so the verifier's reference stays as it is.
 
 ## 3. Testing

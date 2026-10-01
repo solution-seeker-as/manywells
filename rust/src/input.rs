@@ -97,7 +97,8 @@ pub mod test_wells {
         let spec = WellSpec {
             geometry: vertical(2500.0, n_cells, 0.127),
             fluid: v1_fluid(900.0, 420.0, 2225.0, 3000.0, 0.15),
-            friction: Friction::FixedFactor { f_d: 0.03 }, thermal: Thermal { h: 25.0, frictional_heating: false, gravity_term: false, lift_gas_mixing: false },
+            friction: Friction::FixedFactor { f_d: 0.03 },
+            thermal: Thermal { h: 25.0, frictional_heating: false, gravity_term: false, lift_gas_mixing: false },
             slip: Slip::default(),
             inflow: Inflow::Vogel { w_l_max: 80.0 },
             choke: Choke::new(ChokeModel::Simpson, 0.0015201224372924933, Profile::Sigmoid),
@@ -109,7 +110,8 @@ pub mod test_wells {
         let spec = WellSpec {
             geometry: vertical(1800.0, n_cells, 0.1524),
             fluid: v1_fluid(820.0, 500.0, 2225.0, 2200.0, 0.4),
-            friction: Friction::FixedFactor { f_d: 0.05 }, thermal: Thermal { h: 15.0, frictional_heating: false, gravity_term: false, lift_gas_mixing: false },
+            friction: Friction::FixedFactor { f_d: 0.05 },
+            thermal: Thermal { h: 15.0, frictional_heating: false, gravity_term: false, lift_gas_mixing: false },
             slip: Slip::default(),
             inflow: Inflow::ProductivityIndex { k_l: 0.6 },
             choke: Choke::new(ChokeModel::Bernoulli, 0.001824146924750992, Profile::Linear),

@@ -43,10 +43,12 @@ uv run pytest tests/ -v -m "not slow"
 | **test_thermal.py** | `ThermalModel`: heat loss, frictional heating, gravity term, ambient profile, inflow temperature |
 | **test_configurations.py** | `manywells.configurations`: the `v1.0.0` configuration and its check |
 | **test_roots.py** | The root search's copies of the verifier's state distance and thresholds, admissibility (SOL-1), labels, the operating point (SOL-4 to SOL-6), the starts |
-| **test_model_properties.py** | Property and spot checks of develop's full model on deviated, L-shaped, black-oil and cold-lift-gas wells: Invariants, inflow and choke rows, mass conservation, friction, heat flow, convergence, two-root stability (`slow`) |
+| **test_model_properties.py** | Property and spot checks of develop's full model on deviated, L-shaped, black-oil and cold-lift-gas wells, with both backends: Invariants, inflow and choke rows, mass conservation, friction, heat flow, convergence, two-root stability, and the same roots from both (`slow`) |
+| **test_rust_backend.py** | The Rust core as the simulator's backend on v1.0.0's wells: their roots, the CasADi rows at the core's roots, what the core refuses, the void-fraction bracket; `slow`: the same roots as the CasADi backend, the slope's sign on the case set |
+| **test_backend_comparison.py** | The Rust core against the CasADi backend in every configuration of the matrix (`backend_cases.py`): rows at the same state, and the core's march zeroing the CasADi rows; `slow`: the root sets on the comparison set |
 | **test_sampling.py** | The ported sampler: seeding, draw ranges and distributions, the map to each configuration, operating-point draws, the non-stationary walk, dataset rows; `slow`: one well's generation |
 | **test_calibration.py** | `calibrate_bernoulli_choke_model`, `calibrate_inflow_model` (PI and Vogel), and error cases |
-| **test_spec_vectors.py** | `develop` against the test vectors from v1.0.0 in `specs/model/` (component tables, and residual rows in the `v1.0.0` configuration); `spec_parse.py` reads the spec files |
+| **test_spec_vectors.py** | Both backends against the test vectors in `specs/model/` (component tables of v1.0.0 and develop, and v1.0.0's residual rows in the `v1.0.0` configuration); `spec_parse.py` reads the spec files |
 | **test_spec_traceability.py** | Equation IDs, coverage tables and `# spec:` tags (`specs/model/README.md`) |
 | **test_examples.py** | Every script in `scripts/sim_examples/` runs to the end headless (`slow`) |
 

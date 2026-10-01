@@ -189,6 +189,7 @@ pub fn flow_regimes(spec: &WellSpec, x: &[f64]) -> Vec<&'static str> {
     x.chunks_exact(DIM_X).map(State::of).enumerate().map(|(i, s)| {
         let sigma = spec.fluid.surface_tension(s.p, s.t, s.rho_l);
         let cos_incl = spec.geometry.point_cos(i);
-        slip::regime_label(spec.slip.classify(s.v_g, s.v_l, s.alpha, s.rho_g, s.rho_l, sigma, spec.geometry.d, cos_incl))
+        let probs = spec.slip.classify(s.v_g, s.v_l, s.alpha, s.rho_g, s.rho_l, sigma, spec.geometry.d, cos_incl);
+        slip::regime_label(probs)
     }).collect()
 }
