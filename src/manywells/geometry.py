@@ -70,7 +70,7 @@ class WellGeometry:
     cos_incl: tuple = None
     tvd_frac: tuple = None
 
-    def __post_init__(self):
+    def __post_init__(self):  # spec: GEO-3
         md_grid = np.asarray(self.md_survey, dtype=float)
         tvd_grid = np.asarray(self.tvd_survey, dtype=float)
 
@@ -94,7 +94,7 @@ class WellGeometry:
         object.__setattr__(self, "md_survey", tuple(md_grid))
         object.__setattr__(self, "tvd_survey", tuple(tvd_grid))
         
-        # Store nubmer of cells
+        # Store number of cells
         object.__setattr__(self, "n_cells", len(md_grid) - 1)
 
         # per-cell increments in survey order
@@ -141,7 +141,7 @@ class WellGeometry:
         tvd_survey: Sequence[float],
         n_cells: int,
         D: float = 0.1554,
-    ) -> WellGeometry:
+    ) -> WellGeometry:  # spec: GEO-4
         """Interpolate a sparse survey to *n_cells* uniform cells.
 
         Parameters
@@ -160,7 +160,7 @@ class WellGeometry:
         return cls(md_survey=md_uniform, tvd_survey=tvd_uniform, D=D)
 
     @classmethod
-    def vertical(cls, length: float, n_cells: int, D: float = 0.1554) -> WellGeometry:
+    def vertical(cls, length: float, n_cells: int, D: float = 0.1554) -> WellGeometry:  # spec: GEO-1
         """Create a vertical well geometry (MD == TVD everywhere)."""
         md = (0.0, float(length))
         tvd = (0.0, float(length))

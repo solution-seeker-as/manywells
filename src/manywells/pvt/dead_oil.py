@@ -12,7 +12,7 @@ from manywells.pvt import api_from_density
 from manywells.units import kelvin_to_fahrenheit, kelvin_to_celsius, CF_CP, CF_DYNCM
 
 
-def dead_oil_viscosity(api, T):
+def dead_oil_viscosity(api, T):  # spec: PVT-OIL-10
     """
     Beggs-Robinson (1975) correlation for dead oil viscosity.
 

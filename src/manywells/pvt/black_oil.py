@@ -10,7 +10,7 @@ Property Prediction", J Pet Technol 32 (1980): 968-970.
 """
 
 from dataclasses import dataclass
-from math import log as math_log
+from math import log10
 
 import casadi as ca
 
@@ -49,7 +49,7 @@ class BlackOilPVT:
 
         # Corrected gas gravity at reference separator (100 psig = 114.7 psia)
         self.sg_gas_corr = self.sg_gas * (
-            1 + 5.912e-5 * self.api * T_sep_F * math_log(p_sep_psia / 114.7)
+            1 + 5.912e-5 * self.api * T_sep_F * log10(p_sep_psia / 114.7)  # spec: PVT-OIL-5
         )
 
         # API-dependent coefficients resolved once (no CasADi branching)
@@ -74,7 +74,7 @@ class BlackOilPVT:
     # Internal field-unit helpers (CasADi-compatible)
     # ------------------------------------------------------------------
 
-    def _rs_field(self, p_psia, T_F):
+    def _rs_field(self, p_psia, T_F):  # spec: PVT-OIL-6
         """Vazquez-Beggs Rs in scf/STB (CasADi-compatible)."""
         return (
             self._c1 * self.sg_gas_corr
@@ -82,7 +82,7 @@ class BlackOilPVT:
             * ca.exp(self._c3 * self.api / (T_F + 460))
         )
 
-    def _bo_field(self, rs_scf, T_F):
+    def _bo_field(self, rs_scf, T_F):  # spec: PVT-OIL-8
         """Vazquez-Beggs Bo in bbl/STB (CasADi-compatible)."""
         return (
             1
@@ -94,7 +94,7 @@ class BlackOilPVT:
         """Convert SI pressure/temperature to field units."""
         return p / CF_PSI, kelvin_to_fahrenheit(T)
 
-    def _rs_field_capped(self, p_psia, T_F):
+    def _rs_field_capped(self, p_psia, T_F):  # spec: PVT-OIL-7
         """Rs in scf/STB, capped at bubble point if set."""
         rs = self._rs_field(p_psia, T_F)
         if self.p_bubble is not None:
@@ -130,7 +130,7 @@ class BlackOilPVT:
         rs_scf = self._rs_field_capped(p_psia, T_F)
         return self._bo_field(rs_scf, T_F)
 
-    def live_oil_density(self, p, T):
+    def live_oil_density(self, p, T):  # spec: PVT-OIL-9
         """
         Density of live oil (stock-tank oil + dissolved gas) at (p, T).
 
@@ -142,7 +142,7 @@ class BlackOilPVT:
         Bo = self.bo(p, T)      # dimensionless
         return (self.rho_o_sc + Rs * self.rho_g_sc) / Bo
 
-    def bubble_point_pressure(self, Rs_total, T):
+    def bubble_point_pressure(self, Rs_total, T):  # spec: PVT-OIL-14
         """
         Bubble point pressure from Standing's (1947) correlation, or the
         stored value if one was provided at construction.
@@ -166,7 +166,7 @@ class BlackOilPVT:
 
 
 
-def live_oil_viscosity(mu_dead, Rs_scf):
+def live_oil_viscosity(mu_dead, Rs_scf):  # spec: PVT-OIL-11
     """
     Beggs-Robinson (1975) live oil viscosity correction.
 
@@ -188,16 +188,17 @@ def live_oil_viscosity(mu_dead, Rs_scf):
     return mu_live_cP * CF_CP
 
 
-def live_oil_surface_tension(sigma_dead, Rs_scf):
+def live_oil_surface_tension(sigma_dead, Rs_scf):  # spec: PVT-OIL-12
     """
     Abdul-Majeed & Al-Soof (2000) live oil surface tension correction.
 
     Dissolved gas reduces surface tension. At Rs = 500 scf/STB, surface
     tension drops to roughly 40% of the dead-oil value.
 
-    The two branches of the original correlation meet continuously at
-    Rs_vol = 50 Sm3/Sm3 and are blended with a sigmoid for CasADi
-    differentiability.
+    The original correlation switches branches at Rs_vol = 50 Sm3/Sm3, where
+    they do not meet: sigma_live / sigma_dead is 0.425 by the first and 0.375
+    by the second. A sigmoid blends them over a few Sm3/Sm3, for CasADi
+    differentiability (specs/model/pvt/oil.md, PVT-OIL-12).
 
     Reference: Abdul-Majeed, G.H. and Al-Soof, N.B.A., "Estimation of
     gas-oil surface tension", J Pet Sci Eng 27 (2000): 197-200.

@@ -240,10 +240,10 @@ class TestWaterFVF:
         bw = float(water_fvf(P_REF, T_REF))
         assert bw == pytest.approx(1.0)
 
-    def test_high_pressure_slightly_above_one(self):
-        """Water at 200 bar: Bw barely above 1.0."""
+    def test_high_pressure_slightly_below_one(self):
+        """Water at 200 bar is compressed: Bw barely below 1.0 (plans/improvements.md, 1.2)."""
         bw = float(water_fvf(200e5, T_REF))
-        assert 1.0 < bw < 1.01
+        assert 0.99 < bw < 1.0
 
     def test_nearly_incompressible(self):
         """Change in Bw over 100 bar is tiny."""
@@ -265,7 +265,7 @@ class TestFluidModelMixing:
             rho_o=850.0,
             rho_g=gas_density_from_sg(0.65),
             gor=200.0, wlr=0.0,
-            p_sep=100 * CF_PSI,
+            p_sep=100 * CF_PSI / CF_BAR,  # bar
             T_sep=273.15 + 21.1,
         )
 
@@ -285,13 +285,12 @@ class TestFluidModelMixing:
         p, T = 150.0, 373.15
         wp = WellProperties(fluid=fl)
         bc = BoundaryConditions(w_lg=0.5)
-        sim = SSDFSimulator(wp, bc)
 
         w_l_in = wp.inflow.liquid_mass_flow_rate(p, bc.p_r)
         w_g_in = (fl.f_g / (1 - fl.f_g)) * w_l_in
         total_in = w_g_in + bc.w_lg + w_l_in
 
-        w_g_out, w_l_out = sim._gas_and_liquid_flow_rate(p, T, w_l_in)
+        w_g_out, w_l_out = fl.phase_rates(p, T, w_l_in, bc.w_lg)
         total_out = float(w_g_out) + float(w_l_out)
         assert total_out == pytest.approx(total_in, rel=1e-3)
 
@@ -316,13 +315,9 @@ class TestDeadOilRegression:
             fluid=FluidModel(rho_o=density_from_api(45.0), oil_model='dead_oil'),
         )
         bc = BoundaryConditions(p_r=120, p_s=30, u=0.8)
-        sim = SSDFSimulator(wp, bc)
-        try:
-            result = sim.simulate()
-            assert result is not None
-            assert len(result) == (sim.n_cells + 1) * sim.dim_x
-        except SimError:
-            pytest.skip("Ipopt could not solve")
+        sim = SSDFSimulator(wp)
+        result = sim.simulate(bc).x
+        assert len(result) == (sim.n_cells + 1) * sim.dim_x
 
 
 @pytest.mark.slow
@@ -336,30 +331,24 @@ class TestBlackOilSimulator:
             rho_o=density_from_api(35),
             rho_g=gas_density_from_sg(0.65),
             wlr=0.0,
-            p_sep=100 * CF_PSI,
+            p_sep=100 * CF_PSI / CF_BAR,  # bar
             T_sep=273.15 + 21.1,
-            p_bubble=250e5,
+            p_bubble=250.0,  # bar
         )
         geo = WellGeometry.vertical(2000, 5, D=0.1554)
         wp = WellProperties(geometry=geo, fluid=fl)
         bc = BoundaryConditions(p_r=200, p_s=30, u=0.8)
-        return SSDFSimulator(wp, bc)
+        sim = SSDFSimulator(wp)
+        return sim, sim.simulate(bc).x
 
     def test_black_oil_solves(self, bo_sim):
         """The black oil simulator converges."""
-        try:
-            result = bo_sim.simulate()
-            assert result is not None
-            assert len(result) == (bo_sim.n_cells + 1) * bo_sim.dim_x
-        except SimError:
-            pytest.skip("Ipopt could not solve black oil case")
+        sim, result = bo_sim
+        assert len(result) == (sim.n_cells + 1) * sim.dim_x
 
     def test_mass_conservation(self, bo_sim):
         """Total mass (free gas + liquid) is conserved across all cells."""
-        try:
-            result = bo_sim.simulate()
-        except SimError:
-            pytest.skip("Ipopt could not solve")
+        bo_sim, result = bo_sim
 
         wp = bo_sim.wp
         n = bo_sim.n_cells
@@ -378,10 +367,7 @@ class TestBlackOilSimulator:
 
     def test_free_gas_increases_with_decreasing_pressure(self, bo_sim):
         """As pressure drops (moving up the wellbore), more gas exsolves."""
-        try:
-            result = bo_sim.simulate()
-        except SimError:
-            pytest.skip("Ipopt could not solve")
+        bo_sim, result = bo_sim
 
         wp = bo_sim.wp
         n = bo_sim.n_cells
@@ -401,13 +387,30 @@ class TestBlackOilSimulator:
 
     def test_liquid_density_varies_with_pressure(self, bo_sim):
         """In the black oil model, liquid density is NOT constant."""
-        try:
-            result = bo_sim.simulate()
-        except SimError:
-            pytest.skip("Ipopt could not solve")
+        bo_sim, result = bo_sim
 
         dim = bo_sim.dim_x
         n = bo_sim.n_cells
 
         rho_l_values = [result[dim * i + 5] for i in range(n + 1)]
         assert max(rho_l_values) - min(rho_l_values) > 0.1
+
+
+class TestSeparatorGasGravity:
+    """PVT-OIL-5: Vazquez and Beggs (1980), gamma_gs = gamma_g [1 + 5.912e-5 API T_sep log10(p_sep / 114.7)]."""
+
+    def test_reference_separator_leaves_the_gravity_unchanged(self):
+        bo = BlackOilPVT(api=35, sg_gas=0.65, p_sep=114.7 * 6894.76, T_sep=300.0)
+        assert bo.sg_gas_corr == pytest.approx(0.65, rel=1e-12)
+
+    def test_value_at_100_psia_and_70_F(self):
+        """Hand value: 0.65 (1 + 5.912e-5 * 35 * 70 * log10(100 / 114.7)) = 0.644392 (log10, not ln)."""
+        T_sep = (70 - 32) * 5 / 9 + 273.15
+        bo = BlackOilPVT(api=35, sg_gas=0.65, p_sep=100 * 6894.76, T_sep=T_sep)
+        assert bo.sg_gas_corr == pytest.approx(0.644392, rel=1e-6)
+
+    def test_standard_separator(self):
+        """At standard conditions (14.7 psia, 59 F) and API 35 the correction is 0.891, about 11% (ln gave 0.75)."""
+        from manywells.pvt.fluid import FluidModel
+        fl = FluidModel(rho_o=density_from_api(35), rho_g=gas_density_from_sg(0.65))
+        assert fl._black_oil.sg_gas_corr / 0.65 == pytest.approx(0.8911, abs=2e-4)

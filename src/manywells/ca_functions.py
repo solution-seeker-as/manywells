@@ -48,7 +48,7 @@ def ca_softmax(x):  # spec: SMO-3
     return exp_logits / ca.sum1(exp_logits)
 
 
-def ca_sigmoid(x, a, k):
+def ca_sigmoid(x, a, k):  # spec: SMO-4
     """
     Sigmoid function in variable x
 

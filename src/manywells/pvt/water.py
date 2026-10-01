@@ -15,12 +15,13 @@ from manywells.units import P_REF
 
 def water_fvf(p, T, p_ref=P_REF, c_w=4.5e-10):
     """
-    Water formation volume factor with constant compressibility.
+    Water formation volume factor with constant compressibility, to first order.
 
-    Bw = 1 + c_w * (p - p_ref)
+    Bw = 1 - c_w * (p - p_ref)
 
-    Water is nearly incompressible so Bw is very close to 1.0 under
-    typical wellbore conditions.
+    Water shrinks under pressure, so Bw falls below 1.0 above p_ref.  It is
+    nearly incompressible, so Bw stays very close to 1.0 under typical
+    wellbore conditions.  Not used by the simulator.
 
     :param p: Pressure (Pa), may be CasADi symbolic
     :param T: Temperature (K), unused (included for API consistency)
@@ -28,10 +29,10 @@ def water_fvf(p, T, p_ref=P_REF, c_w=4.5e-10):
     :param c_w: Isothermal water compressibility (1/Pa), default 4.5e-10
     :return: Bw (dimensionless)
     """
-    return 1.0 + c_w * (p - p_ref)
+    return 1.0 - c_w * (p - p_ref)  # spec: PVT-WAT-2
 
 
-def water_viscosity(T):
+def water_viscosity(T):  # spec: PVT-WAT-3
     """
     Water viscosity using a Vogel-Fulcher-Tammann type correlation.
     CasADi-compatible.

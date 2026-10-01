@@ -1,6 +1,6 @@
 # ManyWells v2 architecture
 
-*Step 6 of `plans/manywells-v2-plan.md`. Owner: Bjarne Grimstad. Status: decided, 2026-09-30; Bjarne ruled on its five open decisions (Decisions, below).*
+*Step 6 of `plans/manywells-v2-plan.md`. Owner: Bjarne Grimstad. Status: decided, 2026-09-30; Bjarne ruled on its five open decisions (Decisions, below). Step 7 implemented the Python side (2026-10-01); its changes to this file are marked "Step 7", and Bjarne signed them off on 2026-10-01.*
 
 This file fixes the module boundaries, the interfaces between modules and the extension points of ManyWells v2, and the design of the Rust core for `develop`'s model. It does not define physics (`specs/model/`), the sampling procedure (`specs/sampling.md`), the checks (`specs/verification.md`), the v2 dataset schema (release work, `specs/goals.md`) or the calibration contract (before `v2.0.0`). Step 7 implements the Python side, and the Rust core follows after the plan.
 
@@ -79,7 +79,7 @@ Every function of the state accepts CasADi symbols as well as floats in the CasA
 | `SlipModel` | `identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl)` | SI | $(C_0, v_\infty)$ | three regimes (SLIP-1 to SLIP-8) · inclination terms; four regimes (after the plan) |
 | | `flow_regime(...)` | floats | regime name | |
 | `FrictionModel` | `pressure_gradient(s, fluid, D)` | state, fluid, m | $F$, Pa/m (FRIC-1) | fixed $f_D$ (FRIC-2) · roughness with Chen or Haaland |
-| `ThermalModel` | `ambient_temperature(tvd_frac, T_r, T_s)` | –, K, K | K | linear in depth (THM-2) |
+| `ThermalModel` | `ambient_temperature(tvd_frac, T_r, T_s)` | –, K, K | K | linear in depth (THM-2; implemented as THM-4) |
 | | `inflow_temperature(w_res, w_lg, T_r, T_lg, fluid)` | kg/s, kg/s, K, K, fluid | K | $T_r$ (THM-3) · lift-gas mixing |
 | | `temperature_gradient(s, fluid, T_a, F, dp_dmd, cos_incl, D)` | state, fluid, K, Pa/m, Pa/m, –, m | $dT/d\text{MD}$, K/m | heat loss (THM-1) · frictional heating, gravity term |
 | `InflowModel` | `liquid_mass_flow_rate(p_0, p_r)` | bar, bar | $w_\text{res}$, kg/s | Vogel, productivity index (INF-1, INF-2) · fixed rate |
@@ -108,7 +108,9 @@ Contract changes against `develop` today, all in Step 7:
 | `bottom_rows` | `ca.Function(x_0, params) -> r_0`: the six rows of point 0; the march fixes $p_0$ and solves them for the other six unknowns |
 | `point_rows` | `ca.Function(x_i, x_prev, w_res, params, delta_md, cos_incl, tvd_frac) -> r_i`: the seven rows of point $i > 0$ without CHK-1, one function for every cell, used by the march |
 | `bounds(bc)` | `(lbx, ubx)`: the admissible box of SOL-1 and the solver's temperature bounds |
-| `outputs` | `ca.Function(x, params) -> ...`: what a `Root` carries besides its state: the flow regime at each point (one mapped function, `plans/improvements.md` §4.4), CHOKED (CHK-12) and the reservoir phase rates |
+| `regime_probabilities` | `ca.Function(x) -> P`: the flow-regime probabilities at each point, one function mapped over the points (`plans/improvements.md` §4.4), for the labels of SLIP-8 (Step 7: split from `outputs`, as it needs no parameters) |
+| `outputs` | `ca.Function(x, params) -> ...`: the rest of what a `Root` carries besides its state: CHOKED (CHK-12) and the reservoir phase rates |
+| `reservoir_rate`, `bottom_guess` | `ca.Function(p_0, params)`: $w_\text{res}$, and a start for point 0's rows at $p_0$, for the march (Step 7) |
 
 - **No hidden state** (§2.4). The reservoir liquid rate $w_\text{res} = $ `inflow.liquid_mass_flow_rate(p_0, p_r)` is an expression of $x_0$ and the parameters, passed to every point's rows as an argument.
 - **One row form for every trajectory.** The rows use $\Delta\text{MD}$ for friction and heat loss, $\Delta\text{MD}\cos\theta$ for gravity, and $T_a$ from the TVD fraction. On a vertical uniform grid they reduce to DISC-4, and to DISC-5 with the `v1.0.0` thermal option, so a new trajectory never needs a new row.
@@ -121,10 +123,10 @@ Contract changes against `develop` today, all in Step 7:
 |---|---|
 | `IpoptSolver(system)` | builds the feasibility NLP once, with the operating point as NLP parameters (`nlpsol` with `p`) |
 | `.solve(x0, params, lbx, ubx) -> SolveResult` | `x`, `success`, `status`, `stats`; it never prints (§2.2) |
-| `march(system, params, p_0) -> x` | the initial guess: point 0 from `bottom_rows`, then each point from `point_rows`, each by a Newton rootfinder built once per well |
-| `find_roots(system, solver, bc, x_guess=None) -> RootSet` | solves from each start: `x_guess` if given, the default march from $p_0 = p_r - 0.05(p_r - p_s)$, and marches from $p_0 = p_s + f(p_r - p_s)$ for $f \in \{0.5, 0.7, 0.85, 0.95, 0.995\}$ (the verifier's method A); accepts a solve that succeeds and is admissible (SOL-1); merges roots within `tol_x` of each other in the verifier's state distance; labels each by SOL-3 from `residual`'s Jacobian, with the CHK-1 row and the $p_0$ column found through `row_ids`, and calls a label indeterminate where the normalized slope is at most `label_min` in magnitude (decision 5) |
+| `Marcher(system)(params, p_0) -> x` | the initial guess: point 0 from `bottom_rows`, then each point from `point_rows`, each by a Newton rootfinder built once per well, and by Ipopt with v1.0.0's bounds where Newton fails (Step 7: a class, so its solvers are built once; the fallback is solver machinery, measured in `specs/features/012-root-search.md`) |
+| `RootFinder(system).find(bc, x_guess=None) -> RootSet` | solves from each start: `x_guess` if given, the default march from $p_0 = p_r - 0.05(p_r - p_s)$, and marches from $p_0 = p_s + f(p_r - p_s)$ for $f \in \{0.5, 0.7, 0.85, 0.975, 0.995, 0.999\}$ (the verifier's method A, without its duplicate of the default, and 0.975 and 0.999; Step 7, measured in feature spec 012); accepts a solve that Ipopt reports as `Solve_Succeeded`, as the reference build does, and that is admissible (SOL-1); merges roots within `tol_x` of each other in the verifier's state distance; labels each by SOL-3 from `residual`'s Jacobian, with the CHK-1 row and the $p_0$ column found through `row_ids`, and calls a label indeterminate where the normalized slope is at most `label_min` in magnitude (decision 5). Step 7: a class, so that the solver, the march and the Jacobian are built once per well |
 
-The library cannot import the verifier, so it defines its own copies of the state distance, `tol_x` and `label_min`, and a test in `tests/` checks that they equal the verifier's. The starts and any early exit are Step 7's to propose from measurements on the case set.
+The library cannot import the verifier, so it defines its own copies of the state distance, `tol_x` and `label_min`, and a test in `tests/` checks that they equal the verifier's (`tests/test_roots.py`). Step 7 measured the starts on the case set (feature spec 012); `simulate` tries every start, with no early exit.
 
 Another solver adapter (Newton or KINSOL on the square system, JIT compilation, dual warm starts; `plans/improvements.md` §4.2) goes in `solvers/` with the same `solve` contract, and is solver machinery under principle 7.
 
@@ -144,7 +146,7 @@ df = sim.solution_as_df(op)              # per point: state, md, tvd, flow regim
 op2 = sim.simulate(bc2, x_guess=op.x)   # a warm start makes the search faster, not the answer different
 ```
 
-`NoOperatingPoint` is a `SimError` and carries the root set (SOL-5). Log messages go to `logging.getLogger('manywells')`. Whether `simulate` tries every start or stops early is solver policy: Step 7 measures its stable-root rate and cost on the case set, and each backend may choose differently, because only the returned operating point is specified (principle 6). The two-argument constructor `SSDFSimulator(wp, bc)` with `simulate()` keeps working, with a `DeprecationWarning`, until the CasADi backend is retired. During the transition `SSDFSimulator(wp, backend='casadi' | 'rust')` chooses the backend; both take the same inputs and return the same types.
+`NoOperatingPoint` is a `SimError` and carries the root set (SOL-5). Log messages go to `logging.getLogger('manywells')`. Whether `simulate` tries every start or stops early is solver policy: Step 7 measured its stable-root rate and cost on the case set, and each backend may choose differently, because only the returned operating point is specified (principle 6). The two-argument constructor `SSDFSimulator(wp, bc)` with `simulate()` keeps working, with a `DeprecationWarning`, until the CasADi backend is retired; it returns the operating point's state as a flat list, as before. During the transition `SSDFSimulator(wp, backend='casadi' | 'rust')` chooses the backend; both take the same inputs and return the same types. Step 7 adds the `backend` argument with the Rust core, not before.
 
 ## Extension points
 

@@ -57,7 +57,29 @@ Well and fluid parameters of the `v1.0.0` configuration (v1.0.0's `WellPropertie
 | $K_c$ | `K_c` | m² | choke coefficient | $> 0$ |
 | $\sigma(\cdot)$ | `chk_profile` | – | choke profile | one of CHK-7 to CHK-10 |
 
-Here $R_s$ is the specific gas constant, as in the paper. Black-oil correlations (Step 7) also use a solution gas–oil ratio; its symbol will be $R_{so}$ (`rs` in the code) to avoid the clash.
+Here $R_s$ is the specific gas constant, as in the paper. The black-oil correlations also use a solution gas–oil ratio; its symbol is $R_{so}$ (`rs` in the code) to avoid the clash.
+
+Parameters and quantities of `develop`'s options, in addition (the dataclass fields of `FluidModel`, `WellGeometry`, `RoughnessFriction`, `ThermalModel` and `BoundaryConditions`):
+
+| Symbol | Code | Unit | Meaning |
+|---|---|---|---|
+| $\text{MD}$, $\text{TVD}$ | `md`, `tvd` | m | measured and true vertical depth from the surface (GEO-3) |
+| $\Delta\text{MD}_i$, $\cos\theta_i$ | `delta_md`, `cos_incl` | m, – | length and inclination from vertical of cell $i$ |
+| $f_i$ | `tvd_frac` | – | TVD fraction of grid point $i$ (1 at the bottomhole) |
+| $\rho_o$, $\rho_{g,\text{sc}}$, $\rho_w$ | `rho_o`, `rho_g`, `rho_w` | kg/m³ | oil, gas and water densities at standard conditions |
+| $R_{go}$ | `gor` | Sm³/Sm³ | gas–oil ratio at standard conditions |
+| $\alpha_{w,l}$ | `wlr` | – | water–liquid ratio (water cut) at standard conditions, in $[0, 1)$ |
+| $c_{po}$, $c_{pw}$ | `cp_o`, `cp_w` | J/(kg K) | oil and water heat capacities |
+| $\gamma_g$, $M_g$ | `sg_gas`, `M_g` | –, kg/kmol | gas specific gravity (air = 1) and molecular weight |
+| $Z$ | `z_factor` | – | gas compressibility factor |
+| $R_{so}$, $B_o$ | `rs`, `bo` | Sm³/Sm³, – | solution gas–oil ratio and oil formation volume factor |
+| $p_\text{sep}$, $T_\text{sep}$, $p_b$ | `p_sep`, `T_sep`, `p_bubble` | bar, K, bar | separator conditions and bubble-point pressure |
+| $\mu_g$, $\mu_o$, $\mu_w$, $\mu_l$, $\mu_m$ | `gas_viscosity`, …, `mixture_viscosity` | Pa s | viscosities |
+| $\varepsilon$, Re | `roughness`, `Re` | m, – | pipe wall roughness and Reynolds number |
+| $w_\text{res}$ | `w_res` | kg/s | liquid mass rate from the reservoir (the inflow model's) |
+| $w_{g,\text{res}}$, $w_d$ | `w_g_res` | kg/s | reservoir gas rate, gas dissolved in the oil |
+| $T_{lg}$ | `T_lg` | K | lift-gas temperature at injection; `None` means $T_r$ |
+| $\Phi_f$, $\Phi_g$ | – | K/m | frictional heating and gravity terms of the temperature gradient |
 
 Boundary conditions and controls (v1.0.0's `BoundaryConditions`):
 
@@ -82,3 +104,6 @@ Input validation belongs in the dataclasses' `__post_init__`, not in the solver.
 | $\rho_{w,\text{ref}}$ | `WATER.rho` | 999.1 kg/m³ | water density, the reference for specific gravity (PVT-OIL-2) |
 | $\gamma$ | `gamma` | 1.307 | heat capacity ratio of the gas in the choke (CHK-4) |
 | $\epsilon$ | `eps` | $10^{-6}$ | smoothing constant (SMO-1, SMO-2); its unit is the square of its arguments' unit |
+| $R_u$ | `R_UNIVERSAL` | 8314.46 J/(kmol K) | universal gas constant (PVT-GAS-6) |
+| $M_\text{air}$ | `M_AIR` | 28.97 kg/kmol | molecular weight of air (PVT-GAS-6) |
+| – | `CF_PSI`, `CF_RS`, `CF_CP`, `CF_UP` | 6894.76 Pa/psi, 0.178108 (Sm³/Sm³)/(scf/STB), $10^{-3}$ Pa s/cP, $10^{-7}$ Pa s/µP | field-unit conversions of the correlations in `pvt/` |

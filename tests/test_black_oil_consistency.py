@@ -27,19 +27,19 @@ from manywells.units import CF_BAR
 
 FLUID_PARAMS = [
     pytest.param(
-        dict(api=15, sg_gas=0.70, gor=50, p_bubble=150e5),
+        dict(api=15, sg_gas=0.70, gor=50, p_bubble=150.0),
         id="heavy-oil-low-gor",
     ),
     pytest.param(
-        dict(api=25, sg_gas=0.65, gor=150, p_bubble=200e5),
+        dict(api=25, sg_gas=0.65, gor=150, p_bubble=200.0),
         id="medium-oil",
     ),
     pytest.param(
-        dict(api=35, sg_gas=0.60, gor=300, p_bubble=300e5),
+        dict(api=35, sg_gas=0.60, gor=300, p_bubble=300.0),
         id="light-oil-high-gor",
     ),
     pytest.param(
-        dict(api=40, sg_gas=0.80, gor=200, p_bubble=250e5),
+        dict(api=40, sg_gas=0.80, gor=200, p_bubble=250.0),
         id="light-oil-heavy-gas",
     ),
 ]
@@ -141,7 +141,7 @@ def test_gas_fvf_decreases_with_pressure(params):
 def test_oil_compressibility_bounded_by_gas_dissolving(params):
     """B_gd * dR_s/dp > dB_o/dp below the bubble point (r_s = 0 simplification)."""
     fl = _make_fluid(params)
-    p_bub_bar = params["p_bubble"] / CF_BAR
+    p_bub_bar = params["p_bubble"]
     dp = 0.1  # bar
 
     p_saturated = P_GRID[P_GRID < p_bub_bar - dp]
@@ -197,7 +197,7 @@ def test_bo_at_least_one(params):
 def test_rs_non_decreasing_below_bubble_point(params):
     """Rs must be non-decreasing with pressure below the bubble point."""
     fl = _make_fluid(params)
-    p_bub_bar = params["p_bubble"] / CF_BAR
+    p_bub_bar = params["p_bubble"]
     p_below = np.sort(P_GRID[P_GRID < p_bub_bar])
 
     for T in T_GRID:
@@ -215,7 +215,7 @@ def test_rs_non_decreasing_below_bubble_point(params):
 def test_rs_constant_above_bubble_point(params):
     """Rs must be capped (constant) above the bubble point."""
     fl = _make_fluid(params)
-    p_bub_bar = params["p_bubble"] / CF_BAR
+    p_bub_bar = params["p_bubble"]
     p_above = P_GRID[P_GRID > p_bub_bar]
     if len(p_above) < 2:
         pytest.skip("Not enough pressure points above bubble point")

@@ -22,9 +22,9 @@ wp = WellProperties(inflow=FixedFlowRate(w_l_const=W_L))
 bc = BoundaryConditions(u=0.5)
 
 # -- Simulate -------------------------------------------------------------
-sim = SSDFSimulator(wp, bc)
-x = sim.simulate()
-df = sim.solution_as_df(x)
+sim = SSDFSimulator(wp)
+op = sim.simulate(bc)
+df = sim.solution_as_df(op)
 
 # -- Derived quantities ---------------------------------------------------
 A = wp.geometry.A

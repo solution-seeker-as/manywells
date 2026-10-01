@@ -49,7 +49,7 @@ gas_density_std = gas_density
 """Alias for :func:`gas_density` with default (standard-condition) arguments."""
 
 
-def gas_fvf(p, T, Z=1.0, Z_ref=1.0):
+def gas_fvf(p, T, Z=1.0, Z_ref=1.0):  # spec: PVT-GAS-8
     """
     Gas formation volume factor.
 
@@ -61,13 +61,13 @@ def gas_fvf(p, T, Z=1.0, Z_ref=1.0):
     :param T: Temperature (K), may be CasADi symbolic
     :param Z: Compressibility factor at (p, T), default 1.0
     :param Z_ref: Compressibility factor at standard conditions, default 1.0
-    :return: Bg (Sm3 at standard / m3 at reservoir conditions).
+    :return: Bg (m3 at reservoir conditions / Sm3 at standard conditions).
              Multiply standard-condition volume by Bg to get reservoir volume.
     """
     return (Z / Z_ref) * (P_REF * T) / (T_REF * p)
 
 
-def molecular_weight(R_s):
+def molecular_weight(R_s):  # spec: PVT-GAS-6
     """
     Compute gas molecular weight from specific gas constant.
 
@@ -77,7 +77,7 @@ def molecular_weight(R_s):
     return R_UNIVERSAL / R_s
 
 
-def gas_viscosity(T, rho_g, M_g):
+def gas_viscosity(T, rho_g, M_g):  # spec: PVT-GAS-7
     """
     Gas viscosity using the Lee-Gonzalez-Eakin (1966) correlation.
     CasADi-compatible.
@@ -98,7 +98,7 @@ def gas_viscosity(T, rho_g, M_g):
     return K * ca.exp(X * ca.constpow(rho_gcc, Y)) * CF_UP
 
 
-def sutton_pseudo_critical(sg_gas):
+def sutton_pseudo_critical(sg_gas):  # spec: PVT-GAS-5
     """
     Pseudo-critical pressure and temperature from gas specific gravity.
 
@@ -113,7 +113,7 @@ def sutton_pseudo_critical(sg_gas):
     return ppc_psia * CF_PSI, tpc_R / 1.8
 
 
-def gas_z_factor(p, T, sg_gas):
+def gas_z_factor(p, T, sg_gas):  # spec: PVT-GAS-4
     """
     Gas compressibility factor using the Papay (1968) correlation.
     CasADi-compatible (explicit, smooth, no iteration).

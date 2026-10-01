@@ -10,9 +10,7 @@ Implementation of choke model
 """
 
 import abc
-import typing as ty
-from dataclasses import dataclass, field
-from math import sqrt, exp
+from dataclasses import dataclass
 
 import numpy as np
 import casadi as ca
@@ -21,11 +19,14 @@ from manywells.ca_functions import ca_max_approx
 from manywells.units import CF_BAR
 
 
-@dataclass
+CHOKE_PROFILES = ('linear', 'sigmoid', 'convex', 'concave')
+
+
+@dataclass(frozen=True)
 class ChokeModel(abc.ABC):
     """
     Abstract class for choke models based on the Bernoulli equation with support for two-phase correction multipliers:
-        w = K_c * sigma(u) * sqrt(2 * rho * (p_in - max(p_out, cpm * p_in)) / Phi)
+        w = K_c * sigma(u) * sqrt(2 * rho * max(p_in - max(p_out, cpm * p_in), 0) / Phi)
     where
         w is mass rate of the mixture (kg/s)
         K_c is a choke coefficient (m²)
@@ -36,7 +37,8 @@ class ChokeModel(abc.ABC):
         p_in and p_out are inlet and outlet pressure (bar)
         cpm is the critical pressure ration (dimensionless)
 
-    See concrete implementations for different choices of multipliers and densities.
+    A concrete model chooses the density and the multiplier from the state upstream of the choke
+    (density_and_multiplier); mass_flow_rate is the same for every model.
 
     Choked flow is modeled to occur at the critical pressure p_out = cpm * p_in.
     The flow rate becomes independent of the downstream pressure when p_out is below the critical pressure.
@@ -46,16 +48,15 @@ class ChokeModel(abc.ABC):
 
     # Choke properties
     K_c: float = 0.1 * np.pi * (0.1554 / 2) ** 2  # Choke coefficient (m²). Defaults to 10% of area of 6.11 inch pipe.
-    cpr: float = None  # Critical pressure ratio (dimensionless)
-    chk_profile: str = 'linear'    # Choke profile. Can be any of the profiles listed in _chk_profiles.
-
-    # Admissible choke curve profiles
-    _chk_profiles: ty.List[str] = field(default_factory=lambda: ['linear', 'sigmoid', 'convex', 'concave'])
+    cpr: float = None  # Critical pressure ratio (dimensionless). Always set from critical_pressure_ratio().
+    chk_profile: str = 'linear'    # Choke profile, one of CHOKE_PROFILES
 
     def __post_init__(self):
-        assert self.K_c > 0, 'Choke coefficient must be positive'
-        assert self.chk_profile in self._chk_profiles, f'Choke profile {self.chk_profile} is not supported'
-        self.cpr = self.critical_pressure_ratio()
+        if not self.K_c > 0:
+            raise ValueError('Choke coefficient must be positive')
+        if self.chk_profile not in CHOKE_PROFILES:
+            raise ValueError(f'Choke profile {self.chk_profile} is not supported')
+        object.__setattr__(self, 'cpr', self.critical_pressure_ratio())
 
     def choke_opening(self, u: float):
         """
@@ -110,14 +111,34 @@ class ChokeModel(abc.ABC):
         # spec: CHK-3
         p_c = ca_max_approx(self.cpr * p_in, p_out)  # Approximation of max(cpr * p_in, p_out)
         dp = CF_BAR * (p_in - p_c)  # Pressure difference (Pa)
-        return self.K_c * chk * ca.sqrt(2 * rho * dp / multiplier)  # spec: CHK-2
+        w = self.K_c * chk * ca.sqrt(2 * rho * dp / multiplier)  # spec: CHK-2
+        # spec: CHK-11. No flow from the well where p_in <= p_c. if_else, unlike sqrt(max(dp, 0)), keeps the derivative
+        # finite (zero) there, so a solver that steps into that region is not stopped by a NaN Jacobian.
+        return ca.if_else(dp > 0, w, 0)
 
     @abc.abstractmethod
-    def mass_flow_rate(self, *args, **kwargs):
+    def density_and_multiplier(self, s, A):
         """
-        Computes the mass flow rate through the choke
+        The density and the two-phase multiplier of the choke equation, from the state upstream of the choke.
+
+        :param s: State at the wellhead (a PointState: p, v_g, v_l, alpha, rho_g, rho_l, T, rho_m, v_m)
+        :param A: Cross-sectional area of the pipe (m²)
+        :return: Density (kg/m³) and multiplier (dimensionless)
         """
         pass
+
+    def mass_flow_rate(self, u, p_s, s, A):
+        """
+        Mass flow rate through the choke, from the wellhead state s at pressure s.p to the pressure p_s.
+
+        :param u: Choke position in [0, 1] (dimensionless)
+        :param p_s: Pressure downstream of the choke (bar)
+        :param s: State at the wellhead (a PointState)
+        :param A: Cross-sectional area of the pipe (m²)
+        :return: Mass flow rate (kg/s)
+        """
+        rho, multiplier = self.density_and_multiplier(s, A)
+        return self.choke_equation(u, s.p, p_s, rho=rho, multiplier=multiplier)
 
     def is_choked(self, p_in, p_out):  # spec: CHK-12
         """
@@ -132,39 +153,24 @@ class ChokeModel(abc.ABC):
 
 class BernoulliChokeModel(ChokeModel):
 
-    def mass_flow_rate(self, u, p_in, p_out, rho_m):  # spec: CHK-6
+    def density_and_multiplier(self, s, A):  # spec: CHK-6
         """
-        Compute mass flow rate through choke using Bernoulli model
-            rho = rho_m
-            Phi = 1 (no two-phase correction)
-
-        :param u: Choke position in [0, 1] (dimensionless)
-        :param p_in: Upstream pressure (bar)
-        :param p_out: Downstream pressure (bar)
-        :param rho_m: Mixture density (kg/m³)
-        :return: Mass flow rate
+        Bernoulli model: the mixture density, and no two-phase correction (Phi = 1).
         """
-        return self.choke_equation(u, p_in, p_out, rho=rho_m, multiplier=1.0)
+        return s.rho_m, 1.0
 
 
 class SimpsonChokeModel(ChokeModel):
 
-    def mass_flow_rate(self, u, p_in, p_out, x_g, rho_g, rho_l):  # spec: CHK-5
+    def density_and_multiplier(self, s, A):  # spec: CHK-5
         """
-        Compute mass flow rate through choke with two-phase correction
-            rho = rho_l
-            Phi = multiplier of Simpson et al.
-
-        :param u: Choke position in [0, 1] (dimensionless)
-        :param p_in: Upstream pressure (bar)
-        :param p_out: Downstream pressure (bar)
-        :param x_g: Mass fraction of gas (dimensionless)
-        :param rho_g: Gas density (kg/m³)
-        :param rho_l: Liquid density (kg/m³)
-        :return: Mass flow rate
+        Two-phase correction of Simpson et al.: the liquid density, and Simpson's multiplier at the gas mass
+        fraction of the flow, x_g = w_g / w_m.
         """
-        Phi = self.simpson_multiplier(x_g, rho_g, rho_l)  # Two-phase correction multiplier
-        return self.choke_equation(u, p_in, p_out, rho=rho_l, multiplier=Phi)
+        w_g = A * s.alpha * s.rho_g * s.v_g  # Gas mass flow rate
+        w_l = A * (1 - s.alpha) * s.rho_l * s.v_l  # Liquid mass flow rate
+        x_g = w_g / (w_g + w_l)  # Mass fraction of gas
+        return s.rho_l, self.simpson_multiplier(x_g, s.rho_g, s.rho_l)
 
     @staticmethod
     def simpson_multiplier(x_g, rho_g, rho_l):  # spec: CHK-5

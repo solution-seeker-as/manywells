@@ -42,22 +42,19 @@ w_lg_values = np.linspace(1.0, 3.0, 8)
 # -- Run simulations --------------------------------------------------
 w_lg_list, w_oil_list, w_gas_list, w_water_list, T_wh_list = [], [], [], [], []
 
+sim = SSDFSimulator(wp)  # The well's system is built once; the boundary conditions are its parameters
 prev_solution = None
 for w_lg in w_lg_values:
     bc = BoundaryConditions(p_r=P_R, p_s=P_S, T_r=T_R, T_s=T_S, u=U_CHOKE, w_lg=w_lg, T_lg=T_LG)
-    sim = SSDFSimulator(wp, bc)
-
-    if prev_solution is not None:
-        sim.x_guess = prev_solution
 
     try:
-        x = sim.simulate()
+        op = sim.simulate(bc, x_guess=prev_solution)  # The previous operating point is an extra start
     except SimError as e:
         print(f"Simulation failed at w_lg = {w_lg:.2f} kg/s: {e}")
         continue
 
-    prev_solution = x
-    df = sim.solution_as_df(x)
+    prev_solution = op.x
+    df = sim.solution_as_df(op)
 
     A = wp.geometry.A
 
@@ -65,9 +62,8 @@ for w_lg in w_lg_values:
     wh = df.iloc[-1]
     w_gas_wh = A * wh["alpha"] * wh["rho_g"] * wh["v_g"]
 
-    # Bottom-hole pressure → reservoir inflow
-    p_bh = float(df["p"].iloc[0])
-    w_l_inflow = float(wp.inflow.liquid_mass_flow_rate(p_bh, bc.p_r))
+    # Reservoir inflow
+    w_l_inflow = op.w_res
     w_oil = fluid.f_o_in_liquid * w_l_inflow
     w_water = (1 - fluid.f_o_in_liquid) * w_l_inflow
 

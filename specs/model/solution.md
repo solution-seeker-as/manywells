@@ -70,6 +70,14 @@ Not part of the model; recorded because the verifier records which root v1.0.0 r
 - Its default initial guess marches up the well: $p_0 = p_r - 0.05\,(p_r - p_s)$ and $T_0 = T_r$; the bottom point's $(v_g, v_l, \alpha)$ from INF-6, INF-7 and SLIP-1 by Ipopt, starting from $\alpha = 0.5$; then each point from DISC-2 to DISC-5 and the closures by Ipopt, starting from the previous point. A user-supplied `x_guess` replaces the march.
 - It returns whichever root Ipopt reaches, which is the unstable trickle root in some cases (20 of the 141 cases in the case set). The dataset generators' warm starts are described in `specs/sampling.md`.
 
+## Informative: `develop`'s root search
+
+Not part of the model: only the operating point and the root set are specified (principle 6). Recorded so that a reader can follow `manywells.solvers` next to this file (principle 7).
+
+- `SSDFSimulator(wp)` builds the well's system once (DISC-11), with the operating point as parameters, and an Ipopt feasibility NLP on it. `root_set(bc)` solves it from up to eight starts: a given guess (`x_guess`), the default march from $p_0 = p_r - 0.05\,(p_r - p_s)$, and marches from $p_0 = p_s + f\,(p_r - p_s)$ for $f$ in 0.5, 0.7, 0.85, 0.975, 0.995 and 0.999. The march solves point 0's rows at fixed $p_0$, then each point's rows up the well, by Newton's method, and by Ipopt with v1.0.0's bounds where Newton fails.
+- A solve is accepted if Ipopt reports `Solve_Succeeded`, as the verifier's reference build requires, and the state is admissible (SOL-1). Solutions within the verifier's `tol_x` of each other are one root. Each root is labelled by SOL-3 from the residual's Jacobian, with the verifier's `label_min`. `simulate(bc)` returns the operating point of the root set (SOL-4 to SOL-6) and raises `NoOperatingPoint` without one.
+- Measured on the verifier's case set in the `v1.0.0` configuration (2026-10-01): every reference root found with the right label and no other root, a stable-root rate of 100% against v1.0.0's 74.3%, at 0.8 s to build a well's system and 1.6 s to search, per case. The starts after v1.0.0's (method A of the reference build) and the march's fallback are solver machinery, with their measured gains in `manywells/solvers/roots.py` and `march.py` (`plans/manywells-v2-plan.md`, Step 7).
+
 ## Coverage
 
 | ID | Paper | v1.0.0 code | Checked by |

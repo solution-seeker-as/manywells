@@ -102,7 +102,7 @@ def api_from_density(rho):  # spec: PVT-OIL-2
     return 141.5 / sg - 131.5
 
 
-def density_from_api(api):
+def density_from_api(api):  # spec: PVT-OIL-2
     """
     Compute oil density at standard reference conditions from API gravity
 
@@ -123,7 +123,7 @@ def density_from_api(api):
 # GAS DENSITY / SPECIFIC GRAVITY CONVERSIONS
 ################################################
 
-def gas_density_from_sg(sg_gas):
+def gas_density_from_sg(sg_gas):  # spec: PVT-GAS-6
     """
     Gas density at standard conditions from specific gravity relative to air.
 
@@ -133,7 +133,7 @@ def gas_density_from_sg(sg_gas):
     return P_REF * M_AIR * sg_gas / (R_UNIVERSAL * T_REF)
 
 
-def sg_from_gas_density(rho_g):
+def sg_from_gas_density(rho_g):  # spec: PVT-GAS-6
     """
     Gas specific gravity (relative to air) from density at standard conditions.
 
@@ -147,7 +147,7 @@ def sg_from_gas_density(rho_g):
 # MIXTURE VISCOSITY
 ################################################
 
-def mixture_viscosity(mu_l, mu_g, alpha, rho_l, rho_g):
+def mixture_viscosity(mu_l, mu_g, alpha, rho_l, rho_g):  # spec: PVT-MIX-9
     """
     Mass-weighted gas-liquid mixture viscosity (CasADi-compatible).
 

@@ -9,7 +9,7 @@ Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 Scripts for calibrating choke models
 """
 
-from copy import deepcopy
+from dataclasses import replace
 import pandas as pd
 import casadi as ca
 
@@ -35,15 +35,13 @@ def calibrate_bernoulli_choke_model(data: pd.DataFrame, choke: BernoulliChokeMod
     """
     assert isinstance(choke, BernoulliChokeModel), "Choke model is not of type BernoulliChokeModel"
 
-    choke = deepcopy(choke)
-
     K_c_init = choke.K_c
     x_guess = [K_c_init]
     lbx = [0]
     ubx = [1]
 
     K_c = ca.SX.sym(f'K_c')  # Tuning factor
-    choke.K_c = K_c  # Set choke coefficient to Casadi variable
+    unit_choke = replace(choke, K_c=1.0)  # The rate is linear in K_c: K_c times the rate at K_c = 1
     x_vec = ca.vertcat(K_c)
 
     ls_objective = 0  # Least-squares objective
@@ -56,7 +54,7 @@ def calibrate_bernoulli_choke_model(data: pd.DataFrame, choke: BernoulliChokeMod
         w_m = float(data_i['w_m'])
         rho_m = float(data_i['rho_m'])
 
-        g1 = w_m - choke.mass_flow_rate(u, p, p_s, rho_m)
+        g1 = w_m - K_c * unit_choke.choke_equation(u, p, p_s, rho=rho_m, multiplier=1.0)  # Bernoulli: Phi = 1
 
         ls_objective += g1**2
 
@@ -96,15 +94,13 @@ def calibrate_simpson_choke_model(data: pd.DataFrame, choke: SimpsonChokeModel):
     :param choke: Choke model
     :return: list of equations
     """
-    choke = deepcopy(choke)
-
     K_c_init = choke.K_c
     x_guess = [K_c_init]
     lbx = [0]
     ubx = [1]
 
     K_c = ca.SX.sym(f'K_c')  # Tuning factor
-    choke.K_c = K_c  # Set choke coefficient to Casadi variable
+    unit_choke = replace(choke, K_c=1.0)  # The rate is linear in K_c: K_c times the rate at K_c = 1
     x_vec = ca.vertcat(K_c)
 
     ls_objective = 0  # Least-squares objective
@@ -123,7 +119,8 @@ def calibrate_simpson_choke_model(data: pd.DataFrame, choke: SimpsonChokeModel):
         rho_l = float(data_i['rho_l'])
 
         # g1 = w_m ** 2 - choke.mass_flow_rate_squared(u, p, p_s, rho_m)
-        g1 = w_m - choke.mass_flow_rate(u, p, p_s, x_g, rho_g, rho_l)  # Choke model with correction
+        Phi = SimpsonChokeModel.simpson_multiplier(x_g, rho_g, rho_l)  # Two-phase correction multiplier
+        g1 = w_m - K_c * unit_choke.choke_equation(u, p, p_s, rho=rho_l, multiplier=Phi)  # Choke model with correction
 
         ls_objective += g1**2
 

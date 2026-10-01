@@ -21,10 +21,14 @@ jobs:
       - run: uv sync --locked
       - run: uv run pytest
 
-  # The verifier on v1.0.0's own solutions and the committed case set (specs/verification.md).
-  # Candidates (develop's v1-compatibility configuration, the Rust port) join here in Steps 7 and 8.
+  # The verifier on the committed case set (specs/verification.md): v1.0.0's own solutions, with its
+  # expected failures, and develop in its v1.0.0 configuration, with none. The Rust port joins in Step 8.
   verify:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        # An explicit bash adds -o pipefail, so a failing verifier fails the step despite the pipe into tee
+        shell: bash
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v10.2.0
@@ -34,4 +38,9 @@ jobs:
       - run: >
           uv run manywells-verify verification/data/v1_cold.parquet --data verification/data
           --expected-failures verification/expected_failures.csv --name "v1.0.0 (default guess)"
+          | tee -a "$GITHUB_STEP_SUMMARY"
+      - run: uv run python -m scripts.verification.develop_candidate develop.parquet
+      - run: >
+          uv run manywells-verify develop.parquet --data verification/data
+          --name "develop (v1.0.0 configuration)"
           | tee -a "$GITHUB_STEP_SUMMARY"

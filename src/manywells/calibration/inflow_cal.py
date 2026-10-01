@@ -9,7 +9,7 @@ Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 Tuning of inflow models
 """
 
-from copy import deepcopy
+from dataclasses import replace
 import pandas as pd
 import casadi as ca
 
@@ -24,21 +24,20 @@ def calibrate_inflow_model(data: pd.DataFrame, inflow_model: InflowModel):
     :param inflow_model: Inflow model
     :return: Optimal parameter value
     """
-    inflow_model = deepcopy(inflow_model)
-
     x = ca.SX.sym(f'x')  # Tuning factor
     x_vec = ca.vertcat(x)
 
+    # Both models are linear in their parameter, so the rate is x times the rate of a model whose parameter is 1
     if isinstance(inflow_model, Vogel):
         x_guess = [inflow_model.w_l_max]
         lbx = [0]
         ubx = [200]
-        inflow_model.w_l_max = x  # Set tuning factor to Casadi variable
+        unit_model = replace(inflow_model, w_l_max=1.0)
     elif isinstance(inflow_model, ProductivityIndex):
         x_guess = [inflow_model.k_l]
         lbx = [0]
         ubx = [200]
-        inflow_model.k_l = x  # Set tuning factor to Casadi variable
+        unit_model = replace(inflow_model, k_l=1.0)
     else:
         raise ValueError('Inflow model type not supported')
 
@@ -50,7 +49,7 @@ def calibrate_inflow_model(data: pd.DataFrame, inflow_model: InflowModel):
         p_r = float(data_i['p_r'])
         w_l = float(data_i['w_l'])
 
-        w_l_sim = inflow_model.liquid_mass_flow_rate(p, p_r)
+        w_l_sim = x * unit_model.liquid_mass_flow_rate(p, p_r)
 
         ls_objective += (w_l - w_l_sim)**2
 

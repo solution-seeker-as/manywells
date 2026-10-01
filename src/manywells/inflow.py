@@ -7,8 +7,6 @@ Created 27 February 2024
 Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
 Implementation of inflow performance relationships
-
-TODO: Test constant flow model
 """
 
 import abc
@@ -36,7 +34,7 @@ class InflowModel(abc.ABC):
         pass
 
 
-@dataclass
+@dataclass(frozen=True)
 class ProductivityIndex(InflowModel):
     """
     Productivity index (PI) model:
@@ -53,7 +51,8 @@ class ProductivityIndex(InflowModel):
     k_l: float    # Liquid productivity index (kg/s/bar)
 
     def __post_init__(self):
-        assert self.k_l >= 0, 'Liquid productivity index must be non-negative'
+        if not self.k_l >= 0:
+            raise ValueError('Liquid productivity index must be non-negative')
 
     def liquid_mass_flow_rate(self, p, p_r):
         """
@@ -66,7 +65,7 @@ class ProductivityIndex(InflowModel):
         return self.k_l * (p_r - p)  # spec: INF-2
 
 
-@dataclass
+@dataclass(frozen=True)
 class Vogel(InflowModel):
     """
     Vogel's inflow performance relationship (IPR):
@@ -83,7 +82,8 @@ class Vogel(InflowModel):
     w_l_max: float    # Maximum liquid mass flow rate (kg/s)
 
     def __post_init__(self):
-        assert self.w_l_max >= 0, 'Maximum liquid mass flow rate must be non-negative'
+        if not self.w_l_max >= 0:
+            raise ValueError('Maximum liquid mass flow rate must be non-negative')
 
     def liquid_mass_flow_rate(self, p, p_r):
         """
@@ -97,7 +97,7 @@ class Vogel(InflowModel):
         return self.w_l_max * (1 - 0.2 * r - 0.8 * r ** 2)  # spec: INF-1
 
 
-@dataclass
+@dataclass(frozen=True)
 class FixedFlowRate(InflowModel):
     """
     Fixed flow rate model:
@@ -110,7 +110,8 @@ class FixedFlowRate(InflowModel):
     w_l_const: float    # Constant liquid mass flow rate (kg/s)
 
     def __post_init__(self):
-        assert self.w_l_const >= 0, 'Liquid mass flow rate must be non-negative'
+        if not self.w_l_const >= 0:
+            raise ValueError('Liquid mass flow rate must be non-negative')
 
     def liquid_mass_flow_rate(self, p, p_r):
         """
@@ -120,6 +121,4 @@ class FixedFlowRate(InflowModel):
         :param p_r: Reservoir pressure (bar) -- ignored
         :return: Liquid mass flow rate, w_l (kg/s)
         """
-        return self.w_l_const
-
-
+        return self.w_l_const  # spec: INF-8

@@ -8,9 +8,10 @@ Unified fluid model for wellbore simulations.
 
 from dataclasses import dataclass
 
+from manywells.ca_functions import ca_min_approx, ca_max_approx
 from manywells.pvt import (
     R_UNIVERSAL, P_REF, T_REF,
-    api_from_density, gas_density_from_sg, sg_from_gas_density,
+    api_from_density, gas_density_from_sg, sg_from_gas_density, mixture_viscosity,
 )
 from manywells.pvt.gas import (gas_z_factor, gas_viscosity as _gas_viscosity)
 from manywells.pvt.black_oil import BlackOilPVT, live_oil_viscosity, live_oil_surface_tension
@@ -19,7 +20,11 @@ from manywells.pvt.water import water_viscosity
 from manywells.units import M_AIR, CF_BAR, CF_RS
 
 
-@dataclass
+OIL_MODELS = ('black_oil', 'dead_oil')
+SURFACE_TENSION_MODELS = ('oil', 'liquid')
+
+
+@dataclass(frozen=True)
 class FluidModel:
     """
     Unified fluid model for three-phase wellbore flow (gas, oil, water).
@@ -27,10 +32,13 @@ class FluidModel:
     Parameterized by phase densities at standard conditions, gas-oil ratio,
     and water-liquid ratio.  The oil model ('black_oil' or 'dead_oil') controls
     whether pressure-dependent solution gas (Rs) and formation volume factor
-    (Bo) are computed.  The gas model (ideal_gas flag) controls whether the
-    z-factor correlation is used.
+    (Bo) are computed, and with it whether gas dissolves into the oil.  The gas
+    model (ideal_gas flag) controls whether the z-factor correlation is used.
+    The surface tension model chooses the density the dead-oil correlation is
+    evaluated at: the oil's at standard conditions with a live-oil correction
+    ('oil'), or the local liquid density ('liquid', as in v1.0.0).
 
-    All pressure arguments to methods are in bar; temperatures in Kelvin.
+    All pressures, in fields and method arguments, are in bar; temperatures in Kelvin.
 
     Users who prefer API gravity or gas specific gravity can use the helpers
     ``density_from_api`` and ``gas_density_from_sg``::
@@ -48,13 +56,14 @@ class FluidModel:
     wlr: float = 0.0            # Water-liquid ratio (also known as water cut), in [0, 1)
 
     # Model selection
-    oil_model: str = 'black_oil'    # 'black_oil' or 'dead_oil'
-    ideal_gas: bool = False         # True: z=1 (ideal gas law); False: Papay correlation
+    oil_model: str = 'black_oil'          # One of OIL_MODELS
+    ideal_gas: bool = False               # True: z=1 (ideal gas law); False: Papay correlation
+    surface_tension_model: str = 'oil'    # One of SURFACE_TENSION_MODELS
 
     # Separator / bubble point (used by black oil correlations)
-    p_sep: float = P_REF       # Separator pressure (Pa)
-    T_sep: float = T_REF       # Separator temperature (K)
-    p_bubble: float = None     # Bubble point pressure (Pa), or None
+    p_sep: float = P_REF / CF_BAR   # Separator pressure (bar)
+    T_sep: float = T_REF            # Separator temperature (K)
+    p_bubble: float = None          # Bubble point pressure (bar), or None
 
     # Heat capacities (J/kg/K)
     cp_g: float = 2225.0
@@ -62,21 +71,26 @@ class FluidModel:
     cp_w: float = 4184.0
 
     def __post_init__(self):
-        self._api = api_from_density(self.rho_o)
-        self._sg_gas = sg_from_gas_density(self.rho_g)
+        if self.oil_model not in OIL_MODELS:
+            raise ValueError(f"Unknown oil_model: {self.oil_model!r}")
+        if self.surface_tension_model not in SURFACE_TENSION_MODELS:
+            raise ValueError(f"Unknown surface_tension_model: {self.surface_tension_model!r}")
+        if not 0 <= self.wlr < 1:
+            raise ValueError('Water-liquid ratio must be in [0, 1)')
 
+        object.__setattr__(self, '_api', api_from_density(self.rho_o))
+        object.__setattr__(self, '_sg_gas', sg_from_gas_density(self.rho_g))
+
+        black_oil = None
         if self.oil_model == 'black_oil':
-            self._black_oil = BlackOilPVT(
+            black_oil = BlackOilPVT(
                 api=self._api,
                 sg_gas=self._sg_gas,
-                p_sep=self.p_sep,
+                p_sep=self.p_sep * CF_BAR,
                 T_sep=self.T_sep,
-                p_bubble=self.p_bubble,
+                p_bubble=None if self.p_bubble is None else self.p_bubble * CF_BAR,
             )
-        elif self.oil_model == 'dead_oil':
-            self._black_oil = None
-        else:
-            raise ValueError(f"Unknown oil_model: {self.oil_model!r}")
+        object.__setattr__(self, '_black_oil', black_oil)
 
     # ------------------------------------------------------------------
     # Derived properties
@@ -93,35 +107,33 @@ class FluidModel:
         return self._sg_gas
 
     @property
-    def R_s(self) -> float:
+    def R_s(self) -> float:  # spec: PVT-GAS-6
         """Specific gas constant of the gas phase (J/(kg K)). NOTE: Easily confused with the solution gas-oil ratio (Rs)"""
         return R_UNIVERSAL / (M_AIR * self._sg_gas)
 
     @property
-    def M_g(self) -> float:
+    def M_g(self) -> float:  # spec: PVT-GAS-6
         """Gas molecular weight (g/mol = kg/kmol)."""
         return M_AIR * self._sg_gas
 
     @property
-    def rho_l(self) -> float:
+    def rho_l(self) -> float:  # spec: PVT-MIX-10
         """Liquid density at standard conditions (kg/m3)."""
         return self.wlr * self.rho_w + (1 - self.wlr) * self.rho_o
 
     @property
-    def cp_l(self) -> float:
+    def cp_l(self) -> float:  # spec: PVT-MIX-10
         """Liquid specific heat capacity (J/kg/K), volume-weighted."""
         return self.wlr * self.cp_w + (1 - self.wlr) * self.cp_o
 
     @property
-    def f_g(self) -> float:
+    def f_g(self) -> float:  # spec: PVT-MIX-10
         """Gas mass fraction at standard conditions."""
-        if self.wlr >= 1.0:
-            return 0.0
         denom = self.rho_g * self.gor + self.rho_o + self.rho_w * self.wlr / (1 - self.wlr)
         return (self.rho_g * self.gor) / denom
 
     @property
-    def f_o_in_liquid(self) -> float:
+    def f_o_in_liquid(self) -> float:  # spec: PVT-MIX-10
         """Oil mass fraction in the liquid phase at standard conditions."""
         if self.rho_l == 0:
             return 0.0
@@ -136,7 +148,7 @@ class FluidModel:
     # Unified PVT methods
     # ------------------------------------------------------------------
 
-    def rs(self, p, T):
+    def rs(self, p, T):  # spec: PVT-OIL-4
         """
         Solution gas-oil ratio at (p, T).
 
@@ -150,7 +162,7 @@ class FluidModel:
             return self._black_oil.rs(p * CF_BAR, T)
         return 0
 
-    def bo(self, p, T):
+    def bo(self, p, T):  # spec: PVT-OIL-4
         """
         Oil formation volume factor at (p, T).
 
@@ -164,7 +176,7 @@ class FluidModel:
             return self._black_oil.bo(p * CF_BAR, T)
         return 1.0
 
-    def z_factor(self, p, T):
+    def z_factor(self, p, T):  # spec: PVT-GAS-4
         """
         Gas compressibility factor at (p, T).
 
@@ -178,7 +190,7 @@ class FluidModel:
             return 1.0
         return gas_z_factor(p * CF_BAR, T, self._sg_gas)
 
-    def gas_density(self, p, T):  # spec: PVT-GAS-1
+    def gas_density(self, p, T):  # spec: PVT-GAS-1, PVT-GAS-3
         """
         Gas density at (p, T) from the real gas equation of state.
 
@@ -189,7 +201,22 @@ class FluidModel:
         Z = self.z_factor(p, T)
         return CF_BAR * p / (Z * self.R_s * T)
 
-    def liquid_density(self, p, T):
+    def gas_law_row(self, p, T, rho_g):  # spec: PVT-GAS-1, PVT-GAS-3
+        """
+        The gas law as a row of the discretized system, in its canonical form p - rho_g Z R_s T / c_bar (bar),
+        zero where rho_g is the gas density at (p, T).
+
+        The form matters to the solver, not to the roots: in bar, like the momentum row, it lets Ipopt converge in
+        fewer iterations and more tightly than the density form rho_g - gas_density(p, T).
+
+        :param p: Pressure (bar), may be CasADi symbolic
+        :param T: Temperature (K), may be CasADi symbolic
+        :param rho_g: Gas density (kg/m3), may be CasADi symbolic
+        :return: Row value (bar)
+        """
+        return p - rho_g * self.z_factor(p, T) * self.R_s * T / CF_BAR
+
+    def liquid_density(self, p, T):  # spec: PVT-MIX-1, PVT-MIX-6, PVT-OIL-9
         """
         Liquid density at (p, T).
 
@@ -205,7 +232,7 @@ class FluidModel:
         rho_live_oil = (self.rho_o + Rs_i * self.rho_g) / Bo_i
         return self.wlr * self.rho_w + (1 - self.wlr) * rho_live_oil
 
-    def liquid_viscosity(self, p, T):
+    def liquid_viscosity(self, p, T):  # spec: PVT-MIX-8
         """
         Liquid mixture viscosity at (p, T) (CasADi-compatible).
 
@@ -227,26 +254,78 @@ class FluidModel:
     def gas_viscosity(self, T, rho_g):
         """Gas viscosity at (T, rho_g) (CasADi-compatible)."""
         return _gas_viscosity(T, rho_g, self.M_g)
-    
-    def surface_tension(self, p, T):
-        """
-        Oil-gas surface tension at (p, T) (CasADi-compatible).
 
-        For dead oil, depends only on density and temperature.
-        For black oil, the Abdul-Majeed correction reduces surface
-        tension to account for dissolved gas.
+    def mixture_viscosity(self, p, T, alpha, rho_g, rho_l):
+        """
+        Gas-liquid mixture viscosity at a point (CasADi-compatible), mass-weighted.
 
         :param p: Pressure (bar), may be CasADi symbolic
         :param T: Temperature (K), may be CasADi symbolic
-        :return: Oil-gas surface tension (J/m2)
+        :param alpha: Void fraction, may be CasADi symbolic
+        :param rho_g: Gas density (kg/m3), may be CasADi symbolic
+        :param rho_l: Liquid density (kg/m3), may be CasADi symbolic
+        :return: Mixture viscosity (Pa-s)
         """
-        sigma = dead_oil_surface_tension(self.rho_o, T)
+        mu_l = self.liquid_viscosity(p, T)
+        mu_g = self.gas_viscosity(T, rho_g)
+        return mixture_viscosity(mu_l, mu_g, alpha, rho_l=rho_l, rho_g=rho_g)
+
+    def surface_tension(self, p, T, rho_l):
+        """
+        Gas-liquid surface tension at a point (CasADi-compatible).
+
+        With surface_tension_model='oil', the dead-oil correlation at the oil
+        density at standard conditions; for black oil, the Abdul-Majeed
+        correction reduces it to account for dissolved gas.  With 'liquid',
+        the dead-oil correlation at the local liquid density, as in v1.0.0.
+
+        :param p: Pressure (bar), may be CasADi symbolic
+        :param T: Temperature (K), may be CasADi symbolic
+        :param rho_l: Liquid density at the point (kg/m3), may be CasADi symbolic
+        :return: Gas-liquid surface tension (J/m2)
+        """
+        if self.surface_tension_model == 'liquid':
+            return dead_oil_surface_tension(rho_l, T)  # spec: PVT-MIX-5
+        sigma = dead_oil_surface_tension(self.rho_o, T)  # spec: PVT-MIX-7
         if self._black_oil is not None:
             Rs_scf = self.rs(p, T) / CF_RS
             sigma = live_oil_surface_tension(sigma, Rs_scf)
         return sigma
 
-    def dissolved_gas(self, p, T, w_o):
+    def dissolved_gas(self, p, T, w_o):  # spec: PVT-OIL-13
         """Dissolved gas mass at (p, T) for a given oil mass flow rate w_o (kg/s)."""
         Rs = self.rs(p, T)  # Solution gas-oil ratio (Sm3/Sm3) - returns 0 for dead oil
         return Rs * self.rho_g / self.rho_o * w_o
+
+    # ------------------------------------------------------------------
+    # Phase mass rates
+    # ------------------------------------------------------------------
+
+    def reservoir_gas_rate(self, w_res):  # spec: INF-4
+        """
+        Gas mass flow rate from the reservoir, by the gas mass fraction at standard conditions.
+
+        :param w_res: Liquid mass flow rate from the reservoir (kg/s), may be CasADi symbolic
+        :return: Gas mass flow rate from the reservoir (kg/s)
+        """
+        return (self.f_g / (1 - self.f_g)) * w_res
+
+    def phase_rates(self, p, T, w_res, w_lg):
+        """
+        Gas and liquid mass flow rates at (p, T), given the reservoir liquid rate and the lift gas rate.
+
+        Dead oil has no mass transfer: the rates are the same at every point, exactly.  With black oil,
+        gas dissolves into the oil up to the solution gas-oil ratio at (p, T).
+
+        :param p: Pressure (bar), may be CasADi symbolic
+        :param T: Temperature (K), may be CasADi symbolic
+        :param w_res: Liquid mass flow rate from the reservoir (kg/s), may be CasADi symbolic
+        :param w_lg: Lift gas mass flow rate (kg/s), may be CasADi symbolic
+        :return: Gas and liquid mass flow rates, (w_g, w_l) (kg/s)
+        """
+        w_g_res = self.reservoir_gas_rate(w_res)
+        if self._black_oil is None:
+            return w_g_res + w_lg, w_res  # spec: INF-5
+        w_o = w_res * self.f_o_in_liquid  # Oil mass flow rate
+        w_d = ca_min_approx(self.dissolved_gas(p, T, w_o), w_g_res)  # Dissolved gas mass flow rate
+        return ca_max_approx(w_g_res + w_lg - w_d, 0.0), w_res + w_d  # spec: PVT-OIL-13

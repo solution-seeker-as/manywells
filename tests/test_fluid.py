@@ -7,8 +7,13 @@ from manywells.pvt import (
     density_from_api, api_from_density,
     gas_density_from_sg, sg_from_gas_density,
 )
-from manywells.units import M_AIR, CF_PSI
+import dataclasses
+
+from manywells.units import M_AIR, CF_PSI, CF_BAR
+from manywells.pvt.dead_oil import dead_oil_surface_tension
 from manywells.pvt.fluid import FluidModel
+
+RHO_L = 800.0  # Liquid density at the point (kg/m3); the 'oil' surface tension model does not use it
 
 
 class TestHelperRoundtrips:
@@ -158,14 +163,14 @@ class TestDeadOilUnifiedInterface:
 
     def test_surface_tension_positive(self):
         fl = FluidModel(oil_model='dead_oil')
-        sigma = float(fl.surface_tension(100.0, 273.15 + 60))
+        sigma = float(fl.surface_tension(100.0, 273.15 + 60, RHO_L))
         assert sigma > 0
 
     def test_surface_tension_ignores_pressure(self):
         fl = FluidModel(oil_model='dead_oil')
         T = 273.15 + 60
-        s1 = float(fl.surface_tension(50.0, T))
-        s2 = float(fl.surface_tension(300.0, T))
+        s1 = float(fl.surface_tension(50.0, T, RHO_L))
+        s2 = float(fl.surface_tension(300.0, T, RHO_L))
         assert s1 == pytest.approx(s2)
 
 
@@ -177,7 +182,7 @@ class TestBlackOilUnifiedInterface:
             rho_o=density_from_api(30),
             rho_g=gas_density_from_sg(0.65),
             gor=150.0, wlr=0.0,
-            p_sep=200 * CF_PSI, T_sep=333.15,
+            p_sep=200 * CF_PSI / CF_BAR, T_sep=333.15,  # bar
         )
 
     def test_rs_positive_at_pressure(self):
@@ -217,20 +222,20 @@ class TestBlackOilUnifiedInterface:
         )
         fl_live = self._make()
         p, T = 150.0, 273.15 + 80
-        sigma_dead = float(fl_dead.surface_tension(p, T))
-        sigma_live = float(fl_live.surface_tension(p, T))
+        sigma_dead = float(fl_dead.surface_tension(p, T, RHO_L))
+        sigma_live = float(fl_live.surface_tension(p, T, RHO_L))
         assert sigma_live < sigma_dead
 
     def test_surface_tension_positive(self):
         fl = self._make()
-        sigma = float(fl.surface_tension(200.0, 273.15 + 80))
+        sigma = float(fl.surface_tension(200.0, 273.15 + 80, RHO_L))
         assert sigma > 0
 
     def test_surface_tension_decreases_with_pressure(self):
         fl = self._make()
         T = 273.15 + 80
-        sigma_low = float(fl.surface_tension(50.0, T))
-        sigma_high = float(fl.surface_tension(250.0, T))
+        sigma_low = float(fl.surface_tension(50.0, T, RHO_L))
+        sigma_high = float(fl.surface_tension(250.0, T, RHO_L))
         assert sigma_high < sigma_low
 
 
@@ -263,3 +268,76 @@ class TestGasViscosity:
         fl = FluidModel()
         mu = float(fl.gas_viscosity(273.15 + 60, 50.0))
         assert mu > 0
+
+
+class TestFrozenAndValidated:
+
+    def test_frozen(self):
+        fl = FluidModel()
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            fl.rho_o = 900.0
+        with pytest.raises(dataclasses.FrozenInstanceError):
+            fl.rho_l_typo = 900.0  # an assignment to a field that does not exist fails too
+
+    def test_invalid_surface_tension_model(self):
+        with pytest.raises(ValueError, match="surface_tension_model"):
+            FluidModel(surface_tension_model='water')
+
+    def test_invalid_wlr(self):
+        with pytest.raises(ValueError, match="Water-liquid ratio"):
+            FluidModel(wlr=1.0)
+
+
+class TestSurfaceTensionModels:
+
+    def test_liquid_model_uses_the_local_liquid_density(self):
+        """'liquid' is v1.0.0's: the dead-oil correlation at the state's rho_l (PVT-MIX-5)."""
+        fl = FluidModel(oil_model='dead_oil', surface_tension_model='liquid')
+        T = 330.0
+        for rho_l in (750.0, 850.0, 950.0):
+            assert float(fl.surface_tension(100.0, T, rho_l)) == float(dead_oil_surface_tension(rho_l, T))
+
+    def test_oil_model_ignores_the_local_liquid_density(self):
+        fl = FluidModel(oil_model='dead_oil')
+        T = 330.0
+        assert float(fl.surface_tension(100.0, T, 750.0)) == float(dead_oil_surface_tension(fl.rho_o, T))
+        assert float(fl.surface_tension(100.0, T, 950.0)) == float(dead_oil_surface_tension(fl.rho_o, T))
+
+
+class TestPhaseRates:
+
+    def test_reservoir_gas_rate(self):
+        fl = FluidModel()
+        assert fl.reservoir_gas_rate(10.0) == pytest.approx(10.0 * fl.f_g / (1 - fl.f_g))
+
+    def test_dead_oil_rates_are_exact_and_independent_of_p_and_T(self):
+        """Dead oil has no mass transfer (BAL-3): the rates are the reservoir's plus the lift gas, exactly."""
+        fl = FluidModel(oil_model='dead_oil')
+        w_res, w_lg = 12.0, 0.7
+        for p, T in ((20.0, 290.0), (300.0, 400.0)):
+            w_g, w_l = fl.phase_rates(p, T, w_res, w_lg)
+            assert w_g == fl.reservoir_gas_rate(w_res) + w_lg
+            assert w_l == w_res
+
+    def test_black_oil_conserves_mass_and_dissolves_gas(self):
+        fl = FluidModel()
+        w_res, w_lg = 12.0, 0.7
+        total = fl.reservoir_gas_rate(w_res) + w_lg + w_res
+        w_g_lo, w_l_lo = (float(v) for v in fl.phase_rates(50.0, 350.0, w_res, w_lg))
+        w_g_hi, w_l_hi = (float(v) for v in fl.phase_rates(250.0, 350.0, w_res, w_lg))
+        assert w_g_lo + w_l_lo == pytest.approx(total, rel=1e-6)
+        assert w_g_hi + w_l_hi == pytest.approx(total, rel=1e-6)
+        assert w_l_hi > w_l_lo > w_res  # more gas dissolves at higher pressure
+
+
+class TestPressuresInBar:
+
+    def test_bubble_point_in_bar_caps_rs(self):
+        fl = FluidModel(p_bubble=150.0)
+        T = 360.0
+        assert float(fl.rs(250.0, T)) == pytest.approx(float(fl.rs(150.0, T)), rel=1e-3)
+        assert float(fl.rs(100.0, T)) < float(fl.rs(150.0, T))
+
+    def test_default_separator_pressure_is_standard_pressure(self):
+        assert FluidModel().p_sep == pytest.approx(P_REF / CF_BAR)
+

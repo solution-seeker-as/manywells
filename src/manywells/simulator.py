@@ -7,23 +7,31 @@ Created 02 February 2024
 Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
 Implementation of the steady-state drift flux model for two-phase flow in wellbores
+
+The simulator builds a well's discretized system once (manywells.discretization), with the operating point as
+parameters, and finds its roots (manywells.solvers). The model's answer is a root set, each root labelled stable
+or unstable; the operating point is the stable root (specs/model/solution.md).
 """
 
+import logging
+import warnings
 from dataclasses import dataclass, field
 
-import casadi as ca
 import numpy as np
 import pandas as pd
 
+from manywells.choke import ChokeModel, BernoulliChokeModel
+from manywells.discretization import STATE, DIM_X, build_system
+from manywells.friction import FrictionModel, RoughnessFriction
 from manywells.geometry import WellGeometry
-from manywells.units import STD_GRAVITY, CF_BAR
-from manywells.choke import ChokeModel, BernoulliChokeModel, SimpsonChokeModel
-from manywells.friction import friction_factor
-from manywells.inflow import InflowModel, ProductivityIndex, Vogel
-import manywells.pvt as pvt
+from manywells.inflow import InflowModel, ProductivityIndex
 from manywells.pvt.fluid import FluidModel
 from manywells.slip import SlipModel
-from manywells.ca_functions import ca_min_approx, ca_max_approx
+from manywells.solution import Root, RootSet
+from manywells.solvers.roots import RootFinder
+from manywells.thermal import ThermalModel
+
+log = logging.getLogger('manywells')
 
 
 class SimError(Exception):
@@ -31,8 +39,18 @@ class SimError(Exception):
     pass
 
 
-@dataclass
+class NoOperatingPoint(SimError):
+    """The well has no stable root at these conditions, so it cannot flow (SOL-5). The root set is in root_set."""
+
+    def __init__(self, root_set: RootSet):
+        n = len(root_set.roots)
+        super().__init__(f'no stable root: the search found {n} root(s), none of them stable')
+        self.root_set = root_set
+
+
+@dataclass(frozen=True)
 class WellProperties:
+    """A well: one object per model part. The defaults are develop's model."""
 
     # Well geometry
     geometry: WellGeometry = field(default_factory=lambda: WellGeometry.vertical(length=2000, n_cells=100))
@@ -41,13 +59,10 @@ class WellProperties:
     fluid: FluidModel = field(default_factory=FluidModel)
 
     # Friction
-    # Roughness of new/smooth Tubing: 0.0015 to 0.045 mm = 1.5e-6 to 4.5e-5 m
-    # Roughness of commercial/welded steel: 0.045 mm = 4.5e-5 m
-    roughness: float = 4.5e-5  # Pipe wall roughness (m). Default: commercial steel.
-    f_D: float = None          # Fixed Darcy friction factor (overrides roughness-based calculation when set)
+    friction: FrictionModel = field(default_factory=RoughnessFriction)
 
     # Heat transfer
-    h: float = 20.0         # Heat transfer coefficient (W/m²/K)
+    thermal: ThermalModel = field(default_factory=ThermalModel)
 
     # Slip relation
     slip: SlipModel = field(default_factory=SlipModel)
@@ -55,16 +70,21 @@ class WellProperties:
     # Productivity
     inflow: InflowModel = field(default_factory=lambda: ProductivityIndex(k_l=0.5))
 
-    # Choke model
+    # Choke model. None means a Bernoulli choke with K_c = 10% of the pipe's cross-section.
     choke: ChokeModel = None
 
     def __post_init__(self):
-        assert self.roughness > 0, 'Pipe roughness must be positive'
-        if self.f_D is not None:
-            assert self.f_D > 0, 'Friction factor must be positive'
+        for name, cls in (('geometry', WellGeometry), ('fluid', FluidModel), ('friction', FrictionModel),
+                          ('thermal', ThermalModel), ('slip', SlipModel), ('inflow', InflowModel)):
+            if not isinstance(getattr(self, name), cls):
+                raise ValueError(f'{name} must be a {cls.__name__}, got {type(getattr(self, name)).__name__}')
+        if self.choke is None:
+            object.__setattr__(self, 'choke', BernoulliChokeModel(K_c=0.1 * self.geometry.A))
+        elif not isinstance(self.choke, ChokeModel):
+            raise ValueError(f'choke must be a ChokeModel, got {type(self.choke).__name__}')
 
 
-@dataclass
+@dataclass(frozen=True)
 class BoundaryConditions:
     # Pressures
     p_r: float = 170          # Upstream reservoir pressure (bar)
@@ -80,528 +100,117 @@ class BoundaryConditions:
     w_lg: float = 0.          # Lift gas mass flow rate (kg/s). Default value is 0. Assumed injected at z=0.
 
     def __post_init__(self):
-        assert self.p_r > 0, 'Reservoir pressure must be positive'
-        assert self.p_s > 0, 'Separator pressure must be positive'
-        
-        assert self.T_r > 0, 'Reservoir temperature must be positive'
-        assert self.T_s > 0, 'Ambient temperature must be positive'
-        if self.T_lg is not None:
-            assert self.T_lg > 0, 'Lift gas temperature must be positive'
-        
-        assert 0 <= self.u <= 1, 'Choke opening must be in [0, 1]'
-        assert 0 <= self.w_lg, 'Gas lift rate must be non-negative'
+        checks = [
+            (self.p_r > 0, 'Reservoir pressure must be positive'),
+            (self.p_s > 0, 'Separator pressure must be positive'),
+            (self.T_r > 0, 'Reservoir temperature must be positive'),
+            (self.T_s > 0, 'Ambient temperature must be positive'),
+            (self.T_lg is None or self.T_lg > 0, 'Lift gas temperature must be positive'),
+            (0 <= self.u <= 1, 'Choke opening must be in [0, 1]'),
+            (0 <= self.w_lg, 'Gas lift rate must be non-negative'),
+        ]
+        for ok, message in checks:
+            if not ok:
+                raise ValueError(message)
 
 
 class SSDFSimulator:
     """
     Implementation of the steady-state drift-flux model
+
+        sim = SSDFSimulator(wp)          # validates and builds the well's system once
+        op = sim.simulate(bc)            # the operating point, a Root; raises NoOperatingPoint
+        rs = sim.root_set(bc)            # every root found, labelled; empty if the well cannot flow
+        df = sim.solution_as_df(op)      # per point: state, md, tvd, flow regime
+
+    The pipe is discretized into n cells (see WellGeometry object). The state holds the following variables at each
+    of the n + 1 grid points (in the given order), from the bottomhole to the wellhead:
+        x = [p, v_g, v_l, alpha, rho_g, rho_l, T],
+    where p is pressure, v_g and v_l are gas and liquid velocities, alpha is the volumetric fraction of gas,
+    rho_g and rho_l are the gas and liquid densities, and T is temperature.
+
+    Deprecated: SSDFSimulator(wp, bc) with simulate() and the x_guess attribute, which returns the operating point's
+    state as a flat list. It is removed with the CasADi backend.
     """
 
-    def __init__(self, well_properties: WellProperties, boundary_conditions: BoundaryConditions):
+    def __init__(self, well_properties: WellProperties, boundary_conditions: BoundaryConditions = None):
         """
-        Initialize steady-state drift-flux model simulator
-
-        The pipe is discretized into n cells (see WellGeometry object)
-        Variables x_i and equations g_i are indexed at grid points i = 0, ..., n.
-        State x_0 represents the left boundary (bottom of the well).
-        State x_n represents the right boundary (top of the well / surface).
-        The state holds the following variables (in the given order)
-            x = [p, v_g, v_l, alpha, rho_g, rho_l, T],
-        where p is pressure, v_g and v_l are gas and liquid velocities, alpha is the volumetric fraction of gas,
-        rho_g and rho_l are the gas and liquid densities, and T is temperature.
-
         :param well_properties: Well properties (object of type WellProperties)
-        :param boundary_conditions: Boundary conditions (object of type BoundaryConditions)
+        :param boundary_conditions: Deprecated; pass the boundary conditions to simulate() instead
         """
+        if boundary_conditions is not None:
+            warnings.warn('SSDFSimulator(wp, bc) is deprecated: use SSDFSimulator(wp) and simulate(bc), which returns '
+                          'the operating point as a Root', DeprecationWarning, stacklevel=2)
         self.wp = well_properties       # Well properties
-        self.bc = boundary_conditions   # Boundary conditions
+        self.bc = boundary_conditions   # Boundary conditions of the deprecated simulate()
+        self.x_guess = None             # Initial guess of the deprecated simulate()
+
         self.geo = well_properties.geometry  # Convenience alias
         self.n_cells = self.geo.n_cells
-        self.dim_x = 7                  # Dimension of state variables
-        self.x_guess = None             # Initial guess on solution
+        self.dim_x = DIM_X
+        self.variable_names = list(STATE)  # Ordering is important
 
-        self.variable_names = ['p', 'v_g', 'v_l', 'alpha', 'rho_g', 'rho_l', 'T']  # Ordering is important
+        self.system = build_system(well_properties)
+        self._roots = RootFinder(self.system)
 
-        # Initialize choke model if not provided
-        if self.wp.choke is None:
-            self.wp.choke = BernoulliChokeModel(K_c=0.1 * self.geo.A)
-
-    @staticmethod
-    def _create_variables(cell_index: int):
+    def root_set(self, bc: BoundaryConditions, x_guess=None) -> RootSet:
         """
-        Create variables for cell i=cell_index
+        Every root the search finds at the operating point bc, each labelled stable, unstable or indeterminate,
+        sorted by bottomhole pressure, and the operating point.
 
-        :param cell_index: Cell index used in variable names
-        :return: List of variables with order [p, v_g, v_l, alpha, rho_g, rho_l, T]
+        :param bc: Boundary conditions
+        :param x_guess: An extra start for the search, such as the root of a nearby operating point
+        :return: The root set
         """
-        i = cell_index
+        rs = self._roots.find(bc, x_guess=x_guess)
+        failed = [a for a in rs.search if not a.outcome.startswith('root')]
+        if failed:
+            log.debug('%d of %d starts found no root: %s', len(failed), len(rs.search),
+                      '; '.join(f'{a.start}: {a.outcome}' for a in failed))
+        return rs
 
-        p = ca.SX.sym(f'p_{i}')
-        v_g = ca.SX.sym(f'v_g_{i}')
-        v_l = ca.SX.sym(f'v_l_{i}')
-        alpha = ca.SX.sym(f'alpha_{i}')
-        rho_g = ca.SX.sym(f'rho_g_{i}')
-        rho_l = ca.SX.sym(f'rho_l_{i}')
-        T = ca.SX.sym(f'T_{i}')
-
-        return [p, v_g, v_l, alpha, rho_g, rho_l, T]
-
-    def _gas_and_liquid_flow_rate(self, p, T, w_l_inflow):
+    def simulate(self, bc: BoundaryConditions = None, x_guess=None):
         """
-        Computes gas and liquid mass flow rates at a given pressure and temperature.
-        If a black oil model is used, phase transfer is incorporated (gas dissolved in oil).
+        The operating point at bc: the stable root, or the one with the lowest bottomhole pressure if there are
+        several (SOL-4 to SOL-6).
 
-        :param p: In-situ pressure (bar)
-        :param T: In-situ temperature (K)
-        :param w_l_inflow: Liquid mass flow rate from reservoir (kg/s)
-        :return: Liquid and gas mass flow rates (kg/s)
+        :param bc: Boundary conditions. Deprecated: None, with the boundary conditions given to the constructor
+        :param x_guess: An extra start for the search; it makes the search faster, not the answer different
+        :return: The operating point (Root); a flat list of its state in the deprecated form
+        :raises NoOperatingPoint: if there is no stable root
         """
-        bc = self.bc
-        fl = self.wp.fluid
-
-        # spec: INF-4
-        w_g = (fl.f_g / (1 - fl.f_g)) * w_l_inflow  # Gas mass flow rate from reservoir
-        w_lg = bc.w_lg  # Lift gas mass flow rate
-        w_o = w_l_inflow * fl.f_o_in_liquid  # Oil mass flow rate
-        w_g_dissolved = ca_min_approx(fl.dissolved_gas(p, T, w_o), w_g)  # Dissolved gas mass flow rate
-        w_g_total = ca_max_approx(w_g + w_lg - w_g_dissolved, 0.0)
-        w_l_total = w_l_inflow + w_g_dissolved
-        return w_g_total, w_l_total
-
-    def _closure_relations(self, x, cell_index: int):
-        """
-        Creates closure relation equations (constraints)
-
-        :param x: Variables
-        :param cell_index: Cell index (i)
-        :return: list of equations
-        """
-        p, v_g, v_l, alpha, rho_g, rho_l, T = x
-        wp = self.wp
-        geo = self.geo
-        fl = wp.fluid
-
-        # Derivations for slip relation
-        v_m = alpha * v_g + (1 - alpha) * v_l  # Mixture velocity
-        sigma = fl.surface_tension(p, T)
-        cos_incl = geo.cos_incl[max(cell_index - 1, 0)]
-        C_0, v_inf = wp.slip.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, geo.D, cos_incl)
-
-        # Closure relations
-        # spec: SLIP-1
-        g1 = v_g - C_0 * v_m - v_inf                # Slip relation
-        g2 = rho_g - fl.gas_density(p, T)            # Gas density
-        g3 = rho_l - fl.liquid_density(p, T)         # Liquid density
-
-        return [g1, g2, g3]
-
-    def _left_boundary_eqs(self, x):
-        """
-        Equations (constraints) representing the left boundary conditions
-
-        :param x: Variables, x(z=0)
-        :return: list of equations
-        """
-        p, v_g, v_l, alpha, rho_g, rho_l, T = x
-        bc = self.bc
-        fl = self.wp.fluid
-        A = self.geo.A
-
-        # Compute mass flow rates
-        w_l_inflow = self.wp.inflow.liquid_mass_flow_rate(p, bc.p_r)
-        self._w_l_inflow = w_l_inflow  # Store liquid inflow rate (used in _differential_equations)
-        w_g_total, w_l_total = self._gas_and_liquid_flow_rate(p, T, w_l_inflow)
-
-        # Temperature at injection point: energy balance between reservoir fluid and lift gas
-        T_lg = bc.T_lg if bc.T_lg is not None else bc.T_r
-        T_inflow = bc.T_r  # spec: THM-3
-        if bc.w_lg > 0:
-            # Compute mix temperature at the injection point
-            w_g_res = (fl.f_g / (1 - fl.f_g)) * w_l_inflow  # Gas mass flow rate from reservoir
-            H_cap_res = w_l_inflow * fl.cp_l + w_g_res * fl.cp_g
-            H_cap_lg = bc.w_lg * fl.cp_g
-            T_inflow = (H_cap_res * bc.T_r + H_cap_lg * T_lg) / (H_cap_res + H_cap_lg)
-
-        # Equations
-        g1 = A * alpha * rho_g * v_g - w_g_total
-        g2 = A * (1 - alpha) * rho_l * v_l - w_l_total
-        g3 = T - T_inflow  # Inflow fluid temperature
-
-        return [g1, g2, g3]
-
-    def _right_boundary_eqs(self, x):  # spec: CHK-1
-        """
-        Equations (constraints) representing the right boundary conditions
-
-        :param x: Variables, x(z=L)
-        :return: list of equations
-        """
-        p, v_g, v_l, alpha, rho_g, rho_l, T = x
-        wp = self.wp
-        bc = self.bc
-        A = self.geo.A
-
-        # Compute mass flow rates
-        w_g = A * alpha * rho_g * v_g  # Gas mass flow rate
-        w_l = A * (1 - alpha) * rho_l * v_l  # Liquid mass flow rate
-        w_m = w_g + w_l  # Mixture mass flow rate
-
-        # Choke equation, where the upstream pressure is p_in = p(z=L) and the downstream pressure is p_out = p_s.
-        if isinstance(wp.choke, BernoulliChokeModel):
-            rho_m = alpha * rho_g + (1 - alpha) * rho_l  # Mixture density
-            g1 = w_m - wp.choke.mass_flow_rate(bc.u, p, bc.p_s, rho_m)  # Used to generate dataset v6
-        elif isinstance(wp.choke, SimpsonChokeModel):
-            x_g = w_g / w_m  # Mass fraction of gas
-            g1 = w_m - wp.choke.mass_flow_rate(bc.u, p, bc.p_s, x_g, rho_g, rho_l)  # With two-phase correction
-        else:
-            raise ValueError('Unsupported choke model')
-
-        return [g1]
-
-    def _differential_equations(self, x, x_prev, cell_index: int):
-        """
-        Create discretized differential equations for cell i
-
-        :param x: Variables of cell i
-        :param x_prev: Variables of cell i-1
-        :param cell_index: Cell index (i), ranging from 1 to n_cells
-        :return: List of equations
-        """
-        wp = self.wp
-        bc = self.bc
-        fl = wp.fluid
-        geo = self.geo
-        D = geo.D
-        A = geo.A
-
-        delta_md = geo.delta_md[cell_index - 1]
-        cos_incl = geo.cos_incl[cell_index - 1]
-        delta_tvd = delta_md * cos_incl
-
-        # Get variables of current cell (i) and previous cell (i-1)
-        p, v_g, v_l, alpha, rho_g, rho_l, T = x
-        p_prev, v_g_prev, v_l_prev, alpha_prev, rho_g_prev, rho_l_prev, T_prev = x_prev
-
-        # Helper derivations
-        # spec: BAL-7, BAL-8
-        rho_m = alpha * rho_g + (1 - alpha) * rho_l  # Mixture density
-        v_m = alpha * v_g + (1 - alpha) * v_l  # Mixture velocity
-
-        if wp.f_D is not None:
-            f_D = wp.f_D  # spec: FRIC-2
-        else:
-            mu_l = fl.liquid_viscosity(p, T)
-            mu_g = fl.gas_viscosity(T, rho_g)
-            mu_m = pvt.mixture_viscosity(mu_l, mu_g, alpha, rho_l=rho_l, rho_g=rho_g)
-            Re = rho_m * ca.fabs(v_m) * D / mu_m
-            f_D = friction_factor(Re, wp.roughness / D)
-
-        # Acceleration terms
-        acc = alpha * rho_g * v_g ** 2 + (1 - alpha) * rho_l * v_l ** 2
-        acc_prev = alpha_prev * rho_g_prev * v_g_prev ** 2 + (1 - alpha_prev) * rho_l_prev * v_l_prev ** 2
-
-        # Frictional pressure drop (acts along the flow path)
-        dp_f = delta_md * (f_D / D / 2) * rho_m * (v_m ** 2)  # spec: FRIC-1
-
-        # Gravitational pressure drop (only the vertical component contributes)
-        dp_g = delta_tvd * STD_GRAVITY * rho_m  # spec: BAL-6
-
-        # Ambient temperature: linear geothermal gradient based on TVD fraction
-        tvd_frac_i = geo.tvd_frac[cell_index]
-        T_a = bc.T_s + (bc.T_r - bc.T_s) * tvd_frac_i
-
-        cp_flux = fl.cp_g * alpha * rho_g * v_g + fl.cp_l * (1 - alpha) * rho_l * v_l
-
-        # Heat loss to surroundings
-        dT_heat = delta_md * 4 * wp.h * (T - T_a) / (D * cp_flux)
-
-        # Frictional dissipation heating of the liquid phase
-        # For ideal gas, friction does not change enthalpy; for incompressible liquid it does
-        F_fric = (f_D / D / 2) * rho_m * v_m ** 2
-        dT_fric = delta_md * (1 - alpha) * v_l * F_fric / cp_flux
-
-        # Gravitational cooling (adiabatic lapse rate effect)
-        # Only the vertical component of the gravity vector contributes
-        mass_flux = alpha * rho_g * v_g + (1 - alpha) * rho_l * v_l
-        liq_flux = (1 - alpha) * v_l
-        dT_grav = delta_tvd * STD_GRAVITY * (mass_flux - liq_flux * rho_m) / cp_flux
-
-        dT = dT_heat - dT_fric + dT_grav
-
-        # Compute flow rates
-        w_g_total, w_l_total = self._gas_and_liquid_flow_rate(p, T, self._w_l_inflow)  # Compute mass flow rates
-        
-        # Discretized differential equations
-        g1 = A * alpha * rho_g * v_g - w_g_total
-        g2 = A * (1 - alpha) * rho_l * v_l - w_l_total
-        # spec: DISC-4
-        g3 = acc / CF_BAR + p - (acc_prev / CF_BAR + p_prev) + (dp_f + dp_g) / CF_BAR           # Momentum balance
-        g4 = T - T_prev + dT                                                                    # Thermal energy balance
-
-        return [g1, g2, g3, g4]
-
-    def _compute_left_boundary_state(self, p_0, T_0):
-        """
-        Compute state of first cell given a pressure and temperature
-
-        :param p_0: Pressure of cell in bar (must be specified)
-        :param T_0: Temperature of cell in K (must be specified)
-        :return:
-        """
-        wp = self.wp
-        bc = self.bc
-        geo = self.geo
-        fl = wp.fluid
-        A = geo.A
-        D = geo.D
-
-        rho_g = float(fl.gas_density(p_0, T_0))
-        rho_l = float(fl.liquid_density(p_0, T_0))
-        
-
-        # Compute mass flow rates
-        w_l_inflow = wp.inflow.liquid_mass_flow_rate(p_0, bc.p_r)
-        self._w_l_inflow = w_l_inflow  # Store liquid inflow rate (used in _differential_equations)
-        w_g, w_l = self._gas_and_liquid_flow_rate(p_0, T_0, w_l_inflow)  
-
-        """
-        Solve the following equations for the velocities and void fraction (v_g, v_l, alpha).
-        w_g = A * alpha * rho_g * v_g
-        w_l = A * (1 - alpha) * rho_l * v_l
-        v_g = C_0 * v_m + v_inf
-        
-        The parameters C_0 and v_inf are functions of v_g, v_l, and alpha. The mix velocity v_m is known since:
-        v_m = alpha * v_g + (1 - alpha) * v_l
-            = w_g / (A * rho_g) + w_l / (A * rho_l)
-        """
-        # Variables
-        v_g = ca.SX.sym(f'v_g_0')
-        v_l = ca.SX.sym(f'v_l_0')
-        alpha = ca.SX.sym(f'alpha_0')
-
-        # Slip model
-        sigma = fl.surface_tension(p_0, T_0)
-        cos_incl = geo.cos_incl[0]
-        C_0, v_inf = wp.slip.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl)
-        v_m = w_g / (A * rho_g) + w_l / (A * rho_l)  # Known
-
-        # Equations
-        g0 = v_g - (C_0 * v_m + v_inf)
-        g1 = (A * alpha * rho_g) * v_g - w_g
-        g2 = (A * (1 - alpha) * rho_l) * v_l - w_l
-
-        # Create variable and constraint vectors
-        x_vec = ca.vertcat(*[v_g, v_l, alpha])
-        g_vec = ca.vertcat(*[g0, g1, g2])
-
-        # Solve system of equations using Newton rootfinder
-        F = ca.Function('F_bc', [x_vec], [g_vec])
-        rf = ca.rootfinder('rf_bc', 'newton', F)
-        alpha_guess = 0.5
-        x_guess = [w_g / (A * alpha_guess * rho_g), w_l / (A * (1 - alpha_guess) * rho_l), alpha_guess]
-        try:
-            result = rf(x_guess)
-        except RuntimeError as e:
-            raise SimError(f'compute_left_boundary_state: rootfinder failed: {e}')
-
-        v_g, v_l, alpha = result.full().flatten().tolist()
-
-        x_0 = [p_0, v_g, v_l, alpha, rho_g, rho_l, T_0]  # Order is important here!
-
-        return x_0
-
-    def _simulate_cellwise(self, p_0, T_0):
-        """
-        Simulate cellwise given pressure and temperature at the left boundary.
-
-        Builds a per-cell rootfinder so that _differential_equations receives a
-        concrete cell_index and can look up geometry (cos_incl, tvd_frac) directly.
-
-        :param p_0: Pressure at left boundary (bar)
-        :param T_0: Temperature at left boundary (K)
-        :return: Flat list of state variables for all cells
-        """
-
-        x = list()  # Variables
-
-        # Compute state of first cell
-        x_0 = self._compute_left_boundary_state(p_0, T_0)
-        x += x_0
-
-        for i in range(1, self.n_cells + 1):
-            # Build rootfinder for this cell i
-            x_i = self._create_variables(i)
-            x_i_prev = self._create_variables(i - 1)            
-
-            g_diff = self._differential_equations(x_i, x_i_prev, i)
-            g_clos = self._closure_relations(x_i, i)
-
-            # Pack symbolic variables (x_vec), equations (g_vec), and parameters
-            # (p_vec) into CasADi vectors.  F maps (x, p) -> g(x; p) = 0, and
-            # the rootfinder solves for x given p (the previous cell's state).
-            x_vec = ca.vertcat(*x_i)
-            g_vec = ca.vertcat(*(g_diff + g_clos))
-            p_vec = ca.vertcat(*x_i_prev)
-
-            F = ca.Function(f'F_{i}', [x_vec, p_vec], [g_vec])
-            rf = ca.rootfinder(f'rf_{i}', 'newton', F)
-
-            x_i_prev_values = x[self.dim_x * (i - 1):self.dim_x * i]
-
-            try:
-                result = rf(list(x_i_prev_values), list(x_i_prev_values))
-            except RuntimeError:
-                raise SimError(f'Cell-wise rootfinder failed at cell {i}')
-
-            x_opt = result.full().flatten().tolist()
-            x += x_opt
-
-        return x
-
-    def _initial_guess(self):
-        """
-        Provide an initial guess on the solution
-        :return: Initial guess
-        """
-        bc = self.bc
-
-        if self.x_guess is None:
-            # Guess on pressure and temperature in first cell
-            p_0 = bc.p_r - (bc.p_r - bc.p_s) * 0.05  # 5% of the total pressure drop occurs at the inflow
-            T_0 = bc.T_r  # We can improve this guess by using the mixing temperature at the injection point
-
-            # Compute the other cell states
-            x_guess = self._simulate_cellwise(p_0, T_0)
-            return x_guess
-
-        else:
-            # Use provided initial guess
-            return self.x_guess
-
-    def simulate(self):
-        """
-        Simulate a well by simultaneously solving for all grid cells
-        This leads to a large system of equations which we formulate as a non-linear programming problem
-        The resulting NLP problem is solved using Ipopt
-
-        :return: Simulation result (variable values stored in a flat list)
-        """
-        wp = self.wp
-        bc = self.bc
-
-        # We simulate for n cells, with variables at n+1 grid points: x_0, x_1, ..., x_n.
-        # Each x_i is ordered as follows: x = (p, v_g, v_l, alpha, rho_g, rho_l)
-        x = list()  # Variables
-        g = list()  # Constraints (system of equations)
-
-        # Add variables and equations
-        for i in range(self.n_cells + 1):  # Loop over all grid points
-
-            # Variables for cell i
-            x_i = self._create_variables(i)
-
-            # Equations / constraints for cell i
-            g_i = list()
-
-            if i == 0:  # Left boundary
-                g_i += self._left_boundary_eqs(x_i)
-
-            else:  # Cells 1,...,n
-
-                # Get state in previous cell
-                x_i_prev = x[self.dim_x*(i-1):self.dim_x*i]
-
-                # Discretized differential equations
-                g_i += self._differential_equations(x_i, x_i_prev, i)
-
-            if i == self.n_cells:  # Right boundary
-                g_i += self._right_boundary_eqs(x_i)
-
-            # Closure relations
-            g_i += self._closure_relations(x_i, i)
-
-            # Add to variable and constraint lists
-            x += x_i
-            g += g_i
-
-        # Create variable and constraint vectors
-        x_vec = ca.vertcat(*x)
-        g_vec = ca.vertcat(*g)
-
-        # Initial guess on solution
-        x_guess = self._initial_guess()
-
-        # Variable bounds
-        # All variables must be non-negative: x >= 0
-        lbx = [0] * len(x)
-        ubx = [ca.inf] * len(x)  # We use ca.inf for unbounded variables
-
-        for i, x_i in enumerate(x):
-            if x_i.name().split('_')[0] == 'p':
-                lbx[i] = bc.p_s  # Lower bound on pressures
-                ubx[i] = bc.p_r  # Upper bound on pressures
-
-            if x_i.name().split('_')[0] == 'T':
-                lbx[i] = bc.T_s if bc.T_lg is None else min(bc.T_s, bc.T_lg)  # Lower bound on temperatures
-                ubx[i] = bc.T_r + 1  # Upper bound on temperatures (slacking bound by adding 1 K)
-
-            if x_i.name().split('_')[0] == 'alpha':
-                ubx[i] = 1  # Upper bound on alphas
-
-        # Constraint bounds
-        # Equality constraints, g(x) = 0, are implemented as: 0 <= g(x) <= 0
-        lbg = [0] * len(g)
-        ubg = [0] * len(g)
-
-        # Solve system of equations using Ipopt
-        f = 0  # We set the objective function, f, to zero to solve a feasibility problem
-        nlp = {'x': x_vec, 'f': f, 'g': g_vec}
-        solver_config = {'ipopt.print_level': 0, 'print_time': 0}
-        # solver_config = {}
-        solver = ca.nlpsol('S', 'ipopt', nlp, solver_config)
-        result = solver(x0=x_guess, lbx=lbx, ubx=ubx, lbg=lbg, ubg=ubg)
-        # print(result)
-        if not solver.stats()['success']:
-            print('Simulation failed')
-            print('Solver status:', solver.stats())
-            raise SimError('Solve was not successful')
-
-        x_opt = result['x']
-        x_opt = x_opt.full().flatten().tolist()  # Convert solution to flat numpy array and then to a list
-
-        return x_opt
+        legacy = bc is None
+        if legacy:
+            if self.bc is None:
+                raise TypeError('simulate() needs the boundary conditions')
+            bc, x_guess = self.bc, self.x_guess
+        rs = self.root_set(bc, x_guess=x_guess)
+        if rs.operating_point is None:
+            raise NoOperatingPoint(rs)
+        if rs.several_stable:
+            log.info('%d stable roots; the operating point is the one with the lowest p_0 (SOL-6)',
+                     sum(r.label == 'stable' for r in rs.roots))
+        return rs.operating_point.x.tolist() if legacy else rs.operating_point
 
     def solution_as_df(self, x):
         """
-        Represent solution as a DataFrame
+        Represent a solution as a DataFrame, one row per grid point from the bottomhole
 
-        :param x: Solution as flat list
-        :return: Solution as DataFrame
+        :param x: A Root, or its state as a flat list
+        :return: Solution as DataFrame: the state, md, tvd and the flow regime
         """
-        x_list = list()
-        for i in range(self.n_cells + 1):
-            x_i = x[self.dim_x * i:self.dim_x * (i + 1)]
-            x_list.append(np.array(x_i))
+        if isinstance(x, Root):
+            regimes = x.flow_regime
+            X = x.state
+        else:
+            X = np.asarray(x, dtype=float).reshape(-1, DIM_X)
+            regimes = self.system.flow_regimes(X.ravel())
 
-        cols = self.variable_names
-        df = pd.DataFrame(x_list, columns=cols)
+        df = pd.DataFrame(X, columns=self.variable_names)
 
         # Add geometry columns (simulator order: bottom to top)
-        geo = self.geo
-        md = np.array(geo.md)    # simulator order (bottom → top)
-        tvd = np.array(geo.tvd)  # simulator order (bottom → top)
+        df.insert(loc=1, column='md', value=np.array(self.geo.md))
+        df.insert(loc=2, column='tvd', value=np.array(self.geo.tvd))
 
-        df.insert(loc=1, column='md', value=md)
-        df.insert(loc=2, column='tvd', value=tvd)
-
-        # Add flow regime identifier
-        fl = self.wp.fluid
-        flow_regime = list()
-        for index, row in df.iterrows():
-            sigma = float(fl.surface_tension(row['p'], row['T']))
-            cos_incl = geo.cos_incl[max(index - 1, 0)]
-            fr = self.wp.slip.flow_regime(row['v_g'], row['v_l'], row['alpha'], row['rho_g'], row['rho_l'], sigma, cos_incl)
-            flow_regime.append(fr)
-        df['flow-regime'] = flow_regime
-
+        df['flow-regime'] = list(regimes)
         return df

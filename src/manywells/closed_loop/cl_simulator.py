@@ -22,7 +22,10 @@ import matplotlib.pyplot as plt
 from manywells.geometry import WellGeometry
 from manywells.units import STD_GRAVITY, CF_BAR
 from manywells.choke import ChokeModel, BernoulliChokeModel, SimpsonChokeModel
-from manywells.simulator import SSDFSimulator, SimError, WellProperties, BoundaryConditions
+from manywells.simulator import SimError
+# Its frozen private base (decision 2 of specs/architecture.md); WellProperties and
+# BoundaryConditions are imported from here by closed-loop users.
+from manywells.closed_loop._base import SSDFSimulator, WellProperties, BoundaryConditions
 from manywells.ca_functions import ca_min_approx, ca_max_approx
 
 class ClosedLoopWellSimulator(SSDFSimulator):
@@ -184,14 +187,15 @@ class ClosedLoopWellSimulator(SSDFSimulator):
 
             if isinstance(self.wp.choke, BernoulliChokeModel):
                 rho_m = x[-4] * x[-3] + (1 - x[-4]) * x[-2]  # Mixture density alpha*rho_g + (1-alpha)*rho_l
-                w_m = self.wp.choke.mass_flow_rate(self.bc.u, x[-7], bc.p_s, rho_m)  # Used to generate dataset v6
+                w_m = self.wp.choke.choke_equation(self.bc.u, x[-7], bc.p_s, rho=rho_m, multiplier=1.0)
                 w_g = A * x[-4] * x[-3] * x[-6]  # A*alpha*rho_g*v_g
                 w_l = w_m - w_g
             elif isinstance(self.wp.choke, SimpsonChokeModel):
                 w_g = A * x[-4] * x[-3] * x[-6]  # A*alpha*rho_g*v_g
                 w_l = A * (1 - x[-4]) * x[-2] * x[-5]  # A*(1-alpha)*rho_l*v_l
                 x_g = w_g / (w_g + w_l)  # Mass fraction of gas wg/w,
-                w_m = self.wp.choke.mass_flow_rate(self.bc.u, x[-7], self.bc.p_s, x_g, x[-3], x[-2])
+                Phi = SimpsonChokeModel.simpson_multiplier(x_g, x[-3], x[-2])
+                w_m = self.wp.choke.choke_equation(self.bc.u, x[-7], self.bc.p_s, rho=x[-2], multiplier=Phi)
                 w_l = w_m - w_g
             else:
                 raise ValueError('Unsupported choke model')

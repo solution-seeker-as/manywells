@@ -25,6 +25,7 @@ ID = r'[A-Z]+(?:-[A-Z]+)*-\d+'
 DEFINITION = re.compile(rf'^### ({ID}) · (.+)$')
 TAG = re.compile(rf'(?:#|//)\s*spec:\s*({ID}(?:\s*,\s*{ID})*)')
 BEGIN, END = '<!-- vectors:begin', '<!-- vectors:end'
+BLOCK = re.compile(r'^<!-- vectors:begin( develop|) -->$(.*?)^<!-- vectors:end\1 -->$', re.M | re.S)
 
 NAMESPACES = {
     'BAL': 'model/balances.md', 'DISC': 'model/discretization.md', 'SOL': 'model/solution.md',
@@ -137,30 +138,30 @@ class VectorTable:
     inputs: tuple
     outputs: tuple
     rows: tuple      # each row: (inputs dict, outputs dict)
+    source: str = 'v1.0.0'  # the block: 'v1.0.0' (from v1.0.0) or 'develop' (pins develop's options)
 
 
 def vector_tables():
-    """Every component vector table in the generated blocks."""
+    """Every component vector table in the generated blocks, from v1.0.0 and from develop."""
     tables = []
     for path in spec_files():
-        text = path.read_text()
-        if BEGIN not in text:
-            continue
-        block = text[text.index(BEGIN):text.index(END)].splitlines()
-        starts = [k for k, line in enumerate(block) if line.startswith('### ')]
-        for k, start in enumerate(starts):
-            heading = block[start][4:].strip()
-            lines = block[start + 1:starts[k + 1] if k + 1 < len(starts) else len(block)]
-            header = next(line for line in lines if line.startswith('|'))
-            cols = [c.strip() for c in header.strip().strip('|').split('|')]
-            outputs = tuple(c[1:].strip() for c in cols if c.startswith('→'))
-            inputs = tuple(c for c in cols if not c.startswith('→'))
-            rows = []
-            for cells in table_rows(lines):
-                values = [parse_value(c) for c in cells]
-                rows.append((dict(zip(inputs, values[:len(inputs)])), dict(zip(outputs, values[len(inputs):]))))
-            ids = tuple(re.findall(ID, heading.split('(')[0]))
-            tables.append(VectorTable(rel(path), heading, ids, inputs, outputs, tuple(rows)))
+        for m in BLOCK.finditer(path.read_text()):
+            source = 'develop' if m.group(1) else 'v1.0.0'
+            block = m.group(2).splitlines()
+            starts = [k for k, line in enumerate(block) if line.startswith('### ')]
+            for k, start in enumerate(starts):
+                heading = block[start][4:].strip()
+                lines = block[start + 1:starts[k + 1] if k + 1 < len(starts) else len(block)]
+                header = next(line for line in lines if line.startswith('|'))
+                cols = [c.strip() for c in header.strip().strip('|').split('|')]
+                outputs = tuple(c[1:].strip() for c in cols if c.startswith('→'))
+                inputs = tuple(c for c in cols if not c.startswith('→'))
+                rows = []
+                for cells in table_rows(lines):
+                    values = [parse_value(c) for c in cells]
+                    rows.append((dict(zip(inputs, values[:len(inputs)])), dict(zip(outputs, values[len(inputs):]))))
+                ids = tuple(re.findall(ID, heading.split('(')[0]))
+                tables.append(VectorTable(rel(path), heading, ids, inputs, outputs, tuple(rows), source))
     return tables
 
 

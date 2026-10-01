@@ -11,7 +11,10 @@ Checks develop's implementation against the test vectors in specs/model/, which 
 
 A vector whose equation has no implementation on develop is skipped with the reason. A vector that
 develop is known not to reproduce is a strict expected failure, so it fails once develop does
-reproduce it and the entry has to go; Step 7 of plans/manywells-v2-plan.md resolves each one.
+reproduce it and the entry has to go.
+
+The row vectors are checked on develop's v1.0.0 configuration (manywells.configurations), which must
+reproduce v1.0.0's rows as functions of the state (specs/model/discretization.md, Interface).
 """
 
 import math
@@ -22,17 +25,28 @@ import pytest
 
 from manywells.ca_functions import ca_max_approx, ca_min_approx, ca_softmax
 from manywells.choke import BernoulliChokeModel, SimpsonChokeModel
-from manywells.geometry import WellGeometry
+from manywells.configurations import v1_fluid, v1_well
+from manywells.discretization import PointState, build_system
 from manywells.inflow import ProductivityIndex, Vogel
 from manywells.pvt import LiquidProperties, api_from_density, liquid_mix
 from manywells.pvt.dead_oil import dead_oil_surface_tension
-from manywells.pvt.fluid import FluidModel
 from manywells.pvt.gas import gas_density
-from manywells.simulator import BoundaryConditions, SSDFSimulator, WellProperties
+from manywells.simulator import BoundaryConditions
 from manywells.slip import SlipModel, classify_flow_regime
-from manywells.units import P_REF, T_REF
 
-from .spec_parse import row_vectors, vector_tables
+from .spec_parse import ROOT, row_vectors, vector_tables
+
+
+def _develop_tables():
+    """The adapters of the develop vectors: the generator's own calls (specs/tools/make_develop_vectors.py)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('make_develop_vectors', ROOT / 'specs' / 'tools' / 'make_develop_vectors.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return {t.heading: t.fn for t in module.TABLES}
+
+
+DEVELOP_ADAPTERS = _develop_tables()
 
 REL, ABS = 1e-12, 1e-15      # component vectors: the same arithmetic, so agreement to rounding
 ROW_REL = 1e-10              # row vectors: relative to the row's size, which is far from zero
@@ -50,6 +64,17 @@ def choke(model, K_c, profile):
     return model(K_c=K_c, chk_profile=profile)
 
 
+A = 0.0127  # Pipe cross-section (m²) of the choke adapters; it cancels in x_g
+
+
+def choke_state(p_in, rho_g=50.0, rho_l=800.0, x_g=0.5, rho_m=None):
+    """A wellhead state at p_in: with gas mass fraction x_g of the flow, or with mixture density rho_m."""
+    if rho_m is not None:
+        return PointState(p=p_in, v_g=1.0, v_l=1.0, alpha=0.0, rho_g=rho_g, rho_l=rho_m, T=300.0)  # rho_m = rho_l
+    v_g = x_g / (1 - x_g) * rho_l / rho_g  # alpha = 1/2, v_l = 1
+    return PointState(p=p_in, v_g=v_g, v_l=1.0, alpha=0.5, rho_g=rho_g, rho_l=rho_l, T=300.0)
+
+
 # develop's function for each vector table, keyed by the table's heading
 ADAPTERS = {
     'SMO-1': lambda x, y, eps: ca_max_approx(x, y, eps),
@@ -60,9 +85,9 @@ ADAPTERS = {
     'CHK-4': lambda gamma: SimpsonChokeModel.critical_pressure_ratio(gamma),
     'CHK-5 (multiplier)': SimpsonChokeModel.simpson_multiplier,
     'CHK-5 (rate)': lambda K_c, profile, u, p_in, p_out, x_g, rho_g, rho_l:
-        choke(SimpsonChokeModel, K_c, profile).mass_flow_rate(u, p_in, p_out, x_g, rho_g, rho_l),
+        choke(SimpsonChokeModel, K_c, profile).mass_flow_rate(u, p_out, choke_state(p_in, rho_g, rho_l, x_g=x_g), A),
     'CHK-6': lambda K_c, profile, u, p_in, p_out, rho_m:
-        choke(BernoulliChokeModel, K_c, profile).mass_flow_rate(u, p_in, p_out, rho_m),
+        choke(BernoulliChokeModel, K_c, profile).mass_flow_rate(u, p_out, choke_state(p_in, rho_m=rho_m), A),
     'CHK-7': lambda u: choke(SimpsonChokeModel, 1.0, 'linear').choke_opening(u),
     'CHK-8': lambda u: choke(SimpsonChokeModel, 1.0, 'sigmoid').choke_opening(u),
     'CHK-9': lambda u: choke(SimpsonChokeModel, 1.0, 'convex').choke_opening(u),
@@ -70,6 +95,7 @@ ADAPTERS = {
     'CHK-12': lambda p_in, p_out: bool(choke(SimpsonChokeModel, 1.0, 'linear').is_choked(p_in, p_out)),
     'INF-1': lambda w_l_max, p, p_r: Vogel(w_l_max).liquid_mass_flow_rate(p, p_r),
     'INF-2': lambda k_l, p, p_r: ProductivityIndex(k_l).liquid_mass_flow_rate(p, p_r),
+    'INF-4': lambda f_g, w_l: v1_fluid(rho_l=850.0, R_s=420.0, cp_g=2225.0, cp_l=2000.0, f_g=f_g).reservoir_gas_rate(w_l),
     'SLIP-2, SLIP-3': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, D, **_:
         SlipModel().identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl=1.0),
     'SLIP-4': lambda rho_g, rho_l, sigma, **_: SlipModel.harmathy_rise_velocity(rho_g, rho_l, sigma),
@@ -87,14 +113,10 @@ ADAPTERS = {
 }
 
 NOT_ON_DEVELOP = {
-    'INF-3': "develop's FixedFlowRate fixes the liquid rate only and takes the gas from the fluid model",
-    'INF-4': "develop computes the reservoir gas rate inline in SSDFSimulator._gas_and_liquid_flow_rate",
+    'INF-3': "develop's FixedFlowRate fixes the liquid rate only and takes the gas from the fluid model (INF-8)",
 }
 
-KNOWN_DEVIATIONS = {
-    'SLIP-2, SLIP-3': 'develop multiplies the Taylor velocity by sqrt(cos_incl + 1e-9) * (1 + sin_incl)**1.2, '
-                      'which is 1 + 5e-10 in a vertical well (plans/develop_model_changes.md)',
-}
+KNOWN_DEVIATIONS = {}
 
 
 def marks(key, skips, deviations):
@@ -106,7 +128,8 @@ def marks(key, skips, deviations):
 
 
 def vector_params():
-    return [pytest.param(table, id=table.heading, marks=marks(table.heading, NOT_ON_DEVELOP, KNOWN_DEVIATIONS))
+    return [pytest.param(table, id=f'{table.source}: {table.heading}',
+                         marks=marks(table.heading, NOT_ON_DEVELOP, KNOWN_DEVIATIONS) if table.source == 'v1.0.0' else [])
             for table in vector_tables()]
 
 
@@ -123,71 +146,54 @@ def check_outputs(table, k, expected, got):
 
 @pytest.mark.parametrize('table', vector_params())
 def test_component_vectors(table):
-    if table.heading not in ADAPTERS:
+    adapters = ADAPTERS if table.source == 'v1.0.0' else DEVELOP_ADAPTERS
+    if table.heading not in adapters:
         pytest.fail(f'no adapter for vector table {table.heading!r}: add one, or list it in NOT_ON_DEVELOP')
     for k, (inputs, expected) in enumerate(table.rows):
-        check_outputs(table, k, expected, ADAPTERS[table.heading](**inputs))
+        check_outputs(table, k, expected, adapters[table.heading](**inputs))
 
 
 def test_every_table_is_handled():
-    headings = {t.heading for t in vector_tables()}
-    assert headings, 'no vector tables found'
+    tables = vector_tables()
+    v1 = {t.heading for t in tables if t.source == 'v1.0.0'}
+    develop = {t.heading for t in tables if t.source == 'develop'}
+    assert v1 and develop, 'no vector tables found'
     assert set(KNOWN_DEVIATIONS) <= set(ADAPTERS)
-    assert headings <= set(ADAPTERS) | set(NOT_ON_DEVELOP), headings - set(ADAPTERS) - set(NOT_ON_DEVELOP)
+    assert v1 <= set(ADAPTERS) | set(NOT_ON_DEVELOP), v1 - set(ADAPTERS) - set(NOT_ON_DEVELOP)
+    assert develop == set(DEVELOP_ADAPTERS), develop ^ set(DEVELOP_ADAPTERS)  # the develop blocks are up to date
 
 
-# Row vectors (specs/model/discretization.md), on develop's nearest configuration to v1.0.0 today:
-# a vertical well, fixed f_D, dead oil with wlr = 0 and rho_o = rho_l, ideal gas. Step 7 replaces this
-# with the v1-compatibility configuration, which must reproduce every row.
+# Row vectors (specs/model/discretization.md), on develop's v1.0.0 configuration. develop's rows that generalize
+# v1.0.0's carry their own IDs (DISC-11); in this configuration they are v1.0.0's rows as functions of the state.
 
 ROW_IDS = {'first': ['INF-6', 'INF-7', 'THM-3'], 'cell': ['DISC-2', 'DISC-3', 'DISC-4', 'DISC-5'],
            'last': ['CHK-1'], 'closure': ['SLIP-1', 'PVT-GAS-1', 'PVT-MIX-1']}
 
-ROWS_NOT_COMPARABLE = {
-    'DISC-2': 'develop replaces flux continuity by A alpha rho_g v_g = w_g(p, T) at every point',
-    'DISC-3': 'develop replaces flux continuity by A (1 - alpha) rho_l v_l = w_l(p, T) at every point',
-}
+DEVELOP_ROW = {'DISC-2': 'DISC-7', 'DISC-3': 'DISC-8', 'DISC-4': 'DISC-9', 'DISC-5': 'DISC-10'}
 
-ROW_DEVIATIONS = {
-    'INF-6': 'the dissolved-gas path uses smin(R_so ..., w_g) and smax(..., 0), which are not exact at R_so = 0',
-    'INF-7': 'the dissolved-gas path uses smin(R_so ..., w_g), which is not exact at R_so = 0',
-    'DISC-5': 'develop always adds frictional heating and a gravity term to the energy row',
-    'SLIP-1': 'develop takes sigma from rho_o, not from the state rho_l, and adds 1e-9 to cos_incl '
-              'in the Taylor deviation factor',
-}
+ROWS_NOT_COMPARABLE = {}
+
+ROW_DEVIATIONS = {}
 
 
-def develop_simulator(w):
-    """develop's simulator in its nearest configuration to v1.0.0 for a well of v1_rows.json."""
-    rho_g_sc = P_REF / (w['R_s'] * T_REF)
-    fluid = FluidModel(rho_o=w['rho_l'], rho_g=rho_g_sc, wlr=0.0, gor=w['f_g'] * w['rho_l'] / ((1 - w['f_g']) * rho_g_sc),
-                       oil_model='dead_oil', ideal_gas=True, cp_g=w['cp_g'], cp_o=w['cp_l'])
+def v1_case(w):
+    """develop's system in the v1.0.0 configuration, and the parameters, for a well of v1_rows.json."""
     inflow = Vogel(w['w_l_max']) if w['inflow'] == 'vogel' else ProductivityIndex(w['k_l'])
     model = SimpsonChokeModel if w['choke'] == 'simpson' else BernoulliChokeModel
-    wp = WellProperties(geometry=WellGeometry.vertical(length=w['L'], n_cells=w['n_cells'], D=w['D']), fluid=fluid,
-                        f_D=w['f_D'], h=w['h'], inflow=inflow, choke=model(K_c=w['K_c'], chk_profile=w['profile']))
+    wp = v1_well(L=w['L'], D=w['D'], rho_l=w['rho_l'], R_s=w['R_s'], cp_g=w['cp_g'], cp_l=w['cp_l'], f_D=w['f_D'],
+                 h=w['h'], f_g=w['f_g'], inflow=inflow, choke=model(K_c=w['K_c'], chk_profile=w['profile']),
+                 n_cells=w['n_cells'])
     bc = BoundaryConditions(p_r=w['p_r'], p_s=w['p_s'], T_r=w['T_r'], T_s=w['T_s'], u=w['u'], w_lg=w['w_lg'])
-    return SSDFSimulator(wp, bc)
+    system = build_system(wp)
+    return system, system.params(bc)
 
 
-def develop_rows(sim, X):
-    """develop's rows at every point, in v1.0.0's canonical form, as {ID: [value per point]}."""
+def develop_rows(system, params, X):
+    """develop's rows at every point, as {ID: [value per point]}, with develop's IDs."""
+    r = np.asarray(system.residual(np.ravel(X), params)).ravel()
     out = {}
-    n = sim.n_cells
-    for i in range(n + 1):
-        x = list(X[i])
-        if i == 0:
-            vals, ids = sim._left_boundary_eqs(x), list(ROW_IDS['first'])
-        else:
-            vals, ids = sim._differential_equations(x, list(X[i - 1]), i), list(ROW_IDS['cell'])
-            if i == n:
-                vals, ids = vals + sim._right_boundary_eqs(x), ids + ROW_IDS['last']
-        vals, ids = vals + sim._closure_relations(x, i), ids + ROW_IDS['closure']
-        for eq_id, v in zip(ids, vals):
-            v = num(v)
-            if eq_id == 'PVT-GAS-1':  # develop: rho_g - c p / (R_s T); v1.0.0: p - rho_g R_s T / c
-                v = -v * sim.wp.fluid.R_s * x[6] / 1e5
-            out.setdefault(eq_id, []).append(v)
+    for eq_id, v in zip(system.row_ids, r):
+        out.setdefault(eq_id, []).append(float(v))
     return out
 
 
@@ -206,9 +212,17 @@ def row_params():
 
 @pytest.mark.parametrize('well, eq_id, expected', row_params())
 def test_row_vector(well, eq_id, expected):
-    sim = develop_simulator(well['params'])
-    got = develop_rows(sim, np.array(well['x']))[eq_id]
+    system, params = v1_case(well['params'])
+    got = develop_rows(system, params, np.array(well['x']))[DEVELOP_ROW.get(eq_id, eq_id)]
     np.testing.assert_allclose(got, expected, rtol=ROW_REL, atol=0)
+
+
+def test_v1_configuration_rows_follow_the_v1_row_order():
+    """In the v1.0.0 configuration, develop's rows are v1.0.0's, point by point in DISC-6's order."""
+    for well in row_vectors()['wells']:
+        system, _ = v1_case(well['params'])
+        v1_ids = [eq_id for point in well['rows'] for eq_id, _ in point]
+        assert list(system.row_ids) == [DEVELOP_ROW.get(i, i) for i in v1_ids]
 
 
 def test_row_vectors_follow_row_order():

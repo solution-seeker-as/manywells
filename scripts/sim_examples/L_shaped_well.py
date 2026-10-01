@@ -43,16 +43,16 @@ bc = BoundaryConditions(u=0.5)
 wp_vert = WellProperties(geometry=geo_vert)
 wp_l = WellProperties(geometry=geo_l)
 
-sim_vert = SSDFSimulator(wp_vert, bc)
-sim_l = SSDFSimulator(wp_l, bc)
+sim_vert = SSDFSimulator(wp_vert)
+sim_l = SSDFSimulator(wp_l)
 
 print("Simulating vertical well ...")
-x_vert = sim_vert.simulate()
-df_vert = sim_vert.solution_as_df(x_vert)
+op_vert = sim_vert.simulate(bc)
+df_vert = sim_vert.solution_as_df(op_vert)
 
 print("Simulating L-shaped well ...")
-x_l = sim_l.simulate()
-df_l = sim_l.solution_as_df(x_l)
+op_l = sim_l.simulate(bc)
+df_l = sim_l.solution_as_df(op_l)
 
 
 # -- Plot results ---------------------------------------------------------

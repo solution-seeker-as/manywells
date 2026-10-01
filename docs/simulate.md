@@ -10,11 +10,19 @@ Project folder
 ```
 The steps are as follows:
 ```
-1. Define a wp =  WellProperties() object 
-2. Define a bc = BoundaryConditions() object
-3. Define a sim = SSDFSimulator(wp, bp) object
-4. Simulate a data point x = sim.simulate()
+1. Define a wp = WellProperties() object
+2. Define a sim = SSDFSimulator(wp) object, which builds the well's system once
+3. Define a bc = BoundaryConditions() object
+4. Simulate a data point op = sim.simulate(bc)
 ```
+`op` is the operating point, the stable root (a `Root`, with the state in `op.x`), and `sim.solution_as_df(op)` gives it
+per grid point. `simulate` raises `NoOperatingPoint` if the well has no stable root at these conditions. Further data
+points of the same well reuse its system: `sim.simulate(bc2)`, optionally with `x_guess=op.x` as an extra start.
+`sim.root_set(bc)` returns every root the search finds, each labelled stable or unstable (`specs/model/solution.md`).
+`scripts/sim_examples/` has complete examples.
+
+A well in the `v1.0.0` configuration, which reproduces ManyWells v1.0.0 and the published datasets, is built from
+v1.0.0's parameters by `manywells.configurations.v1_well`.
 
 ### Multiple datapoints from multiple wells
 In order to simulate datasets similar to those provided with the publication, refer to the following scripts:

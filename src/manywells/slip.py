@@ -15,7 +15,6 @@ from dataclasses import dataclass
 import casadi as ca
 from manywells.ca_functions import ca_softmax
 from manywells.units import STD_GRAVITY
-from math import sqrt
 
 
 def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl):  # spec: SLIP-6, SLIP-7
@@ -93,7 +92,7 @@ def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl):  # spe
     c_1 = ca.tanh(v_gs - annular_boundary)  # Eq. A-19 in Hasan, Kabir & Sayarpour (2010)
     c_2 = ca.tanh((alpha - 0.7) * 2)  # Multiplied by 2 to increase sensitivity
     c_3 = ca.tanh(v_gs - 1.08 * v_ls)  # Eq. A-18 in Hasan, Kabir & Sayarpour (2010)
-    c_4 = ca.tanh((alpha - 0.25 * cos_incl) * 2)  # Multiplied by 2 to increase sensitivity
+    c_4 = ca.tanh((alpha - 0.25 * cos_incl) * 2)  # Multiplied by 2 to increase sensitivity  # spec: SLIP-11
 
     # Output layer
     y_1 = 3.17715258 * c_1 + 6.81938489 * c_2 + 0.30182974 * c_3 + 3.58362465 * c_4 - 3.92904391  # Annular flow
@@ -107,7 +106,7 @@ def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl):  # spe
     return p
 
 
-@dataclass
+@dataclass(frozen=True)
 class SlipModel:
     """
     Slip model:
@@ -119,12 +118,12 @@ class SlipModel:
     """
 
     # Profile parameter for different flow regimes
-    C_0_annular = 1.0
-    C_0_slug = 1.175
-    C_0_bubbly = 1.2
+    C_0_annular: float = 1.0
+    C_0_slug: float = 1.175
+    C_0_bubbly: float = 1.2
 
     # Drift velocity
-    v_inf_annular = 0.0
+    v_inf_annular: float = 0.0
 
     @staticmethod
     def harmathy_rise_velocity(rho_g, rho_l, sigma):  # spec: SLIP-4
@@ -149,6 +148,12 @@ class SlipModel:
         """
         return 0.35 * ca.sqrt(STD_GRAVITY * D * (1 - rho_g / rho_l))
 
+    def classify(self, v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl):
+        """
+        Flow-regime probabilities [p_annular, p_slug, p_bubbly] of the classifier (classify_flow_regime).
+        """
+        return classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl)
+
     def identify_parameters(self, v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl):
         """
         Compute slip model parameters (C_0, v_inf) based on flow regime.
@@ -164,7 +169,7 @@ class SlipModel:
         :return: C_0, v_inf
         """
 
-        probs = classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl)
+        probs = self.classify(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl)
         p_annular = probs[0]
         p_slug = probs[1]
         p_bubbly = probs[2]
@@ -177,12 +182,13 @@ class SlipModel:
         v_inf_slug = self.taylor_rise_velocity(rho_g, rho_l, D)
         v_inf_bubbly = self.harmathy_rise_velocity(rho_g, rho_l, sigma)
 
-        # Adjust rise velocity by well-deviation factor in Eq. (A-10) of Hasan et al. (2010)
-        sin_incl = sqrt(1 - cos_incl**2)
-        deviation_factor = sqrt(cos_incl + 1e-9) * (1 + sin_incl) ** 1.2  # Add 1e-9 to avoid imaginary numbers here
+        # Adjust rise velocity by well-deviation factor in Eq. (A-10) of Hasan et al. (2010). It is exactly 1 in a
+        # vertical cell. cos_incl is in [0, 1] (WellGeometry), and may be symbolic (a parameter of the march's rows).
+        sin_incl = ca.sqrt(1 - cos_incl ** 2)
+        deviation_factor = ca.sqrt(cos_incl) * (1 + sin_incl) ** 1.2  # spec: SLIP-10
         v_inf_slug *= deviation_factor
 
-        v_inf = p_annular * v_inf_annular + p_slug * v_inf_slug + p_bubbly * v_inf_bubbly
+        v_inf = p_annular * v_inf_annular + p_slug * v_inf_slug + p_bubbly * v_inf_bubbly  # spec: SLIP-3
 
         return C_0, v_inf
 
@@ -205,7 +211,7 @@ class SlipModel:
         eq = v_g - (C_0 * v_m + v_inf)
         return eq
 
-    def flow_regime(self, v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl) -> str:  # spec: SLIP-8
+    def flow_regime(self, v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl) -> str:
         """
         Return textual description of classified (most probable) flow regime
 
@@ -218,14 +224,24 @@ class SlipModel:
         :param cos_incl: Cosine of the angle to the vertical (dimensionless)
         :return: Textual description of classified flow regime (annular, slug-churn, or bubbly)
         """
-        probs = classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl)
-        p_annular, p_slug, p_bubbly = probs.full().flatten().tolist()
-        if p_annular > p_slug and p_annular > p_bubbly:
-            return 'annular'
-        elif p_slug > p_annular and p_slug > p_bubbly:
-            return 'slug-churn'
-        else:
-            return 'bubbly'
+        probs = self.classify(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl)
+        return regime_label(ca.DM(probs).full().flatten().tolist())
+
+
+def regime_label(probs) -> str:  # spec: SLIP-8
+    """
+    Textual description of the most probable flow regime
+
+    :param probs: Probabilities [p_annular, p_slug, p_bubbly] (floats), as from classify_flow_regime
+    :return: 'annular', 'slug-churn' or 'bubbly'
+    """
+    p_annular, p_slug, p_bubbly = probs
+    if p_annular > p_slug and p_annular > p_bubbly:
+        return 'annular'
+    elif p_slug > p_annular and p_slug > p_bubbly:
+        return 'slug-churn'
+    else:
+        return 'bubbly'
 
 
 if __name__ == '__main__':

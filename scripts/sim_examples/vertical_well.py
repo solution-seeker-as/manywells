@@ -14,13 +14,14 @@ from manywells.simulator import WellProperties, BoundaryConditions, SSDFSimulato
 # -- Create a new well (using default values) ----------------------------
 well_properties = WellProperties()
 boundary_conditions = BoundaryConditions(u=0.5)
-sim = SSDFSimulator(well_properties, boundary_conditions)
+sim = SSDFSimulator(well_properties)  # builds the well's system once
 
 # -- Simulate ------------------------------------------------------------
-x = sim.simulate()
+op = sim.simulate(boundary_conditions)  # the operating point: the stable root
+print(f'Operating point: p_0 = {op.p_0:.2f} bar ({op.label}), choked: {op.choked}')
 
 # Convert solution to DataFrame
-df = sim.solution_as_df(x)
+df = sim.solution_as_df(op)
 
 # -- Plot results ---------------------------------------------------------
 

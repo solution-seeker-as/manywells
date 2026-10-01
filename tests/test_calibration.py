@@ -23,7 +23,7 @@ def test_calibrate_bernoulli_choke_model_recovers_K_c():
     choke = BernoulliChokeModel(K_c=K_c_true, chk_profile="linear")
     # Generate synthetic data using the same choke model (with choked flow: p_c = cpr*p_in)
     p_in, p_out, rho_m, u = 100.0, 30.0, 600.0, 1.0
-    w_expr = choke.mass_flow_rate(u, p_in, p_out, rho_m)
+    w_expr = choke.choke_equation(u, p_in, p_out, rho=rho_m, multiplier=1.0)
     w_m_true = w_expr.full().item() if hasattr(w_expr, "full") else float(w_expr)
     data = pd.DataFrame(
         [

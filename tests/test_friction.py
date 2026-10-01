@@ -93,3 +93,41 @@ class TestFrictionFactor:
         fun = ca.Function('f', [Re_sym], [f_sym])
         result = float(fun(1e5))
         assert result > 0
+
+
+# ---------------------------------------------------------------------------
+# The friction model components
+# ---------------------------------------------------------------------------
+
+from manywells.discretization import PointState
+from manywells.friction import FixedFrictionFactor, RoughnessFriction
+from manywells.pvt.fluid import FluidModel
+
+STATE = PointState(p=150.0, v_g=3.0, v_l=2.0, alpha=0.2, rho_g=120.0, rho_l=780.0, T=360.0)
+
+
+def test_fixed_friction_factor_pressure_gradient():
+    """FRIC-1 with FRIC-2: F = f_D / (2 D) rho_m v_m^2."""
+    D = 0.15
+    F = FixedFrictionFactor(0.03).pressure_gradient(STATE, FluidModel(), D)
+    assert F == pytest.approx(0.03 / (2 * D) * STATE.rho_m * STATE.v_m ** 2, rel=1e-15)
+
+
+def test_roughness_friction_uses_the_mixture_reynolds_number():
+    """FRIC-3: f_D from Re = rho_m |v_m| D / mu_m and the relative roughness, through FRIC-6."""
+    D, eps, fl = 0.15, 4.5e-5, FluidModel()
+    mu_m = float(fl.mixture_viscosity(STATE.p, STATE.T, STATE.alpha, STATE.rho_g, STATE.rho_l))
+    Re = STATE.rho_m * abs(STATE.v_m) * D / mu_m
+    got = _eval(RoughnessFriction(roughness=eps).friction_factor(STATE, fl, D))
+    assert got == pytest.approx(_eval(friction_factor(Re, eps / D)), rel=1e-12)
+    assert _eval(RoughnessFriction(roughness=eps, correlation='haaland').friction_factor(STATE, fl, D)) == \
+        pytest.approx(_eval(friction_factor(Re, eps / D, 'haaland')), rel=1e-12)
+
+
+def test_friction_models_are_validated():
+    with pytest.raises(ValueError, match="Friction factor must be positive"):
+        FixedFrictionFactor(0.0)
+    with pytest.raises(ValueError, match="roughness must be positive"):
+        RoughnessFriction(roughness=0.0)
+    with pytest.raises(ValueError, match="correlation"):
+        RoughnessFriction(correlation='moody')

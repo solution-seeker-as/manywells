@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The gas phase's equation of state, and the standard conditions that volumetric rates and gas densities at standard conditions refer to.
+The gas phase's equation of state, the standard conditions that volumetric rates and gas densities at standard conditions refer to, and, for `develop`, the real-gas z-factor and the gas viscosity.
 
 ## Interface
 
@@ -12,6 +12,8 @@ The gas phase's equation of state, and the standard conditions that volumetric r
 | density at standard conditions | $R_s$ | $\rho_{g,\text{sc}}$ (kg/m³) | no |
 
 v1.0.0's code takes $p$ in Pa in `pvt.gas_density`; the vectors below are in bar.
+
+In `develop` the gas is parameterized by its density at standard conditions $\rho_{g,\text{sc}}$ (`FluidModel.rho_g`), from which PVT-GAS-6 gives the specific gravity and $R_s$; `FluidModel.ideal_gas` chooses PVT-GAS-1 or PVT-GAS-3. The correlations of PVT-GAS-4, PVT-GAS-5 and PVT-GAS-7 take $p$ in Pa internally; `FluidModel`'s methods take bar.
 
 ## Equations
 
@@ -29,22 +31,70 @@ $$\rho_{g,\text{sc}} = \frac{p_\text{ref}}{R_s T_\text{ref}}.$$
 
 It is not part of the discretized system. The datasets use it for standard volumetric gas rates (`docs/datasets.md`), and `develop` parameterizes the gas by $\rho_{g,\text{sc}}$ instead of $R_s$, so it converts between the two (`specs/sampling.md`).
 
+### PVT-GAS-3 · Real gas law
+
+$$c_\text{bar}\, p = Z(p, T)\, \rho_g R_s T$$
+
+with the z-factor of PVT-GAS-4 and $p$ in bar. Its row in DISC-11 is $p - \rho_g Z R_s T / c_\text{bar}$ (bar), the canonical form of PVT-GAS-1 with $Z$; with $Z = 1$ it is PVT-GAS-1. The form matters to the solver, not to the roots: in bar, like the momentum row, it lets Ipopt converge tightly on long grids, where the density form $\rho_g - c_\text{bar} p/(Z R_s T)$ left the phase mass rates drifting by up to $1.3\cdot10^{-6}$ of the total rate at $N = 400$ (verifier case set, 2026-10-01).
+
+### PVT-GAS-4 · Papay z-factor
+
+Papay (1968):
+
+$$Z = 1 - \frac{3.52\, p_{pr}}{10^{0.9813\, T_{pr}}} + \frac{0.274\, p_{pr}^2}{10^{0.8157\, T_{pr}}}, \qquad p_{pr} = \frac{p}{p_{pc}}, \quad T_{pr} = \frac{T}{T_{pc}},$$
+
+explicit and smooth, with the pseudo-critical properties of PVT-GAS-5. Valid for $p_{pr} < 6$ and $T_{pr} > 1.05$.
+
+### PVT-GAS-5 · Sutton pseudo-critical properties
+
+Sutton (1985), from the gas specific gravity $\gamma_g$:
+
+$$p_{pc} = 756.8 - 131.07\,\gamma_g - 3.6\,\gamma_g^2\ \text{psia}, \qquad T_{pc} = 169.2 + 349.5\,\gamma_g - 74.0\,\gamma_g^2\ \text{°R},$$
+
+converted to Pa ($1\ \text{psi} = 6894.76$ Pa) and K ($T_{pc}/1.8$).
+
+### PVT-GAS-6 · Gas gravity and gas constant
+
+$$\gamma_g = \frac{\rho_{g,\text{sc}}\, R_u\, T_\text{ref}}{p_\text{ref}\, M_\text{air}}, \qquad M_g = M_\text{air}\,\gamma_g, \qquad R_s = \frac{R_u}{M_g},$$
+
+with $R_u = 8314.46$ J/(kmol K) and $M_\text{air} = 28.97$ kg/kmol. It agrees with PVT-GAS-2: $R_s = p_\text{ref}/(\rho_{g,\text{sc}} T_\text{ref})$.
+
+### PVT-GAS-7 · Gas viscosity
+
+Lee, Gonzalez and Eakin (1966), with $T$ in °R, $\rho_g$ in g/cm³ and $M_g$ in kg/kmol:
+
+$$\mu_g = 10^{-7} K \exp\!\left(X \rho_g^{\,Y}\right)\ \text{Pa s}, \qquad K = \frac{(9.4 + 0.02 M_g)\, T^{1.5}}{209 + 19 M_g + T}, \quad X = 3.5 + \frac{986}{T} + 0.01 M_g, \quad Y = 2.4 - 0.2X.$$
+
+The source gives $10^{-4}K\exp(\cdot)$ in cP. Used by friction (PVT-MIX-9).
+
+### PVT-GAS-8 · Gas formation volume factor
+
+$$B_g = \frac{Z}{Z_\text{ref}}\,\frac{p_\text{ref}\, T}{T_\text{ref}\, p},$$
+
+the reservoir volume of a unit standard volume. Not used by the simulator; the black-oil consistency tests use it.
+
 ## Options
 
 | Option | IDs | Used by |
 |---|---|---|
-| Ideal gas | PVT-GAS-1 | `v1.0.0` |
-| Real gas with a z-factor (Papay, Sutton pseudo-critical properties) | Step 7 | `develop` |
+| Ideal gas | PVT-GAS-1 | `v1.0.0`; `develop` with `ideal_gas=True` |
+| Real gas with a z-factor (Papay, Sutton pseudo-critical properties) | PVT-GAS-3 to PVT-GAS-5 | `develop` default |
+
+PVT-GAS-2 and PVT-GAS-6 apply to every option, PVT-GAS-7 to the friction of `develop` (FRIC-3).
 
 The heat capacity $c_{pg}$ is a constant parameter (THM-1). The lift gas is the same gas as the produced gas (paper §2.3).
 
 ## Safeguards
 
-None.
+None. Nothing checks that $p_{pr}$ and $T_{pr}$ are in PVT-GAS-4's range; at high $p_{pr}$ its $Z$ has a minimum and then rises steeply.
 
 ## Sources
 
-Paper (9) and Table 3 (standard reference conditions).
+- Paper (9) and Table 3 (standard reference conditions).
+- Papay (1968), "A termelési technológiai paraméterek változása a gáztelepek művelése során", *OGIL Műszaki Tudományos Közlemények*, 267–273.
+- Sutton (1985), "Compressibility factors for high-molecular-weight reservoir gases", SPE 14265.
+- Lee, Gonzalez and Eakin (1966), "The viscosity of natural gases", *Journal of Petroleum Technology* 18, 997–1000.
+- Feature specs `specs/features/005-fluid-model.md` and `006-real-gas.md`.
 
 ## Test vectors
 
@@ -68,9 +118,53 @@ Generated by `specs/tools/make_v1_vectors.py` from ManyWells v1.0.0 (casadi 3.6.
 | 420.0 | 0.8372375498872117 |
 <!-- vectors:end -->
 
+<!-- vectors:begin develop -->
+Generated by `specs/tools/make_develop_vectors.py` from develop (casadi 3.8.1): they pin develop's options. Do not edit by hand.
+
+### PVT-GAS-3
+
+| p | T | rho_g_sc | → rho_g |
+|---|---|---|---|
+| 1.01325 | 288.15 | 0.8 | 0.8025111150985167 |
+| 100.0 | 350.0 | 0.8 | 72.63595630996694 |
+| 250.0 | 380.0 | 0.68 | 130.09617761579543 |
+| 30.0 | 290.0 | 1.0 | 33.344112095524885 |
+
+### PVT-GAS-4, PVT-GAS-5
+
+| p | T | sg_gas | → p_pc | → T_pc | → Z |
+|---|---|---|---|---|---|
+| 1.01325 | 288.15 | 0.554 | 47.09688673190624 | 188.95067555555553 | 0.9975929753172854 |
+| 100.0 | 350.0 | 0.65 | 46.200649124600005 | 202.8388888888889 | 0.895826953447206 |
+| 250.0 | 380.0 | 0.75 | 45.262203340999996 | 216.5 | 0.9409016075663112 |
+| 300.0 | 330.0 | 0.9 | 43.845226739599994 | 235.45 | 0.9075327281455864 |
+
+### PVT-GAS-6
+
+| rho_g_sc | → sg_gas | → M_g | → R_s |
+|---|---|---|---|
+| 0.6783 | 0.5536169542027575 | 16.038283163253883 | 518.4133435834127 |
+| 0.8 | 0.6529464298425562 | 18.915858072538853 | 439.5497136907862 |
+| 1.1 | 0.8978013410335149 | 26.00930484974093 | 319.6725190478444 |
+
+### PVT-GAS-7
+
+| T | rho_g | M_g | → mu_g |
+|---|---|---|---|
+| 288.15 | 0.68 | 16.04 | 1.1127036746568543e-05 |
+| 350.0 | 80.0 | 18.8 | 1.5377485303874373e-05 |
+| 380.0 | 200.0 | 22.0 | 2.377124205445594e-05 |
+<!-- vectors:end develop -->
+
 ## Coverage
 
 | ID | Paper | v1.0.0 code | Checked by |
 |---|---|---|---|
 | PVT-GAS-1 | (9) | `simulator.py` `_closure_relations` (`g2`); `pvt.py` `gas_density` | vectors; rows |
 | PVT-GAS-2 | Table 3 | `pvt.py` `P_REF`, `T_REF`, `gas_density`, `specific_gas_constant` | vectors |
+| PVT-GAS-3 | — | — | vectors; rows (in the v1.0.0 configuration, as PVT-GAS-1) |
+| PVT-GAS-4 | — | — | vectors; property: tests/test_pvt.py |
+| PVT-GAS-5 | — | — | vectors |
+| PVT-GAS-6 | — | — | vectors; property: tests/test_fluid.py |
+| PVT-GAS-7 | — | — | vectors; property: tests/test_pvt.py |
+| PVT-GAS-8 | — | — | property: tests/test_black_oil_consistency.py |
