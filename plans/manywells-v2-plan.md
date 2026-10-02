@@ -59,7 +59,7 @@ Because the problem is a nonconvex feasibility NLP with multiple roots and a 95.
 A change on `develop`, and any new equation (Step 10), comes in as an option that is off in the v1-compatibility configuration. That configuration must keep passing against the v1.0.0 reference; a change that alters it is a regression and fails by design. With an option on, there is no reference root set and no second implementation of the model. The option is checked by:
 
 - test vectors for each component function (friction, PVT, slip, …) in its spec file;
-- Invariants, dropping those that assume dead oil where gas dissolves into the oil;
+- Invariants, dropping those that assume dead oil where gas dissolves into the oil, and "temperature not below the ambient profile" where the Joule–Thomson term can cool the fluid below its surroundings (`specs/features/016-joule-thomson.md`);
 - spot checks of relations that need no closure: the inflow equation at the bottom and the choke equation at the top, conservation of total mass, non-negative friction in every cell, and heat flowing outwards;
 - Convergence;
 - stability property checks with the implementation's own Jacobian: a two-root well has one stable and one unstable root, the unstable one at higher `p_0`;
@@ -276,6 +276,7 @@ The checks above establish that a candidate solves the model and returns its sta
 - **Output.** The new equation, merged; a list of the gaps found, each fixed; a "how to add an equation" section in `AGENTS.md`, checked against what was actually done.
 - **Done when.** The addition went through the loop with no undocumented steps left, and CI is green, including the traceability test.
 - **Who.** Agent implements, working only from `AGENTS.md` and the specs; Bjarne reviews the spec delta.
+- **Status.** Done 2026-10-02. The equation is the gas's Joule–Thomson cooling, with the Dranchuk–Abou-Kassem equation of state as its factor and as the gas law (`specs/features/016-joule-thomson.md`). Bjarne approved the spec before the implementation, then signed off its method changes, constants, bound and spec edits, and ruled that only the root where a cell's energy row rises in its temperature is physical (SOL-9). It is merged into `develop` (`8c082a2`, `7e44137`), and CI is green on it. The gaps found are listed in the spec, each fixed, and `AGENTS.md` has a section, "Adding an equation", with the steps taken.
 
 ## After this plan: the path to v2.0.0
 
