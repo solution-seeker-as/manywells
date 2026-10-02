@@ -1,6 +1,6 @@
 # Calibration
 
-*Step C1 of `plans/calibration-plan.md`. Owner: Bjarne Grimstad. Status: draft for Bjarne's sign-off, 2026-10-02. The scope decisions (the four parameters, a joint full-well forward model, measurement noise only, a MAP point estimate) are Bjarne's, 2026-10-02; everything else here, the priors, the noise defaults and the tolerances of the checks included, needs his sign-off. Implemented in `manywells.calibration` (feature spec `specs/features/017-calibration.md`).*
+*Step C1 of `plans/calibration-plan.md`. Owner: Bjarne Grimstad. Status: decided, 2026-10-02. The scope decisions (the four parameters, a joint full-well forward model, measurement noise only, a MAP point estimate) are Bjarne's, and he signed off the rest, the priors, the noise defaults, the start search and the tolerances of the checks included, on the same day. Implemented in `manywells.calibration` (feature spec `specs/features/017-calibration.md`). Any change to this file needs his sign-off.*
 
 How ManyWells calibrates a well to its production data: rates from well tests or multiphase flow meters (MPFMs), and pressures and temperatures from whatever sensors the well has, with missing values. This is not physics, so it lives outside `specs/model/`, like `specs/sampling.md`; it changes no equation of the model, and the `v1.0.0` configuration is untouched.
 
@@ -142,7 +142,7 @@ Every draw comes from `numpy.random.default_rng(seed)`.
 
 ### Checks
 
-The calibration is checked on wells simulated with known parameters (`tests/test_calibration_recovery.py`), drawn with `manywells.sampling` in the `develop` configuration on 20 cells, with $z^* = (1.5, -1, 1, -1.5)$ for (`K_c`, `w_l_max`, `roughness`, `h`), all four free, from the start of CAL-9. The tolerances are proposed, for Bjarne's sign-off.
+The calibration is checked on wells simulated with known parameters (`tests/test_calibration_recovery.py`), drawn with `manywells.sampling` in the `develop` configuration on 20 cells, with $z^* = (1.5, -1, 1, -1.5)$ for (`K_c`, `w_l_max`, `roughness`, `h`), all four free, from the start of CAL-9. Bjarne signed off the tolerances on 2026-10-02.
 
 1. **Identification.** With noise-free rows, full instrumentation and the $\sigma$ scaled down by 1000, so that the priors' pull is negligible, every parameter is within $10^{-3}$ of $z^*$.
 2. **Getting close.** With noise, in each instrumentation: the fit converges; $\lVert\hat z - z^*\rVert < \lVert z^*\rVert$, closer to the truth than the medians; `K_c`, `w_l_max` and `h` are each within 0.5 of $z^*$; and every observation's RMS of scaled residuals is below 2. Where the data fix only a combination of parameters, the fit can only move along that ridge; it still moves towards $z^*$, since in a linearized model with noise-free rows the MAP is the point of the ridge nearest the medians, and $z^*$ lies on the ridge.

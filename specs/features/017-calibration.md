@@ -1,6 +1,6 @@
 # 017 · Calibration to a well's production data
 
-*Feature spec for Step C1 of `plans/calibration-plan.md`, 2026-10-02. Status: draft for Bjarne's sign-off; implemented on the branch `calibration`, with Steps C2 to C7 of the plan. Not a model feature: it adds `specs/calibration.md` and changes no equation in `specs/model/`. Bjarne's decisions of 2026-10-02 are marked; everything else, the priors, the noise defaults, the start search and the tolerances included, needs his sign-off.*
+*Feature spec for Step C1 of `plans/calibration-plan.md`, 2026-10-02. Status: implemented on the branch `calibration`, with Steps C2 to C7 of the plan; signed off by Bjarne on 2026-10-02 (Sign-off, at the end). Not a model feature: it adds `specs/calibration.md` and changes no equation in `specs/model/`.*
 
 ## Decisions (Bjarne, 2026-10-02)
 
@@ -91,7 +91,7 @@ On 24 CPUs, 2026-10-02. The scripts are `scripts/calibration/twins.py` (items 6 
 
 - `tests/test_calibration.py` (fast): the data's validation, the noise, the parameters and priors, the predicted observations, the residuals and the synthetic data's instrumentation.
 - `tests/test_calibration_recovery.py` (slow): the Checks of `specs/calibration.md` (identification, getting close in every instrumentation, determinism), the result and its diagnostics, the start off the medians and a row that cannot flow anywhere, on seeded wells.
-- The twin study (proposed, for Bjarne's sign-off): in every instrumentation, at least 95% of the fits converge, end closer to $z^*$ than the medians are where $z^*$ is more than 0.5 from them, have `K_c`, `w_l_max` and `h` within 0.5 of $z^*$, and have every RMS of scaled residuals below 2. Measured: 100%, 100%, 96.6% to 100% (28 of 29 in `periodic_tests`, whose largest `K_c` error is 0.51) and 100%.
+- The twin study: in every instrumentation, at least 95% of the fits converge, end closer to $z^*$ than the medians are where $z^*$ is more than 0.5 from them, have `K_c`, `w_l_max` and `h` within 0.5 of $z^*$, and have every RMS of scaled residuals below 2. Measured: 100%, 100%, 96.6% to 100% (28 of 29 in `periodic_tests`, whose largest `K_c` error is 0.51) and 100%.
 - `tests/test_spec_traceability.py` passes with the CAL namespace; `tests/test_sampling.py` passes unchanged after the extraction; `scripts/sim_examples/calibrate_well.py` runs (`tests/test_examples.py`).
 
 ## Findings
@@ -112,9 +112,10 @@ On 24 CPUs, 2026-10-02. The scripts are `scripts/calibration/twins.py` (items 6 
 
 The items under After this plan in `plans/calibration-plan.md`: posterior uncertainty (a Laplace approximation from the fit's Jacobian), model discrepancy, uncertain inputs such as $p_r$, change over time and sequential recalibration, hierarchical priors across wells, more parameters, faster solves (a tracked operating point on the core, or the parameters as symbols of the CasADi system) and modular fits. The private real-well checks (Step C8) wait for `plans/validation-plan.md`.
 
-## Needs Bjarne's sign-off
+## Sign-off (Bjarne, 2026-10-02)
 
-- `specs/calibration.md`: the data's columns, the rate observation (CAL-3), the noise defaults (CAL-4), the priors (CAL-6), the barrier and the start search (CAL-9), the stopping rule (CAL-11), and the Checks' tolerances.
-- The start search, a routine with a measured gain (constitution, principle 7; Measurements, item 7): it lets 20 of 145 twin fits start at all and removes 2 false minima, for 22% more solves in total.
-- The calibration contract in `specs/architecture.md`, the removal of `choke_cal` and `inflow_cal`, and declaring `scipy`.
-- The added line in `AGENTS.md` that puts `specs/calibration.md` among the specs that need sign-off.
+- **`specs/calibration.md`:** the data's columns (CAL-1, CAL-2), the rate observation (CAL-3), the noise defaults (CAL-4), the priors (CAL-6), the barrier and the start search (CAL-9), the stopping rule (CAL-11), and the Checks' tolerances: identification within $10^{-3}$; getting close within 0.5 for `K_c`, `w_l_max` and `h`, with residual RMS below 2; and the twin study's share of 95%. Signed off.
+- **The start search** (constitution, principle 7; Measurements, item 7). It lets 20 of 145 twin fits start at all and removes 2 false minima, for 22% more solves in total. Signed off.
+- **The calibration contract** in `specs/architecture.md`, **the removal** of `choke_cal` and `inflow_cal` (an API break, in the CHANGELOG), and **declaring `scipy`**. Signed off.
+- **The added line in `AGENTS.md`** that puts `specs/calibration.md` among the specs that need sign-off. Signed off.
+- **Old files.** Bjarne asked for the old calibration files to be deleted: `choke_cal.py` and `inflow_cal.py` with this branch, and his untracked `scripts/wellbore_cal.py`, which no longer ran on `develop`'s API.

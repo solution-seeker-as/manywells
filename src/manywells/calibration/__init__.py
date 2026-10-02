@@ -17,11 +17,11 @@ the rows a well's instruments give, with missing values.
 
 from manywells.calibration.data import CalibrationData, Noise, OBSERVATIONS
 from manywells.calibration.fit import CalibrationError, CalibrationResult, calibrate, evaluate
-from manywells.calibration.parameters import (FIELDS, Parameter, apply, darcy_productivity_index, default_prior,
-                                              vogel_maximum_rate)
+from manywells.calibration.parameters import (CENTIPOISE, FIELDS, MILLIDARCY, Parameter, apply,
+                                              darcy_productivity_index, default_prior, vogel_maximum_rate)
 from manywells.calibration.synthetic import INSTRUMENTATIONS, synthetic_data
 
 __all__ = ['CalibrationData', 'Noise', 'OBSERVATIONS', 'CalibrationError', 'CalibrationResult', 'calibrate',
-           'evaluate', 'FIELDS',
+           'evaluate', 'FIELDS', 'MILLIDARCY', 'CENTIPOISE',
            'Parameter', 'apply', 'darcy_productivity_index', 'default_prior', 'vogel_maximum_rate',
            'INSTRUMENTATIONS', 'synthetic_data']

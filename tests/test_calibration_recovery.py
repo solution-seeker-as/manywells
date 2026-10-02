@@ -28,7 +28,7 @@ pytestmark = pytest.mark.slow
 FREE = ['K_c', 'w_l_max', 'roughness', 'h']
 Z_TRUE = np.array([1.5, -1.0, 1.0, -1.5])     # The truth, in prior standard deviations from the medians
 SEED, WELLS, N_CELLS, N_ROWS = 1, (1, 3, 4), 20, 10
-# The tolerances (specs/calibration.md, Checks; proposed, for Bjarne's sign-off)
+# The tolerances (specs/calibration.md, Checks; signed off by Bjarne, 2026-10-02)
 IDENTIFIED = 1e-3       # Identification: every parameter within this many prior standard deviations
 CLOSE = 0.5             # Getting close: each of DETERMINED within this many
 DETERMINED = ('K_c', 'w_l_max', 'h')

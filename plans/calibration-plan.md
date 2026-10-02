@@ -1,6 +1,6 @@
 # ManyWells calibration — plan
 
-*Draft 2026-10-02. Owner: Bjarne Grimstad. Status: Steps C1 to C7 implemented on the branch `calibration` on 2026-10-02, at Bjarne's request, against the drafted spec; awaiting his sign-off. Step C8 waits for `plans/validation-plan.md`. Bjarne made the scope decisions below on 2026-10-02; everything else is a draft for his sign-off.*
+*Draft 2026-10-02. Owner: Bjarne Grimstad. Status: Steps C1 to C7 implemented on the branch `calibration` on 2026-10-02, at Bjarne's request, and signed off by him the same day (`specs/features/017-calibration.md`, Sign-off). Step C8 waits for `plans/validation-plan.md`. Bjarne made the scope decisions below on 2026-10-02.*
 
 This plan makes it easy to calibrate ManyWells to a well's production data: rates from well tests or multiphase flow meters (MPFMs), and pressures and temperatures from whatever sensors the well has. Rows may have missing values, and instrumentation differs between wells; not every well has a downhole gauge. The first version calibrates four parameters per well (choke, inflow, friction, heat transfer), each with a physics-based prior, and returns the posterior mode (MAP). It works with both backends, the Rust core by default.
 
@@ -77,7 +77,7 @@ Bjarne, 2026-10-02:
 - **Measurement noise only.** No discrepancy term: no extra model-error variance, no offset per well test, and no Gaussian-process δ.
 - **MAP point estimate only.** Priors act as physics-based regularization. There is no posterior covariance, Laplace approximation or sampling in the first version.
 
-Proposed alongside these, for sign-off:
+Proposed alongside these, and signed off by Bjarne on 2026-10-02:
 
 - **Per well, over a window.** A calibration covers one well and one set of rows, with θ constant across them. A table with several wells is calibrated well by well. Drift over time is handled by recalibrating on a recent window.
 - **Inputs are known.** `p_r`, `T_r`, `T_s` and the fluid fractions are given per row, not calibrated. `p_r` is the main risk: a 1% error in it significantly corrupts a productivity estimate (Nikoofard et al. 2017, Table VII). Calibrating it is the first item after this plan.
@@ -104,7 +104,7 @@ A calibration takes a `CalibrationData` for one well: a table with one row per s
 
 Each parameter is a field of a component of `WellProperties`, applied with `dataclasses.replace`. Each is a plain field in `solvers/rust.py`'s `core_well`, so both backends take it.
 
-Every prior is log-normal, which keeps the parameter positive. The fit works in the standardized log, z = (log θ − log m)/s, so a parameter's prior residual is z itself. The table below is a proposal, for sign-off.
+Every prior is log-normal, which keeps the parameter positive. The fit works in the standardized log, z = (log θ − log m)/s, so a parameter's prior residual is z itself. The table below was proposed here; `specs/calibration.md` (CAL-6) holds it as Bjarne signed it off on 2026-10-02.
 
 **Choke coefficient**
 - **Field:** `choke.K_c` (m²); CHK-2, CHK-5, CHK-6.
@@ -158,7 +158,7 @@ The shape of the choke profile σ(u) is not calibrated. With rows at several ope
 - **No operating point.** A row was observed flowing, so a θ under which it has no operating point is inconsistent with it.
   - Following Seman et al.'s extreme barrier, the row's residuals then take a large fixed value, so the solver rejects the step.
   - The fit starts at the prior medians. *Changed in Step C6:* the twin study found wells that flow at their own parameters but not at the medians at some rows, typically at small choke openings. If a row has no operating point at the medians, the fit starts at the feasible point with the lowest cost among one and two prior standard deviations along each parameter. Only if none is feasible does it stop and report the rows, instead of dropping them silently.
-  - This rule is a spec decision, for sign-off; the start search is a routine whose gain the study measured (principle 7).
+  - This rule is a spec decision (CAL-9); the start search is a routine whose gain the study measured (principle 7). Bjarne signed off both on 2026-10-02.
 - **Cost.** Each objective evaluation is n solves, and a finite-difference Jacobian with p free parameters adds p more evaluations.
   - Example: 50 rows, four parameters and about 20 iterations make about 5,000 solves. At 0.15 s each, that is about 13 minutes on one core, or under 2 minutes on 8 threads. Step C4 measures it.
   - Speed-up option: a solve that tracks the operating point from the previous θ, with a local search on the core's `residual(p_0)` (about 2 ms per call) in place of the full scan. That is new solver machinery, so it comes only with a measured gain (principle 7).
@@ -166,7 +166,7 @@ The shape of the choke profile σ(u) is not calibrated. With rows at several ope
 ### Noise and the objective
 
 - **The noise model.** Each observation's σ comes from its sensor or source: absolute for pressures and temperatures, relative for the rate. Rates enter as log residuals, so a relative σ applies directly.
-- **Defaults.** For sign-off, and overridable per well and per column:
+- **Defaults.** Overridable per well and per column; signed off by Bjarne on 2026-10-02 (CAL-4):
 
   | Observation | Default σ | Basis |
   |---|---|---|
@@ -238,7 +238,7 @@ src/manywells/calibration/
   - **The calibration contract in `specs/architecture.md`:** the module row and the interface.
 - **Done when.** Bjarne has signed off the spec, including the priors and noise defaults, and approved the feature spec.
 - **Who.** Agent drafts; Bjarne decides.
-- **Status.** Drafted 2026-10-02 on the branch `calibration`, with Steps C2 to C7 implemented against the drafts at Bjarne's request: `specs/calibration.md` (CAL-1 to CAL-13, with its Checks), `specs/features/017-calibration.md`, and the contract in `specs/architecture.md` (Interface contracts, Calibration). Awaiting his sign-off.
+- **Status.** Drafted 2026-10-02 on the branch `calibration`, with Steps C2 to C7 implemented against the drafts at Bjarne's request: `specs/calibration.md` (CAL-1 to CAL-13, with its Checks), `specs/features/017-calibration.md`, and the contract in `specs/architecture.md` (Interface contracts, Calibration). Bjarne signed them off on 2026-10-02, the priors, the noise defaults and the tolerances included.
 
 ### Step C2 — Data and observations
 
@@ -273,7 +273,7 @@ src/manywells/calibration/
     - the time per evaluation at n = 10, 50 and 200 rows, on both backends;
     - the accuracy of the finite-difference Jacobian, comparing steps h and h/2 in z. The root's tolerance has to stay well below the change a step makes.
 - **Done when.** The measurements are in the feature spec, and the Jacobian is smooth on the twins. If the cost is too high for interactive use, the agent proposes the tracked solve with its measured gain, under principle 7.
-- **Status.** Done 2026-10-02 (feature spec 017, Measurements). The forward differences agree to five digits for steps from 10⁻⁴ to 10⁻⁸ in log θ, and 16 threads solve 16 rows 12 times faster than one. A fit of 20 rows takes a median of 11 s on 24 CPUs, and 160 rows under a minute, so no tracked solve is proposed. The CasADi backend works but builds a system per row and parameter value: 25 to 290 s for a fit of 4 rows that the core does in 1 to 4 s.
+- **Status.** Done 2026-10-02 (feature spec 017, Measurements). The forward differences agree to four digits from a step of 10⁻⁴ and to five from 10⁻⁵ to 10⁻⁸ in log θ, and 16 threads solve 16 rows 12 times faster than one. A fit of 20 rows takes a median of 11 s on 24 CPUs, and 160 rows under a minute, so no tracked solve is proposed. The CasADi backend works but builds a system per row and parameter value: 25 to 290 s for a fit of 4 rows that the core does in 1 to 4 s.
 
 ### Step C5 — The fit, and recovering known parameters
 
@@ -302,7 +302,7 @@ src/manywells/calibration/
 - **Done when.**
   - The recovery tests pass at the tolerances Bjarne set in Step C1.
   - The fit is deterministic: the same inputs and seed give the same θ̂.
-- **Status.** Done 2026-10-02, at the proposed tolerances, which await Bjarne's sign-off (`specs/calibration.md`, Checks).
+- **Status.** Done 2026-10-02, at the tolerances Bjarne signed off the same day (`specs/calibration.md`, Checks).
   - `tests/test_calibration_recovery.py`: three seeded vertical wells, 10 rows on 20 cells, z* = (1.5, −1, 1, −1.5), 22 slow tests in about a minute.
   - **Identification:** every parameter within 10⁻³ of z*, with the noise scaled down by 1000; measured within 2·10⁻⁷ on eight wells of every trajectory.
   - **Getting close:** in every instrumentation, `K_c`, `w_l_max` and `h` within 0.5.
@@ -336,7 +336,7 @@ src/manywells/calibration/
 - **Output.** `scripts/calibration/twins.py`, research code like `scripts/verification/`, with its results in the feature spec.
 - **Done when.** The share of wells that meet Step C5's criteria, in each pattern, is at least what Bjarne set in Step C1, and the results are recorded.
 - **Who.** Agent runs; Bjarne sets the tolerances.
-- **Status.** Run 2026-10-02 on 30 wells of seed 2026; results in feature spec 017, Measurements, and the corrected table above. Bjarne has set no share yet. Findings:
+- **Status.** Run 2026-10-02 on 30 wells of seed 2026; results in feature spec 017, Measurements, and the corrected table above. Bjarne signed off a share of 95% per instrumentation on 2026-10-02 (`specs/calibration.md`, Checks); the study meets it. Findings:
   - **Starting the fit.** 20 of the first 145 fits could not start at the medians: some row had no operating point there.
   - **A false minimum.** 2 fits converged to a false minimum at a roughness of about 140 m, a valley of the friction correlation far outside its range.
   - **The fix.** The start search (CAL-9) removes both failures, for 34% more solves at the median.
@@ -352,7 +352,7 @@ src/manywells/calibration/
   - Update the layout line in `AGENTS.md`, and declare `scipy` in `pyproject.toml`.
   - `scripts/wellbore_cal.py` is Bjarne's untracked file. Freeing the roughness supersedes it, and he decides whether to delete it.
 - **Done when.** The full suite passes, the example included.
-- **Status.** Done 2026-10-02. The full suite passes: one test, the backend comparison, needs multiprocessing, which runs outside the agent's sandbox. `README.md` and `docs/testing.md` point to the new files, and `AGENTS.md` lists `specs/calibration.md` among the specs that need sign-off. `scripts/wellbore_cal.py` is untouched, in the main checkout.
+- **Status.** Done 2026-10-02. The full suite passes: one test, the backend comparison, needs multiprocessing, which runs outside the agent's sandbox. `README.md` and `docs/testing.md` point to the new files, and `AGENTS.md` lists `specs/calibration.md` among the specs that need sign-off. At Bjarne's request, his untracked `scripts/wellbore_cal.py` was deleted from the main checkout on 2026-10-02.
 
 ### Step C8 — Calibrated real-well checks (private)
 
@@ -399,12 +399,15 @@ In rough order of value:
 
 ## Needs Bjarne's sign-off
 
-- `specs/calibration.md`: the priors, the noise defaults, the rate observation, the barrier and the stopping rule.
-- The feature spec, and the tolerances of the recovery tests (C5) and the twin study (C6).
-- The calibration contract in `specs/architecture.md`.
-- Retiring `choke_cal.py` and `inflow_cal.py` (an API break), and declaring `scipy`.
-- Any solver machinery from Step C4, with its measured gain.
-- The accuracy bound of the private check (Step C8).
+Signed off on 2026-10-02 (`specs/features/017-calibration.md`, Sign-off):
+- `specs/calibration.md`, with the priors, the noise defaults, the rate observation, the barrier, the start search and the stopping rule;
+- the feature spec, and the tolerances of the recovery tests (C5) and the twin study (C6);
+- the calibration contract in `specs/architecture.md`;
+- retiring `choke_cal.py` and `inflow_cal.py` (an API break), and declaring `scipy`.
+
+Step C4 added no solver machinery: the core's search is used as it is.
+
+Still open: the accuracy bound of the private check (Step C8).
 
 ## Open decisions
 

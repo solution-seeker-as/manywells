@@ -150,7 +150,7 @@ op2 = sim.simulate(bc2, x_guess=op.x)   # a warm start makes the search faster, 
 
 ### Calibration
 
-*Added with `specs/calibration.md` (`plans/calibration-plan.md`, Step C1), 2026-10-02; for Bjarne's sign-off.*
+*Added with `specs/calibration.md` (`plans/calibration-plan.md`, Step C1), 2026-10-02; signed off by Bjarne the same day.*
 
 ```python
 data = CalibrationData(df, noise=Noise())                  # one well's rows: inputs, observations (NaN where missing)
