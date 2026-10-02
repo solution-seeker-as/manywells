@@ -1,65 +1,76 @@
 # Testing
 
-The project uses [pytest](https://pytest.org/) for testing. Tests live in the `tests/` directory.
+The project uses [pytest](https://pytest.org/). `tests/` tests the `manywells` package and `verification/tests/`
+tests the verifier (`specs/verification.md`). The Rust core in `rust/` has its own tests, which cargo runs.
 
 ## Setup
 
-Install the environment. pytest comes from the `dev` dependency group, which `uv sync` installs by default:
+Install the environment from the project root:
 
 ```bash
 uv sync
 ```
 
-Or with pip (25.1 or newer, for dependency-group support):
+This installs the `dev` dependency group too, which holds pytest and the verifier (`manywells-verify`, the uv
+workspace member in `verification/`). `uv sync` builds the Rust core, so it needs a Rust toolchain (stable, at least
+1.85, from [rustup](https://rustup.rs)).
+
+With pip, install the two packages and pytest:
 
 ```bash
-pip install -e . --group dev
+pip install -e . -e ./verification pytest
 ```
+
+`pip install --group dev` does not work here, because the verifier is not on PyPI.
 
 ## Running tests
 
-Run all tests:
-
 ```bash
-uv run pytest tests/ -v
+uv run pytest                                        # everything: tests/ and verification/tests/
+uv run pytest -m "not slow"                          # skip the slow tests
+uv run pytest tests/test_thermal.py                  # one file
+uv run pytest tests/test_simulator.py::test_row_order  # one test
+cargo test --manifest-path rust/Cargo.toml --no-default-features   # the Rust core, without Python
 ```
 
-Skip slow tests (e.g. full simulator solve):
+The tests that run a full solve, and those that run the examples, are marked `slow`. Skipping them is fine while
+iterating; run the full suite before finishing a change to the solver, the physics or the public API. CI runs all of
+them.
 
-```bash
-uv run pytest tests/ -v -m "not slow"
-```
+`--no-default-features` leaves out the crate's `python` feature, the bindings in `rust/src/lib.rs`, so cargo builds
+and tests the core alone.
 
-## Test layout
+## Layout
 
-| File | Coverage |
-|------|----------|
-| **test_pvt.py** | Reference conditions, fluids, `specific_gas_constant`, `gas_density`, `liquid_mix`, `water_liquid_ratio`, API/density conversions, `dead_oil_surface_tension` |
-| **test_ca_functions.py** | `ca_max_approx`, `ca_min_approx`, `ca_softmax`, `ca_sigmoid`, `ca_double_sigmoid` |
-| **test_choke.py** | `ChokeModel` (critical pressure ratio, choke openings, invalid profile/K_c), `BernoulliChokeModel`, `SimpsonChokeModel`, `is_choked` |
-| **test_inflow.py** | `ProductivityIndex`, `Vogel`, `FixedFlowRate` |
-| **test_slip.py** | `classify_flow_regime`, `SlipModel` (Harmathy, Taylor, `identify_parameters`, `slip_equation`, `flow_regime`) |
-| **test_simulator.py** | `WellProperties`, `BoundaryConditions` (frozen, validated), `SSDFSimulator` (construction, row order, the deprecated two-argument form, `solution_as_df`); `slow`: full solves, root sets, `NoOperatingPoint` |
-| **test_thermal.py** | `ThermalModel`: heat loss, frictional heating, gravity term, ambient profile, inflow temperature |
-| **test_configurations.py** | `manywells.configurations`: the `v1.0.0` configuration and its check |
-| **test_roots.py** | The root search's copies of the verifier's state distance and thresholds, admissibility (SOL-1), labels, the operating point (SOL-4 to SOL-6), the starts |
-| **test_model_properties.py** | Property and spot checks of develop's full model on deviated, L-shaped, black-oil and cold-lift-gas wells, with both backends: Invariants, inflow and choke rows, mass conservation, friction, heat flow, convergence, two-root stability, and the same roots from both (`slow`) |
-| **test_rust_backend.py** | The Rust core as the simulator's backend on v1.0.0's wells: their roots, the CasADi rows at the core's roots, what the core refuses, the void-fraction bracket; `slow`: the same roots as the CasADi backend, the slope's sign on the case set |
-| **test_backend_comparison.py** | The Rust core against the CasADi backend in every configuration of the matrix (`backend_cases.py`): rows at the same state, and the core's march zeroing the CasADi rows; `slow`: the root sets on the comparison set |
-| **test_sampling.py** | The ported sampler: seeding, draw ranges and distributions, the map to each configuration, operating-point draws, the non-stationary walk, dataset rows; `slow`: one well's generation |
-| **test_calibration.py** | `calibrate_bernoulli_choke_model`, `calibrate_inflow_model` (PI and Vogel), and error cases |
-| **test_spec_vectors.py** | Both backends against the test vectors in `specs/model/` (component tables of v1.0.0 and develop, and v1.0.0's residual rows in the `v1.0.0` configuration); `spec_parse.py` reads the spec files |
-| **test_spec_traceability.py** | Equation IDs, coverage tables and `# spec:` tags (`specs/model/README.md`) |
-| **test_examples.py** | Every script in `scripts/sim_examples/` runs to the end headless (`slow`) |
+The test files follow the module layout: `test_<module>.py` tests `src/manywells/<module>.py`, and the tests of a
+package are named after its modules (`test_pvt.py`, `test_fluid.py` and `test_black_oil.py` for `pvt/`, for
+instance). `test_roots.py` tests the root search in `solvers/roots.py` and the operating point in `solution.py`.
 
-`verification/tests/` tests the verifier (`specs/verification.md`); `uv run pytest` runs it with the rest.
+These files cut across modules:
 
-The tests that run a full simulator solve, or the examples, are marked `slow` so they can be skipped for faster feedback with `-m "not slow"`.
+| File | What it checks |
+|------|----------------|
+| `test_spec_vectors.py` | Both backends against the test vectors in `specs/model/`: the component tables of v1.0.0 and `develop`, and v1.0.0's residual rows in the `v1.0.0` configuration. A vector whose equation `develop` does not implement is skipped with the reason; one that `develop` is known not to reproduce is a strict expected failure, so it fails once `develop` does. |
+| `test_spec_traceability.py` | Equation IDs, coverage tables and `# spec:` tags (`specs/model/README.md`). `spec_parse.py` reads the spec files for both spec tests. |
+| `test_model_properties.py` | `develop`'s full model, which has no reference root sets: invariants, inflow and choke rows, mass conservation, friction, heat flow, convergence and stability, on deviated, L-shaped, black-oil and cold-lift-gas wells, with both backends (`slow`). |
+| `test_rust_backend.py` | The Rust core as the simulator's backend on v1.0.0's wells, and what it refuses. |
+| `test_backend_comparison.py` | The Rust core against the CasADi backend in every configuration of the matrix in `backend_cases.py`: the rows at the same state, and, in the slow test, the root sets on the comparison set. |
+| `test_examples.py` | Every script in `scripts/sim_examples/` runs to the end headless (`slow`). |
+
+`verification/tests/` reads v1.0.0 roots from `verification/tests/data/fixtures.npz`, which
+`verification/build/make_test_fixtures.py` writes from v1.0.0 (`verification/build/README.md`). Never edit it by
+hand.
 
 ## Configuration
 
 Pytest is configured in `pyproject.toml` under `[tool.pytest.ini_options]`:
 
-- **testpaths**: `["tests"]`
-- **pythonpath**: `["src"]` so the `manywells` package is importable
-- **markers**: `slow` — marks tests as slow (deselect with `-m "not slow"`)
+- **testpaths**: `["tests", "verification/tests"]`
+- **pythonpath**: `["src"]`, so the `manywells` package is importable
+- **markers**: `slow`, for the tests that run a full solve or the examples (deselect with `-m "not slow"`)
+
+## CI
+
+`.github/workflows/tests.yml` runs on every push to `main` and `develop` and on every pull request. The `test` job
+runs `uv run pytest` on Python 3.11 to 3.14. The `verify` job runs the Rust core's cargo tests and then the
+verifier on v1.0.0's own solutions and on `develop`'s candidates with each backend (`AGENTS.md`, The verifier).
