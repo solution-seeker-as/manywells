@@ -1,9 +1,17 @@
 # Dataset description
 
-The `data` folder contains synthetic well data generated using the code in `scripts/data_generation/`. 
-The generated data is stored in data dumps (pickle files), which are later compiled to a dataset 
-by running the script `read_dump.py` (for stationary datasets) or `read_dump_nonstationary.py` 
-(for non-stationary datasets). 
+The published ManyWells datasets are on [Hugging Face](https://huggingface.co/datasets/solution-seeker-as/manywells):
+`manywells-sol-1` (stationary, open loop), `manywells-nsol-1` (non-stationary, open loop) and `manywells-nscl-1`
+(non-stationary, closed loop). Each has one million samples, 500 from each of 2000 wells, generated with ManyWells
+v1.0.0, and a config file, `<dataset>_config.zip`, with the parameters each well was simulated with. The
+[README](../README.md#datasets) shows how to load them, and [`corrigendum.md`](corrigendum.md) lists their errata.
+The published datasets are never modified.
+
+The generators in `scripts/data_generation/` write new datasets with the same features
+([`simulate.md`](simulate.md), Generating datasets). Their config file holds each well's draws
+(`manywells.sampling.wells.WellDraw`), whose columns differ from those of the published config files.
+`read_dump.py` and `read_dump_nonstationary.py` are v1.0.0's scripts that compiled its generators' pickle files
+into the published datasets; the generators on `develop` write the files directly.
 
 ### Dataset features
 

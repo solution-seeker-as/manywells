@@ -487,7 +487,9 @@ matters only on the CasADi backend.
   `thermal_energy_modeling.md`, `calibration.md`, ...) that the README never
   links to. Add a "Documentation" section to the README, and consider
   mkdocs-material + mkdocstrings on GitHub Pages to render both the guides and
-  the (already thorough) docstrings.
+  the (already thorough) docstrings. **[README section done 2026-10-02]** The
+  README has a Documentation section, and the empty `docs/calibration.md` was
+  removed; mkdocs remains open.
 - **Examples hygiene**: move the `__main__` demo blocks in `slip.py` and
   `cl_simulator.py` into `scripts/`/tests; library modules with executable
   tails confuse new readers and evade testing.
