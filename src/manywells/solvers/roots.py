@@ -153,6 +153,11 @@ class RootFinder:
                 attempts.append(Attempt(name, np.nan if p_0 is None else p_0, 'not admissible (a cell is supersonic)',
                                         time.perf_counter() - t0, result.stats.get('iter_count', 0)))
                 continue
+            if not self.system.energy_rows_rise(result.x, params):  # spec: SOL-9
+                attempts.append(Attempt(name, np.nan if p_0 is None else p_0,
+                                        'not admissible (an energy row falls in T)', time.perf_counter() - t0,
+                                        result.stats.get('iter_count', 0)))
+                continue
             same = [x for x in solutions if state_distance(result.x, x, bc) <= TOL_X]
             if not same:
                 solutions.append(result.x)

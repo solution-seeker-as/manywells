@@ -178,6 +178,9 @@ class System:
         cell_slope(x_i, x_prev, w_res, params, delta_md, cos_incl, tvd_frac) -> s
                                                  the slope of cell i's momentum row in p_i with the point's other
                                                  rows held at zero, positive where the cell is subsonic (SOL-8)
+        energy_slope(x_i, x_prev, w_res, params, delta_md, cos_incl, tvd_frac) -> s
+                                                 the slope of cell i's energy row in T_i at fixed p_i with the point's
+                                                 mass rows and closures held at zero, positive at a root (SOL-9)
         reservoir_rate(p_0, params) -> w_res     the reservoir liquid rate (kg/s)
         bottom_guess(p_0, params) -> x_0         a starting point for point 0's rows at p_0
         regime_probabilities(x) -> P             the flow-regime probabilities [p_annular, p_slug, p_bubbly]
@@ -193,6 +196,7 @@ class System:
     bottom_rows: ca.Function
     point_rows: ca.Function
     cell_slope: ca.Function
+    energy_slope: ca.Function
     reservoir_rate: ca.Function
     bottom_guess: ca.Function
     regime_probabilities: ca.Function
@@ -226,6 +230,16 @@ class System:
         N = self.n_cells
         slopes = self.cell_slope.map(N)(X[1:].T, X[:-1].T, w_res, params, ca.DM(geo.delta_md).T,
                                         ca.DM(geo.cos_incl).T, ca.DM(geo.tvd_frac[1:]).T)
+        return bool(np.all(np.asarray(slopes) > 0))
+
+    def energy_rows_rise(self, x, params) -> bool:  # spec: SOL-9
+        """Whether every cell's energy row of state x rises with T_i at fixed p_i, along the point's mass rows and
+        closures."""
+        geo, X = self.wp.geometry, np.reshape(x, (-1, DIM_X))
+        w_res = float(self.reservoir_rate(X[0, 0], params))
+        N = self.n_cells
+        slopes = self.energy_slope.map(N)(X[1:].T, X[:-1].T, w_res, params, ca.DM(geo.delta_md).T,
+                                          ca.DM(geo.cos_incl).T, ca.DM(geo.tvd_frac[1:]).T)
         return bool(np.all(np.asarray(slopes) > 0))
 
     def bounds(self, bc):
@@ -291,6 +305,13 @@ def build_system(wp) -> System:  # spec: DISC-11
     cell_slope = ca.Function('cell_slope', [x_i, x_prev, w, prm, d_md, cos_i, frac], [slope],
                              ['x_i', 'x_prev', 'w_res', 'params', 'delta_md', 'cos_incl', 'tvd_frac'], ['s'])
 
+    # The energy row's slope in T_i at fixed p_i along the curve on which the point's mass rows and closures are zero
+    # (SOL-9): ∂r_T/∂T - ∂r_T/∂y (∂r_c/∂y)^-1 ∂r_c/∂T, with y the five unknowns between p and T
+    held, y = [0, 1, 4, 5, 6], [1, 2, 3, 4, 5]  # DISC-7, DISC-8 and the closures; v_g, v_l, alpha, rho_g, rho_l
+    t_slope = J[3, 6] - ca.mtimes(J[3, y], ca.solve(J[held, y], J[held, 6]))
+    energy_slope = ca.Function('energy_slope', [x_i, x_prev, w, prm, d_md, cos_i, frac], [t_slope],
+                               ['x_i', 'x_prev', 'w_res', 'params', 'delta_md', 'cos_incl', 'tvd_frac'], ['s'])
+
     # Reservoir rate, and a starting point for point 0: the densities and the inflow temperature at p_0, half gas
     # by volume, and the velocities that carry the phase rates
     p_0 = ca.SX.sym('p_0')
@@ -319,6 +340,6 @@ def build_system(wp) -> System:  # spec: DISC-11
                           ['x', 'params'], ['choked', 'w_res', 'w_g_res'])
 
     return System(wp=wp, n_x=n_x, row_ids=row_ids(wp), residual=residual, bottom_rows=bottom, point_rows=point,
-                  cell_slope=cell_slope,
+                  cell_slope=cell_slope, energy_slope=energy_slope,
                   reservoir_rate=reservoir_rate, bottom_guess=bottom_guess, regime_probabilities=regimes,
                   outputs=outputs)

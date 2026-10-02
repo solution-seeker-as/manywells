@@ -110,3 +110,26 @@ def test_a_state_with_a_supersonic_cell_is_not_a_root():
     assert 'not admissible (a cell is supersonic)' in [a.outcome for a in rs.search]
     assert sim.system.subsonic(rs.roots[0].x, sim.system.params(bc))
     assert [round(r.p_0, 2) for r in SSDFSimulator(wp, backend='rust').root_set(bc).roots] == [264.0]
+
+
+def test_the_energy_slope_with_heat_loss_alone():
+    """SOL-9: with heat loss alone (THM-1) the energy row rises in T_i by 1 + delta_md 4h / (D C) along the point's
+    mass rows and closures, which hold the heat-capacity flux C at the previous point's."""
+    from manywells.configurations import v1_well
+    from manywells.discretization import build_system
+    from manywells.inflow import Vogel
+    from manywells.choke import SimpsonChokeModel
+    wp = v1_well(L=2000.0, D=0.127, rho_l=880.0, R_s=420.0, cp_g=2225.0, cp_l=3000.0, f_D=0.03, h=25.0, f_g=0.15,
+                 inflow=Vogel(60.0), choke=SimpsonChokeModel(K_c=0.0015, chk_profile='linear'), n_cells=10)
+    bc = BoundaryConditions(p_r=220.0, p_s=20.0, u=0.6)
+    system = build_system(wp)
+    params = system.params(bc)
+    x = np.asarray(system.bottom_guess(180.0, params), dtype=float).ravel()
+    X = np.vstack([x] * 2)
+    X[1, 0] -= 5.0                                  # any state of the next point: the slope holds along the curve
+    geo = wp.geometry
+    tau = float(system.energy_slope(X[1], X[0], float(system.reservoir_rate(X[0, 0], params)), params,
+                                    geo.delta_md[0], geo.cos_incl[0], geo.tvd_frac[1]))
+    p, v_g, v_l, alpha, rho_g, rho_l, T = X[0]
+    C = wp.fluid.cp_g * alpha * rho_g * v_g + wp.fluid.cp_l * (1 - alpha) * rho_l * v_l
+    assert tau == pytest.approx(1 + geo.delta_md[0] * 4 * wp.thermal.h / (geo.D * C), rel=1e-10)

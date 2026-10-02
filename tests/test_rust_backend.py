@@ -253,3 +253,6 @@ def test_the_core_finds_the_operating_point_of_a_gas_well_with_joule_thomson_coo
     counts = sim._roots.counts
     assert counts['edge_refinements'] > 0 and counts['lower_step_outs'] > 0
     assert well != 22 or counts['temperature_minima'] > 0
+    from manywells.discretization import build_system
+    system = build_system(wp)
+    assert system.energy_rows_rise(op.x, system.params(bc))  # SOL-9: the upper root where the row is U-shaped

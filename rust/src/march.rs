@@ -209,7 +209,7 @@ impl<'a> Marcher<'a> {
             // U-shaped in T, as Joule-Thomson cooling can make it near a gas well's choked wellhead: the root on the
             // rising side of its minimum, which continues the root without the term, lies between the ends, and the
             // minimum brackets it. Otherwise the root lies below T_lo, and the lower end steps out.
-            let falling = row(a - U_SAMPLE_DT).map_or(true, |f| !(f <= f_a));
+            let falling = row(a - U_SAMPLE_DT).map_or(true, |f| !(f <= f_a)); // spec: SOL-9
             if falling {
                 self.count(|c| c.temperature_minima += 1);
                 let (t_m, f_m) = minimize(&mut |t| row(t).ok().filter(|f| f.is_finite()).unwrap_or(f64::INFINITY),

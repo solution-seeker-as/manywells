@@ -119,6 +119,17 @@ def test_invariants(solved, name, backend):
 
 @pytest.mark.parametrize('backend', BACKENDS)
 @pytest.mark.parametrize('name', WELLS)
+def test_every_root_is_subsonic_with_rising_energy_rows(solved, name, backend):
+    """SOL-8 and SOL-9 at every root of both backends, by the CasADi system's slopes."""
+    sim, bc, rs = solved[name, backend]
+    system = solved[name, 'casadi'][0].system
+    params = system.params(bc)
+    for root in rs.roots:
+        assert system.subsonic(root.x, params) and system.energy_rows_rise(root.x, params)
+
+
+@pytest.mark.parametrize('backend', BACKENDS)
+@pytest.mark.parametrize('name', WELLS)
 def test_spot_checks(solved, name, backend):
     """Relations that need no closure: the inflow rows (INF-6, INF-7), the choke row (CHK-1), and at every point
     the phase rates of the fluid model (DISC-7, DISC-8) and non-negative friction (FRIC-1)."""

@@ -1,6 +1,6 @@
 # 016 · The Dranchuk–Abou-Kassem gas law and Joule–Thomson cooling
 
-*Feature spec for Step 10 of `plans/manywells-v2-plan.md`, 2026-10-02. Status: approved by Bjarne on 2026-10-02 with the rulings below, and implemented on the branch `step10-joule-thomson`. The changes that still need his sign-off are listed at the end.*
+*Feature spec for Step 10 of `plans/manywells-v2-plan.md`, 2026-10-02. Status: approved by Bjarne on 2026-10-02 with the rulings below, implemented on the branch `step10-joule-thomson` and merged into `develop`; signed off by Bjarne on 2026-10-02 (Sign-off, at the end).*
 
 ## Rulings (Bjarne, 2026-10-02)
 
@@ -8,6 +8,7 @@
 - **The gas law.** DAK is also the gas law (PVT-GAS-11), folded into this spec. Papay's z-factor stays as an option, and DAK is `develop`'s default.
 - **The default.** The Joule–Thomson term is on in `develop`'s default and off in the `v1.0.0` configuration.
 - **The tolerance** of the reference test of $J$ is $0.03 + 0.1\,|J_\text{ref}|$.
+- **Two roots of an energy row** (found in the implementation): only the root where a cell's energy row rises in $T_i$ is physical. `solution.md` has a new SOL-9, and the CasADi search rejects a state with a falling energy row; the core takes the rising root by design (design choice 5).
 
 ## Motivation
 
@@ -44,6 +45,7 @@ with $J$ of PVT-GAS-10 at the point, $F$ the viscous pressure gradient (FRIC-1),
 ### Other files
 
 - `specs/model/balances.md`: **BAL-13**, $dT/dz = -H + \Phi_f - \Phi_g - \Phi_{JT}$; with $\Phi_{JT} = 0$ it is BAL-12.
+- `specs/model/solution.md`: **SOL-9**, rising energy rows: a state with a cell whose energy row falls in $T_i$, at fixed $p_i$ along the point's mass rows and closures, is not a root; SOL-2's root set holds only states that satisfy it.
 - `specs/model/discretization.md`: DISC-10's row is unchanged, and its text adds $-\Phi_{JT,i}$; DISC-11's gas-law closure is PVT-GAS-1, PVT-GAS-3 or PVT-GAS-11.
 - `specs/model/README.md`: `develop`'s default gas is PVT-GAS-9 and PVT-GAS-11, its energy balance BAL-13 with THM-8.
 - `specs/model/nomenclature.md`: $\Phi_{JT}$, $J$ (`jt_factor`), $\rho_r$ (`reduced_density`), `z_factor_model`.
@@ -58,7 +60,7 @@ with $J$ of PVT-GAS-10 at the point, $F$ the viscous pressure gradient (FRIC-1),
 | fluid | `FluidModel.z_factor_model`; `z_factor`, `gas_density`, `gas_law_row` with DAK; `reduced_density`, `jt_factor` | `ZFactorModel`, `GasLaw::Dak`; `Fluid::jt_factor` |
 | thermal | `ThermalModel.joule_thomson`, THM-8 | `Thermal::joule_thomson`, THM-8; `is_linear` is false with it and a real gas |
 | method | none | the temperature bracket's lower end steps out (item 4); the cell solve descends where the state at $p_s$ cannot be computed, the scan refines the edges of the finite region, and the temperature solve takes the upper root of a U-shaped row (item 5) |
-| harness | `configurations.py` (off in `v1_well`, `z_factor_model` checked for `develop`), `discretization.row_ids`, the solver's lower temperature bound (`System.bounds`, item 6), `solvers/rust.py` | `lib.rs`: `Well::new`'s arguments, `dak_z_factor`, `dak_jt_factor`, `jt_factor` components, the `lower_step_outs`, `temperature_minima` and `edge_refinements` counts; test wells `w1_joule_thomson`, `w2_joule_thomson` |
+| harness | `configurations.py` (off in `v1_well`, `z_factor_model` checked for `develop`), `discretization.row_ids`, the solver's lower temperature bound (`System.bounds`, item 6), SOL-9 in the CasADi search (`System.energy_slope`, `energy_rows_rise`), `solvers/rust.py` | `lib.rs`: `Well::new`'s arguments, `dak_z_factor`, `dak_jt_factor`, `jt_factor` components, the `lower_step_outs`, `temperature_minima` and `edge_refinements` counts; test wells `w1_joule_thomson`, `w2_joule_thomson` |
 
 No interface changes: `temperature_gradient` already receives the state, the fluid, $F$ and $\cos\theta$ in both backends, and `dp_dmd` stays unused.
 
@@ -132,7 +134,8 @@ Done on the branch, 2026-10-02:
 6. **Backend comparison** (`tests/backend_cases.py`): feature `016`; overlays `papay`, `joule-thomson` (with a real gas) and `no joule-thomson`; the rows agree at the same states in every configuration of the matrix, including `W1+papay+joule-thomson` and `W2+energy terms+joule-thomson`; the comparison-set groups as above.
 7. **The Rust core's method.** Step 9's assumption checks (`march.rs`, `the_cell_rows_have_the_shapes_the_cell_solve_assumes`) run on the two new test wells too. They found one gap: the energy row's crossings were counted over samples where the row is NaN, below 0 °F, where the dead-oil viscosity correlation has none; the check now counts finite samples only. `tests/test_rust_backend.py` checks item 5 on the three sampled gas wells that showed it (wells 44 and 22): the core finds the CasADi backend's operating point at each, and takes the new paths.
 8. **Temperature bounds.** In the backend comparison, every root of either backend is found by both, but for the known exceptions above; the two roots that the old bound cut off are found by both since item 6.
-9. **The suites.** `cargo test --no-default-features` passes (40 tests), and the full test suite passes: 692 passed and 1 skipped, before the gas-well test of item 7 was added, which passes on its own. Its one warning, a root only the core finds in `v1.0.0+L-shaped#0` at 433.06 bar, an unstable root 0.035 K above $T_s$ without the term, comes from none of the new paths (`plans/improvements.md` §2.9).
+9. **SOL-9.** `tests/test_roots.py` checks the slope with heat loss alone against $1 + \Delta\text{MD}\,4h/(D\,C)$; `tests/test_model_properties.py` checks SOL-8 and SOL-9 at every root of both backends; `tests/test_backend_comparison.py` checks that the core's marches satisfy it; and `tests/test_rust_backend.py` that the core's operating point at well 22, where the row is U-shaped, does. After the ruling, `develop`'s verifier report and the backend comparison above are unchanged: the CasADi search rejected no root.
+10. **The suites.** `cargo test --no-default-features` passes (40 tests), and the full test suite passes: 692 passed and 1 skipped, before the gas-well test of item 7 was added, which passes on its own. Its one warning, a root only the core finds in `v1.0.0+L-shaped#0` at 433.06 bar, an unstable root 0.035 K above $T_s$ without the term, comes from none of the new paths (`plans/improvements.md` §2.9).
 
 ## Gaps found (Step 10)
 
@@ -154,13 +157,13 @@ Step 10 records every step that needed more than `AGENTS.md` and the specs descr
 - **Other energy terms:** the liquid's thermal expansion (its Joule–Thomson term with $\beta_l \ne 0$), the heat of solution of dissolved gas, kinetic energy in the energy balance, and Joule–Thomson cooling across the choke, which is downstream of the model.
 - **The range below $T_{pr} = 1.05$**, near the critical point, where DAK is not recommended: nothing checks it (`specs/model/pvt/gas.md`, Safeguards).
 
-## Needs Bjarne's sign-off
+## Sign-off (Bjarne, 2026-10-02)
 
-1. **The Rust core's four method changes** (principle 7), with their measured cost and gain: the lower step-out of the temperature bracket (item 4); the cell solve's descent where the state at $p_s$ cannot be computed, the scan's refinement of the edges of the finite region, and the temperature solve's U-shaped row (item 5), with their constants.
-2. **The density solve's constants:** 20 unrolled Newton steps in the CasADi backend; a relative step of $10^{-13}$ and at most 50 steps in the Rust core (item 3).
-3. **The tolerance of the $Z$ test** against methane's reference: 2%; and the CasADi backend's lower temperature bound with the term, $1.05\,T_{pc}$ (item 6).
-4. **The edits to `specs/model/`** (PVT-GAS-9 to PVT-GAS-11, THM-8, BAL-13 and the text of DISC-10, DISC-11 and the configuration table), and to `specs/architecture.md`.
-5. **The changed default of `develop`**, which changes its results (Measurements), and the `AGENTS.md` section.
+- **The Rust core's four method changes** (principle 7), with their measured cost and gain and their constants: the lower step-out of the temperature bracket (item 4); the cell solve's descent where the state at $p_s$ cannot be computed, the scan's refinement of the edges of the finite region, and the temperature solve's choice of the rising root of a U-shaped row (item 5). Signed off.
+- **The density solve's constants:** 20 unrolled Newton steps in the CasADi backend; a relative step of $10^{-13}$ and at most 50 steps in the Rust core (item 3). Signed off.
+- **The CasADi backend's lower temperature bound** with the term, $1.05\,T_{pc}$ (item 6), and **the tolerance of the $Z$ test** against methane's reference, 2%. Signed off.
+- **Two roots of an energy row:** ruled; SOL-9 (Rulings).
+- **The edits to `specs/model/`** (PVT-GAS-9 to PVT-GAS-11, THM-8, BAL-13, SOL-9 and the text of DISC-10, DISC-11 and the configuration table) and to `specs/architecture.md`; **the changed default of `develop`**, which changes its results (Measurements); and **the `AGENTS.md` section**. Signed off.
 
 ## Sources
 

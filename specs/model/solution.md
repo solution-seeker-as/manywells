@@ -20,7 +20,7 @@ The strict positivity rules out the zero-flow state, a static liquid column with
 
 ### SOL-2 · Root set
 
-The root set of a case is the set of admissible states at which every row of DISC-6 is zero and every cell is subsonic (SOL-8). At every root $w_m > 0$, so the choke row (CHK-1) needs $p_N > p_c \ge p_s$, and the inflow (INF-1, INF-2) needs $p_0 < p_r$.
+The root set of a case is the set of admissible states at which every row of DISC-6 is zero, every cell is subsonic (SOL-8), and every cell's energy row rises in its temperature (SOL-9). At every root $w_m > 0$, so the choke row (CHK-1) needs $p_N > p_c \ge p_s$, and the inflow (INF-1, INF-2) needs $p_0 < p_r$.
 
 ### SOL-3 · Stability label
 
@@ -74,6 +74,14 @@ Cell $i$ is **subsonic** if $\sigma_i > 0$. Along the curve the momentum row is 
 
 Step 9 found such a state: at `v1.0.0+chen#6` of the comparison set, the CasADi search reached a state with every row zero whose last cell falls from 106 to 10.3 bar, past its sonic point. None of the verifier's 200 reference roots has a supersonic cell.
 
+### SOL-9 · Rising energy rows
+
+Decided by Bjarne, 2026-10-02 (`specs/features/016-joule-thomson.md`). Write the unknowns of a point $i > 0$ as $x_i = (p_i, y_i, T_i)$, with $y_i = (v_{g,i}, v_{l,i}, \alpha_i, \rho_{g,i}, \rho_{l,i})$, and its rows (DISC-6, DISC-11, without CHK-1) as the energy row $r_{T,i}$, the momentum row and the five others $r_{c,i}$: the two mass rows and the three closures. With $x_{i-1}$ and $p_i$ fixed, $r_{c,i} = 0$ defines $y_i(T_i)$ near a root, and the energy row along that curve has the slope
+
+$$\tau_i = \frac{\partial r_{T,i}}{\partial T_i} - \frac{\partial r_{T,i}}{\partial y_i}\left(\frac{\partial r_{c,i}}{\partial y_i}\right)^{-1}\frac{\partial r_{c,i}}{\partial T_i}.$$
+
+A state with a cell where $\tau_i \le 0$ is not a root of the model. With heat loss alone (THM-1), $\tau_i = 1 + \Delta\text{MD}_i\,4h/(D\,C) > 0$ at every state, and frictional heating and the gravity term change it little; so the rule matters only with the Joule–Thomson term (THM-8). Near a gas well's choked wellhead that term can make the energy row U-shaped in $T_i$, with two roots: the one on the rising side continues the root without the term, and the other comes from the growth of the gas's Joule–Thomson factor towards the critical point (PVT-GAS-10). Step 10 found such a cell: at well 22 of `plans/evidence/dak_jt_default.py`, roots at 279.3 and 293.4 K, of which the CasADi backend's root has the upper one.
+
 ## Informative: v1.0.0's solver
 
 Not part of the model; recorded because the verifier records which root v1.0.0 returns from its default guess (`specs/verification.md`, `v1_cold.parquet`).
@@ -118,3 +126,4 @@ Where SLIP-1 has several roots in $\alpha$ (`slip.md`, Open question), the root 
 | SOL-6 | — | `verification/src/manywells_verify/checks.py` `check_operating_point` | verifier: Operating point (tested in `verification/tests/test_checks.py`, as the case set has no such case: both were left out for incomplete root sets) |
 | SOL-7 | — | — | property: `plans/evidence/root_sets.py`, `plans/solver_description.md` §7; spec-only: a property of the model, not an equation |
 | SOL-8 | — | — | property: tests/test_roots.py (the CasADi search rejects a state with a supersonic cell), tests/test_backend_comparison.py (the Rust core's marches are subsonic) |
+| SOL-9 | — | — | property: tests/test_roots.py (the slope with heat loss alone), tests/test_backend_comparison.py (the Rust core's marches have rising energy rows), tests/test_model_properties.py (every root of both backends) |
