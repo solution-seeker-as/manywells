@@ -75,8 +75,8 @@ class ThermalModel:
         :param fluid: Fluid model (FluidModel), for the heat capacities and the gas's Joule-Thomson factor
         :param T_a: Ambient temperature at the point (K)
         :param F: Viscous pressure gradient at the point (Pa/m)
-        :param dp_dmd: Pressure gradient of the cell, c_bar (p_i - p_{i-1}) / delta_md (Pa/m); for pressure-dependent
-                       terms such as Joule-Thomson cooling, which no option uses yet
+        :param dp_dmd: Pressure gradient of the cell, c_bar (p_i - p_{i-1}) / delta_md (Pa/m), which no option uses:
+                       the Joule-Thomson term takes F + rho_m g cos(theta) for the pressure gradient (THM-8)
         :param cos_incl: Cosine of the inclination from vertical of the cell (dimensionless)
         :param D: Inner pipe diameter (m)
         :return: dT/dMD (K/m)

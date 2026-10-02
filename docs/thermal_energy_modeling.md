@@ -1,189 +1,148 @@
-# Thermal Energy Modeling
+# Thermal energy modeling
 
-The simulator's energy equation governs the fluid temperature profile along the
-wellbore. Four physical mechanisms are modeled:
+This note derives the temperature equation of ManyWells' model and explains its terms. The equations, with their IDs,
+are specified in [`specs/model/thermal.md`](../specs/model/thermal.md) and
+[`specs/model/balances.md`](../specs/model/balances.md); where this note and the spec differ, the spec holds.
 
-```
-cp_flux * dT/dz = -4h(T - T_a)/D  +  (1-α)*v_l*F  -  g*(mass_flux - liq_flux*ρ_m)  -  α*v_g*J*(F + ρ_m g)
-                   ^^^^^^^^^^^^^^    ^^^^^^^^^^^^^    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^     ^^^^^^^^^^^^^^^^^^^
-                   heat transfer     liquid friction  gravitational cooling             Joule-Thomson cooling
-                                    dissipation                                        of the real gas
-```
+## The temperature equation
 
-where `cp_flux = cp_g*α*ρ_g*v_g + cp_l*(1-α)*ρ_l*v_l` and `J = T (∂ln Z/∂T)_p`.
+Along the flow path, with $z$ the distance from the bottomhole and $\theta$ the inclination from vertical, the
+temperature of the mixture obeys (BAL-13)
 
-The equation follows from the steady-state enthalpy balance with real-gas
-(`dh_g = cp_g dT - cp_g μ_JT dp`) and incompressible-liquid (`h_l = cp_l T + p/ρ_l`)
-equations of state, neglecting kinetic energy changes. For an ideal gas
-`μ_JT = 0` and the last term vanishes, which is the equation without it. Acceleration terms in the momentum
-equation are also neglected when substituting `dp/dz` into the energy balance;
-this is consistent with the simulator's low-fidelity, steady-state design.
+$$\frac{dT}{dz} = -H + \Phi_f - \Phi_g - \Phi_{JT},$$
 
+where each term is in K/m and has the heat-capacity flux of the flow,
 
-## 1. Heat transfer to surroundings
+$$C = c_{pg}\,\alpha\rho_g v_g + c_{pl}\,(1-\alpha)\rho_l v_l,$$
 
-Heat loss from the fluid to the formation through the wellbore wall:
+in its denominator:
 
-```
-dT_heat = Δz * 4h(T - T_a) / (D * cp_flux)
-```
+| Term | ID | Expression | Effect | Switch |
+|---|---|---|---|---|
+| Heat loss | THM-1 | $H = \dfrac{4h\,(T - T_a)}{D\,C}$ | cools the fluid while it is warmer than its surroundings | always on |
+| Frictional heating | THM-6 | $\Phi_f = \dfrac{(1-\alpha)\,v_l\,F}{C}$ | heats | `frictional_heating` |
+| Gravity term | THM-7 | $\Phi_g = \dfrac{g\cos\theta\,\big(\alpha\rho_g v_g + (1-\alpha)\rho_l v_l - (1-\alpha)\,v_l\,\rho_m\big)}{C}$ | cools | `gravity_term` |
+| Joule–Thomson term | THM-8 | $\Phi_{JT} = \dfrac{\alpha\,v_g\,J\,(F + \rho_m g\cos\theta)}{C}$ | cools where $J > 0$, heats where $J < 0$ | `joule_thomson` |
 
-The ambient temperature T_a follows a linear geothermal profile from the reservoir
-temperature T_r (at z=0) to the surface temperature T_s (at z=L).
+$h$ is the overall heat transfer coefficient, $D$ the inner diameter, $T_a$ the ambient temperature, $F$ the
+viscous pressure gradient (FRIC-1), $\rho_m$ the mixture density and $J = T(\partial \ln Z/\partial T)_p$ the gas's
+Joule–Thomson factor (PVT-GAS-10).
 
-### References
+The switches are fields of `ThermalModel` (`src/manywells/thermal.py`). The `v1.0.0` configuration has heat loss
+only (BAL-5), with an ambient temperature linear in $z$ (THM-2). `develop` has all four terms by default, with an
+ambient temperature linear in true vertical depth (THM-4). $\Phi_{JT}$ is zero for an ideal gas, so it matters only
+with a real gas (PVT-GAS-3 or PVT-GAS-11).
 
-* Zhang, H.-Q., Wang, Q., Sarica, C. and Brill, J.P. (2006).
-  "Unified Model of Heat Transfer in Gas/Liquid Pipe Flow."
-  *SPE Production & Operations*, 21(1), 114–122.
-  Eq. (13) gives the temperature gradient for bubbly/dispersed-bubble flow;
-  Eq. (26) gives the corresponding expression for stratified/annular flow.
-  Both have the form `dT/dl = -4U(T - T_O) / (d * cp_flux)`.
+The temperature at the bottomhole is the reservoir temperature $T_r$ (THM-3), or, with `lift_gas_mixing`, the
+mixture of the reservoir fluid and the lift gas weighted by their heat-capacity rates (THM-5). The discretized row
+evaluates the gradient at the upper point of each cell (implicit Euler, DISC-10).
 
-* Hasan, A.R. and Kabir, C.S. (2012).
-  "Wellbore Heat-Transfer Modeling and Applications."
-  *Journal of Petroleum Science and Engineering*, 86–87, 127–136.
-  Eq. (7) presents the full single-conduit energy balance; the `∓Q/w` term
-  represents the heat exchange with the surroundings.
+## Derivation
 
+Write the phases' mass fluxes as $\dot m_g = \alpha\rho_g v_g$ and $\dot m_l = (1-\alpha)\rho_l v_l$ (kg/(m² s)),
+so that $C = c_{pg}\dot m_g + c_{pl}\dot m_l$. In this section the pressure $p$ is in Pa; the code works in bar and
+converts with $c_\text{bar}$.
 
-## 2. Frictional dissipation heating
+**Energy balance.** At steady state, with no kinetic energy and no mass transfer between the phases, so that
+$\dot m_g$ and $\dot m_l$ are constant, the total energy of the mixture changes by the heat lost through the wall
+and the work done against gravity:
 
-Viscous friction converts mechanical energy to heat. For an incompressible
-liquid the frictional pressure drop directly heats the fluid; for an ideal gas
-it does not (the enthalpy of an ideal gas is pressure-independent).
+$$\frac{d}{dz}\big(\dot m_g h_g + \dot m_l h_l\big) = -\frac{4h\,(T - T_a)}{D} - (\dot m_g + \dot m_l)\,g\cos\theta,$$
 
-```
-F       = (f_D / (2D)) * ρ_m * v_m²
-dT_fric = Δz * (1 - α) * v_l * F / cp_flux
-```
+with $h_g$ and $h_l$ the phases' specific enthalpies. (The subscripted $h_g$ and $h_l$ are enthalpies; $h$ alone is
+the heat transfer coefficient.) The factor $4/D$ is the pipe's perimeter over its cross-section.
 
-The term arises when the liquid enthalpy `h_l = cp_l T + p/ρ_l` is expanded
-in the energy balance. The frictional pressure gradient `F` enters through the
-`(1/ρ_l) dp/dz` contribution to `dh_l/dz`, weighted by the liquid volumetric
-flux `(1-α) v_l`.
+**Enthalpies.** Both phases have constant heat capacities. The liquid is incompressible, and the gas obeys
+$1/\rho_g = Z R_s T/p$:
 
-### Limiting cases
+$$dh_l = c_{pl}\,dT + \frac{dp}{\rho_l}, \qquad dh_g = c_{pg}\,dT + \left[\frac{1}{\rho_g} - T\left(\frac{\partial (1/\rho_g)}{\partial T}\right)_p\right]dp = c_{pg}\,dT - \frac{J}{\rho_g}\,dp.$$
 
-* **Pure liquid (α = 0):** `dT_fric/dz = (f_D/(2D)) * v_l² / cp_l`
-  — standard viscous dissipation heating.
-* **Pure gas (α = 1):** the term vanishes — correct for an ideal gas whose
-  enthalpy is independent of pressure.
+The bracket is $-(R_s T^2/p)(\partial Z/\partial T)_p = -J/\rho_g$, so the gas's Joule–Thomson coefficient is
+$\mu_{JT} = J/(\rho_g c_{pg})$. For an ideal gas $Z = 1$ and $J = 0$, so its enthalpy does not depend on pressure.
+The liquid's enthalpy does, through $p/\rho_l$: an incompressible liquid heats as it expands.
 
-### References
+**Substitution.** With $\dot m_l/\rho_l = (1-\alpha)v_l$ and $\dot m_g J/\rho_g = \alpha v_g J$, the balance
+becomes
 
-* Hasan, A.R. and Kabir, C.S. (2012).
-  "Wellbore Heat-Transfer Modeling and Applications."
-  *Journal of Petroleum Science and Engineering*, 86–87, 127–136.
-  Eq. (7): the `C_J dp/dz` (Joule–Thomson) term captures the thermodynamic coupling between pressure changes and temperature for single-phase flow. For an incompressible liquid `C_J = -1/(ρ_l cp_l)`, so this term reduces to friction heating.
+$$C\,\frac{dT}{dz} + \big[(1-\alpha)\,v_l - \alpha\,v_g J\big]\frac{dp}{dz} = -\frac{4h\,(T - T_a)}{D} - (\dot m_g + \dot m_l)\,g\cos\theta.$$
 
-* Hasan, A.R. and Kabir, C.S. (2002).
-  *Fluid Flow and Heat Transfer in Wellbores*.
-  Society of Petroleum Engineers.
-  Chapter 2 derives the complete steady-state energy equation for wellbore flow, including viscous dissipation, from the general enthalpy balance.
+The momentum balance (BAL-11) without its acceleration term gives the pressure gradient,
+$dp/dz = -(F + \rho_m g\cos\theta)$. Substituting it and dividing by $C$:
 
-## 3. Gravitational cooling (adiabatic lapse rate)
+$$\frac{dT}{dz} = -\underbrace{\frac{4h\,(T - T_a)}{D\,C}}_{H} + \underbrace{\frac{(1-\alpha)\,v_l F}{C}}_{\Phi_f} - \underbrace{\frac{g\cos\theta\,\big(\dot m_g + \dot m_l - (1-\alpha)\,v_l\,\rho_m\big)}{C}}_{\Phi_g} - \underbrace{\frac{\alpha\,v_g J\,(F + \rho_m g\cos\theta)}{C}}_{\Phi_{JT}}.$$
 
-As the fluid rises, thermal energy is converted to gravitational potential
-energy. For a pure ideal gas this produces the classical adiabatic lapse rate
-`-g/cp`. For a pure incompressible liquid, hydrostatic pressure work exactly
-compensates the gravitational potential energy change, so the net effect
-vanishes.
+## The terms
 
-```
-mass_flux = α*ρ_g*v_g + (1-α)*ρ_l*v_l
-liq_flux  = (1 - α)*v_l
-dT_grav   = Δz_tvd * g * (mass_flux - liq_flux * ρ_m) / cp_flux
-```
+**Heat loss ($H$).** The form of Zhang et al. (2006): heat flows to the formation in proportion to the temperature
+difference, with one overall coefficient $h$ for the whole well. The ambient temperature falls linearly from $T_r$ at
+the bottomhole to $T_s$ at the surface, in $z$ (THM-2) or in true vertical depth (THM-4), which is the same in a
+vertical well.
 
-Note that only the vertical component of gravity contributes (`Δz_tvd = Δz cos(theta)`), whereas the frictional term acts along the measured depth (`Δz`).
+**Frictional heating ($\Phi_f$).** Friction lowers the pressure, and the liquid's enthalpy carries the lost pressure
+as heat, through its $p/\rho_l$ term, weighted by the liquid's volumetric flux $(1-\alpha)v_l$. For pure liquid it is
+$\Phi_f = F/(\rho_l c_{pl})$, viscous dissipation. The gas's share is in $\Phi_{JT}$, and it is zero for an ideal gas.
 
-### Limiting cases
+**Gravity term ($\Phi_g$).** Lifting the flow converts thermal energy into potential energy. The liquid's share is
+paid by the hydrostatic pressure drop through its $p/\rho_l$ term, so only the gas's share is left; with
+$\rho_m = \alpha\rho_g + (1-\alpha)\rho_l$,
 
-* **Pure gas (α = 1):** `dT_grav/dz = g / cp_g ≈ 0.0044 K/m` for methane
-  (cp_g = 2225 J/(kg K)), giving about 13 K of cooling over 3000 m.
-* **Pure liquid (α = 0):** the term vanishes
-  (`mass_flux - liq_flux * ρ_m = ρ_l v_l - v_l ρ_l = 0`).
+$$\Phi_g = \frac{\alpha\, g\cos\theta\,\big(\rho_g v_g + (1-\alpha)\,v_l\,(\rho_l - \rho_g)\big)}{C} \ge 0.$$
 
-### References
+For pure liquid it vanishes. For pure gas it is the adiabatic lapse rate $g\cos\theta/c_{pg}$: about 0.0044 K/m with
+$c_{pg} = 2225$ J/(kg K), or 13 K over 3000 m of vertical depth.
 
-* Ramey, H.J. Jr. (1962).
-  "Wellbore Heat Transmission."
-  *Journal of Petroleum Technology*, 14(4), 427–435.
-  The foundational paper on wellbore thermal modeling.
+**Joule–Thomson term ($\Phi_{JT}$).** A real gas's enthalpy depends on pressure, so the gas cools as it expands where
+$Z$ rises with $T$ ($J > 0$), and heats where $Z$ falls with $T$, above the inversion pressure. In the range the
+sampler draws, $J > 0$ below about 300 bar. The pressure gradient $F + \rho_m g\cos\theta$ is positive at every
+admissible state, so $\Phi_{JT}$ has the sign of $J$. It vanishes for an ideal gas and for pure liquid, and for pure
+gas it is $\mu_{JT}(F + \rho_g g\cos\theta)$, the gas's Joule–Thomson cooling along its pressure drop. $J$ comes from
+the Dranchuk–Abou-Kassem equation of state in closed form at the state's gas density (PVT-GAS-10).
 
-* Hasan, A.R. and Kabir, C.S. (2012).
-  "Wellbore Heat-Transfer Modeling and Applications."
-  *Journal of Petroleum Science and Engineering*, 86–87, 127–136.
-  Eq. (7): the `g sinα / (J gc)` term represents gravitational work on the fluid. Note that `sinα` is used since `α` is the angle to the horizontal, and the conversion factors J and gc are both 1 when using SI units.
+With this term the fluid can become colder than its surroundings in gas-rich wells, and heat then flows in from the
+formation. Near a gas well's choked wellhead it can give a cell's energy row two roots in the temperature; only the
+one where the row rises in the temperature is a root of the model (SOL-9).
 
+## Assumptions and limitations
 
-## 4. Joule–Thomson cooling of the real gas
+- **One temperature.** The phases are in thermal equilibrium at every point.
+- **No kinetic energy** in the energy balance.
+- **No acceleration in the substituted pressure gradient.** $\Phi_f$, $\Phi_g$ and $\Phi_{JT}$ use
+  $F + \rho_m g\cos\theta$, while the momentum row (BAL-11) keeps the acceleration. Using the cell's actual pressure
+  gradient in $\Phi_{JT}$ instead changes the wellhead temperature by at most 0.38 K (feature spec 016, design
+  choice 1).
+- **Constant heat capacities.** $c_{pg}$ and $c_{pl}$ do not depend on pressure or temperature, although a real gas's
+  heat capacity rises with pressure.
+- **Incompressible liquid.** The liquid has no thermal expansion, so its Joule–Thomson coefficient is
+  $-1/(\rho_l c_{pl})$, which gives $\Phi_f$ and the liquid's share of $\Phi_g$.
+- **Constant mass fluxes in the derivation.** With dissolved gas (BAL-10) the phases' mass fluxes change along the
+  well. The equation uses the local fluxes and leaves out the enthalpy the gas carries as it leaves solution, the
+  heat of solution.
+- **Simple heat transfer.** One overall coefficient $h$ for the whole well and a linear ambient profile, with no
+  transient conduction into the formation as in Ramey (1962).
+- **The gas law's range.** Nothing checks that a state is in the Dranchuk–Abou-Kassem equation's range. Below a
+  pseudo-reduced temperature of 1.05, near the critical point, $J$ can have a pole (`specs/model/pvt/gas.md`,
+  Safeguards).
+- **Nothing downstream of the wellhead.** The Joule–Thomson cooling across the choke is outside the model.
 
-The enthalpy of a real gas depends on pressure. With `V = 1/ρ_g = Z R_s T / p`,
+## References
 
-```
-dh_g = cp_g dT + [V - T (∂V/∂T)_p] dp = cp_g dT - cp_g μ_JT dp,
-cp_g μ_JT = (R_s T² / p) (∂Z/∂T)_p = J / ρ_g,       J = T (∂ln Z/∂T)_p
-```
-
-(Hasan and Kabir 2018, §6.4.2). Expanding gas cools while `Z` rises with `T`,
-below the inversion pressure, and heats above it. The gas's extra enthalpy flux,
-`(w_g/A) cp_g μ_JT dp/dz = α ρ_g v_g (J/ρ_g) dp/dz = α v_g J dp/dz`, enters the
-balance as the liquid's `p/ρ_l` term does, and `dp/dz ≈ -F - ρ_m g` gives
-
-```
-dT_JT = -Δz * α * v_g * J * (F + ρ_m g cos(theta)) / cp_flux
-```
-
-`J` comes from the Dranchuk–Abou-Kassem equation of state at the state's gas
-density, in closed form (`specs/model/pvt/gas.md`, PVT-GAS-10).
-
-### Limiting cases
-
-* **Ideal gas:** `J = 0`, and the term vanishes.
-* **Pure liquid (α = 0):** the term vanishes.
-* **Pure gas (α = 1):** `dT_JT/dz = -μ_JT (F + ρ_g g cos(theta))`, the gas's
-  Joule–Thomson cooling along its pressure drop; with the gravity term it is the
-  single-phase gas equation of Hasan and Kabir (2012), Eq. (7), without heat loss
-  and kinetic energy.
-
-### References
-
-* Hasan, A.R. and Kabir, C.S. (2018).
-  *Fluid Flow and Heat Transfer in Wellbores*, 2nd ed.
-  Society of Petroleum Engineers.
-  §6.4.2: the Joule–Thomson coefficient of a single-phase liquid, a real gas and a
-  two-phase mixture, weighted by mass. §6.4.1 does not recommend neglecting it,
-  "because gas in most wells is rarely ideal".
-
-* Dranchuk, P.M. and Abou-Kassem, J.H. (1975).
-  "Calculation of Z Factors for Natural Gases Using Equations of State."
-  *Journal of Canadian Petroleum Technology*, 14(3), 34–36.
-
-
-## Derivation sketch
-
-Starting from the steady-state enthalpy balance for the mixture (no mass
-transfer between phases, constant mass fluxes `w_g/A` and `w_l/A`):
-
-```
-d/dz [w_g/A · h_g  +  w_l/A · (cp_l T + p/ρ_l)]  =  -4h(T - T_a)/D  -  (w_g + w_l)/A · g
-```
-
-with `dh_g/dz = cp_g dT/dz - cp_g μ_JT dp/dz` (§4). Expanding the left-hand side
-and substituting `dp/dz ≈ -F - ρ_m g` (neglecting acceleration):
-
-```
-cp_flux · dT/dz  +  [(1-α) v_l - α v_g J] · (-F - ρ_m g)  =  -4h(T - T_a)/D  -  mass_flux · g
-```
-
-Rearranging:
-
-```
-cp_flux · dT/dz  =  -4h(T - T_a)/D  +  (1-α) v_l · F  +  g · (liq_flux · ρ_m - mass_flux)  -  α v_g J · (F + ρ_m g)
-```
-
-The four terms on the right-hand side are heat transfer to surroundings
-(§1), frictional dissipation (§2), gravitational cooling (§3) and Joule–Thomson
-cooling of the real gas (§4). With an ideal gas (`J = 0`) the last vanishes.
+- Zhang, H.-Q., Wang, Q., Sarica, C. and Brill, J.P. (2006). "Unified model of heat transfer in gas/liquid pipe flow."
+  *SPE Production & Operations* 21(1), 114–122. Eqs. (13) and (26) give the temperature gradient for
+  bubbly/dispersed-bubble and for stratified/annular flow, both of the form $dT/dl = -4U(T - T_O)/(d\,C)$: THM-1.
+- Ramey, H.J. Jr. (1962). "Wellbore heat transmission." *Journal of Petroleum Technology* 14(4), 427–435. The
+  foundational paper on wellbore temperatures.
+- Hasan, A.R. and Kabir, C.S. (2002). *Fluid Flow and Heat Transfer in Wellbores*. Society of Petroleum Engineers.
+  Chapter 2 derives the steady-state energy equation of wellbore flow, with viscous dissipation, from the enthalpy
+  balance.
+- Hasan, A.R. and Kabir, C.S. (2012). "Wellbore heat-transfer modeling and applications." *Journal of Petroleum
+  Science and Engineering* 86–87, 127–136. Eq. (7) is the single-conduit energy balance: its $\mp Q/w$ term is the
+  heat exchange (THM-1); its $C_J\,dp/dz$ term the Joule–Thomson effect, which for an incompressible liquid,
+  $C_J = -1/(\rho_l c_{pl})$, gives the frictional heating (THM-6) and for a real gas THM-8; its
+  $g\sin\alpha/(J g_c)$ term the gravitational work (THM-7), where $\alpha$ is the angle from horizontal and
+  $J = g_c = 1$ in SI units.
+- Hasan, A.R. and Kabir, C.S. (2018). *Fluid Flow and Heat Transfer in Wellbores*, 2nd ed. Society of Petroleum
+  Engineers. §6.4.2 gives the Joule–Thomson coefficient of a liquid, a real gas and a two-phase mixture, weighted by
+  mass; §6.4.1 advises against neglecting it, "because gas in most wells is rarely ideal".
+- Dranchuk, P.M. and Abou-Kassem, J.H. (1975). "Calculation of Z factors for natural gases using equations of
+  state." *Journal of Canadian Petroleum Technology* 14(3), 34–36. The equation of state behind $Z$ and $J$
+  (PVT-GAS-9 to PVT-GAS-11).
