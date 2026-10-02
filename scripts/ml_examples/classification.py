@@ -353,6 +353,6 @@ if __name__ == '__main__':
     store_path = os.path.join(os.getcwd(), 'results')
     if not os.path.exists(store_path):
         os.makedirs(store_path)
-    fig.savefig(os.path.join(store_path,'nscl_accuracy_classification.pdf'), bbox_inches='tight')
+    fig.savefig(os.path.join(store_path,'sol_accuracy_classification.pdf'), bbox_inches='tight')
     plt.show()
 

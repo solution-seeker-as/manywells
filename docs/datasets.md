@@ -10,8 +10,9 @@ The published datasets are never modified.
 The generators in `scripts/data_generation/` write new datasets with the same features
 ([`simulate.md`](simulate.md), Generating datasets). Their config file holds each well's draws
 (`manywells.sampling.wells.WellDraw`), whose columns differ from those of the published config files.
-`read_dump.py` and `read_dump_nonstationary.py` are v1.0.0's scripts that compiled its generators' pickle files
-into the published datasets; the generators on `develop` write the files directly.
+v1.0.0's generators wrote pickle files, which its scripts `read_dump.py` and `read_dump_nonstationary.py`
+compiled into the published datasets; they are at the
+[`v1.0.0` tag](https://github.com/solution-seeker-as/manywells/tree/v1.0.0/scripts/data_generation).
 
 ### Dataset features
 

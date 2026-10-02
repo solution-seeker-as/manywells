@@ -24,7 +24,7 @@ uv run python -m scripts.ml_examples.classification
 ```
 
 Each script prints the score for each number of wells per model, plots it against that number and saves the plot in
-`results/` in the working directory (`sol_mse_regression.pdf` and `nscl_accuracy_classification.pdf`). Each takes
+`results/` in the working directory (`sol_mse_regression.pdf` and `sol_accuracy_classification.pdf`). Each takes
 about 3 minutes on one core after the download, most of it adding the noise. No seed is set, so the scores vary
 from run to run.
 
