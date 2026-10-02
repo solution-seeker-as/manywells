@@ -46,6 +46,8 @@ dev = [
 # Rebuild the extension when the Rust core changes
 cache-keys = [{ file = "pyproject.toml" }, { file = "rust/Cargo.toml" }, { file = "rust/Cargo.lock" },
               { file = "rust/src/**/*.rs" }]
+# Resolve only package versions published at least 7 days ago
+exclude-newer = "7 days"
 
 [tool.uv.workspace]
 members = ["verification"]
