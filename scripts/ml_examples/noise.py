@@ -9,11 +9,10 @@ Erlend Lundby, erlend@solutionseeker.no
 Simple noise model that adds noise to data
 """
 
-import os
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
-import manywells.pvt as pvt
+from manywells.pvt.gas import gas_density
 from scripts.ml_examples.data_loader import load_data, load_config
 
 
@@ -50,7 +49,7 @@ def add_noise(df, config, percentage_noise=0.1):
         for id in df['ID'].unique():
             c_i = config[config['ID'] == id]
             #df_i = df[df['ID'] == id]
-            rho_g = pvt.gas_density(c_i['wp.R_s'].values[0])
+            rho_g = gas_density(c_i['wp.R_s'].values[0])  # At standard conditions
             rho_l = c_i['wp.rho_l'].values[0]
             rho_oil = c_i['oil.rho'].values[0]
             rho_water = c_i['water.rho'].values[0]
@@ -74,39 +73,36 @@ def add_noise(df, config, percentage_noise=0.1):
     df_copy[noise_cols] += noise_df[noise_cols]
     return df_copy, noise_df
 
-def save_data(df, dataset_name, version):
+def save_data(df, path):
     """
     Save synthetic dataset
     :param df:
-    :param dataset_name:
-    :param version:
+    :param path: path of the CSV file
     :return:
     """
-    path = os.path.join('../../data/', version + '/' + dataset_name + '.csv')
     df.to_csv(path, index=False)
 
 
-def add_noise_and_save(dataset_name, version):
-    df = load_data(dataset_name, version)
-    df_noisy = add_noise(df)
-    noisy_name = dataset_name + '_noisy'
-    save_data(df_noisy, noisy_name, version)
+def add_noise_and_save(dataset_name, path, percentage_noise=0.1):
+    """Add noise to a published dataset, such as 'manywells-sol-1', and save it as CSV at path."""
+    df = load_data(dataset_name)
+    df_noisy, _ = add_noise(df, load_config(dataset_name), percentage_noise)
+    save_data(df_noisy, path)
 
 
 def init_noise_df(df, cols):
     id_col = df['ID'].copy()
-    zero_df = pd.DataFrame(0, index=id_col.index,columns=cols)
+    zero_df = pd.DataFrame(0.0, index=id_col.index, columns=cols)
     noise_df = pd.concat([id_col, zero_df], axis=1)
     return noise_df
 
 
 if __name__=='__main__':
-    version = 'v9'
-    dataset_name = 'synth_v9'
-    # add_noise_and_save(dataset_name, version)
-    config = load_config(dataset_name, version)
+    dataset_name = 'manywells-sol-1'
+    # add_noise_and_save(dataset_name, dataset_name + '_noisy.csv')
+    config = load_config(dataset_name)
     print(config.loc[config['ID']==0,'wp.R_s'].iloc[0])
-    df = load_data(dataset_name, version)
+    df = load_data(dataset_name)
     df_new,noise_df = add_noise(df, config)
     w_zero = noise_df['WLIQ'] - noise_df['WWAT'] - noise_df['WOIL']
     q_zero = noise_df['QLIQ'] - noise_df['QWAT'] - noise_df['QOIL']

@@ -252,10 +252,9 @@ if __name__ == '__main__':
     #------------------------------
     #1. Load dataset and dataset config
     # ------------------------------
-    version = 'manywells-sol'
     dataset_name = 'manywells-sol-1'
-    df_orig = load_data(version=version, dataset_name=dataset_name)
-    config_orig = load_config(version=version, dataset_name=dataset_name)
+    df_orig = load_data(dataset_name)
+    config_orig = load_config(dataset_name)
 
     #------------------------------
     #2. Add gaussian noise to data
