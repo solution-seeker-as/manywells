@@ -106,10 +106,6 @@ venv.bak/
 # Apple
 .DS_Store
 
-# Local folders
-local_scripts/
-papers/
-
 # Verifier build environments and full data (see verification/build/README.md)
 .worktrees/
 verification/data/build/
