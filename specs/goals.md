@@ -66,6 +66,6 @@ The new flow-regime model comes after the plan.
 |---|---|
 | Tolerances (`tol_r`, `tol_x`, convergence order) | Plan, Step 2 item 5 |
 | Operating point when there are two stable roots | `specs/model/solution.md` (Step 4): the one with the lowest p0 (SOL-6) |
-| Rust performance target | the feature spec of the plan's Step 9 (Step 8's set none) |
+| Rust performance target | none yet (Bjarne, 2026-10-02); `specs/features/015-rust-develop-model.md` records the measurements |
 | Calibration method with the Rust core | Calibration spec, after the plan |
 | v2.0 vs v2.x feature split; v2 dataset schema (every root or the operating point only); accuracy bound for the real-well check; license; wheel platforms | v2.0.0 release work |

@@ -47,7 +47,8 @@ def test_rows_agree(configuration):
 
 @pytest.mark.parametrize('configuration', MATRIX, ids=lambda c: c.name)
 def test_the_cores_march_zeroes_the_casadi_rows(configuration):
-    """The core's march from p_0 solves every row of the system but the choke row; the CasADi rows agree."""
+    """The core's march from p_0 solves every row of the system but the choke row, with every cell subsonic (SOL-8);
+    the CasADi rows agree."""
     wp, bc = configuration.inputs()
     finder, system = RustRootFinder(wp), build_system(wp)
     for fraction in (0.7, 0.85, 0.5, 0.95, 0.3):
@@ -57,6 +58,7 @@ def test_the_cores_march_zeroes_the_casadi_rows(configuration):
         ids, rows = casadi_rows(system, bc, x)
         rows = rows[np.array(ids) != 'CHK-1']
         assert np.max(np.abs(rows)) < ROOT_ROW, f'p_0 at {fraction} of the drawdown: {np.max(np.abs(rows))}'
+        assert system.subsonic(x, system.params(bc)), 'the core takes each cell\'s subsonic root (SOL-8)'
         return
     pytest.fail('no march reached the wellhead')
 

@@ -1,6 +1,6 @@
 # 015 · `develop`'s model in the Rust core
 
-*Feature spec for Step 9 of `plans/manywells-v2-plan.md` (2026-10-02), on the branch `step9-rust-develop-model`, one commit per feature spec. Status: draft for Bjarne's sign-off, which he collects at the end of the step: the methods and constants under principle 7, the comparison's tolerances, the findings, and the performance target.*
+*Feature spec for Step 9 of `plans/manywells-v2-plan.md` (2026-10-02), on the branch `step9-rust-develop-model`, one commit per feature spec. Status: Bjarne signed off on 2026-10-02: the three solver changes under principle 7, the comparison's tolerances and the temperature solve's constants, no performance target yet, and the Step 9 edits to `specs/architecture.md`. His rulings on the findings are given under each.*
 
 ## Motivation
 
@@ -54,7 +54,7 @@ The march of 014 with three changes:
 - A sample where $R$ is not finite, where a march leaves the closures' range, is left out instead of aborting the search.
 - A refined local minimum must be strict on one side.
 
-## Solver machinery and its measured gain (principle 7)
+## Solver machinery and its measured gain (principle 7; signed off 2026-10-02)
 
 Each row adds one change to the row above; one core per case.
 
@@ -87,7 +87,7 @@ With a fixed rate, every march that falls below $p_s$ gives the same $R$, the ra
 - Comparison set, 20 wells per configuration (520 cases, 24 processes, build and search per case): core 0.205 s at the median, CasADi 4.08 s, 19.9× at the median and 57.7× in total.
 - One process, 2 wells per configuration (52 cases): core 0.154 s at the median, CasADi 1.40 s, 9.1× at the median and 26.9× in total (at least 1.3× in every case). On the v1.0.0 base, 0.081 s against 0.83 s (10.2× and 14.6×); on the develop base, 0.248 s against 4.5 s (18.2× and 31.1×).
 
-**Performance target:** for Bjarne to set from these numbers (014 deferred it to this step).
+**Performance target:** none yet (Bjarne, 2026-10-02). The measurements above are the record.
 
 ## The comparison with the CasADi backend
 
@@ -137,17 +137,17 @@ Per configuration (CasADi roots / core roots / missed / core-only):
 - The verifier on the Rust candidate (`develop_candidate.py --backend rust`): PASS, no expected failures, 100%. On `develop`'s CasADi candidate, unchanged.
 - The traceability test passes with the core's tags.
 
-## Findings, for Bjarne's rulings
+## Findings, with Bjarne's rulings
 
-1. **Another branch of the momentum row.** At `v1.0.0+chen#6` and `v1.0.0+haaland#6`, the CasADi search finds a second stable root (318.69 bar). Its last cell drops from 106 to 10.3 bar, past the sonic point of the cell's U-shaped momentum row. Its rows are zero ($5 \cdot 10^{-9}$), so it is a root of the discretized system. The core's march takes each cell's subsonic root by design (014), so it does not find it. Neither `discretization.md` nor `solution.md` says which root of a cell is physical; a supersonic cell is not, in a steady-state model. Proposed: a ruling with the void-fraction branch question of Step 8's finding 2, after the plan.
-2. **Several void fractions.** In the cases where the slip law has several void fractions, the backends find different subsets of roots on different branches. At `develop#17`, CasADi finds four stable roots between 208.45 and 209.96 bar, and the core the lowest of them, which is the operating point by SOL-6. That is Step 8's finding 2, now on `develop`'s model in 1 to 2 of 20 wells per configuration.
-3. **The core accepts a jump in $R$ as a root** where the void fraction switches branch between neighbouring $p_0$ (`v1.0.0+deviated#17`, 210.36 bar). Its choke row is $-7.5 \cdot 10^{-4}$ kg/s, under the acceptance bound of $10^{-3}$ of the rate. The signed-off rule compares such cases on rows only, so it passes. A tighter acceptance, such as $|R|$ within a few ulp of $p_r$ times $|dR/dp_0|$, would reject it, but it is solver machinery and was not tried.
-4. **What the label means with a fixed rate.** With INF-8 the inflow does not respond to $p_0$, so the nodal-analysis argument of SOL-3 (a small rise in rate makes the flow fall back) has no inflow side. Both backends compute the label the same way, from $dR/dp_0$, and agree. Whether it means stability for a fixed-rate well is for Bjarne to say.
-5. **The comparison's tolerances**, for sign-off:
+1. **Another branch of the momentum row.** At `v1.0.0+chen#6` and `v1.0.0+haaland#6`, the CasADi search finds a second stable root (318.69 bar). Its last cell drops from 106 to 10.3 bar, past the sonic point of the cell's U-shaped momentum row. Its rows are zero ($5 \cdot 10^{-9}$), so it is a root of the discretized system. The core's march takes each cell's subsonic root by design (014), so it does not find it. Neither `discretization.md` nor `solution.md` said which root of a cell is physical; a supersonic cell is not, in a steady-state model. **Ruling (2026-10-02):** only the subsonic root of a cell is physical. `solution.md` has a new SOL-8, Subsonic cells, and SOL-2's root set holds only states whose cells are all subsonic. The CasADi search now rejects a state with a supersonic cell (`System.subsonic`, from the slope of each cell's momentum row with the point's other rows held at zero); the core's cell solve takes the subsonic root by design. None of the verifier's 200 reference roots has a supersonic cell, and both candidates still report PASS, 100%. At `v1.0.0+chen#6` the CasADi search now finds only the root at 264.00 bar, as the core does (`tests/test_roots.py`). The comparison above was run before the ruling; there, the two supersonic roots count among the missed.
+2. **Several void fractions.** In the cases where the slip law has several void fractions, the backends find different subsets of roots on different branches. At `develop#17`, CasADi finds four stable roots between 208.45 and 209.96 bar, and the core the lowest of them, which is the operating point by SOL-6. That is Step 8's finding 2, now on `develop`'s model in 1 to 2 of 20 wells per configuration. It stays open, with `slip.md`, to be ruled after the plan.
+3. **The core accepts a jump in $R$ as a root** where the void fraction switches branch between neighbouring $p_0$ (`v1.0.0+deviated#17`, 210.36 bar). Its choke row is $-7.5 \cdot 10^{-4}$ kg/s, under the acceptance bound of $10^{-3}$ of the rate. The signed-off rule compares such cases on rows only, so it passes. A tighter acceptance, such as $|R|$ within a few ulp of $p_r$ times $|dR/dp_0|$, would reject it, but it is solver machinery and was not tried. **Ruling (2026-10-02):** a known finding, not changed; noted in `slip.md`, Open question, and revisited when that is ruled.
+4. **What the label means with a fixed rate.** With INF-8 the inflow does not respond to $p_0$, so the nodal-analysis argument of SOL-3 (a small rise in rate makes the flow fall back) has no inflow side. Both backends compute the label the same way, from $dR/dp_0$, and agree. **Ruling (2026-10-02):** the label is kept, computed by SOL-3 as for any inflow; a note under SOL-3 says that with a fixed rate it comes from the tubing and the choke alone.
+5. **The comparison's tolerances**, signed off (2026-10-02):
    - rows to $10^{-10}$ of each row's largest value along the well. Per row, a mass row that is small at one point where its terms cancel ($-0.0012$ against terms of 2.2, with dissolved gas) gave $9 \cdot 10^{-11}$ from a difference of $10^{-13}$;
    - core-only roots to $10^{-8}$, and the choke row to the larger of $10^{-6} w_m$ and 8 ulp of $p_r$ times $|dR/dp_0|$ (at the extreme trickle root of `v1.0.0+L-shaped#0`, 0.005 bar below $p_r$, the normalized slope is $5.5 \cdot 10^9$);
    - 2 wells per configuration in the test, 20 in the script; a 2001-point grid in $\alpha$ for several void fractions.
-6. **Constants of the temperature solve**, for sign-off: the guard of $10^{-8}$ K, at most 10 chord steps, at most 30 step-outs.
+6. **Constants of the temperature solve**, signed off (2026-10-02): the guard of $10^{-8}$ K, at most 10 chord steps, at most 30 step-outs.
 
 ## Out of scope
 

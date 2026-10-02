@@ -171,6 +171,9 @@ class System:
         bottom_rows(x_0, params) -> r_0          the six rows of point 0
         point_rows(x_i, x_prev, w_res, params, delta_md, cos_incl, tvd_frac) -> r_i
                                                  the seven rows of a point i > 0, without CHK-1
+        cell_slope(x_i, x_prev, w_res, params, delta_md, cos_incl, tvd_frac) -> s
+                                                 the slope of cell i's momentum row in p_i with the point's other
+                                                 rows held at zero, positive where the cell is subsonic (SOL-8)
         reservoir_rate(p_0, params) -> w_res     the reservoir liquid rate (kg/s)
         bottom_guess(p_0, params) -> x_0         a starting point for point 0's rows at p_0
         regime_probabilities(x) -> P             the flow-regime probabilities [p_annular, p_slug, p_bubbly]
@@ -185,6 +188,7 @@ class System:
     residual: ca.Function
     bottom_rows: ca.Function
     point_rows: ca.Function
+    cell_slope: ca.Function
     reservoir_rate: ca.Function
     bottom_guess: ca.Function
     regime_probabilities: ca.Function
@@ -210,6 +214,15 @@ class System:
         choked, w_res, w_g_res = self.outputs(x, params)
         return {'flow_regime': self.flow_regimes(x), 'choked': bool(float(choked)), 'w_res': float(w_res),
                 'w_g_res': float(w_g_res)}
+
+    def subsonic(self, x, params) -> bool:  # spec: SOL-8
+        """Whether every cell of state x is subsonic: its momentum row rises with p_i along the point's other rows."""
+        geo, X = self.wp.geometry, np.reshape(x, (-1, DIM_X))
+        w_res = float(self.reservoir_rate(X[0, 0], params))
+        N = self.n_cells
+        slopes = self.cell_slope.map(N)(X[1:].T, X[:-1].T, w_res, params, ca.DM(geo.delta_md).T,
+                                        ca.DM(geo.cos_incl).T, ca.DM(geo.tvd_frac[1:]).T)
+        return bool(np.all(np.asarray(slopes) > 0))
 
     def bounds(self, bc):
         """
@@ -260,6 +273,14 @@ def build_system(wp) -> System:  # spec: DISC-11
     point = ca.Function('point_rows', [x_i, x_prev, w, prm, d_md, cos_i, frac], [ca.vertcat(*r_i)],
                         ['x_i', 'x_prev', 'w_res', 'params', 'delta_md', 'cos_incl', 'tvd_frac'], ['r_i'])
 
+    # The momentum row's slope in p_i along the curve on which the point's six other rows are zero (SOL-8):
+    # ds = ∂r_p/∂p - ∂r_p/∂y (∂r_o/∂y)^-1 ∂r_o/∂p, with y the other six unknowns and r_o the other six rows
+    J = ca.jacobian(ca.vertcat(*r_i), x_i)
+    other = [0, 1, 3, 4, 5, 6]  # the rows of point i but DISC-9, the third of cell_rows
+    slope = J[2, 0] - ca.mtimes(J[2, 1:], ca.solve(J[other, 1:], J[other, 0]))
+    cell_slope = ca.Function('cell_slope', [x_i, x_prev, w, prm, d_md, cos_i, frac], [slope],
+                             ['x_i', 'x_prev', 'w_res', 'params', 'delta_md', 'cos_incl', 'tvd_frac'], ['s'])
+
     # Reservoir rate, and a starting point for point 0: the densities and the inflow temperature at p_0, half gas
     # by volume, and the velocities that carry the phase rates
     p_0 = ca.SX.sym('p_0')
@@ -288,5 +309,6 @@ def build_system(wp) -> System:  # spec: DISC-11
                           ['x', 'params'], ['choked', 'w_res', 'w_g_res'])
 
     return System(wp=wp, n_x=n_x, row_ids=row_ids(wp), residual=residual, bottom_rows=bottom, point_rows=point,
+                  cell_slope=cell_slope,
                   reservoir_rate=reservoir_rate, bottom_guess=bottom_guess, regime_probabilities=regimes,
                   outputs=outputs)

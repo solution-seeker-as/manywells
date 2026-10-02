@@ -255,12 +255,19 @@ The checks above establish that a candidate solves the model and returns its sta
   - one PR per feature spec, the temperature solve measured first, and the scope above;
   - Finding 4's ruling in `specs/features/014-rust-solver.md`, renumbered so that the case set stays as it is through Step 10.
 
-  Implemented 2026-10-02 on the branch `step9-rust-develop-model`, one commit per feature spec, with 007 and 008 in one because Python's black oil always has dissolved gas (`specs/features/015-rust-develop-model.md`). For Bjarne's sign-off, collected at the end: the methods and constants (015, solver machinery), the comparison's tolerances, the findings, the performance target, the edits to `specs/architecture.md`, and the merge.
+  Done 2026-10-02, on the branch `step9-rust-develop-model`, one commit per feature spec, with 007 and 008 in one because Python's black oil always has dissolved gas (`specs/features/015-rust-develop-model.md`).
   - **The core** implements every option a row uses; the equations no row uses stay in Python only (Bjarne, 2026-10-02). The `v1.0.0` configuration's verifier report is unchanged (PASS, 100%, 0.066 s per case), its roots identical but for rounding where the grid became Python's.
   - **The temperature solve** (item 2): a chord iteration from the previous trial's temperature, with a bracketed Brent as fallback, 2.9× faster than Brent alone at the median. The scan leaves out samples where $R$ is not finite, and refines only strict local minima.
-  - **The comparison** (item 4): rows at the same state on a matrix of 55 configurations, the component vectors, and the root sets on the comparison set. At 20 wells for each of 26 configurations, all 520 cases pass: no label differs, and every root the core misses is in a case where the slip law has several void fractions or on another branch of a point's rows; core 20× faster than the CasADi backend at the median.
+  - **The comparison** (item 4): rows at the same state on a matrix of 55 configurations, the component vectors, and the root sets on the comparison set. At 20 wells for each of 26 configurations, all 520 cases pass: no label differs, and every root the core misses is in a case where the slip law has several void fractions or on another branch of a cell's rows. On one process the core is 9× faster than the CasADi backend at the median and 27× in total (18× and 31× on `develop`'s model).
   - **The assumptions** (item 3): checked at every cell of every root of 13 test wells, which together cover every option; the void-fraction bracket on random states.
-  - **Findings:** a CasADi root past the sonic point of a cell's momentum row, a second branch question beside Step 8's finding 2; the core accepting a jump in $R$ as a root where the void fraction switches branch; and what the label means with a fixed rate.
+
+  Bjarne's sign-off and rulings, 2026-10-02:
+  - he signed off the three solver changes (the chord iteration for the temperature, leaving non-finite samples out of the scan, refining only strict local minima), the comparison's tolerances and the temperature solve's constants, and the edits to `specs/architecture.md`;
+  - he set no performance target yet;
+  - **015, Finding 1:** the CasADi search reached a state with every row zero whose last cell is past its sonic point. Ruling: only a cell's subsonic root is physical. `solution.md` has a new SOL-8, and the CasADi search rejects a state with a supersonic cell; the verifier's reference roots have none, and both candidates still report PASS, 100%;
+  - **Finding 3:** the core's acceptance of a jump in $R$ where the void fraction switches branch is a known finding, not changed (`slip.md`, Open question);
+  - **Finding 4:** with a fixed rate the label is kept, with a note under SOL-3;
+  - the several-void-fraction question (Finding 2, Step 8's finding 2) stays open, to be ruled after the plan.
 
 ### Step 10 — Prove the loop: add one new equation
 

@@ -105,7 +105,7 @@ class Attempt:
     """One start of a search and its outcome."""
     start: str          # 'x_guess', 'default' or 'p_s + f (p_r - p_s)' with f
     p_0: float          # p_0 the march started from (bar); NaN for a given guess
-    outcome: str        # 'root at p_0 = ... bar', 'march failed', 'solve failed (<Ipopt status>)' or 'not admissible'
+    outcome: str        # 'root at p_0 = ... bar', 'march failed', 'solve failed (<Ipopt status>)' or 'not admissible ...'
     seconds: float = 0.0  # Time taken by the march and the solve
     iterations: int = 0   # Ipopt iterations
 
@@ -148,6 +148,10 @@ class RootFinder:
             if not admissible(result.x, bc):
                 attempts.append(Attempt(name, np.nan if p_0 is None else p_0, 'not admissible', time.perf_counter() - t0,
                                         result.stats.get('iter_count', 0)))
+                continue
+            if not self.system.subsonic(result.x, params):  # spec: SOL-8
+                attempts.append(Attempt(name, np.nan if p_0 is None else p_0, 'not admissible (a cell is supersonic)',
+                                        time.perf_counter() - t0, result.stats.get('iter_count', 0)))
                 continue
             same = [x for x in solutions if state_distance(result.x, x, bc) <= TOL_X]
             if not same:

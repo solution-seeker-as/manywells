@@ -308,8 +308,9 @@ impl<'a> Marcher<'a> {
     }
 }
 
-/// The pressure that zeroes a cell's momentum row(p) (bar) on [p_s, p_prev]
-fn cell_step(row: &mut impl FnMut(f64) -> Result<f64, RootError>, p_s: f64, p_prev: f64) -> CellStep {
+/// The pressure that zeroes a cell's momentum row(p) (bar) on [p_s, p_prev]: its subsonic root, on the rising side
+/// of the row's minimum at the sonic pressure p*
+fn cell_step(row: &mut impl FnMut(f64) -> Result<f64, RootError>, p_s: f64, p_prev: f64) -> CellStep {  // spec: SOL-8
     // The row is U-shaped in p, with its minimum at the cell's sonic pressure p*, and positive at p_prev. Below
     // zero at p_s: p_s lies right of p*, or left of it where the row still falls, so the only sign change on
     // [p_s, p_prev] is the subsonic root

@@ -92,3 +92,21 @@ def test_starts():
     fractions = [(p_0 - BC.p_s) / (BC.p_r - BC.p_s) for _, p_0 in starts[1:]]
     assert fractions == pytest.approx(roots.START_FRACTIONS)
     assert len({round(p, 9) for _, p in starts}) == len(starts)  # no start twice
+
+
+@pytest.mark.slow
+def test_a_state_with_a_supersonic_cell_is_not_a_root():
+    """
+    SOL-8: at v1.0.0+chen#6 of the comparison set (tests/backend_cases.py), Ipopt from one start reaches a state with
+    every row zero whose last cell falls from 106 to 10.3 bar, past its sonic point. The search rejects it; the other
+    starts give the one root, at 264.00 bar, which is subsonic in every cell and which the Rust core also finds.
+    """
+    from manywells.simulator import SSDFSimulator
+    from .backend_cases import Case
+    wp, bc = Case('v1.0.0', 'chen', 6).inputs()
+    sim = SSDFSimulator(wp)
+    rs = sim.root_set(bc)
+    assert [round(r.p_0, 2) for r in rs.roots] == [264.0]
+    assert 'not admissible (a cell is supersonic)' in [a.outcome for a in rs.search]
+    assert sim.system.subsonic(rs.roots[0].x, sim.system.params(bc))
+    assert [round(r.p_0, 2) for r in SSDFSimulator(wp, backend='rust').root_set(bc).roots] == [264.0]

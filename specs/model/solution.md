@@ -20,7 +20,7 @@ The strict positivity rules out the zero-flow state, a static liquid column with
 
 ### SOL-2 · Root set
 
-The root set of a case is the set of admissible states at which every row of DISC-6 is zero. At every root $w_m > 0$, so the choke row (CHK-1) needs $p_N > p_c \ge p_s$, and the inflow (INF-1, INF-2) needs $p_0 < p_r$.
+The root set of a case is the set of admissible states at which every row of DISC-6 is zero and every cell is subsonic (SOL-8). At every root $w_m > 0$, so the choke row (CHK-1) needs $p_N > p_c \ge p_s$, and the inflow (INF-1, INF-2) needs $p_0 < p_r$.
 
 ### SOL-3 · Stability label
 
@@ -35,6 +35,8 @@ $$s = \frac{dR}{dp_0} = \frac{\partial r_\text{CHK-1}}{\partial p_0} - \frac{\pa
 The root is **stable** if $s < 0$ and **unstable** if $s > 0$. At $s = 0$, a fold where two roots merge, the label is **indeterminate**.
 
 This is static (nodal-analysis) stability. A lower $p_0$ means a higher rate from the reservoir. At a stable root, a small increase in rate makes $R > 0$: the tubing delivers too low a wellhead pressure for the choke to pass that rate, and the flow falls back. At an unstable root the same increase makes $R < 0$, and the flow runs away. Heading and other dynamic instabilities are outside a steady-state model.
+
+With a fixed liquid rate (INF-8) the inflow does not respond to $p_0$, so the argument has no inflow side: $s$ comes from the tubing and the choke alone, and the label says whether, at that rate, a small rise in $p_0$ makes the tubing deliver more or less than the choke passes. The label is computed as for any inflow (Bjarne, 2026-10-02, `specs/features/015-rust-develop-model.md`, Finding 4).
 
 The sign of $s$ does not change if the CHK-1 row is multiplied by a positive function, such as the squared form of CHK-11, and it does not depend on the form or scaling of the other rows, because they define the same curve $y(p_0)$. The verifier normalizes $s$ by $(p_r - p_s)/w_m$ and treats labels of small magnitude as indeterminate (`specs/verification.md`, `label_min`).
 
@@ -62,6 +64,16 @@ $$p_r - p_s < \rho_l\, g\, L / c_\text{bar},$$
 
 that is, if a static liquid column cannot reach the separator; otherwise it has one root, which is stable. The criterion split all 2,000 `sol-1` configs, solved with the Rust port (`plans/solver_description.md` §7), and held on 50 configs solved with v1.0.0 from six starts each (`plans/evidence/root_sets.py`). It fails near the fold (SOL-6) and is untested with gas lift, which can remove the trickle root: in Step 2's case set it did so in 9 of 10 two-root wells.
 
+### SOL-8 · Subsonic cells
+
+Decided by Bjarne, 2026-10-02 (`specs/features/015-rust-develop-model.md`, Finding 1). Write the unknowns of a point $i > 0$ as $x_i = (p_i, y_i)$, and its rows (DISC-6, DISC-11, without CHK-1) as the momentum row $r_{p,i}$ and the six others $r_{o,i}$. With $x_{i-1}$ fixed, $r_{o,i} = 0$ defines $y_i(p_i)$ near a root, and the momentum row along that curve has the slope
+
+$$\sigma_i = rac{\partial r_{p,i}}{\partial p_i} - rac{\partial r_{p,i}}{\partial y_i}\left(rac{\partial r_{o,i}}{\partial y_i}ight)^{-1}rac{\partial r_{o,i}}{\partial p_i}.$$
+
+Cell $i$ is **subsonic** if $\sigma_i > 0$. Along the curve the momentum row is U-shaped in $p_i$: positive at $p_{i-1}$, falling to a minimum at the cell's sonic pressure $p^*$, and rising again below it. Its root on the rising side, $p^* < p_i < p_{i-1}$, is the subsonic one; a root below $p^*$ has the flow pass through sonic speed within the cell, which a steady flow in a pipe of constant area cannot. A state with a cell where $\sigma_i \le 0$ is not a root of the model.
+
+Step 9 found such a state: at `v1.0.0+chen#6` of the comparison set, the CasADi search reached a state with every row zero whose last cell falls from 106 to 10.3 bar, past its sonic point. None of the verifier's 200 reference roots has a supersonic cell.
+
 ## Informative: v1.0.0's solver
 
 Not part of the model; recorded because the verifier records which root v1.0.0 returns from its default guess (`specs/verification.md`, `v1_cold.parquet`).
@@ -75,20 +87,20 @@ Not part of the model; recorded because the verifier records which root v1.0.0 r
 Not part of the model: only the operating point and the root set are specified (principle 6). Recorded so that a reader can follow `manywells.solvers` next to this file (principle 7).
 
 - `SSDFSimulator(wp)` builds the well's system once (DISC-11), with the operating point as parameters, and an Ipopt feasibility NLP on it. `root_set(bc)` solves it from up to eight starts: a given guess (`x_guess`), the default march from $p_0 = p_r - 0.05\,(p_r - p_s)$, and marches from $p_0 = p_s + f\,(p_r - p_s)$ for $f$ in 0.5, 0.7, 0.85, 0.975, 0.995 and 0.999. The march solves point 0's rows at fixed $p_0$, then each point's rows up the well, by Newton's method, and by Ipopt with v1.0.0's bounds where Newton fails.
-- A solve is accepted if Ipopt reports `Solve_Succeeded`, as the verifier's reference build requires, and the state is admissible (SOL-1). Solutions within the verifier's `tol_x` of each other are one root. Each root is labelled by SOL-3 from the residual's Jacobian, with the verifier's `label_min`. `simulate(bc)` returns the operating point of the root set (SOL-4 to SOL-6) and raises `NoOperatingPoint` without one.
+- A solve is accepted if Ipopt reports `Solve_Succeeded`, as the verifier's reference build requires, the state is admissible (SOL-1), and every cell is subsonic (SOL-8). Solutions within the verifier's `tol_x` of each other are one root. Each root is labelled by SOL-3 from the residual's Jacobian, with the verifier's `label_min`. `simulate(bc)` returns the operating point of the root set (SOL-4 to SOL-6) and raises `NoOperatingPoint` without one.
 - Measured on the verifier's case set in the `v1.0.0` configuration (2026-10-01): every reference root found with the right label and no other root, a stable-root rate of 100% against v1.0.0's 74.3%, at 0.8 s to build a well's system and 1.6 s to search, per case. The starts after v1.0.0's (method A of the reference build) and the march's fallback are solver machinery, with their measured gains in `manywells/solvers/roots.py` and `march.py` (`plans/manywells-v2-plan.md`, Step 7).
 
 ## Informative: the Rust core's search
 
-Not part of the model; recorded so that a reader can follow `rust/src/shoot.rs` and `march.rs` next to this file (principle 7). Details and measured gains are in `specs/features/014-rust-solver.md`.
+Not part of the model; recorded so that a reader can follow `rust/src/shoot.rs` and `march.rs` next to this file (principle 7). Details and measured gains are in `specs/features/014-rust-solver.md` and `015-rust-develop-model.md`.
 
-- **The search.** `SSDFSimulator(wp, backend='rust')` covers the `v1.0.0` configuration only, and shoots on $p_0$:
-  - Given $p_0$, the march solves every row but CHK-1 point by point up the well, so $R(p_0)$, the CHK-1 row at the wellhead, is SOL-3's shooting residual.
+- **The search.** `SSDFSimulator(wp, backend='rust')` shoots on $p_0$:
+  - Given $p_0$, the march solves every row but CHK-1 point by point up the well, so $R(p_0)$, the CHK-1 row at the wellhead, is SOL-3's shooting residual. Each cell's momentum row is solved for its subsonic root (SOL-8), with the temperature solved at each trial pressure where the energy row depends on it.
   - Once the pressure falls below $p_s$, $R = w_m$ exactly (CHK-11).
   - The roots are the sign changes of $R$ on a scan of 101 points over $(p_s, p_r)$, with a ladder of halving drawdowns in the top interval and a search around each local minimum of $R \ge 0$.
   - Brent refines each sign change in the drawdown $p_r - p_0$.
 - **Acceptance and label.** A root is accepted if its march solved every row and $|R| \le 10^{-3} w_m$. Its slope comes from a central difference of $R$, labelled by SOL-3 with the verifier's `label_min`.
-- **Measured** on the verifier's case set (2026-10-01): every reference root found with the right label, a stable-root rate of 100%, and 65 ms per case on one core, with no build.
+- **Measured** on the verifier's case set (2026-10-01): every reference root found with the right label, a stable-root rate of 100%, and 65 ms per case on one core, with no build. With `develop`'s options it finds every root the CasADi backend finds, with its label, except on several void-fraction branches (2026-10-02, 015).
 
 ## Informative: roots on several void-fraction branches
 
@@ -105,3 +117,4 @@ Where SLIP-1 has several roots in $\alpha$ (`slip.md`, Open question), the root 
 | SOL-5 | — | — | verifier: Operating point |
 | SOL-6 | — | `verification/src/manywells_verify/checks.py` `check_operating_point` | verifier: Operating point (tested in `verification/tests/test_checks.py`, as the case set has no such case: both were left out for incomplete root sets) |
 | SOL-7 | — | — | property: `plans/evidence/root_sets.py`, `plans/solver_description.md` §7; spec-only: a property of the model, not an equation |
+| SOL-8 | — | — | property: tests/test_roots.py (the CasADi search rejects a state with a supersonic cell), tests/test_backend_comparison.py (the Rust core's marches are subsonic) |

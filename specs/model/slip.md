@@ -116,6 +116,7 @@ At fixed superficial velocities $j_g = \alpha v_g$ and $j_l = (1 - \alpha) v_l$,
 - **Where it occurs.** Near the slug–annular transition with little liquid there can be three roots. In Step 8's regenerated `sol-1` samples, at well 44 (k = 4: $u$ = 0.056, 3.8 kg/s of lift gas, $j_l$ = 0.016 m/s), point 95 has $\alpha$ = 0.662, 0.915 and 0.920.
 - **Consequence for the root set.** SOL-2 then holds roots that differ only in the branch at some points, and which branch is physical is not specified (`solution.md`, informative section).
 - **The case set.** At every point of every reference root, the root is unique (`tests/test_rust_backend.py`).
+- **Consequence for the Rust core.** Where the void fraction a march takes switches branch between neighbouring $p_0$, $R(p_0)$ jumps across zero, and the core can accept the jump as a root: at `v1.0.0+deviated#17` of Step 9's comparison set, its choke row is $-7.5 \cdot 10^{-4}$ kg/s, under the acceptance bound of $10^{-3} w_m$. A known finding, not changed (Bjarne, 2026-10-02, `specs/features/015-rust-develop-model.md`, Finding 3).
 - **Status.** Open (Bjarne, 2026-10-01). It is to be ruled after the plan, with the new flow-regime model of `specs/goals.md`, which replaces this classifier.
 
 ## Sources
