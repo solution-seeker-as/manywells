@@ -42,11 +42,11 @@ On top of them:
 - `solvers/`: the Ipopt adapter, the initial-guess march, and the multi-start root search with the stability label. `solution.py`: `Root`, `RootSet` and the operating point (SOL-4 to SOL-6).
 - `configurations.py`: the `v1.0.0` configuration (`v1_well`) and the check that a well is in a configuration.
 - `sampling/`, `datasets/`: the ported dataset sampler (`specs/sampling.md`) and the rows and files of a dataset.
-- `calibration/`: fitting model parameters to data. Closed loop is out of v2; `closed_loop/` was retired (it remains in v1.0.0).
+- `calibration/`: calibrating a well to its production data (`specs/calibration.md`): the data and its noise (`data.py`), the free parameters and their priors (`parameters.py`), the residuals of each row's operating point (`objective.py`), the MAP fit (`fit.py`), and synthetic data at known parameters (`synthetic.py`). It sits on top of the simulator and works with either backend. Closed loop is out of v2; `closed_loop/` was retired (it remains in v1.0.0).
 
 `rust/` is the Rust core (crate `manywells-core`, built as `manywells._core`): the same model parts, one module per spec file, with `// spec:` tags, the rows of each point defined once in `discretization.rs`, and a shooting search on the bottomhole pressure (`march.rs`, `shoot.rs`). It implements every option of `develop`'s model (`specs/features/014-rust-solver.md` for the `v1.0.0` configuration, `specs/features/015-rust-develop-model.md` for the rest). Both backends are kept and developed together, so a new equation goes into both, under the same spec ID (`specs/goals.md`), and its option goes into the comparison of the two (`tests/backend_cases.py`). `solvers/rust.py` converts a well to its inputs and builds the `RootSet` from its roots; the bindings in `lib.rs` sit behind the crate's `python` feature.
 
-`scripts/` is research code, not library API. `sim_examples/` is the best reference for setting up and running a simulation; `data_generation/` holds the dataset generators, thin callers of `manywells.sampling`; `verification/` the scripts that run `develop` for the verifier. Tests in `tests/` follow the module layout.
+`scripts/` is research code, not library API. `sim_examples/` is the best reference for setting up and running a simulation; `data_generation/` holds the dataset generators, thin callers of `manywells.sampling`; `verification/` the scripts that run `develop` for the verifier; `calibration/` the calibration's twin study. Tests in `tests/` follow the module layout.
 
 `specs/` holds the decided specifications: goals, the constitution, the model, sampling, verification, the architecture and the feature specs (`specs/features/`). `verification/` is the verifier, a separate package. `plans/` holds the plan of work and the backlog; plans are drafts, not specs.
 
@@ -139,7 +139,7 @@ A new equation is a model option that is off in the `v1.0.0` configuration. Thes
 
 Draft these when the task calls for it, but say that they need sign-off and don't present them as settled:
 
-- Any change to what `specs/model/`, `specs/sampling.md`, `specs/goals.md` or `specs/constitution.md` says: physics, sampling, scope or rules.
+- Any change to what `specs/model/`, `specs/sampling.md`, `specs/calibration.md`, `specs/goals.md` or `specs/constitution.md` says: physics, sampling, calibration (its priors and noise defaults included), scope or rules.
 - Any tolerance or bound, and any change to what a verifier check tests (`specs/verification.md`, `verification/src/manywells_verify/`).
 - The case set and all reference data (the table above), and every new entry in `verification/expected_failures.csv`.
 - Any change to a dataset schema. The published v1 datasets are never modified.
@@ -153,7 +153,7 @@ Real-well data is confidential. Some real-well data for validation resides in th
 ## Where to look for more
 
 - `specs/constitution.md` for the rules, and `specs/goals.md` for the goals and the direction for v2 (scope, non-goals, API and dataset compatibility).
-- `specs/model/` before changing any physics: the model's equations with stable IDs, one file per module (`specs/model/README.md`). Code that implements an equation carries a `# spec: <ID>` tag; `tests/test_spec_traceability.py` checks the tags and `tests/test_spec_vectors.py` checks `develop` against test vectors from v1.0.0. `specs/discrepancies.md` lists where the paper and v1.0.0 differ, and `specs/sampling.md` specifies the dataset sampling.
+- `specs/model/` before changing any physics: the model's equations with stable IDs, one file per module (`specs/model/README.md`). Code that implements an equation carries a `# spec: <ID>` tag; `tests/test_spec_traceability.py` checks the tags and `tests/test_spec_vectors.py` checks `develop` against test vectors from v1.0.0. `specs/discrepancies.md` lists where the paper and v1.0.0 differ, `specs/sampling.md` specifies the dataset sampling, and `specs/calibration.md` the calibration to a well's data (`docs/calibration.md` explains how to use it).
 - `specs/verification.md` for the verifier's case set, checks and tolerances, and `verification/build/README.md` for how its reference data is built.
 - `specs/architecture.md` before moving code between modules, adding a module or a model option, or changing an interface: the module layout (implemented in Step 7 of the plan), the interface contracts with units, the extension points, the Rust core's design, and the module each planned v2 feature belongs to.
 - `docs/thermal_energy_modeling.md` when changing the energy equation; it derives the temperature terms and cites the sources.

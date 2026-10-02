@@ -103,6 +103,7 @@ lists the datasets' errata, including the samples that lie on an unstable soluti
 ## Documentation
 
 - [`docs/simulate.md`](docs/simulate.md): setting up and solving a well, and generating datasets
+- [`docs/calibration.md`](docs/calibration.md): calibrating a well to its production data
 - [`docs/datasets.md`](docs/datasets.md): the datasets' features
 - [`docs/corrigendum.md`](docs/corrigendum.md): errors in the paper and errata in the published datasets
 - [`docs/thermal_energy_modeling.md`](docs/thermal_energy_modeling.md): the derivation of the energy balance's terms

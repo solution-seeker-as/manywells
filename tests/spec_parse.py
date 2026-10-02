@@ -32,7 +32,7 @@ NAMESPACES = {
     'GEO': 'model/geometry.md', 'PVT-GAS': 'model/pvt/gas.md', 'PVT-OIL': 'model/pvt/oil.md',
     'PVT-WAT': 'model/pvt/water.md', 'PVT-MIX': 'model/pvt/mixture.md', 'SLIP': 'model/slip.md',
     'FRIC': 'model/friction.md', 'THM': 'model/thermal.md', 'INF': 'model/inflow.md',
-    'CHK': 'model/choke.md', 'SMO': 'model/smoothing.md', 'SMP': 'sampling.md',
+    'CHK': 'model/choke.md', 'SMO': 'model/smoothing.md', 'SMP': 'sampling.md', 'CAL': 'calibration.md',
 }
 CHECK_KINDS = ('vectors', 'rows', 'verifier:', 'property:', 'spec-only:')
 
@@ -43,8 +43,9 @@ def namespace(eq_id):
 
 def spec_files():
     files = sorted(MODEL.rglob('*.md'))
-    if (SPECS / 'sampling.md').exists():
-        files.append(SPECS / 'sampling.md')
+    for name in ('sampling.md', 'calibration.md'):
+        if (SPECS / name).exists():
+            files.append(SPECS / name)
     return files
 
 

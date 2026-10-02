@@ -2,7 +2,7 @@
 
 *Step 6 of `plans/manywells-v2-plan.md`. Owner: Bjarne Grimstad. Status: decided, 2026-09-30; Bjarne ruled on its five open decisions (Decisions, below). Step 7 implemented the Python side (2026-10-01); its changes to this file are marked "Step 7", and Bjarne signed them off on 2026-10-01.*
 
-This file fixes the module boundaries, the interfaces between modules and the extension points of ManyWells v2, and the design of the Rust core for `develop`'s model. It does not define physics (`specs/model/`), the sampling procedure (`specs/sampling.md`), the checks (`specs/verification.md`), the v2 dataset schema (release work, `specs/goals.md`) or the calibration contract (before `v2.0.0`). Step 7 implements the Python side, and the Rust core follows in Steps 8 and 9.
+This file fixes the module boundaries, the interfaces between modules and the extension points of ManyWells v2, and the design of the Rust core for `develop`'s model. It does not define physics (`specs/model/`), the sampling procedure (`specs/sampling.md`), the checks (`specs/verification.md`), the v2 dataset schema (release work, `specs/goals.md`) or the calibration (`specs/calibration.md`), whose interface it gives under Interface contracts. Step 7 implements the Python side, and the Rust core follows in Steps 8 and 9.
 
 A **module** is one part of the code with one job: for a model part, its spec file, its Python module and, in the core, its Rust module of the same name. The solvers are the exception, because the two backends solve differently (`solvers/` in Python, `march.rs` and `shoot.rs` in the core). A feature belongs to exactly one module (feature map, below).
 
@@ -15,7 +15,7 @@ discretization  the rows of each point, in DISC-6 order                  ├ bac
 solvers         march, root search, stability label; Ipopt adapter      ┘
 solution        Root, RootSet, operating point (SOL-4 to SOL-6)          Python
 simulator       SSDFSimulator: the public API over one backend           Python
-on top          sampling, datasets, calibration (later)
+on top          sampling, datasets, calibration
 ```
 
 The **backend** is the part that holds the model equations: components, discretization and solvers. There are two: `develop`'s Python/CasADi code, and the Rust core, which covers the `v1.0.0` configuration since Step 8 and the whole model from Step 9 on. Both are kept and developed together (`specs/goals.md`, 2026-10-01). Everything else is Python and is shared by both backends, so switching backends changes no input, output or selection rule.
@@ -46,7 +46,7 @@ Dependency rules, checked in review:
 | `solution.py` | `Root`, `RootSet`, operating-point selection | `model/solution.md` SOL-4 to SOL-6 | new |
 | `sampling/` | `wells.py`, `conditions.py`, `generate.py`: well draws, operating-point draws, the generation procedure | `sampling.md` | new (Step 7), ported from `scripts/data_generation/` |
 | `datasets/` | `schema.py`, `rows.py`, `io.py`: feature definitions, the features of a solved sample, writers and readers | `docs/datasets.md`; the v2 schema is release work | new |
-| `calibration/` | fitting inflow and choke models to data | its spec, before `v2.0.0` | exists, unchanged |
+| `calibration/` | `data.py`, `parameters.py`, `objective.py`, `fit.py`, `synthetic.py`: one well's calibration data and noise, the free parameters and their priors, the residuals of each row's operating point, the MAP fit, synthetic data at known parameters | `calibration.md` | rewritten (`plans/calibration-plan.md`), with the contract below |
 
 The sampler lives in `src/`, not in `scripts/`, because the traceability test looks for the SMP tags in `src/` and `rust/`. The generator scripts become thin callers of `sampling.generate`. The candidate adapter that runs `develop` on the verifier's case set imports both `manywells` and `manywells_verify`, so it is a script, `scripts/verification/develop_candidate.py` (Step 7).
 
@@ -147,6 +147,21 @@ op2 = sim.simulate(bc2, x_guess=op.x)   # a warm start makes the search faster, 
 ```
 
 `NoOperatingPoint` is a `SimError` and carries the root set (SOL-5). Log messages go to `logging.getLogger('manywells')`. Whether `simulate` tries every start or stops early is solver policy: Step 7 measured its stable-root rate and cost on the case set, and each backend may choose differently, because only the returned operating point is specified (principle 6). The two-argument constructor `SSDFSimulator(wp, bc)` with `simulate()` keeps working, with a `DeprecationWarning`, until v2.0.0; it returns the operating point's state as a flat list, as before. `SSDFSimulator(wp, backend='casadi' | 'rust')` chooses the backend; both take the same inputs and return the same types. Step 8 added the `backend` argument with the Rust core; `'rust'` takes wells in the `v1.0.0` configuration only and refuses others, and builds no CasADi system.
+
+### Calibration
+
+*Added with `specs/calibration.md` (`plans/calibration-plan.md`, Step C1), 2026-10-02; for Bjarne's sign-off.*
+
+```python
+data = CalibrationData(df, noise=Noise())                  # one well's rows: inputs, observations (NaN where missing)
+result = calibrate(wp, data, bc, free=['K_c', 'w_l_max', 'roughness', 'h'], priors=None, backend='rust')
+result.values, result.z, result.well, result.residuals    # MAP estimate, shifts in prior sds, calibrated well, table
+table = evaluate(result.well, other_data, bc)             # the same table on rows it was not calibrated on
+```
+
+- **On top of the simulator.** `calibration/` calls only `SSDFSimulator(wp, backend=...).simulate(bc)` and the datasets' feature definitions (`datasets.rows.root_features`), so it works with both backends and holds no model equation. A free parameter is a plain field of a component (CAL-5), applied with `dataclasses.replace`, so every component the core has takes it.
+- **One well per row.** Each row has its own fluid (`gor`, `wlr`), so it is solved on its own `WellProperties`: on the core, a new `_core.Well` costs nothing and the rows run in threads, since the core releases the GIL; on the CasADi backend, each row and parameter value builds a system, which is fine for cross-checks on small cases and too slow for routine use. Making the parameters symbols of the CasADi system (`plans/improvements.md` §4.5) would change that, and needs a measured gain (principle 7).
+- **Errors.** `CalibrationError` (a `SimError`) when a row has no operating point at the prior medians, or the fit ends at parameters where one has none (CAL-9); `ValueError` for malformed data or parameters.
 
 ## Extension points
 

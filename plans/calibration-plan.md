@@ -1,6 +1,6 @@
 # ManyWells calibration — plan
 
-*Draft 2026-10-02. Owner: Bjarne Grimstad. Status: proposal. Bjarne made the scope decisions below on 2026-10-02; everything else is a draft for his sign-off.*
+*Draft 2026-10-02. Owner: Bjarne Grimstad. Status: Steps C1 to C7 implemented on the branch `calibration` on 2026-10-02, at Bjarne's request, against the drafted spec; awaiting his sign-off. Step C8 waits for `plans/validation-plan.md`. Bjarne made the scope decisions below on 2026-10-02; everything else is a draft for his sign-off.*
 
 This plan makes it easy to calibrate ManyWells to a well's production data: rates from well tests or multiphase flow meters (MPFMs), and pressures and temperatures from whatever sensors the well has. Rows may have missing values, and instrumentation differs between wells; not every well has a downhole gauge. The first version calibrates four parameters per well (choke, inflow, friction, heat transfer), each with a physics-based prior, and returns the posterior mode (MAP). It works with both backends, the Rust core by default.
 
@@ -154,11 +154,11 @@ The shape of the choke profile σ(u) is not calibrated. With rows at several ope
 ### Forward model and observations
 
 - **The forward solve.** For a given θ, each row becomes a `WellProperties` (θ applied, plus the row's fluid) and a `BoundaryConditions`. `simulate(bc)` solves it for its operating point: the stable root, or the one with the lowest `p_0` if there are several (SOL-6).
-- **Predicted observations.** They come from the root, with the same definitions as the dataset features. One function, extracted from `sample_row`, takes the well, the boundary conditions and the root. The datasets and calibration both call it, and the dataset rows do not change.
+- **Predicted observations.** They come from the root, with the same definitions as the dataset features. One function, extracted from `sample_row`, takes the root, the boundary conditions and the fluid's standard densities and water fraction (the `v1.0.0` configuration's fluid is a mixed dead oil, so the densities cannot come from the well alone). The datasets and calibration both call it, and the dataset rows do not change.
 - **No operating point.** A row was observed flowing, so a θ under which it has no operating point is inconsistent with it.
   - Following Seman et al.'s extreme barrier, the row's residuals then take a large fixed value, so the solver rejects the step.
-  - The fit starts at the prior medians. A row with no operating point there is reported and the fit stops, instead of dropping the row silently.
-  - This rule is a spec decision, for sign-off.
+  - The fit starts at the prior medians. *Changed in Step C6:* the twin study found wells that flow at their own parameters but not at the medians at some rows, typically at small choke openings. If a row has no operating point at the medians, the fit starts at the feasible point with the lowest cost among one and two prior standard deviations along each parameter. Only if none is feasible does it stop and report the rows, instead of dropping them silently.
+  - This rule is a spec decision, for sign-off; the start search is a routine whose gain the study measured (principle 7).
 - **Cost.** Each objective evaluation is n solves, and a finite-difference Jacobian with p free parameters adds p more evaluations.
   - Example: 50 rows, four parameters and about 20 iterations make about 5,000 solves. At 0.15 s each, that is about 13 minutes on one core, or under 2 minutes on 8 threads. Step C4 measures it.
   - Speed-up option: a solve that tracks the operating point from the previous θ, with a local search on the core's `residual(p_0)` (about 2 ms per call) in place of the full scan. That is new solver machinery, so it comes only with a measured gain (principle 7).
@@ -193,6 +193,8 @@ What we expect, from the model's structure and the literature. Steps C5 and C6 c
 | PWH, TWH and rates (no downhole gauge) | yes | weakly: confounded with friction through PWH | weakly | yes |
 | Wellhead sensors on every row, rates from periodic tests | yes, from the test rows | weakly | weakly | yes |
 | PBH, PWH, TWH, no rates | a one-parameter family: fix friction, or add rates on some rows, and the rest follows | same | same | same |
+
+*Corrected by Step C6* (29 sampled wells, 20 rows; errors in prior standard deviations, median and largest; `docs/calibration.md`): with `p_r` given, the productivity is well determined whenever some rows have rates, downhole gauge or not (largest error 0.32 without one); `K_c` and `h` are within 0.51 and 0.22 in every instrumentation tested. Roughness, not productivity, is the weak parameter: median errors 0.04 to 0.14, largest 1.0 to 1.45, because in smooth tubing the friction factor depends on the Reynolds number alone. The case without any rates was not tested.
 
 - **Choked flow.** PDC then carries no information, and `K_c` absorbs any error in r_c.
 - **Wide-open choke.** With a small pressure drop, sensor drift dominates the choke fit (Ausen et al. 2017).
@@ -236,6 +238,7 @@ src/manywells/calibration/
   - **The calibration contract in `specs/architecture.md`:** the module row and the interface.
 - **Done when.** Bjarne has signed off the spec, including the priors and noise defaults, and approved the feature spec.
 - **Who.** Agent drafts; Bjarne decides.
+- **Status.** Drafted 2026-10-02 on the branch `calibration`, with Steps C2 to C7 implemented against the drafts at Bjarne's request: `specs/calibration.md` (CAL-1 to CAL-13, with its Checks), `specs/features/017-calibration.md`, and the contract in `specs/architecture.md` (Interface contracts, Calibration). Awaiting his sign-off.
 
 ### Step C2 — Data and observations
 
@@ -248,6 +251,7 @@ src/manywells/calibration/
   - A row's predicted observations equal the dataset features of the same root.
   - Each kind of malformed input is rejected with a clear `ValueError`.
 - **Done when.** The tests pass, and `tests/test_sampling.py` passes unchanged.
+- **Status.** Done 2026-10-02. The extracted function is `datasets.rows.root_features(root, bc, rho_o, rho_w, rho_g, x_w)`: it takes the densities and the water fraction rather than the well, because the `v1.0.0` configuration's fluid is a mixed dead oil. `tests/test_calibration.py` and `tests/test_sampling.py` pass.
 
 ### Step C3 — Parameters and priors
 
@@ -259,6 +263,7 @@ src/manywells/calibration/
   - The Rust core receives the value (`core_well`).
   - The defaults match the spec's table.
 - **Can run in parallel with C2.**
+- **Status.** Done 2026-10-02, with `darcy_productivity_index` and `vogel_maximum_rate` for a physics-based productivity median (CAL-7).
 
 ### Step C4 — The objective and its cost
 
@@ -268,6 +273,7 @@ src/manywells/calibration/
     - the time per evaluation at n = 10, 50 and 200 rows, on both backends;
     - the accuracy of the finite-difference Jacobian, comparing steps h and h/2 in z. The root's tolerance has to stay well below the change a step makes.
 - **Done when.** The measurements are in the feature spec, and the Jacobian is smooth on the twins. If the cost is too high for interactive use, the agent proposes the tracked solve with its measured gain, under principle 7.
+- **Status.** Done 2026-10-02 (feature spec 017, Measurements). The forward differences agree to five digits for steps from 10⁻⁴ to 10⁻⁸ in log θ, and 16 threads solve 16 rows 12 times faster than one. A fit of 20 rows takes a median of 11 s on 24 CPUs, and 160 rows under a minute, so no tracked solve is proposed. The CasADi backend works but builds a system per row and parameter value: 25 to 290 s for a fit of 4 rows that the core does in 1 to 4 s.
 
 ### Step C5 — The fit, and recovering known parameters
 
@@ -296,6 +302,11 @@ src/manywells/calibration/
 - **Done when.**
   - The recovery tests pass at the tolerances Bjarne set in Step C1.
   - The fit is deterministic: the same inputs and seed give the same θ̂.
+- **Status.** Done 2026-10-02, at the proposed tolerances, which await Bjarne's sign-off (`specs/calibration.md`, Checks).
+  - `tests/test_calibration_recovery.py`: three seeded vertical wells, 10 rows on 20 cells, z* = (1.5, −1, 1, −1.5), 22 slow tests in about a minute.
+  - **Identification:** every parameter within 10⁻³ of z*, with the noise scaled down by 1000; measured within 2·10⁻⁷ on eight wells of every trajectory.
+  - **Getting close:** in every instrumentation, `K_c`, `w_l_max` and `h` within 0.5.
+  - **Changed by Step C6:** the fit no longer starts at z = 0 alone, but at the cheapest feasible of 4p + 1 starts (CAL-9; the No operating point bullet above).
 
 ### Step C6 — The twin study
 
@@ -325,6 +336,12 @@ src/manywells/calibration/
 - **Output.** `scripts/calibration/twins.py`, research code like `scripts/verification/`, with its results in the feature spec.
 - **Done when.** The share of wells that meet Step C5's criteria, in each pattern, is at least what Bjarne set in Step C1, and the results are recorded.
 - **Who.** Agent runs; Bjarne sets the tolerances.
+- **Status.** Run 2026-10-02 on 30 wells of seed 2026; results in feature spec 017, Measurements, and the corrected table above. Bjarne has set no share yet. Findings:
+  - **Starting the fit.** 20 of the first 145 fits could not start at the medians: some row had no operating point there.
+  - **A false minimum.** 2 fits converged to a false minimum at a roughness of about 140 m, a valley of the friction correlation far outside its range.
+  - **The fix.** The start search (CAL-9) removes both failures, for 34% more solves at the median.
+  - **Model error.** It is absorbed silently in some wells and shows in the held-out residuals in others.
+  - **Backends.** On the same data the backends agree; where they differ, the CasADi search found another root or none (`plans/improvements.md` §2.9).
 
 ### Step C7 — Retire, document, example
 
@@ -335,6 +352,7 @@ src/manywells/calibration/
   - Update the layout line in `AGENTS.md`, and declare `scipy` in `pyproject.toml`.
   - `scripts/wellbore_cal.py` is Bjarne's untracked file. Freeing the roughness supersedes it, and he decides whether to delete it.
 - **Done when.** The full suite passes, the example included.
+- **Status.** Done 2026-10-02. The full suite passes: one test, the backend comparison, needs multiprocessing, which runs outside the agent's sandbox. `README.md` and `docs/testing.md` point to the new files, and `AGENTS.md` lists `specs/calibration.md` among the specs that need sign-off. `scripts/wellbore_cal.py` is untouched, in the main checkout.
 
 ### Step C8 — Calibrated real-well checks (private)
 
@@ -351,6 +369,7 @@ src/manywells/calibration/
   - If the validation plan is not approved, the same check is a script under `scripts/calibration/` that reads a local directory, which is never committed.
 - **Done when.** The aggregate results are recorded, and Bjarne has set the acceptance bound relative to v1.0.0's errors (`specs/goals.md`, Decided elsewhere).
 - **Who.** Agent writes; Bjarne runs it and decides.
+- **Status.** Not started: it waits for Bjarne's decision on `plans/validation-plan.md` and for its V4.
 
 ## Sequencing
 
@@ -389,7 +408,7 @@ In rough order of value:
 
 ## Open decisions
 
-- Whether C1 starts before Step 10 is done.
+- ~~Whether C1 starts before Step 10 is done.~~ Settled: Step 10 (016) was merged into `develop` before the branch `calibration` was made, and Bjarne asked for the plan to be executed on 2026-10-02.
 - Whether `p_r` is a free parameter already in the first version. Without PBH it is confounded with the productivity.
 - The default σ's. With measurement noise only, they also weight the outputs against each other and against the priors.
 

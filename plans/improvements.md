@@ -282,6 +282,8 @@ calibration, one of the stated use cases).
 
 **[after the plan]** Calibration is deferred (plan, Scope decisions).
 
+**[done 2026-10-02, `plans/calibration-plan.md`]** The functions below are retired; `calibrate` raises `CalibrationError` (a `SimError`) and logs (`specs/calibration.md`).
+
 `calibrate_inflow_model` / `calibrate_*_choke_model` raise bare `Exception`
 on failure and `print` solver stats; align with `SimError`/logging (see 2.2).
 They also rebuild a fresh Ipopt instance per call — fine for now, but if 3.x

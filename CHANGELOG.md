@@ -15,6 +15,11 @@ v2.0.0 may break any part of the API; every break is listed here with an old→n
 - A state with a supersonic cell is not a root (SOL-8): each cell's momentum row must rise with its pressure along the point's other rows, on the subsonic side of its sonic point. The CasADi search rejects such states, as the Rust core's cell solve never reaches them; none of the verifier's reference roots has one (`specs/features/015-rust-develop-model.md`, Finding 1).
 - Installing from source needs a Rust toolchain: the package is built by maturin instead of setuptools.
 
+### Calibration
+
+- `manywells.calibration` calibrates a well to its production data (`specs/calibration.md`, `docs/calibration.md`): the MAP estimate of the choke coefficient, the inflow productivity, friction (`f_D` or the roughness) and the heat-transfer coefficient, any of them free, each with a physics-based log-normal prior, from rows with well-test or MPFM rates, pressures and temperatures, with missing values and whatever instruments the well has. Each row is solved for the well's operating point, on either backend (the Rust core by default). `calibration.synthetic_data` simulates a well's rows at known parameters, and the recovery tests check that the fit finds them (`specs/features/017-calibration.md`).
+- `scipy` is a declared dependency; it was installed before as scikit-learn's.
+
 ### API breaks
 
 **Simulator.** The well's system is built once; the boundary conditions go to `simulate`, which returns a `Root`. The old form still works, with a `DeprecationWarning`, until v2.0.0.
@@ -112,6 +117,19 @@ from manywells.closed_loop.cl_simulator import ClosedLoopWellSimulator
 
 # new: use v1.0.0
 #   pip install git+ssh://git@github.com/solution-seeker-as/manywells.git@v1.0.0
+```
+
+**Calibration.** `calibration.choke_cal` and `calibration.inflow_cal` are removed. They fitted one component to columns that are not measured, such as the mixture density upstream of the choke; `calibrate` fits the whole well to what is measured.
+
+```python
+# old
+from manywells.calibration.choke_cal import calibrate_simpson_choke_model
+K_c = calibrate_simpson_choke_model(df_with_p_w_m_u_p_s_x_g_rho_g_rho_l, choke)
+
+# new
+from manywells.calibration import CalibrationData, calibrate
+result = calibrate(wp, CalibrationData(df_with_CHK_PDC_PWH_TWH_QOIL_QGAS_QWAT), bc, free=['K_c'])
+K_c = result.values['K_c']          # result.well is the calibrated WellProperties
 ```
 
 ### Breaks since v1.0.0 that predate this list
