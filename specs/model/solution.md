@@ -68,7 +68,7 @@ that is, if a static liquid column cannot reach the separator; otherwise it has 
 
 Decided by Bjarne, 2026-10-02 (`specs/features/015-rust-develop-model.md`, Finding 1). Write the unknowns of a point $i > 0$ as $x_i = (p_i, y_i)$, and its rows (DISC-6, DISC-11, without CHK-1) as the momentum row $r_{p,i}$ and the six others $r_{o,i}$. With $x_{i-1}$ fixed, $r_{o,i} = 0$ defines $y_i(p_i)$ near a root, and the momentum row along that curve has the slope
 
-$$\sigma_i = rac{\partial r_{p,i}}{\partial p_i} - rac{\partial r_{p,i}}{\partial y_i}\left(rac{\partial r_{o,i}}{\partial y_i}ight)^{-1}rac{\partial r_{o,i}}{\partial p_i}.$$
+$$\sigma_i = \frac{\partial r_{p,i}}{\partial p_i} - \frac{\partial r_{p,i}}{\partial y_i}\left(\frac{\partial r_{o,i}}{\partial y_i}\right)^{-1}\frac{\partial r_{o,i}}{\partial p_i}.$$
 
 Cell $i$ is **subsonic** if $\sigma_i > 0$. Along the curve the momentum row is U-shaped in $p_i$: positive at $p_{i-1}$, falling to a minimum at the cell's sonic pressure $p^*$, and rising again below it. Its root on the rising side, $p^* < p_i < p_{i-1}$, is the subsonic one; a root below $p^*$ has the flow pass through sonic speed within the cell, which a steady flow in a pipe of constant area cannot. A state with a cell where $\sigma_i \le 0$ is not a root of the model.
 
