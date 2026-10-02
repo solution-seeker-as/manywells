@@ -17,8 +17,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from manywells.calibration import (CalibrationData, Noise, Parameter, apply, darcy_productivity_index,
-                                   default_prior, vogel_maximum_rate)
+from manywells.calibration import (CalibrationData, Noise, Parameter, apply, calibrate, darcy_productivity_index,
+                                   default_prior, evaluate, vogel_maximum_rate)
 from manywells.calibration.fit import priors_for
 from manywells.calibration.objective import BARRIER, Objective, predicted, row_conditions, row_fluids
 from manywells.calibration.parameters import MILLIDARCY, CENTIPOISE
@@ -172,6 +172,20 @@ def test_default_priors():
         default_prior('roughness', wp_f)
     with pytest.raises(ValueError, match='A_c'):
         default_prior('K_c', WP, A_c=-1.0)
+
+
+def test_a_well_the_backend_cannot_solve_is_refused_before_any_solve():
+    """A component the Rust core lacks is a ValueError, not rows taken for ones that cannot flow."""
+    class MyInflow(Vogel):
+        pass
+
+    wp = replace(WP, inflow=MyInflow(w_l_max=50.0))
+    with pytest.raises(ValueError, match='Rust core cannot solve'):
+        calibrate(wp, CalibrationData(rows()), BoundaryConditions(), ['K_c'])
+    with pytest.raises(ValueError, match='Rust core cannot solve'):
+        evaluate(wp, CalibrationData(rows()), BoundaryConditions())
+    with pytest.raises(ValueError, match='backend must be'):
+        calibrate(WP, CalibrationData(rows()), BoundaryConditions(), ['K_c'], backend='fortran')
 
 
 def test_priors_for():

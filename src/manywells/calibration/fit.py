@@ -115,6 +115,17 @@ def residual_table(objective, pred) -> pd.DataFrame:
     return df
 
 
+def check_backend(wp, backend):
+    """Raise ValueError if the backend cannot solve the well, before any row is taken for one that cannot flow."""
+    if backend == 'rust':
+        from manywells.solvers.rust import not_in_core  # Imported here, so that only this backend loads the core
+        missing = not_in_core(wp)
+        if missing:
+            raise ValueError('the Rust core cannot solve this well: ' + '; '.join(missing) + '. Use backend="casadi".')
+    elif backend != 'casadi':
+        raise ValueError(f"backend must be 'casadi' or 'rust', not {backend!r}")
+
+
 def start(objective) -> np.ndarray:  # spec: CAL-9
     """
     The start of the fit: of the prior medians, z = 0, and the starts START_SHIFTS prior standard deviations from them
@@ -146,6 +157,7 @@ def evaluate(wp, data: CalibrationData, bc, backend='rust', workers=None) -> pd.
     """
     if not isinstance(data, CalibrationData):
         raise ValueError(f'data must be a CalibrationData, got {type(data).__name__}')
+    check_backend(wp, backend)
     objective = Objective(wp, data, bc, (), backend=backend, workers=workers)
     (pred, _), = objective.predict([np.zeros(0)])
     return residual_table(objective, pred)
@@ -171,6 +183,7 @@ def calibrate(wp, data: CalibrationData, bc, free, priors=None, A_c=None, backen
     """
     if not isinstance(data, CalibrationData):
         raise ValueError(f'data must be a CalibrationData, got {type(data).__name__}')
+    check_backend(wp, backend)
     parameters = priors_for(wp, list(free), priors, A_c)
     objective = Objective(wp, data, bc, parameters, backend=backend, workers=workers)
     z0 = start(objective)
