@@ -6,7 +6,7 @@ Vazquez-Beggs correlations implemented in manywells, and shows their effect
 on live-oil density.
 
 Usage:
-    uv run python scripts/fvf_learn.py
+    uv run python -m scripts.black_oil_tutorial
 """
 
 import numpy as np
@@ -14,7 +14,6 @@ import matplotlib.pyplot as plt
 
 from manywells.pvt import density_from_api, gas_density_from_sg
 from manywells.pvt.fluid import FluidModel
-from manywells.units import CF_BAR
 
 
 # -- Fluid setup ----------------------------------------------------------
@@ -26,12 +25,12 @@ fl = FluidModel(
     rho_g=gas_density_from_sg(0.65),
     gor=200.0,
     wlr=0.0,
-    p_bubble=250e5,
+    p_bubble=250.0,  # bar
 )
 
 print(f"Oil density (std):  {fl.rho_o:.1f} kg/m3  (API {fl.api:.1f})")
 print(f"Gas density (std):  {fl.rho_g:.3f} kg/m3  (sg_gas {fl.sg_gas:.3f})")
-print(f"Bubble point:       {fl.p_bubble / 1e5:.0f} bar")
+print(f"Bubble point:       {fl.p_bubble:.0f} bar")
 print()
 
 
@@ -49,7 +48,7 @@ rs_vals = np.array([float(fl.rs(p, T_fixed)) for p in p_bar])
 bo_vals = np.array([float(fl.bo(p, T_fixed)) for p in p_bar])
 rho_l_vals = np.array([float(fl.liquid_density(p, T_fixed)) for p in p_bar])
 
-p_bubble_bar = fl.p_bubble / CF_BAR
+p_bubble_bar = fl.p_bubble
 
 fig, axes = plt.subplots(3, 1, figsize=(8, 10), sharex=True)
 
@@ -191,8 +190,8 @@ for p in [30, 100, 150, 200, 250, 300]:
     marker = " <-- bubble point" if abs(p - p_bubble_bar) < 1 else ""
     print(f"{p:>16} {rs:>14.2f} {bo:>8.4f} {rho:>15.2f}{marker}")
 
-# fig.savefig('scripts/fvf_learn_1_rs_bo_vs_pressure.png', dpi=150, bbox_inches='tight')
-# fig2.savefig('scripts/fvf_learn_2_temperature_effect.png', dpi=150, bbox_inches='tight')
-# fig3.savefig('scripts/fvf_learn_3_dead_vs_black_oil.png', dpi=150, bbox_inches='tight')
-# print("\nFigures saved to scripts/fvf_learn_*.png")
+# fig.savefig('black_oil_tutorial_1_rs_bo_vs_pressure.png', dpi=150, bbox_inches='tight')
+# fig2.savefig('black_oil_tutorial_2_temperature_effect.png', dpi=150, bbox_inches='tight')
+# fig3.savefig('black_oil_tutorial_3_dead_vs_black_oil.png', dpi=150, bbox_inches='tight')
+# print("\nFigures saved to black_oil_tutorial_*.png")
 plt.show()
