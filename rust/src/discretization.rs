@@ -150,7 +150,11 @@ pub fn row_ids(spec: &WellSpec) -> Vec<&'static str> {  // spec: DISC-11
     let n = spec.n_cells();
     let bottom = ["INF-6", "INF-7", if spec.thermal.lift_gas_mixing { "THM-5" } else { "THM-3" }];
     let cell = ["DISC-7", "DISC-8", "DISC-9", "DISC-10"];
-    let gas_law = if spec.fluid.gas_law == GasLaw::Ideal { "PVT-GAS-1" } else { "PVT-GAS-3" };
+    let gas_law = match spec.fluid.gas_law {
+        GasLaw::Ideal => "PVT-GAS-1",
+        GasLaw::Dak { .. } => "PVT-GAS-11",
+        GasLaw::Papay { .. } => "PVT-GAS-3",
+    };
     let liquid = if spec.fluid.has_mass_transfer() { "PVT-MIX-6" } else { "PVT-MIX-1" };
     let closures = ["SLIP-1", gas_law, liquid];
     let mut ids = Vec::with_capacity(DIM_X * (n + 1));

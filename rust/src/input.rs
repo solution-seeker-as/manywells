@@ -80,7 +80,7 @@ pub mod test_wells {
     use super::*;
     use crate::choke::{ChokeModel, Profile};
     use crate::geometry::tests::{survey, vertical};
-    use crate::pvt::fluid::{FluidInputs, SurfaceTensionModel};
+    use crate::pvt::fluid::{FluidInputs, SurfaceTensionModel, ZFactorModel};
     use crate::units::{P_REF, T_REF};
 
     /// A fluid in the v1.0.0 configuration from v1.0.0's parameters, as configurations.v1_fluid: dead oil of the
@@ -89,7 +89,7 @@ pub mod test_wells {
         let rho_g = P_REF / (r_s * T_REF);
         let gor = f_g * rho_l / ((1.0 - f_g) * rho_g);
         Fluid::new(FluidInputs { rho_o: rho_l, rho_g, rho_w: 999.1, gor, wlr: 0.0, cp_g, cp_o: cp_l, cp_w: 4184.0,
-                                 ideal_gas: true, black_oil: false, p_sep: P_REF / 1e5, t_sep: T_REF, p_bubble: None,
+                                 ideal_gas: true, z_factor: ZFactorModel::Papay, black_oil: false, p_sep: P_REF / 1e5, t_sep: T_REF, p_bubble: None,
                                  surface_tension: SurfaceTensionModel::Liquid })
     }
 
@@ -98,7 +98,7 @@ pub mod test_wells {
             geometry: vertical(2500.0, n_cells, 0.127),
             fluid: v1_fluid(900.0, 420.0, 2225.0, 3000.0, 0.15),
             friction: Friction::FixedFactor { f_d: 0.03 },
-            thermal: Thermal { h: 25.0, frictional_heating: false, gravity_term: false, lift_gas_mixing: false },
+            thermal: Thermal { h: 25.0, frictional_heating: false, gravity_term: false, lift_gas_mixing: false, joule_thomson: false },
             slip: Slip::default(),
             inflow: Inflow::Vogel { w_l_max: 80.0 },
             choke: Choke::new(ChokeModel::Simpson, 0.0015201224372924933, Profile::Sigmoid),
@@ -111,7 +111,7 @@ pub mod test_wells {
             geometry: vertical(1800.0, n_cells, 0.1524),
             fluid: v1_fluid(820.0, 500.0, 2225.0, 2200.0, 0.4),
             friction: Friction::FixedFactor { f_d: 0.05 },
-            thermal: Thermal { h: 15.0, frictional_heating: false, gravity_term: false, lift_gas_mixing: false },
+            thermal: Thermal { h: 15.0, frictional_heating: false, gravity_term: false, lift_gas_mixing: false, joule_thomson: false },
             slip: Slip::default(),
             inflow: Inflow::ProductivityIndex { k_l: 0.6 },
             choke: Choke::new(ChokeModel::Bernoulli, 0.001824146924750992, Profile::Linear),
@@ -122,7 +122,7 @@ pub mod test_wells {
     /// W1 with frictional heating and the gravity term (009), so that the energy row depends on the pressure
     pub fn w1_thermal(n_cells: usize) -> (WellSpec, OperatingPoint) {
         let (mut spec, op) = w1(n_cells);
-        spec.thermal = Thermal { h: 25.0, frictional_heating: true, gravity_term: true, lift_gas_mixing: false };
+        spec.thermal = Thermal { h: 25.0, frictional_heating: true, gravity_term: true, lift_gas_mixing: false, joule_thomson: false };
         (spec, op)
     }
 
@@ -195,6 +195,24 @@ pub mod test_wells {
         (spec, op)
     }
 
+    /// W1 with develop's model, the DAK gas law and Joule-Thomson cooling (016)
+    pub fn w1_joule_thomson(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let (mut spec, op) = w1_develop(n_cells);
+        spec.fluid = Fluid::new(FluidInputs { z_factor: ZFactorModel::Dak, ..spec.fluid.inputs });
+        spec.thermal.joule_thomson = true;
+        (spec, op)
+    }
+
+    /// W2 L-shaped at its bubble point with Haaland friction, its gas real by DAK, with the energy terms and
+    /// Joule-Thomson cooling: a gas mass fraction of 0.4 (016)
+    pub fn w2_joule_thomson(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let (mut spec, op) = w2_haaland(n_cells);
+        spec.fluid = Fluid::new(FluidInputs { ideal_gas: false, z_factor: ZFactorModel::Dak, ..spec.fluid.inputs });
+        spec.thermal = Thermal { h: 15.0, frictional_heating: true, gravity_term: true, lift_gas_mixing: false,
+                                 joule_thomson: true };
+        (spec, op)
+    }
+
     /// Every test well
     pub fn all(n_cells: usize) -> Vec<(&'static str, WellSpec, OperatingPoint)> {
         let named = |name, (spec, op)| (name, spec, op);
@@ -203,7 +221,8 @@ pub mod test_wells {
              named("w1_real_gas", w1_real_gas(n_cells)), named("w1_black_oil", w1_black_oil(n_cells)),
              named("w2_bubble_point", w2_bubble_point(n_cells)), named("w1_develop", w1_develop(n_cells)),
              named("w2_haaland", w2_haaland(n_cells)), named("w1_cold_lift_gas", w1_cold_lift_gas(n_cells)),
-             named("w2_fixed_rate", w2_fixed_rate(n_cells))]
+             named("w2_fixed_rate", w2_fixed_rate(n_cells)), named("w1_joule_thomson", w1_joule_thomson(n_cells)),
+             named("w2_joule_thomson", w2_joule_thomson(n_cells))]
     }
 }
 

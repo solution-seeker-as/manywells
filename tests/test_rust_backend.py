@@ -222,3 +222,34 @@ def test_the_slip_row_has_one_root_in_alpha_at_every_reference_point():
     values = np.asarray(h(*(a.reshape(1, -1) for a in args))).reshape(len(grid), -1)
     sign_changes = np.sum(np.diff(np.sign(values), axis=0) != 0, axis=0)
     assert np.all(sign_changes == 1), f'{np.sum(sign_changes != 1)} points with {set(sign_changes[sign_changes != 1])}'
+
+
+# Gas wells of develop's sampler where Joule-Thomson cooling (THM-8) breaks the core's assumptions, and the CasADi
+# backend's operating point (specs/features/016-joule-thomson.md, design choice 5): (well, sample, p_0 in bar), with
+# the seed and the samples of plans/evidence/dak_jt_default.py. At 44 the state at p_s cannot be computed and R is
+# finite only just below the root; at 22 the energy row is U-shaped in T near the choked wellhead.
+GAS_WELLS = ((44, 0, 225.677), (22, 1, 156.265), (22, 2, 118.189))
+
+
+def _gas_well(well, sample):
+    from manywells.configurations import DEVELOP
+    from manywells.sampling.conditions import nominal_conditions, sample_conditions
+    from manywells.sampling.wells import rng_for, sample_well, well_properties
+    draw = sample_well(2026, well)
+    rng = rng_for(2026, well, 'jt')
+    bc, fractions = nominal_conditions(draw), draw.fractions
+    for _ in range(sample):
+        bc, fractions = sample_conditions(draw, rng)
+    return well_properties(draw, fractions, DEVELOP), bc
+
+
+@pytest.mark.parametrize('well, sample, p_0', GAS_WELLS)
+def test_the_core_finds_the_operating_point_of_a_gas_well_with_joule_thomson_cooling(well, sample, p_0):
+    wp, bc = _gas_well(well, sample)
+    assert wp.thermal.joule_thomson and wp.fluid.f_g > 0.8
+    sim = SSDFSimulator(wp, backend='rust')
+    op = sim.simulate(bc)
+    assert op.label == 'stable' and op.p_0 == pytest.approx(p_0, abs=1e-3)
+    counts = sim._roots.counts
+    assert counts['edge_refinements'] > 0 and counts['lower_step_outs'] > 0
+    assert well != 22 or counts['temperature_minima'] > 0

@@ -100,7 +100,7 @@ def test_row_order():
     """Rows at each point in the order of DISC-11: the bottomhole's six, seven per point, and CHK-1 at the top."""
     sim = SSDFSimulator(WellProperties(geometry=WellGeometry.vertical(100, 2, D=0.1)))
     ids = sim.system.row_ids
-    closures = ('SLIP-1', 'PVT-GAS-3', 'PVT-MIX-6')  # the default fluid: real gas, black oil
+    closures = ('SLIP-1', 'PVT-GAS-11', 'PVT-MIX-6')  # the default fluid: real gas by DAK, black oil
     assert ids[:6] == ('INF-6', 'INF-7', 'THM-5') + closures
     assert ids[6:13] == ('DISC-7', 'DISC-8', 'DISC-9', 'DISC-10') + closures
     assert ids[13:] == ('DISC-7', 'DISC-8', 'DISC-9', 'DISC-10', 'CHK-1') + closures

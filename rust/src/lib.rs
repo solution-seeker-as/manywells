@@ -45,7 +45,7 @@ mod _core {
     use crate::discretization::State;
     use crate::input::{OperatingPoint, WellSpec};
     use crate::march::Marcher;
-    use crate::pvt::fluid::{Fluid, FluidInputs, SurfaceTensionModel};
+    use crate::pvt::fluid::{Fluid, FluidInputs, SurfaceTensionModel, ZFactorModel};
     use crate::pvt::{gas, mixture, oil, water};
     use crate::shoot;
     use crate::slip::{self, Slip};
@@ -88,10 +88,10 @@ mod _core {
         #[pyo3(signature = (
             *,
             md, tvd, D,
-            rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, oil_model, surface_tension_model, p_sep, T_sep,
-            p_bubble=None,
+            rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, z_factor_model, oil_model, surface_tension_model,
+            p_sep, T_sep, p_bubble=None,
             friction, f_D=None, roughness=None, correlation=None,
-            h, frictional_heating, gravity_term, lift_gas_mixing,
+            h, frictional_heating, gravity_term, lift_gas_mixing, joule_thomson,
             C_0_annular, C_0_slug, C_0_bubbly, v_inf_annular,
             inflow, inflow_coefficient,
             choke, K_c, profile
@@ -99,9 +99,10 @@ mod _core {
         #[allow(non_snake_case, clippy::too_many_arguments)]
         fn new(md: Vec<f64>, tvd: Vec<f64>, D: f64,
                rho_o: f64, rho_g: f64, rho_w: f64, gor: f64, wlr: f64, cp_g: f64, cp_o: f64, cp_w: f64, ideal_gas: bool,
-               oil_model: &str, surface_tension_model: &str, p_sep: f64, T_sep: f64, p_bubble: Option<f64>,
+               z_factor_model: &str, oil_model: &str, surface_tension_model: &str, p_sep: f64, T_sep: f64,
+               p_bubble: Option<f64>,
                friction: &str, f_D: Option<f64>, roughness: Option<f64>, correlation: Option<&str>,
-               h: f64, frictional_heating: bool, gravity_term: bool, lift_gas_mixing: bool,
+               h: f64, frictional_heating: bool, gravity_term: bool, lift_gas_mixing: bool, joule_thomson: bool,
                C_0_annular: f64, C_0_slug: f64, C_0_bubbly: f64, v_inf_annular: f64,
                inflow: &str, inflow_coefficient: f64,
                choke: &str, K_c: f64, profile: &str) -> PyResult<Self> {
@@ -109,6 +110,11 @@ mod _core {
                 "dead_oil" => false,
                 "black_oil" => true,
                 m => return Err(PyValueError::new_err(format!("oil model {m:?} is not 'dead_oil' or 'black_oil'"))),
+            };
+            let z_factor = match z_factor_model {
+                "dak" => ZFactorModel::Dak,
+                "papay" => ZFactorModel::Papay,
+                m => return Err(PyValueError::new_err(format!("z-factor model {m:?} is not 'dak' or 'papay'"))),
             };
             let surface_tension = match surface_tension_model {
                 "oil" => SurfaceTensionModel::Oil,
@@ -141,11 +147,11 @@ mod _core {
             let spec = WellSpec {
                 geometry: Geometry::from_grid(&md, &tvd, D).map_err(PyValueError::new_err)?,
                 fluid: Fluid::new(FluidInputs {
-                    rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, black_oil, p_sep, t_sep: T_sep,
-                    p_bubble, surface_tension,
+                    rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, z_factor, black_oil, p_sep,
+                    t_sep: T_sep, p_bubble, surface_tension,
                 }),
                 friction,
-                thermal: Thermal { h, frictional_heating, gravity_term, lift_gas_mixing },
+                thermal: Thermal { h, frictional_heating, gravity_term, lift_gas_mixing, joule_thomson },
                 slip: Slip { c_0_annular: C_0_annular, c_0_slug: C_0_slug, c_0_bubbly: C_0_bubbly, v_inf_annular },
                 inflow,
                 choke: Choke::new(model, K_c, profile),
@@ -171,9 +177,11 @@ mod _core {
             let c = search.counts;
             let counts = HashMap::from([("marches", c.marches), ("states", c.states), ("rejected", search.rejected),
                                         ("temperature_solves", c.temperature_solves), ("step_outs", c.step_outs),
+                                        ("lower_step_outs", c.lower_step_outs),
+                                        ("temperature_minima", c.temperature_minima),
                                         ("chord_fallbacks", c.chord_fallbacks),
                                         ("temperature_failures", c.temperature_failures),
-                                        ("non_finite", c.non_finite)]);
+                                        ("non_finite", c.non_finite), ("edge_refinements", c.edge_refinements)]);
             Ok((roots, counts))
         }
 
@@ -289,6 +297,9 @@ mod _core {
             }
             "gas_density" => { let [p, t] = take(name, a)?; vec![spec.fluid.gas_density(p, t)] }
             "z_factor" => { let [p, t] = take(name, a)?; vec![spec.fluid.z_factor(p, t)] }
+            "dak_z_factor" => { let [r, t] = take(name, a)?; vec![gas::dak_z_factor(r, t)] }
+            "dak_jt_factor" => { let [r, t] = take(name, a)?; vec![gas::dak_jt_factor(r, t)] }
+            "jt_factor" => { let [t, rho_g] = take(name, a)?; vec![spec.fluid.jt_factor(t, rho_g)] }
             "sutton_pseudo_critical" => {
                 let [sg_gas] = take(name, a)?;
                 let (ppc, tpc) = gas::sutton_pseudo_critical(sg_gas);

@@ -211,9 +211,14 @@ def dead_fluid(**kw):
     return FluidModel(**{'oil_model': 'dead_oil', 'ideal_gas': True, 'surface_tension_model': 'liquid', **kw})
 
 
+def papay_fluid(**kw):
+    """dead_fluid with a real gas by Papay's z-factor."""
+    return dead_fluid(ideal_gas=False, z_factor_model='papay', **kw)
+
+
 def thermal(**on):
     return ThermalModel(**{'h': 0.0, 'frictional_heating': False, 'gravity_term': False, 'lift_gas_mixing': False,
-                           **on})
+                           'joule_thomson': False, **on})
 
 
 def thermal_term(alpha, rho_g, v_g, rho_l, v_l, F, cos_incl, cp_g, cp_l, **on):
@@ -265,6 +270,10 @@ RUST_ADAPTERS = {
              fluid=v1_fluid(rho_l=850.0, R_s=420.0, cp_g=cp_g, cp_l=cp_l, f_g=f_g)),
     'THM-6': lambda F, **kw: thermal_term(F=F, cos_incl=1.0, frictional_heating=True, **kw),
     'THM-7': lambda cos_incl, **kw: -thermal_term(F=0.0, cos_incl=cos_incl, gravity_term=True, **kw),
+    'THM-8': lambda alpha, rho_g, v_g, rho_l, v_l, F, cos_incl, T, sg_gas, cp_g, cp_l: -rust(
+        'temperature_gradient', 100.0, v_g, v_l, alpha, rho_g, rho_l, T, T, F, cos_incl,
+        fluid=dead_fluid(rho_g=gas_density_from_sg(sg_gas), ideal_gas=False, cp_g=cp_g, cp_o=cp_l),
+        thermal=thermal(joule_thomson=True), geometry=WellGeometry.vertical(length=1000.0, n_cells=10, D=0.1)),
     'SLIP-10, SLIP-11': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl:
         rust('slip_parameters', v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl),
     'SLIP-11 (classifier)': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl:
@@ -276,10 +285,14 @@ RUST_ADAPTERS = {
     'FRIC-4': lambda Re, eps_D: rust('chen_friction_factor', Re, eps_D),
     'FRIC-5': lambda Re, eps_D: rust('haaland_friction_factor', Re, eps_D),
     'FRIC-6': lambda Re, eps_D: rust('friction_factor_of_re', Re, eps_D, friction=RoughnessFriction()),
-    'PVT-GAS-3': lambda p, T, rho_g_sc: rust('gas_density', p, T, fluid=dead_fluid(rho_g=rho_g_sc, ideal_gas=False)),
+    'PVT-GAS-3': lambda p, T, rho_g_sc: rust('gas_density', p, T, fluid=papay_fluid(rho_g=rho_g_sc)),
     'PVT-GAS-4, PVT-GAS-5': lambda p, T, sg_gas: (
         rust('sutton_pseudo_critical', sg_gas)[0] / CF_BAR, rust('sutton_pseudo_critical', sg_gas)[1],
-        rust('z_factor', p, T, fluid=dead_fluid(rho_g=gas_density_from_sg(sg_gas), ideal_gas=False))),
+        rust('z_factor', p, T, fluid=papay_fluid(rho_g=gas_density_from_sg(sg_gas)))),
+    'PVT-GAS-9': lambda r, t: rust('dak_z_factor', r, t),
+    'PVT-GAS-10': lambda r, t: rust('dak_jt_factor', r, t),
+    'PVT-GAS-11': lambda p, T, rho_g_sc: (rust('gas_density', p, T, fluid=dead_fluid(rho_g=rho_g_sc, ideal_gas=False)),
+                                          rust('z_factor', p, T, fluid=dead_fluid(rho_g=rho_g_sc, ideal_gas=False))),
     'PVT-GAS-6': lambda rho_g_sc: rust('gas_parameters', fluid=dead_fluid(rho_g=rho_g_sc)),
     'PVT-GAS-7': lambda T, rho_g, M_g: rust('gas_viscosity', T, rho_g, M_g),
     'PVT-OIL-5': lambda api, sg_gas, p_sep, T_sep: rust('separator_gravity', api, sg_gas, p_sep, T_sep),

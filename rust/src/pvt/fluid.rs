@@ -8,7 +8,8 @@
 //! src/manywells/pvt/fluid.py. It is given by the densities of oil, gas and water at standard conditions, the
 //! gas-oil and water-liquid ratios and the heat capacities, from which it derives the gas's specific gravity and gas
 //! constant, the liquid at standard conditions and the inflow's gas mass fraction, with the same arithmetic as
-//! FluidModel. The gas is ideal or real (Papay); the oil is dead, or black oil into which reservoir gas dissolves
+//! FluidModel. The gas is ideal or real (Dranchuk-Abou-Kassem or Papay); the oil is dead, or black oil into which
+//! reservoir gas dissolves
 //! (Vazquez-Beggs), mixed with incompressible water as one liquid.
 
 use crate::pvt::oil::BlackOil;
@@ -32,12 +33,22 @@ pub enum OilModel {
     BlackOil(BlackOil),
 }
 
+/// The z-factor of a real gas, FluidModel.z_factor_model
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ZFactorModel {
+    Dak,
+    Papay,
+}
+
 /// The gas's compressibility factor
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum GasLaw {
     /// Z = 1
     Ideal,
-    /// Z from Papay's correlation, with the pseudo-critical pressure (Pa) and temperature (K) of the gas
+    /// Z from the Dranchuk-Abou-Kassem equation of state at the gas's density, with the pseudo-critical pressure
+    /// (Pa) and temperature (K) of the gas
+    Dak { ppc: f64, tpc: f64 },
+    /// Z from Papay's correlation at the pressure, with the pseudo-critical pressure (Pa) and temperature (K)
     Papay { ppc: f64, tpc: f64 },
 }
 
@@ -53,6 +64,7 @@ pub struct FluidInputs {
     pub cp_o: f64,
     pub cp_w: f64,
     pub ideal_gas: bool,
+    pub z_factor: ZFactorModel, // The real gas's z-factor, where ideal_gas is false
     pub black_oil: bool,
     pub p_sep: f64,             // Separator pressure (bar) and temperature (K) of the black-oil correlations
     pub t_sep: f64,
@@ -78,8 +90,8 @@ pub struct Fluid {
 
 impl Fluid {
     pub fn new(inputs: FluidInputs) -> Self {
-        let FluidInputs { rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, black_oil, p_sep, t_sep, p_bubble,
-                          .. } = inputs;
+        let FluidInputs { rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, z_factor, black_oil, p_sep, t_sep,
+                          p_bubble, .. } = inputs;
         let sg_gas = rho_g * R_UNIVERSAL * T_REF / (P_REF * M_AIR); // spec: PVT-GAS-6
         let rho_l = wlr * rho_w + (1.0 - wlr) * rho_o;               // spec: PVT-MIX-10
         let api = oil::api_from_density(rho_o);
@@ -98,7 +110,10 @@ impl Fluid {
                 GasLaw::Ideal
             } else {
                 let (ppc, tpc) = gas::sutton_pseudo_critical(sg_gas);
-                GasLaw::Papay { ppc, tpc }
+                match z_factor {
+                    ZFactorModel::Dak => GasLaw::Dak { ppc, tpc },
+                    ZFactorModel::Papay => GasLaw::Papay { ppc, tpc },
+                }
             },
             oil: if black_oil {
                 OilModel::BlackOil(BlackOil::new(api, sg_gas, p_sep * CF_BAR, t_sep, p_bubble.map(|p_b| p_b * CF_BAR)))
@@ -124,20 +139,45 @@ impl Fluid {
         }
     }
 
-    /// The gas's compressibility factor at p (bar) and T (K)
+    /// The gas's compressibility factor at p (bar) and T (K): with DAK, at the density its gas law gives there
     pub fn z_factor(&self, p: f64, t: f64) -> f64 {
         match self.gas_law {
             GasLaw::Ideal => 1.0,
+            GasLaw::Dak { ppc, tpc } => gas::dak_z_factor(gas::dak_reduced_density(p * CF_BAR / ppc, t / tpc), t / tpc),
             GasLaw::Papay { ppc, tpc } => gas::papay_z_factor(p * CF_BAR, t, ppc, tpc),
         }
     }
 
+    /// Gas density (kg/m³) at p (bar) and T (K)
     pub fn gas_density(&self, p: f64, t: f64) -> f64 {
-        gas::gas_density(p, t, self.z_factor(p, t), self.r_s)
+        match self.gas_law {
+            GasLaw::Dak { ppc, tpc } => {  // spec: PVT-GAS-11
+                gas::dak_reduced_density(p * CF_BAR / ppc, t / tpc) * ppc / (gas::DAK_ZC * self.r_s * tpc)
+            }
+            _ => gas::gas_density(p, t, self.z_factor(p, t), self.r_s),
+        }
     }
 
+    /// The gas-law row (bar), p - rho_g Z R_s T / c_bar; with DAK, Z is the equation of state's at rho_g and T
     pub fn gas_law_row(&self, p: f64, t: f64, rho_g: f64) -> f64 {
-        gas::gas_law_row(p, t, rho_g, self.z_factor(p, t), self.r_s)
+        let z = match self.gas_law {
+            GasLaw::Dak { ppc, tpc } => {  // spec: PVT-GAS-11
+                gas::dak_z_factor(gas::reduced_density(rho_g, self.r_s, ppc, tpc), t / tpc)
+            }
+            _ => self.z_factor(p, t),
+        };
+        gas::gas_law_row(p, t, rho_g, z, self.r_s)
+    }
+
+    /// The gas's Joule-Thomson factor J = T (d ln Z / dT)_p at T (K) and gas density rho_g (kg/m³): 0 for an ideal
+    /// gas, and the DAK equation of state's for a real gas, whatever its z-factor
+    pub fn jt_factor(&self, t: f64, rho_g: f64) -> f64 {
+        match self.gas_law {
+            GasLaw::Ideal => 0.0,
+            GasLaw::Dak { ppc, tpc } | GasLaw::Papay { ppc, tpc } => {
+                gas::dak_jt_factor(gas::reduced_density(rho_g, self.r_s, ppc, tpc), t / tpc) // spec: PVT-GAS-10
+            }
+        }
     }
 
     /// Liquid density (kg/m³) at p (bar) and T (K): the live oil's, with the dissolved gas and its formation volume

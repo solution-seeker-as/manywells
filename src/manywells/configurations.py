@@ -75,7 +75,8 @@ def v1_well(*, L, D, rho_l, R_s, cp_g, cp_l, f_D, h, f_g, inflow, choke, n_cells
     wp = WellProperties(geometry=WellGeometry.vertical(length=L, n_cells=n_cells, D=D),
                         fluid=v1_fluid(rho_l, R_s, cp_g, cp_l, f_g),
                         friction=FixedFrictionFactor(f_D=f_D),
-                        thermal=ThermalModel(h=h, frictional_heating=False, gravity_term=False, lift_gas_mixing=False),
+                        thermal=ThermalModel(h=h, frictional_heating=False, gravity_term=False, lift_gas_mixing=False,
+                                             joule_thomson=False),
                         slip=SlipModel(), inflow=inflow, choke=choke)
     check(wp, V1)
     return wp
@@ -110,7 +111,8 @@ def differences(wp: WellProperties, configuration: str) -> list:
     else:
         default = FluidModel()
         out += [f'fluid: {k} is {getattr(fluid, k)!r}, not {getattr(default, k)!r}'
-                for k in ('oil_model', 'ideal_gas', 'surface_tension_model') if getattr(fluid, k) != getattr(default, k)]
+                for k in ('oil_model', 'ideal_gas', 'z_factor_model', 'surface_tension_model')
+                if getattr(fluid, k) != getattr(default, k)]
         if not isinstance(wp.friction, RoughnessFriction) or wp.friction.correlation != RoughnessFriction().correlation:
             out.append(f'friction: {wp.friction}, not RoughnessFriction with the default correlation')
         out += [f'thermal: {k} is off' for k, v in thermal.items() if not v]

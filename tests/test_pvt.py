@@ -1,5 +1,6 @@
 """Tests for manywells.pvt."""
 
+import numpy as np
 import pytest
 
 from manywells.pvt import (
@@ -20,6 +21,9 @@ from manywells.pvt import (
 from manywells.pvt.dead_oil import dead_oil_viscosity, dead_oil_surface_tension
 from manywells.pvt.black_oil import live_oil_viscosity, live_oil_surface_tension
 from manywells.pvt.gas import specific_gas_constant, gas_density, gas_viscosity, gas_z_factor, sutton_pseudo_critical, molecular_weight
+from manywells.pvt.gas import DAK_ZC, dak_jt_factor, dak_reduced_density, dak_z_factor
+from manywells.pvt.fluid import FluidModel
+from manywells.pvt import gas_density_from_sg
 from manywells.pvt.water import water_viscosity
 
 def test_reference_conditions():
@@ -363,6 +367,72 @@ class TestGasZFactor:
         """Z is positive for a range of conditions."""
         Z = float(gas_z_factor(150e5, 340, 0.80))
         assert Z > 0
+
+
+# Methane from the reference equation of state of Setzmann and Wagner (1991), J. Phys. Chem. Ref. Data 20,
+# 1061-1155, through CoolProp 8.0.0 (plans/evidence/jt_factor.py): p (bar), T (K), J = T (d ln Z / dT)_p, Z
+METHANE_REFERENCE = (
+    (5.0, 280.0, 0.0383, 0.9892), (20.0, 300.0, 0.1316, 0.9667), (50.0, 300.0, 0.3544, 0.9195),
+    (100.0, 280.0, 1.0182, 0.8059), (100.0, 360.0, 0.3556, 0.9401), (150.0, 280.0, 1.2479, 0.7634),
+    (200.0, 330.0, 0.6609, 0.8912), (270.0, 425.0, 0.2651, 1.0265), (350.0, 360.0, 0.2849, 1.0308),
+    (460.0, 300.0, -0.0009, 1.1271), (460.0, 390.0, 0.0947, 1.1468),
+)
+METHANE_SG = 0.5538  # 16.043 / 28.97
+
+
+class TestDranchukAbouKassem:
+    """The DAK gas law (PVT-GAS-9, PVT-GAS-11) and its Joule-Thomson factor (PVT-GAS-10)."""
+
+    def test_the_density_solves_the_gas_law(self):
+        """Newton from the ideal-gas density converges over the equation's range: 1.05 <= T_pr <= 3, p_pr <= 30."""
+        for t in (1.05, 1.2, 1.6, 2.2, 3.0):
+            for ppr in (1e-3, 0.2, 1.0, 3.0, 6.0, 10.0, 15.0, 30.0):
+                r = float(dak_reduced_density(ppr, t))
+                assert r * t * float(dak_z_factor(r, t)) / DAK_ZC == pytest.approx(ppr, rel=1e-12)
+
+    def test_the_fluid_density_zeroes_its_row(self):
+        fl = FluidModel()
+        for p, T in ((1.01325, 288.15), (100.0, 350.0), (450.0, 420.0)):
+            rho = float(fl.gas_density(p, T))
+            assert float(fl.gas_law_row(p, T, rho)) == pytest.approx(0.0, abs=1e-12 * p)
+            assert float(fl.z_factor(p, T)) == pytest.approx(1e5 * p / (rho * fl.R_s * T), rel=1e-13)
+
+    def test_ideal_at_low_pressure(self):
+        assert float(dak_z_factor(1e-6, 1.5)) == pytest.approx(1.0, abs=1e-6)
+
+    def test_the_factor_is_t_dlnz_dt_along_an_isobar(self):
+        """PVT-GAS-10's closed form equals a central difference of ln Z from PVT-GAS-9 at constant pressure."""
+        fl = FluidModel(rho_g=gas_density_from_sg(0.7))
+        for p, T in ((20.0, 300.0), (100.0, 330.0), (250.0, 380.0), (450.0, 420.0)):
+            h = 1e-3
+            fd = T * (np.log(float(fl.z_factor(p, T + h))) - np.log(float(fl.z_factor(p, T - h)))) / (2 * h)
+            J = float(fl.jt_factor(T, fl.gas_density(p, T)))
+            assert J == pytest.approx(fd, rel=1e-6, abs=1e-9)
+
+    def test_the_factor_is_zero_for_an_ideal_gas(self):
+        assert FluidModel(ideal_gas=True).jt_factor(350.0, 80.0) == 0.0
+
+    def test_the_factor_is_the_same_for_both_z_factor_models(self):
+        """The factor is DAK's at the state's density, whatever the gas law (specs/features/016-joule-thomson.md)."""
+        dak, papay = FluidModel(), FluidModel(z_factor_model='papay')
+        assert float(dak.jt_factor(350.0, 80.0)) == float(papay.jt_factor(350.0, 80.0))
+
+    def test_methane_against_the_reference_equation_of_state(self):
+        """J within 0.03 + 0.1 |J_ref| (signed off by Bjarne, 2026-10-02) and Z within 2% of the reference."""
+        fl = FluidModel(rho_g=gas_density_from_sg(METHANE_SG))
+        for p, T, J_ref, Z_ref in METHANE_REFERENCE:
+            rho = fl.gas_density(p, T)
+            assert abs(float(fl.jt_factor(T, rho)) - J_ref) <= 0.03 + 0.1 * abs(J_ref), (p, T)
+            assert float(fl.z_factor(p, T)) == pytest.approx(Z_ref, rel=0.02), (p, T)
+
+    def test_the_factor_denominator_is_positive_above_the_critical_region(self):
+        """Z + r dZ/dr is (dp/drho)_T up to a positive factor: positive for T_pr >= 1.05 and p_pr <= 15."""
+        from manywells.pvt.gas import _dak_terms
+        for t in np.linspace(1.05, 3.0, 40):
+            for r in np.linspace(1e-6, 3.0, 600):
+                Z, Z_r, _ = (float(v) for v in _dak_terms(r, t))
+                if r * t * Z / DAK_ZC <= 15:
+                    assert Z + r * Z_r > 0, (t, r)
 
 
 def test_gas_density_backward_compat():

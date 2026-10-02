@@ -8,8 +8,8 @@ Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
 Property and spot checks of develop's full model, which has no reference root sets (plans/manywells-v2-plan.md,
 "New model versions", and Step 7 item 5). The wells exercise develop's options: deviated and L-shaped trajectories,
-black oil with dissolved gas, real gas, friction from roughness, frictional heating and the gravity term, and
-lift gas colder than the reservoir.
+black oil with dissolved gas, real gas by the Dranchuk-Abou-Kassem equation of state, friction from roughness,
+frictional heating, the gravity term and Joule-Thomson cooling, and lift gas colder than the reservoir.
 
 Checked at every root: the verifier's Invariants that do not assume dead oil (total mass rate constant instead of
 each phase's); spot checks of the relations that need no closure (the inflow rows at the bottom, the choke row at
@@ -29,6 +29,7 @@ from manywells.geometry import WellGeometry
 from manywells.pvt import density_from_api, gas_density_from_sg
 from manywells.pvt.fluid import FluidModel
 from manywells.simulator import BoundaryConditions, SSDFSimulator, WellProperties
+from manywells.thermal import ThermalModel
 
 from .backend_cases import compare_root_sets
 
@@ -141,7 +142,9 @@ def test_spot_checks(solved, name, backend):
 @pytest.mark.parametrize('name', [n for n in WELLS if WELLS[n][1].w_lg == 0])
 def test_heat_flows_from_the_fluid_to_the_surroundings(solved, name, backend):
     """Without lift gas the fluid enters at T_r, the ambient temperature at the bottomhole, and is warmer than its
-    surroundings everywhere above: the heat loss carries heat outwards, against frictional heating and gravity."""
+    surroundings everywhere above: the heat loss carries heat outwards, against frictional heating and gravity. The
+    Joule-Thomson term (THM-8) can cool the fluid of a gas-rich well below its surroundings
+    (specs/features/016-joule-thomson.md); these wells carry too little gas for that."""
     sim, bc, rs = solved[name, backend]
     geo = sim.wp.geometry
     T_a = np.array([sim.wp.thermal.ambient_temperature(f, bc.T_r, bc.T_s) for f in geo.tvd_frac])
@@ -149,6 +152,23 @@ def test_heat_flows_from_the_fluid_to_the_surroundings(solved, name, backend):
         T = root.state[:, 6]
         assert T[0] == pytest.approx(bc.T_r, abs=TOL_T)
         assert np.all(T[1:] - T_a[1:] > 0)
+
+
+GAS_RICH = (lambda n, joule_thomson: WellProperties(
+                geometry=WellGeometry.vertical(3000.0, n),
+                fluid=FluidModel(rho_o=density_from_api(40.0), rho_g=gas_density_from_sg(0.65), gor=800.0, wlr=0.1),
+                thermal=ThermalModel(joule_thomson=joule_thomson)),
+            BoundaryConditions(p_r=300.0, p_s=20.0, T_r=380.0, T_s=280.0, u=0.5))
+
+
+@pytest.mark.parametrize('backend', BACKENDS)
+def test_joule_thomson_cools_a_gas_rich_well(backend):
+    """THM-8: in a gas-rich well (a gas mass fraction of 0.4) the real gas cools as it expands, so the wellhead is
+    several kelvin colder with the term than without it, from the same bottomhole temperature (8 K on 2026-10-02)."""
+    make, bc = GAS_RICH
+    on, off = (SSDFSimulator(make(100, jt), backend=backend).simulate(bc).state for jt in (True, False))
+    assert on[0, 6] == pytest.approx(bc.T_r, abs=TOL_T) and off[0, 6] == pytest.approx(bc.T_r, abs=TOL_T)
+    assert on[-1, 6] < off[-1, 6] - 5.0
 
 
 @pytest.mark.parametrize('backend', BACKENDS)

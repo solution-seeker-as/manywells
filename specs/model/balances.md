@@ -76,6 +76,12 @@ $$\frac{dT}{dz} = -H + \Phi_f - \Phi_g$$
 
 with the heat loss $H$ (THM-1), the frictional heating $\Phi_f$ (THM-6) and the gravity term $\Phi_g$ (THM-7), each in K/m; a thermal model may leave either term out. The derivation from the total-energy balance, with its assumptions, is in `docs/thermal_energy_modeling.md`. With neither term it is BAL-5.
 
+### BAL-13 · Energy with the Joule–Thomson term
+
+$$\frac{dT}{dz} = -H + \Phi_f - \Phi_g - \Phi_{JT}$$
+
+with the Joule–Thomson term $\Phi_{JT}$ of THM-8 (K/m), which a thermal model may leave out, as it may $\Phi_f$ and $\Phi_g$. It replaces BAL-12's ideal gas, whose enthalpy does not depend on pressure, by the real gas of the fluid model (`docs/thermal_energy_modeling.md`). With $\Phi_{JT} = 0$ it is BAL-12.
+
 ## Options
 
 | Option | IDs | Used by |
@@ -85,7 +91,8 @@ with the heat loss $H$ (THM-1), the frictional heating $\Phi_f$ (THM-6) and the 
 | Vertical pipe | BAL-4, BAL-6 | `v1.0.0` |
 | Inclined flow path | BAL-11, BAL-6 | `develop` |
 | Heat loss only | BAL-5 | `v1.0.0` |
-| Heat loss, frictional heating, gravity term | BAL-12 | `develop` |
+| Heat loss, frictional heating, gravity term | BAL-12 | `develop` without the Joule–Thomson term |
+| Heat loss, frictional heating, gravity term, Joule–Thomson term | BAL-13 | `develop` |
 
 ## Safeguards
 
@@ -94,7 +101,7 @@ None in the continuous model. The admissible states are defined in `solution.md`
 ## Sources
 
 - Paper §2, equations (1)–(4), (7) and the source terms in §2.1.
-- `docs/thermal_energy_modeling.md` for BAL-12. Feature specs `specs/features/001-deviated-wells.md`, `008-dissolved-gas.md` and `009-energy-balance.md`.
+- `docs/thermal_energy_modeling.md` for BAL-12 and BAL-13. Feature specs `specs/features/001-deviated-wells.md`, `008-dissolved-gas.md`, `009-energy-balance.md` and `016-joule-thomson.md`.
 - Aarsnes, Flåtten and Aamo (2016), "Review of two-phase flow models for control and estimation", *Annual Reviews in Control* 42, 50–62.
 
 ## Test vectors
@@ -117,3 +124,4 @@ The balances have no functions of their own. Their discretized rows are checked 
 | BAL-10 | — | — | property: tests/test_model_properties.py (total mass rate constant, free gas increasing up the well); spec-only: continuous form, implemented as DISC-7 and DISC-8 |
 | BAL-11 | — | — | property: tests/test_model_properties.py (deviated wells); spec-only: continuous form, implemented as DISC-9 |
 | BAL-12 | — | — | property: tests/test_model_properties.py; spec-only: continuous form, implemented as DISC-10 |
+| BAL-13 | — | — | property: tests/test_model_properties.py; spec-only: continuous form, implemented as DISC-10 |

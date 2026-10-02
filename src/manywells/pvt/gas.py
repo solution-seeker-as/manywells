@@ -5,9 +5,10 @@ terms of the CC BY-NC 4.0 International Public License.
 
 Gas thermophysical properties (CasADi-compatible).
 
-Equation of state (ideal gas with optional Z-factor), formation volume
-factor, density, viscosity, and molecular weight / specific gas constant
-conversions.
+Equation of state (ideal gas, or a real gas with the Z-factor of Papay or of
+the Dranchuk-Abou-Kassem equation of state), the Joule-Thomson factor,
+formation volume factor, density, viscosity, and molecular weight / specific
+gas constant conversions.
 """
 
 import casadi as ca
@@ -111,6 +112,80 @@ def sutton_pseudo_critical(sg_gas):  # spec: PVT-GAS-5
     ppc_psia = 756.8 - 131.07 * sg_gas - 3.6 * sg_gas ** 2
     tpc_R = 169.2 + 349.5 * sg_gas - 74.0 * sg_gas ** 2
     return ppc_psia * CF_PSI, tpc_R / 1.8
+
+
+DAK_A = (0.3265, -1.0700, -0.5339, 0.01569, -0.05165, 0.5475, -0.7361, 0.1844, 0.1056, 0.6134, 0.7210)
+"""The coefficients A_1 to A_11 of the Dranchuk-Abou-Kassem equation of state (1975, Eq. 2)."""
+
+DAK_ZC = 0.27
+"""The critical compressibility factor of DAK's reduced density (1975, Eq. 3)."""
+
+DAK_NEWTON_STEPS = 20
+"""Newton steps of dak_reduced_density, unrolled so that it accepts CasADi symbols. From the ideal-gas density,
+Newton converges to 1e-12 in at most 17 steps for 1.05 <= T_pr <= 3 and p_pr <= 30
+(specs/features/016-joule-thomson.md)."""
+
+
+def _dak_terms(r, t):
+    """DAK's Z, dZ/dr and t dZ/dt at reduced density r and pseudo-reduced temperature t."""
+    a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11 = DAK_A
+    c1 = a1 + a2 / t + a3 / t ** 3 + a4 / t ** 4 + a5 / t ** 5
+    c2 = a6 + a7 / t + a8 / t ** 2
+    c3 = a9 * (a7 / t + a8 / t ** 2)
+    c4 = a10 / t ** 3
+    e = ca.exp(-a11 * r ** 2)
+    Z = 1 + c1 * r + c2 * r ** 2 - c3 * r ** 5 + c4 * r ** 2 * (1 + a11 * r ** 2) * e
+    Z_r = c1 + 2 * c2 * r - 5 * c3 * r ** 4 + 2 * c4 * r * e * (1 + a11 * r ** 2 - a11 ** 2 * r ** 4)
+    tZ_t = ((-a2 / t - 3 * a3 / t ** 3 - 4 * a4 / t ** 4 - 5 * a5 / t ** 5) * r
+            + (-a7 / t - 2 * a8 / t ** 2) * r ** 2
+            - a9 * (-a7 / t - 2 * a8 / t ** 2) * r ** 5
+            - 3 * a10 / t ** 3 * r ** 2 * (1 + a11 * r ** 2) * e)
+    return Z, Z_r, tZ_t
+
+
+def dak_z_factor(r, t):  # spec: PVT-GAS-9
+    """
+    Gas compressibility factor from the Dranchuk-Abou-Kassem (1975) equation of state, explicit in the reduced
+    density. CasADi-compatible.
+
+    Reference: Dranchuk, P.M. and Abou-Kassem, J.H., "Calculation of Z Factors for Natural Gases Using Equations of
+    State", J Can Pet Technol 14(3) (1975): 34-36, Eq. (2). Recommended for 0.2 <= p_pr < 30 and 1.0 < T_pr <= 3.0.
+
+    :param r: Reduced gas density (dimensionless), may be CasADi symbolic
+    :param t: Pseudo-reduced temperature T / T_pc (dimensionless), may be CasADi symbolic
+    :return: Z-factor (dimensionless)
+    """
+    return _dak_terms(r, t)[0]
+
+
+def dak_jt_factor(r, t):  # spec: PVT-GAS-10
+    """
+    The gas's Joule-Thomson factor J = T (d ln Z / dT)_p of the DAK equation of state, at reduced density r and
+    pseudo-reduced temperature t: J = (t Z_t - r Z_r) / (Z + r Z_r). CasADi-compatible. The Joule-Thomson
+    coefficient is J / (rho_g c_pg). The denominator is positive for T_pr >= 1.05 and p_pr <= 15.
+
+    :param r: Reduced gas density (dimensionless), may be CasADi symbolic
+    :param t: Pseudo-reduced temperature (dimensionless), may be CasADi symbolic
+    :return: J (dimensionless)
+    """
+    Z, Z_r, tZ_t = _dak_terms(r, t)
+    return (tZ_t - r * Z_r) / (Z + r * Z_r)
+
+
+def dak_reduced_density(ppr, t):  # spec: PVT-GAS-11
+    """
+    DAK's reduced density at pseudo-reduced pressure and temperature: the root of r t Z(r, t) / Z_c = p_pr, by
+    DAK_NEWTON_STEPS Newton steps from the ideal-gas density Z_c p_pr / t. CasADi-compatible.
+
+    :param ppr: Pseudo-reduced pressure p / p_pc (dimensionless), may be CasADi symbolic
+    :param t: Pseudo-reduced temperature (dimensionless), may be CasADi symbolic
+    :return: Reduced gas density (dimensionless)
+    """
+    r = DAK_ZC * ppr / t
+    for _ in range(DAK_NEWTON_STEPS):
+        Z, Z_r, _ = _dak_terms(r, t)
+        r = r - (r * t * Z - DAK_ZC * ppr) / (t * (Z + r * Z_r))
+    return r
 
 
 def gas_z_factor(p, T, sg_gas):  # spec: PVT-GAS-4

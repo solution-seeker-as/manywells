@@ -48,7 +48,7 @@ ROOT_ROW = 1e-8       # a core-only root zeroes every CasADi row but the choke r
 ROOT_CHOKE_REL = 1e-6  # and the choke row to this fraction of the wellhead rate, or to what p_0's resolution allows,
 ROOT_P0_ULPS = 8       # this many ulp of p_r times |dR/dp_0|, if more (steep at the trickle roots next to p_r)
 SEED = 20261002       # the comparison set's seed (SMP-31)
-FEATURES = ('001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011')
+FEATURES = ('001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011', '016')
 
 
 def features(wp) -> frozenset:
@@ -74,6 +74,8 @@ def features(wp) -> frozenset:
         out.add('010')
     if type(wp.inflow) is FixedFlowRate:
         out.add('011')
+    if not fluid.ideal_gas and (fluid.z_factor_model == 'dak' or thermal.joule_thomson):
+        out.add('016')
     return frozenset(out)
 
 
@@ -127,6 +129,11 @@ def thermal(**kw):
     return lambda wp, bc: (replace(wp, thermal=replace(wp.thermal, **kw)), bc)
 
 
+def joule_thomson(wp, bc):
+    """The Joule-Thomson term on, with a real gas: with an ideal gas the term is zero."""
+    return replace(wp, fluid=replace(wp.fluid, ideal_gas=False), thermal=replace(wp.thermal, joule_thomson=True)), bc
+
+
 def lift_gas_temperature(wp, bc):
     """Lift gas at least 1 kg/s, injected cold (30% of the way from T_s to T_r), mixing with the inflow."""
     wp = replace(wp, thermal=replace(wp.thermal, lift_gas_mixing=True))
@@ -169,6 +176,8 @@ OVERLAYS = {
     'gravity term': thermal(gravity_term=True),
     'energy terms': thermal(frictional_heating=True, gravity_term=True),
     'real gas': fluid(ideal_gas=False),
+    'papay': fluid(ideal_gas=False, z_factor_model='papay'),
+    'joule-thomson': joule_thomson,
     'black oil': black_oil,
     'bubble point': bubble_point,
     'oil surface tension': fluid(surface_tension_model='oil'),
@@ -188,6 +197,7 @@ OVERLAYS = {
     'no frictional heating': thermal(frictional_heating=False),
     'no gravity term': thermal(gravity_term=False),
     'no lift-gas mixing': thermal(lift_gas_mixing=False),
+    'no joule-thomson': thermal(joule_thomson=False),
 }
 
 
@@ -214,10 +224,11 @@ BASES = {
 }
 
 V1_OVERLAYS = ('non-uniform grid', 'deviated', 'L-shaped', 'slip constants', 'water', 'frictional heating',
-               'gravity term', 'energy terms', 'real gas', 'black oil', 'bubble point', 'oil surface tension', 'chen', 'haaland',
-               'lift-gas temperature', 'fixed rate')
+               'gravity term', 'energy terms', 'real gas', 'papay', 'joule-thomson', 'black oil', 'bubble point',
+               'oil surface tension', 'chen', 'haaland', 'lift-gas temperature', 'fixed rate')
 DEVELOP_OVERLAYS = ('dead oil', 'ideal gas', 'liquid surface tension', 'fixed f_D', 'haaland', 'no frictional heating',
-                    'no gravity term', 'no lift-gas mixing', 'deviated', 'L-shaped', 'non-uniform grid',
+                    'no gravity term', 'no lift-gas mixing', 'no joule-thomson', 'papay', 'deviated', 'L-shaped',
+                    'non-uniform grid',
                     'slip constants', 'water', 'bubble point', 'lift-gas temperature', 'fixed rate', 'vogel', 'simpson')
 
 
@@ -244,6 +255,7 @@ def matrix() -> list:
         out += [Configuration(base)] + [Configuration(base, (o,)) for o in V1_OVERLAYS]
     out += [Configuration('develop')] + [Configuration('develop', (o,)) for o in DEVELOP_OVERLAYS]
     out += [Configuration('develop', ('deviated', 'fixed rate')), Configuration('develop', ('L-shaped', 'haaland'))]
+    out += [Configuration('W1', ('papay', 'joule-thomson')), Configuration('W2', ('energy terms', 'joule-thomson'))]
     return out
 
 
@@ -304,11 +316,12 @@ def row_difference(ids, rust, casadi) -> tuple:
 # The comparison set: sampled wells with overlays
 
 COMPARISON = {
-    V1: ('', 'deviated', 'L-shaped', 'real gas', 'black oil', 'bubble point', 'oil surface tension', 'chen',
-         'haaland', 'frictional heating', 'gravity term', 'lift-gas temperature', 'fixed rate'),
-    DEVELOP: ('', 'dead oil', 'ideal gas', 'liquid surface tension', 'haaland', 'fixed f_D', 'no frictional heating',
-              'no gravity term', 'lift-gas temperature', 'fixed rate', 'productivity index', 'bernoulli',
-              'bubble point'),
+    V1: ('', 'deviated', 'L-shaped', 'real gas', 'papay', 'joule-thomson', 'black oil', 'bubble point',
+         'oil surface tension', 'chen', 'haaland', 'frictional heating', 'gravity term', 'lift-gas temperature',
+         'fixed rate'),
+    DEVELOP: ('', 'dead oil', 'ideal gas', 'papay', 'liquid surface tension', 'haaland', 'fixed f_D',
+              'no frictional heating', 'no gravity term', 'no joule-thomson', 'lift-gas temperature', 'fixed rate',
+              'productivity index', 'bernoulli', 'bubble point'),
 }
 
 

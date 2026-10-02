@@ -55,14 +55,14 @@ The `v1.0.0` configuration reproduces ManyWells v1.0.0, which generated the publ
 |---|---|---|
 | Geometry | GEO-1 (vertical), GEO-2 | GEO-3, GEO-4 (any survey), GEO-2 |
 | Mass transfer | BAL-3 (none) | BAL-10, PVT-OIL-13 (dissolved gas) |
-| Gas | PVT-GAS-1 (ideal gas) | PVT-GAS-3 to PVT-GAS-6 (real gas, Papay) |
+| Gas | PVT-GAS-1 (ideal gas) | PVT-GAS-5, PVT-GAS-6, PVT-GAS-9, PVT-GAS-11 (real gas, Dranchuk–Abou-Kassem); Papay's PVT-GAS-3, PVT-GAS-4 as an option |
 | Oil | PVT-OIL-1 (dead oil) | PVT-OIL-4 to PVT-OIL-9 (black oil, Vazquez–Beggs) |
 | Liquid density | PVT-MIX-1 (constant) | PVT-MIX-6 (black oil and water) |
 | Fluid parameters | $\rho_l$, $R_s$, $c_{pg}$, $c_{pl}$, $f_g$ | PVT-MIX-10 ($\rho_o$, $\rho_{g,\text{sc}}$, $\rho_w$, gas–oil and water–liquid ratios), PVT-GAS-6 |
 | Surface tension | PVT-MIX-5 with PVT-OIL-3 | PVT-MIX-7 with PVT-OIL-3 and PVT-OIL-12 |
 | Slip | SLIP-1 to SLIP-8 | SLIP-1 to SLIP-8 with SLIP-10, SLIP-11 (inclination) |
 | Friction | FRIC-1 with FRIC-2 (fixed $f_D$) | FRIC-1, FRIC-3, FRIC-4, FRIC-6 (roughness, Chen), with PVT-MIX-8, PVT-MIX-9 |
-| Energy | BAL-5 with THM-1, THM-2; THM-3 at the bottom | BAL-12 with THM-1, THM-4, THM-6, THM-7; THM-5 at the bottom |
+| Energy | BAL-5 with THM-1, THM-2; THM-3 at the bottom | BAL-13 with THM-1, THM-4, THM-6, THM-7, THM-8 (with PVT-GAS-10); THM-5 at the bottom |
 | Momentum | BAL-4, BAL-6 | BAL-11, BAL-6 |
 | Discretization | DISC-1 to DISC-6 | DISC-7 to DISC-11 |
 | Choke | CHK-1 to CHK-4, CHK-11, CHK-12; CHK-11 extends v1.0.0, whose row is NaN where it applies, a region no root reaches | same |

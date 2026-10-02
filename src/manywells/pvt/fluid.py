@@ -13,7 +13,8 @@ from manywells.pvt import (
     R_UNIVERSAL, P_REF, T_REF,
     api_from_density, gas_density_from_sg, sg_from_gas_density, mixture_viscosity,
 )
-from manywells.pvt.gas import (gas_z_factor, gas_viscosity as _gas_viscosity)
+from manywells.pvt.gas import (DAK_ZC, dak_jt_factor, dak_reduced_density, dak_z_factor, gas_z_factor,
+                               gas_viscosity as _gas_viscosity, sutton_pseudo_critical)
 from manywells.pvt.black_oil import BlackOilPVT, live_oil_viscosity, live_oil_surface_tension
 from manywells.pvt.dead_oil import dead_oil_viscosity, dead_oil_surface_tension
 from manywells.pvt.water import water_viscosity
@@ -21,6 +22,7 @@ from manywells.units import M_AIR, CF_BAR, CF_RS
 
 
 OIL_MODELS = ('black_oil', 'dead_oil')
+Z_FACTOR_MODELS = ('dak', 'papay')
 SURFACE_TENSION_MODELS = ('oil', 'liquid')
 
 
@@ -33,7 +35,8 @@ class FluidModel:
     and water-liquid ratio.  The oil model ('black_oil' or 'dead_oil') controls
     whether pressure-dependent solution gas (Rs) and formation volume factor
     (Bo) are computed, and with it whether gas dissolves into the oil.  The gas
-    model (ideal_gas flag) controls whether the z-factor correlation is used.
+    is ideal (ideal_gas=True) or real, with the z-factor of the Dranchuk-Abou-Kassem
+    equation of state ('dak') or of Papay's correlation ('papay').
     The surface tension model chooses the density the dead-oil correlation is
     evaluated at: the oil's at standard conditions with a live-oil correction
     ('oil'), or the local liquid density ('liquid', as in v1.0.0).
@@ -57,7 +60,8 @@ class FluidModel:
 
     # Model selection
     oil_model: str = 'black_oil'          # One of OIL_MODELS
-    ideal_gas: bool = False               # True: z=1 (ideal gas law); False: Papay correlation
+    ideal_gas: bool = False               # True: z=1 (ideal gas law); False: the z-factor model's
+    z_factor_model: str = 'dak'           # One of Z_FACTOR_MODELS, for a real gas
     surface_tension_model: str = 'oil'    # One of SURFACE_TENSION_MODELS
 
     # Separator / bubble point (used by black oil correlations)
@@ -75,11 +79,14 @@ class FluidModel:
             raise ValueError(f"Unknown oil_model: {self.oil_model!r}")
         if self.surface_tension_model not in SURFACE_TENSION_MODELS:
             raise ValueError(f"Unknown surface_tension_model: {self.surface_tension_model!r}")
+        if self.z_factor_model not in Z_FACTOR_MODELS:
+            raise ValueError(f"Unknown z_factor_model: {self.z_factor_model!r}")
         if not 0 <= self.wlr < 1:
             raise ValueError('Water-liquid ratio must be in [0, 1)')
 
         object.__setattr__(self, '_api', api_from_density(self.rho_o))
         object.__setattr__(self, '_sg_gas', sg_from_gas_density(self.rho_g))
+        object.__setattr__(self, '_pseudo_critical', sutton_pseudo_critical(self._sg_gas))  # (Pa, K)
 
         black_oil = None
         if self.oil_model == 'black_oil':
@@ -105,6 +112,11 @@ class FluidModel:
     def sg_gas(self) -> float:
         """Gas specific gravity relative to air (dimensionless)."""
         return self._sg_gas
+
+    @property
+    def pseudo_critical(self) -> tuple:  # spec: PVT-GAS-5
+        """Pseudo-critical pressure (Pa) and temperature (K) of the gas, from its specific gravity (Sutton, 1985)."""
+        return self._pseudo_critical
 
     @property
     def R_s(self) -> float:  # spec: PVT-GAS-6
@@ -176,11 +188,20 @@ class FluidModel:
             return self._black_oil.bo(p * CF_BAR, T)
         return 1.0
 
-    def z_factor(self, p, T):  # spec: PVT-GAS-4
+    def _dak(self):
+        return self.z_factor_model == 'dak' and not self.ideal_gas
+
+    def reduced_density(self, rho_g):  # spec: PVT-GAS-9
+        """DAK's reduced gas density Z_c rho_g R_s T_pc / p_pc at gas density rho_g (kg/m3), may be symbolic."""
+        ppc, tpc = self._pseudo_critical
+        return DAK_ZC * rho_g * self.R_s * tpc / ppc
+
+    def z_factor(self, p, T):  # spec: PVT-GAS-4, PVT-GAS-9, PVT-GAS-11
         """
         Gas compressibility factor at (p, T).
 
-        Returns 1.0 for ideal gas; uses Papay (1968) correlation otherwise.
+        Returns 1.0 for ideal gas; otherwise the Dranchuk-Abou-Kassem (1975) equation of state at the density it
+        gives at (p, T) ('dak'), or Papay's (1968) correlation ('papay').
 
         :param p: Pressure (bar), may be CasADi symbolic
         :param T: Temperature (K), may be CasADi symbolic
@@ -188,9 +209,12 @@ class FluidModel:
         """
         if self.ideal_gas:
             return 1.0
-        return gas_z_factor(p * CF_BAR, T, self._sg_gas)
+        if self.z_factor_model == 'papay':
+            return gas_z_factor(p * CF_BAR, T, self._sg_gas)
+        ppc, tpc = self._pseudo_critical
+        return dak_z_factor(dak_reduced_density(p * CF_BAR / ppc, T / tpc), T / tpc)
 
-    def gas_density(self, p, T):  # spec: PVT-GAS-1, PVT-GAS-3
+    def gas_density(self, p, T):  # spec: PVT-GAS-1, PVT-GAS-3, PVT-GAS-11
         """
         Gas density at (p, T) from the real gas equation of state.
 
@@ -198,13 +222,16 @@ class FluidModel:
         :param T: Temperature (K), may be CasADi symbolic
         :return: Gas density (kg/m3)
         """
+        if self._dak():
+            ppc, tpc = self._pseudo_critical
+            return dak_reduced_density(p * CF_BAR / ppc, T / tpc) * ppc / (DAK_ZC * self.R_s * tpc)
         Z = self.z_factor(p, T)
         return CF_BAR * p / (Z * self.R_s * T)
 
-    def gas_law_row(self, p, T, rho_g):  # spec: PVT-GAS-1, PVT-GAS-3
+    def gas_law_row(self, p, T, rho_g):  # spec: PVT-GAS-1, PVT-GAS-3, PVT-GAS-11
         """
         The gas law as a row of the discretized system, in its canonical form p - rho_g Z R_s T / c_bar (bar),
-        zero where rho_g is the gas density at (p, T).
+        zero where rho_g is the gas density at (p, T). With DAK, Z is the equation of state's at rho_g and T.
 
         The form matters to the solver, not to the roots: in bar, like the momentum row, it lets Ipopt converge in
         fewer iterations and more tightly than the density form rho_g - gas_density(p, T).
@@ -214,7 +241,25 @@ class FluidModel:
         :param rho_g: Gas density (kg/m3), may be CasADi symbolic
         :return: Row value (bar)
         """
-        return p - rho_g * self.z_factor(p, T) * self.R_s * T / CF_BAR
+        if self._dak():
+            Z = dak_z_factor(self.reduced_density(rho_g), T / self._pseudo_critical[1])
+        else:
+            Z = self.z_factor(p, T)
+        return p - rho_g * Z * self.R_s * T / CF_BAR
+
+    def jt_factor(self, T, rho_g):  # spec: PVT-GAS-10
+        """
+        The gas's Joule-Thomson factor J = T (d ln Z / dT)_p at temperature T and gas density rho_g: 0 for an ideal
+        gas, and otherwise the Dranchuk-Abou-Kassem equation of state's at the reduced density of rho_g, whatever
+        the z-factor model (specs/features/016-joule-thomson.md).
+
+        :param T: Temperature (K), may be CasADi symbolic
+        :param rho_g: Gas density (kg/m3), may be CasADi symbolic
+        :return: J (dimensionless)
+        """
+        if self.ideal_gas:
+            return 0.0
+        return dak_jt_factor(self.reduced_density(rho_g), T / self._pseudo_critical[1])
 
     def liquid_density(self, p, T):  # spec: PVT-MIX-1, PVT-MIX-6, PVT-OIL-9
         """

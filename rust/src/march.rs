@@ -36,11 +36,23 @@ const CELL_ROW_TOL: f64 = 1e-8;
 /// CELL_ROW_TOL.
 const TEMPERATURE_TOL: f64 = 1e-8;
 
-/// Most doublings of the step beyond the upper end of the temperature bracket (Marcher::solve_temperature)
+/// Most doublings of the step beyond either end of the temperature bracket (Marcher::solve_temperature)
 const MAX_STEP_OUTS: usize = 30;
 
 /// Most steps of the chord iteration for the temperature before the bracketed solve takes over
 const CHORD_MAXITER: usize = 10;
+
+/// The cell step's descent from p_prev where the state at p_s cannot be computed (descend): its first step is
+/// (p_prev - p_s) / DESCENT_STEPS, and it doubles; and the relative width to which it bisects the edge of the
+/// pressures with a state
+const DESCENT_STEPS: f64 = 1024.0;
+const EDGE_XTOL: f64 = 1e-9;
+
+/// The temperature solve's test for a row U-shaped in T (Marcher::solve_temperature): the step (K) below T_lo at
+/// which it samples the row, and the width (K) to which it narrows the row's minimum before it concludes that the
+/// row stays positive
+const U_SAMPLE_DT: f64 = 1e-2;
+const U_MIN_XTOL: f64 = 1e-3;
 
 /// A march from p_0 to the wellhead
 pub struct March {
@@ -76,11 +88,17 @@ pub struct Counts {
     pub temperature_solves: usize,
     /// Temperature solves that the chord iteration did not finish, so the bracketed solve took over
     pub chord_fallbacks: usize,
-    /// Temperature solves whose bracket needed steps beyond max(T_{i-1}, T_a), and those that failed
+    /// Temperature solves whose bracket needed steps beyond max(T_{i-1}, T_a), those that needed steps below its
+    /// lower end (Joule-Thomson cooling, THM-8), and those that failed
     pub step_outs: usize,
+    pub lower_step_outs: usize,
+    /// Temperature solves whose row was U-shaped in T, so that its minimum bracketed the root
+    pub temperature_minima: usize,
     pub temperature_failures: usize,
-    /// Samples of the scan where R is not finite, which it leaves out (shoot.rs)
+    /// Samples of the scan where R is not finite, which it leaves out, and the edges of the finite region it refines
+    /// (shoot.rs)
     pub non_finite: usize,
+    pub edge_refinements: usize,
 }
 
 pub struct Marcher<'a> {
@@ -131,11 +149,15 @@ impl<'a> Marcher<'a> {
     /// First a chord iteration: Newton's method with the heat loss's slope (heat_loss_slope) for the derivative, from
     /// guess, the temperature at the cell's previous trial pressure, until its step is a few ulp. Where it does not
     /// converge, Brent on the row r_T(T), with the closures at (p, T), on a bracket where it changes sign. With
-    /// dT/dMD = -H + Φ_f - Φ_g, the row is r_T = T - T_{i-1} + ΔMD (H - Φ_f + Φ_g), where the heat loss H has the sign
-    /// of T - T_a, frictional heating Φ_f >= 0, and the gravity term 0 <= Φ_g <= Φ_max (Thermal::gravity_term_bound)
-    /// at every state. So r_T <= 0 at T_lo = min(T_{i-1}, T_a) - ΔMD Φ_max, and r_T >= 0 at max(T_{i-1}, T_a) without
-    /// frictional heating; where frictional heating keeps r_T negative there, the upper end steps out by doubling
-    /// steps until it is not.
+    /// dT/dMD = -H + Φ_f - Φ_g - Φ_JT, the row is r_T = T - T_{i-1} + ΔMD (H - Φ_f + Φ_g + Φ_JT), where the heat loss
+    /// H has the sign of T - T_a, frictional heating Φ_f >= 0, and the gravity term 0 <= Φ_g <= Φ_max
+    /// (Thermal::gravity_term_bound) at every state. So without the Joule-Thomson term, r_T <= 0 at
+    /// T_lo = min(T_{i-1}, T_a) - ΔMD Φ_max, and r_T >= 0 at max(T_{i-1}, T_a) without frictional heating. Where
+    /// frictional heating, or Joule-Thomson heating (Φ_JT < 0), keeps r_T negative at the upper end, it steps out by
+    /// doubling steps until it is not; where Joule-Thomson cooling (Φ_JT > 0, which has no simple bound) keeps r_T
+    /// positive at T_lo, the lower end steps out in the same way. Near a gas well's choked wellhead, the cooling can
+    /// make r_T U-shaped in T, with two roots; the solve takes the one on the rising side of its minimum, which
+    /// continues the root without the term (specs/features/016-joule-thomson.md).
     ///
     /// Where the row jumps across zero instead of crossing it, as where the slip law switches between several void
     /// fractions, Brent converges onto the jump: the state there is returned, as not solved, so that the march can
@@ -165,12 +187,8 @@ impl<'a> Marcher<'a> {
         let t_a = thermal::ambient_temperature(cell.tvd_frac, op.t_r, op.t_s);
         let t_lo = prev.t.min(t_a) - cell.delta_md * spec.thermal.gravity_term_bound(&spec.fluid, cell.cos_incl);
         let (mut a, mut b) = (t_lo, prev.t.max(t_a));
-        let f_lo = row(a).ok()?;
+        let mut f_a = row(a).ok()?;
         let mut f_b = row(b).ok()?;
-        if f_lo > 0.0 {
-            self.count(|c| c.temperature_failures += 1);
-            return None;
-        }
         if f_b < 0.0 {
             self.count(|c| c.step_outs += 1);
             let mut step = -f_b;
@@ -185,6 +203,38 @@ impl<'a> Marcher<'a> {
                     return None;
                 }
                 step *= 2.0;
+            }
+        } else if f_a > 0.0 {
+            // Positive at both ends. Where the row rises below T_lo, T_lo is on the falling side of a row that is
+            // U-shaped in T, as Joule-Thomson cooling can make it near a gas well's choked wellhead: the root on the
+            // rising side of its minimum, which continues the root without the term, lies between the ends, and the
+            // minimum brackets it. Otherwise the root lies below T_lo, and the lower end steps out.
+            let falling = row(a - U_SAMPLE_DT).map_or(true, |f| !(f <= f_a));
+            if falling {
+                self.count(|c| c.temperature_minima += 1);
+                let (t_m, f_m) = minimize(&mut |t| row(t).ok().filter(|f| f.is_finite()).unwrap_or(f64::INFINITY),
+                                          a, b, U_MIN_XTOL, 200, 0.0);
+                if !(f_m < 0.0) {
+                    self.count(|c| c.temperature_failures += 1);
+                    return None;
+                }
+                a = t_m;
+            } else {
+                self.count(|c| c.lower_step_outs += 1);
+                let mut step = f_a;
+                for k in 0..=MAX_STEP_OUTS {
+                    b = a;
+                    a -= step;
+                    f_a = row(a).ok()?;
+                    if f_a <= 0.0 {
+                        break;
+                    }
+                    if k == MAX_STEP_OUTS {
+                        self.count(|c| c.temperature_failures += 1);
+                        return None;
+                    }
+                    step *= 2.0;
+                }
             }
         }
         let (t, f) = brentq(&mut row, a, b, 0.0, RTOL, 100).ok()?;
@@ -317,7 +367,7 @@ fn cell_step(row: &mut impl FnMut(f64) -> Result<f64, RootError>, p_s: f64, p_pr
     let solved = |(p, f): (f64, f64)| if f.abs() <= CELL_ROW_TOL { CellStep::Solved(p) } else { CellStep::Unsolved(p) };
     let f_s = match row(p_s) {
         Ok(f) => f,
-        Err(_) => return CellStep::Unsolved(p_prev),
+        Err(_) => return descend(row, p_s, p_prev),
     };
     if f_s < 0.0 {
         return match brentq(row, p_s, p_prev, CELL_XTOL, RTOL, 100) {
@@ -338,6 +388,51 @@ fn cell_step(row: &mut impl FnMut(f64) -> Result<f64, RootError>, p_s: f64, p_pr
         };
     }
     if f_s <= f_star { CellStep::BelowSeparator } else { CellStep::Unsolved(p_star) }
+}
+
+/// The cell step where the state cannot be computed at p_s, as where Joule-Thomson cooling (THM-8) leaves a gas
+/// well's energy row without a root at pressures far below the cell's, and the pressures with a state need not form
+/// one interval. The subsonic root is the first sign change below p_prev: the search steps down from p_prev,
+/// doubling its step from (p_prev - p_s) / DESCENT_STEPS, to the first pressure where the row is negative, and Brent
+/// takes it from there. Where a step reaches a pressure without a state first, the edge of the stretch with states
+/// above it is found by bisection, and the row's minimum on that stretch decides, as in cell_step.
+fn descend(row: &mut impl FnMut(f64) -> Result<f64, RootError>, p_s: f64, p_prev: f64) -> CellStep {
+    let finite = |r: Result<f64, RootError>| r.ok().filter(|f| f.is_finite());
+    let mut hi = p_prev; // the lowest pressure reached with a state, where the row is positive
+    let mut d = (p_prev - p_s) / DESCENT_STEPS;
+    loop {
+        let p = (p_prev - d).max(p_s);
+        match finite(row(p)) {
+            Some(f) if f < 0.0 => return bracket(row, p, hi, hi),
+            Some(_) if p > p_s => hi = p,
+            Some(_) => return CellStep::BelowSeparator, // positive down to p_s
+            None => {
+                let (mut lo, mut up) = (p, hi);
+                while up - lo > EDGE_XTOL * p_prev {
+                    let c = 0.5 * (lo + up);
+                    match finite(row(c)) {
+                        Some(f) if f < 0.0 => return bracket(row, c, up, up),
+                        Some(_) => up = c,
+                        None => lo = c,
+                    }
+                }
+                let (p_star, f_star) = minimize(&mut |p| finite(row(p)).unwrap_or(f64::INFINITY), up, p_prev, 1e-2, 200,
+                                                f64::NEG_INFINITY);
+                return if f_star < 0.0 { bracket(row, p_star, p_prev, p_star) } else { CellStep::Unsolved(up) };
+            }
+        }
+        d *= 2.0;
+    }
+}
+
+/// Brent on a sign change of the cell's row on [a, b]: solved where the row is zero there, and otherwise unsolved at
+/// fail
+fn bracket(row: &mut impl FnMut(f64) -> Result<f64, RootError>, a: f64, b: f64, fail: f64) -> CellStep {
+    match brentq(row, a, b, CELL_XTOL, RTOL, 100) {
+        Ok((p, f)) if f.abs() <= CELL_ROW_TOL => CellStep::Solved(p),
+        Ok((p, _)) => CellStep::Unsolved(p),
+        Err(_) => CellStep::Unsolved(fail),
+    }
 }
 
 #[cfg(test)]
@@ -383,7 +478,9 @@ mod tests {
     /// What the cell solve assumes (specs/features/015-rust-develop-model.md): at every cell of every root of the
     /// test wells, which cover every option, the cell's momentum row, with the temperature solved at each pressure, is
     /// U-shaped in the pressure on [p_s, p_{i-1}] and positive at p_{i-1}; and where the energy row depends on the
-    /// pressure, it has one root in the temperature at the root's pressure.
+    /// pressure, it has one root in the temperature at the root's pressure, within 40 K of the root's. Samples where
+    /// the row is not finite are left out: the dead-oil viscosity has none below 0 °F (255 K), which a cold
+    /// wellhead's window reaches with Joule-Thomson cooling.
     #[test]
     fn the_cell_rows_have_the_shapes_the_cell_solve_assumes() {
         for (name, spec, op) in all(20) {
@@ -404,7 +501,8 @@ mod tests {
                     if t_fixed.is_none() {
                         let r_t: Vec<f64> = (0..=200).map(|k| s.t - 40.0 + 80.0 * k as f64 / 200.0)
                             .filter_map(|t| m.point_state(s.p, t, root.w_res, cell.cos_incl))
-                            .map(|st| discretization::energy_row(&spec, &op, cell, &st, &prev)).collect();
+                            .map(|st| discretization::energy_row(&spec, &op, cell, &st, &prev))
+                            .filter(|r| r.is_finite()).collect();
                         let crossings = r_t.windows(2).filter(|w| (w[0] < 0.0) != (w[1] < 0.0)).count();
                         assert_eq!(crossings, 1, "{name}, root {}, cell {i}: energy row", root.x[0]);
                     }

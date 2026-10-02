@@ -32,7 +32,7 @@ from manywells.pvt import density_from_api, gas_density_from_sg, mixture_viscosi
 from manywells.pvt.black_oil import BlackOilPVT, live_oil_surface_tension, live_oil_viscosity
 from manywells.pvt.dead_oil import dead_oil_viscosity
 from manywells.pvt.fluid import FluidModel
-from manywells.pvt.gas import gas_viscosity, sutton_pseudo_critical
+from manywells.pvt.gas import dak_jt_factor, dak_z_factor, gas_viscosity, sutton_pseudo_critical
 from manywells.pvt.water import water_fvf, water_viscosity
 from manywells.slip import SlipModel, classify_flow_regime
 from manywells.thermal import ThermalModel
@@ -75,10 +75,19 @@ def state(alpha, v_g, v_l, rho_g, rho_l, p=100.0, T=350.0):
 
 
 def thermal_term(alpha, rho_g, v_g, rho_l, v_l, F, cos_incl, cp_g, cp_l, frictional_heating, gravity_term):
-    m = ThermalModel(h=0.0, frictional_heating=frictional_heating, gravity_term=gravity_term, lift_gas_mixing=False)
+    m = ThermalModel(h=0.0, frictional_heating=frictional_heating, gravity_term=gravity_term, lift_gas_mixing=False,
+                     joule_thomson=False)
     fl = FluidModel(oil_model='dead_oil', cp_g=cp_g, cp_o=cp_l)
     return m.temperature_gradient(state(alpha, v_g, v_l, rho_g, rho_l), fl, T_a=350.0, F=F, dp_dmd=0.0,
                                   cos_incl=cos_incl, D=0.1)
+
+
+def joule_thomson_term(alpha, rho_g, v_g, rho_l, v_l, F, cos_incl, T, sg_gas, cp_g, cp_l):
+    """THM-8, Phi_JT, the cooling of the real (DAK) gas: minus the temperature gradient with that term alone."""
+    m = ThermalModel(h=0.0, frictional_heating=False, gravity_term=False, lift_gas_mixing=False, joule_thomson=True)
+    fl = FluidModel(oil_model='dead_oil', rho_g=gas_density_from_sg(sg_gas), cp_g=cp_g, cp_o=cp_l)
+    return -m.temperature_gradient(state(alpha, v_g, v_l, rho_g, rho_l, T=T), fl, T_a=T, F=F, dp_dmd=0.0,
+                                   cos_incl=cos_incl, D=0.1)
 
 
 def lift_gas_mixing(w_res, w_lg, T_r, T_lg, f_g, cp_g, cp_l):
@@ -94,7 +103,7 @@ def rough_pipe(p, T, alpha, v_g, v_l, rho_g, rho_l, D, roughness):
 
 def pseudo_critical_and_z(p, T, sg_gas):
     ppc, tpc = sutton_pseudo_critical(sg_gas)
-    fl = FluidModel(rho_g=gas_density_from_sg(sg_gas))
+    fl = FluidModel(rho_g=gas_density_from_sg(sg_gas), z_factor_model='papay')
     return ppc / CF_BAR, tpc, fl.z_factor(p, T)
 
 
@@ -139,6 +148,13 @@ TABLES = [
            (0.6, 60.0, 8.0, 820.0, 3.0, 0.5, 2225.0, 2500.0), (0.5, 60.0, 8.0, 820.0, 3.0, 0.0, 2225.0, 2500.0)),
           lambda cos_incl, **kw: -thermal_term(F=0.0, cos_incl=cos_incl, frictional_heating=False, gravity_term=True,
                                                **kw)),
+    Table('thermal.md', 'THM-8', ('alpha', 'rho_g', 'v_g', 'rho_l', 'v_l', 'F', 'cos_incl', 'T', 'sg_gas', 'cp_g', 'cp_l'),
+          ('Phi_JT',),
+          ((1.0, 60.0, 10.0, 850.0, 2.0, 300.0, 1.0, 350.0, 0.65, 2225.0, 4180.0),
+           (0.5, 80.0, 6.0, 800.0, 2.5, 900.0, 0.7, 330.0, 0.7, 2225.0, 3000.0),
+           (0.9, 300.0, 3.0, 820.0, 1.0, 1500.0, 1.0, 300.0, 0.65, 2225.0, 2500.0),
+           (0.0, 50.0, 10.0, 850.0, 2.0, 500.0, 1.0, 350.0, 0.65, 2225.0, 4180.0)),
+          joule_thomson_term),
     # slip.md
     Table('slip.md', 'SLIP-10, SLIP-11', ('v_g', 'v_l', 'alpha', 'rho_g', 'rho_l', 'sigma', 'D', 'cos_incl'),
           ('C_0', 'v_inf'),
@@ -165,10 +181,18 @@ TABLES = [
     # pvt/gas.md
     Table('pvt/gas.md', 'PVT-GAS-3', ('p', 'T', 'rho_g_sc'), ('rho_g',),
           ((1.01325, 288.15, 0.8), (100.0, 350.0, 0.8), (250.0, 380.0, 0.68), (30.0, 290.0, 1.0)),
-          lambda p, T, rho_g_sc: FluidModel(rho_g=rho_g_sc).gas_density(p, T)),
+          lambda p, T, rho_g_sc: FluidModel(rho_g=rho_g_sc, z_factor_model='papay').gas_density(p, T)),
     Table('pvt/gas.md', 'PVT-GAS-4, PVT-GAS-5', ('p', 'T', 'sg_gas'), ('p_pc', 'T_pc', 'Z'),
           ((1.01325, 288.15, 0.554), (100.0, 350.0, 0.65), (250.0, 380.0, 0.75), (300.0, 330.0, 0.9)),
           pseudo_critical_and_z),
+    Table('pvt/gas.md', 'PVT-GAS-9', ('r', 't'), ('Z',),
+          ((0.05, 1.5), (0.3, 1.2), (0.8, 1.6), (1.5, 2.0), (2.0, 1.3)), dak_z_factor),
+    Table('pvt/gas.md', 'PVT-GAS-10', ('r', 't'), ('J',),
+          ((0.05, 1.5), (0.3, 1.2), (0.8, 1.6), (1.5, 2.0), (2.0, 1.3)), dak_jt_factor),
+    Table('pvt/gas.md', 'PVT-GAS-11', ('p', 'T', 'rho_g_sc'), ('rho_g', 'Z'),
+          ((1.01325, 288.15, 0.8), (100.0, 350.0, 0.8), (250.0, 380.0, 0.68), (450.0, 420.0, 0.75),
+           (30.0, 290.0, 1.0)),
+          lambda p, T, rho_g_sc: (FluidModel(rho_g=rho_g_sc).gas_density(p, T), FluidModel(rho_g=rho_g_sc).z_factor(p, T))),
     Table('pvt/gas.md', 'PVT-GAS-6', ('rho_g_sc',), ('sg_gas', 'M_g', 'R_s'),
           ((0.6783,), (0.8,), (1.1,)), gas_parameters),
     Table('pvt/gas.md', 'PVT-GAS-7', ('T', 'rho_g', 'M_g'), ('mu_g',),

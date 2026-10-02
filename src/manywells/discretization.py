@@ -24,6 +24,9 @@ import numpy as np
 from manywells.slip import regime_label
 from manywells.units import CF_BAR, STD_GRAVITY
 
+JT_T_PR_MIN = 1.05
+"""The pseudo-reduced temperature of the solver's lower temperature bound with the Joule-Thomson term (System.bounds)."""
+
 DIM_X = 7
 STATE = ('p', 'v_g', 'v_l', 'alpha', 'rho_g', 'rho_l', 'T')  # Order is important
 PARAMS = ('p_r', 'p_s', 'T_r', 'T_s', 'T_lg', 'u', 'w_lg')   # The operating point, as the system's parameters
@@ -140,7 +143,7 @@ def closure_rows(wp, s, cos_incl):
     C_0, v_inf = wp.slip.identify_parameters(s.v_g, s.v_l, s.alpha, s.rho_g, s.rho_l, sigma, wp.geometry.D, cos_incl)
     return [
         s.v_g - C_0 * s.v_m - v_inf,                 # spec: SLIP-1
-        fluid.gas_law_row(s.p, s.T, s.rho_g),        # Gas law (PVT-GAS-1 or PVT-GAS-3)
+        fluid.gas_law_row(s.p, s.T, s.rho_g),        # Gas law (PVT-GAS-1, PVT-GAS-3 or PVT-GAS-11)
         s.rho_l - fluid.liquid_density(s.p, s.T),    # Liquid density (PVT-MIX-1 or PVT-MIX-6)
     ]
 
@@ -150,7 +153,8 @@ def row_ids(wp) -> tuple:
     fluid, N = wp.fluid, wp.geometry.n_cells
     bottom = ('INF-6', 'INF-7', 'THM-5' if wp.thermal.lift_gas_mixing else 'THM-3')
     cell = ('DISC-7', 'DISC-8', 'DISC-9', 'DISC-10')
-    closures = ('SLIP-1', 'PVT-GAS-1' if fluid.ideal_gas else 'PVT-GAS-3',
+    gas_law = 'PVT-GAS-1' if fluid.ideal_gas else 'PVT-GAS-11' if fluid.z_factor_model == 'dak' else 'PVT-GAS-3'
+    closures = ('SLIP-1', gas_law,
                 'PVT-MIX-1' if fluid.oil_model == 'dead_oil' else 'PVT-MIX-6')
     ids = bottom + closures
     for i in range(1, N + 1):
@@ -228,8 +232,14 @@ class System:
         """
         Bounds on the state for the solver: p in [p_s, p_r], alpha in [0, 1], velocities and densities
         non-negative, and T in [min(T_s, T_lg), T_r + 1]. A root must also be admissible (SOL-1).
+
+        With the Joule-Thomson term (THM-8) on a real gas the fluid can be colder than its surroundings, and the
+        lower bound is 1.05 T_pc where that is lower: the lower end of the Dranchuk-Abou-Kassem equation of state's
+        range, below which the Joule-Thomson factor has a pole (PVT-GAS-10; specs/features/016-joule-thomson.md).
         """
         T_low = bc.T_s if bc.T_lg is None else min(bc.T_s, bc.T_lg)
+        if self.wp.thermal.joule_thomson and not self.wp.fluid.ideal_gas:
+            T_low = min(T_low, JT_T_PR_MIN * self.wp.fluid.pseudo_critical[1])
         lb = np.array([bc.p_s, 0, 0, 0, 0, 0, T_low], dtype=float)
         ub = np.array([bc.p_r, np.inf, np.inf, 1, np.inf, np.inf, bc.T_r + 1], dtype=float)
         n = self.n_cells + 1

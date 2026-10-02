@@ -56,7 +56,10 @@ pub struct Search {
 /// for a negative R there, and Brent then runs on both sides of it.
 ///
 /// Where a march leaves the range of the closures, R is not finite, and the sample is left out: through choked cells
-/// just above p_s, frictional heating can heat the flow past the range of the surface tension correlation.
+/// just above p_s, frictional heating can heat the flow past the range of the surface tension correlation, and in a
+/// gas well Joule-Thomson cooling (THM-8) can leave a cell's energy row without a root. Where a finite sample
+/// neighbours one that is not, the edge of the finite region is found by bisection to the refinement's width and
+/// sampled, so that a root next to the edge is bracketed.
 fn shoot(m: &Marcher) -> Vec<(f64, bool)> {
     let op = m.op;
     let p_lo = op.p_s + 1e-3;
@@ -74,9 +77,30 @@ fn shoot(m: &Marcher) -> Vec<(f64, bool)> {
         d /= 2.0;
     }
     p.sort_by(f64::total_cmp);
-    let n_samples = p.len();
-    let (p, r): (Vec<f64>, Vec<f64>) = p.into_iter().filter_map(|p| residual(p).map(|r| (p, r))).unzip();
-    m.count(|c| c.non_finite += n_samples - p.len());
+    let mut samples: Vec<(f64, Option<f64>)> = p.into_iter().map(|p| (p, residual(p))).collect();
+    m.count(|c| c.non_finite += samples.iter().filter(|(_, r)| r.is_none()).count());
+    let xtol_refine = REFINE_XTOL * (op.p_r - op.p_s);
+    let mut edges = Vec::new();
+    for j in 0..samples.len().saturating_sub(1) {
+        let ((p_a, r_a), (p_b, r_b)) = (samples[j], samples[j + 1]);
+        if r_a.is_some() == r_b.is_some() {
+            continue;
+        }
+        // Bisect towards the edge, keeping `inside` finite
+        let (mut inside, mut outside) = if r_a.is_some() { ((p_a, r_a.unwrap()), p_b) } else { ((p_b, r_b.unwrap()), p_a) };
+        while (inside.0 - outside).abs() > xtol_refine {
+            let c = 0.5 * (inside.0 + outside);
+            match residual(c) {
+                Some(r_c) => inside = (c, r_c),
+                None => outside = c,
+            }
+        }
+        m.count(|c| c.edge_refinements += 1);
+        edges.push((inside.0, Some(inside.1)));
+    }
+    samples.extend(edges);
+    samples.sort_by(|x, y| x.0.total_cmp(&y.0));
+    let (p, r): (Vec<f64>, Vec<f64>) = samples.into_iter().filter_map(|(p, r)| r.map(|r| (p, r))).unzip();
     if p.len() < 2 {
         return Vec::new();
     }
@@ -88,7 +112,6 @@ fn shoot(m: &Marcher) -> Vec<(f64, bool)> {
             brackets.push((p[j], p[j + 1], r[j] < 0.0));
         }
     }
-    let xtol_refine = REFINE_XTOL * (op.p_r - op.p_s);
     for j in 1..n {
         // A local minimum, strict on one side at least: with a fixed rate (INF-8), R is the same constant at every
         // sample whose march falls below p_s, a flat stretch that holds no root

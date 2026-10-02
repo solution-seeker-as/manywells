@@ -5,12 +5,12 @@
 // Created 01 October 2026
 
 //! The thermal model (specs/model/thermal.md), as ThermalModel in src/manywells/thermal.py: heat loss to an ambient
-//! profile linear in true vertical depth, and optionally frictional heating and the gravity term; the fluid enters at
-//! the reservoir temperature, or mixed with lift gas at its own. Derivations of the terms:
-//! docs/thermal_energy_modeling.md.
+//! profile linear in true vertical depth, and optionally frictional heating, the gravity term and the real gas's
+//! Joule-Thomson cooling; the fluid enters at the reservoir temperature, or mixed with lift gas at its own.
+//! Derivations of the terms: docs/thermal_energy_modeling.md.
 
 use crate::discretization::State;
-use crate::pvt::fluid::Fluid;
+use crate::pvt::fluid::{Fluid, GasLaw};
 use crate::units::STD_GRAVITY;
 
 #[derive(Clone, Copy, Debug)]
@@ -19,6 +19,7 @@ pub struct Thermal {
     pub frictional_heating: bool, // Viscous dissipation heats the liquid (THM-6)
     pub gravity_term: bool,       // Work against gravity cools the flow (THM-7)
     pub lift_gas_mixing: bool,    // Lift gas at T_lg mixes with the reservoir fluid at the bottomhole (THM-5)
+    pub joule_thomson: bool,      // A real gas cools as it expands (THM-8)
 }
 
 /// Ambient temperature (K) at a point whose true vertical depth is tvd_frac of the bottomhole's, linear from T_s at
@@ -35,7 +36,7 @@ pub fn heat_flux_capacity(fluid: &Fluid, s: &State) -> f64 {
 impl Thermal {
     /// The temperature gradient dT/dMD (K/m) along the flow path at a point with state s, ambient temperature t_a
     /// (K), viscous pressure gradient f (Pa/m) and inclination cos_incl, in a pipe of inner diameter d (m):
-    /// -H + (frictional heating) - (gravity term), with H the heat loss
+    /// -H + (frictional heating) - (gravity term) - (Joule-Thomson term), with H the heat loss
     pub fn temperature_gradient(&self, s: &State, fluid: &Fluid, t_a: f64, f: f64, cos_incl: f64, d: f64) -> f64 {
         let cp_flux = heat_flux_capacity(fluid, s);
         let mut dt = -4.0 * self.h * (s.t - t_a) / (d * cp_flux); // spec: THM-1
@@ -47,13 +48,19 @@ impl Thermal {
             let liq_flux = (1.0 - s.alpha) * s.v_l;
             dt -= cos_incl * STD_GRAVITY * (mass_flux - liq_flux * s.rho_m()) / cp_flux; // spec: THM-7
         }
+        if self.joule_thomson {
+            let j = fluid.jt_factor(s.t, s.rho_g);
+            dt -= s.alpha * s.v_g * j * (f + cos_incl * STD_GRAVITY * s.rho_m()) / cp_flux; // spec: THM-8
+        }
         dt
     }
 
     /// Whether the energy row is linear in the temperature and does not depend on the pressure: with heat loss
-    /// alone, where the phase rates fix the heat flux capacity (no mass transfer)
+    /// alone, where the phase rates fix the heat flux capacity (no mass transfer). The Joule-Thomson term is zero
+    /// for an ideal gas.
     pub fn is_linear(&self, fluid: &Fluid) -> bool {
-        !self.frictional_heating && !self.gravity_term && !fluid.has_mass_transfer()
+        let joule_thomson = self.joule_thomson && fluid.gas_law != GasLaw::Ideal;
+        !self.frictional_heating && !self.gravity_term && !joule_thomson && !fluid.has_mass_transfer()
     }
 
     /// An upper bound on the gravity term (K/m) at inclination cos_incl, over every state: its numerator
@@ -91,11 +98,12 @@ impl Thermal {
 mod tests {
     use super::*;
     use crate::input::test_wells::v1_fluid;
+    use crate::pvt::fluid::{FluidInputs, ZFactorModel};
 
     #[test]
     fn lift_gas_at_the_reservoir_temperature_leaves_the_inflow_at_it() {
         let fluid = v1_fluid(820.0, 420.0, 2225.0, 3000.0, 0.1);
-        let th = Thermal { h: 20.0, frictional_heating: false, gravity_term: false, lift_gas_mixing: true };
+        let th = Thermal { h: 20.0, frictional_heating: false, gravity_term: false, lift_gas_mixing: true, joule_thomson: false };
         assert_eq!(th.inflow_temperature(10.0, 2.0, 360.0, 360.0, &fluid), 360.0);
         let t = th.inflow_temperature(10.0, 2.0, 360.0, 300.0, &fluid);
         assert!(t < 360.0 && t > 300.0);
@@ -108,7 +116,7 @@ mod tests {
     #[test]
     fn frictional_heating_of_a_liquid_is_f_over_rho_c() {
         let fluid = v1_fluid(820.0, 420.0, 2225.0, 3000.0, 0.1);
-        let th = Thermal { h: 0.0, frictional_heating: true, gravity_term: false, lift_gas_mixing: false };
+        let th = Thermal { h: 0.0, frictional_heating: true, gravity_term: false, lift_gas_mixing: false, joule_thomson: false };
         let dt = th.temperature_gradient(&state(0.0, 1.0, 2.0), &fluid, 350.0, 500.0, 1.0, 0.1);
         assert!((dt - 500.0 / (820.0 * 3000.0)).abs() < 1e-15);
     }
@@ -116,7 +124,7 @@ mod tests {
     #[test]
     fn the_gravity_term_is_g_over_c_for_a_gas_and_zero_for_a_liquid() {
         let fluid = v1_fluid(820.0, 420.0, 2225.0, 3000.0, 0.1);
-        let th = Thermal { h: 0.0, frictional_heating: false, gravity_term: true, lift_gas_mixing: false };
+        let th = Thermal { h: 0.0, frictional_heating: false, gravity_term: true, lift_gas_mixing: false, joule_thomson: false };
         let gas = -th.temperature_gradient(&state(1.0, 10.0, 1.0), &fluid, 350.0, 0.0, 1.0, 0.1);
         assert!((gas - STD_GRAVITY / 2225.0).abs() < 1e-15);
         assert_eq!(th.temperature_gradient(&state(0.0, 1.0, 2.0), &fluid, 350.0, 0.0, 1.0, 0.1), 0.0);
@@ -124,5 +132,22 @@ mod tests {
             let phi = -th.temperature_gradient(&state(alpha, v_g, v_l), &fluid, 350.0, 0.0, 0.7, 0.1);
             assert!(phi >= 0.0 && phi <= th.gravity_term_bound(&fluid, 0.7), "{phi}");
         }
+    }
+
+    #[test]
+    fn the_joule_thomson_term_cools_a_real_gas_by_mu_jt_times_its_pressure_gradient() {
+        let ideal = v1_fluid(820.0, 420.0, 2225.0, 3000.0, 0.1);
+        let real = Fluid::new(FluidInputs { ideal_gas: false, z_factor: ZFactorModel::Dak, ..ideal.inputs });
+        let th = Thermal { h: 0.0, frictional_heating: false, gravity_term: false, lift_gas_mixing: false,
+                           joule_thomson: true };
+        let (f, cos_incl) = (300.0, 0.8);
+        let gas = state(1.0, 10.0, 1.0);
+        let mu_jt = real.jt_factor(gas.t, gas.rho_g) / (gas.rho_g * real.cp_g);
+        let want = -mu_jt * (f + gas.rho_g * STD_GRAVITY * cos_incl);
+        let dt = th.temperature_gradient(&gas, &real, 350.0, f, cos_incl, 0.1);
+        assert!(want < 0.0 && (dt - want).abs() <= 1e-14 * want.abs(), "{dt} vs {want}");
+        assert_eq!(th.temperature_gradient(&gas, &ideal, 350.0, f, cos_incl, 0.1), 0.0);
+        assert_eq!(th.temperature_gradient(&state(0.0, 1.0, 2.0), &real, 350.0, f, cos_incl, 0.1), 0.0);
+        assert!(th.is_linear(&ideal) && !th.is_linear(&real));
     }
 }

@@ -32,7 +32,7 @@ The modules follow `specs/architecture.md`. `src/manywells/simulator.py` holds `
 - `geometry.py`: the trajectory and grid (MD/TVD, inclination, TVD fraction).
 - `pvt/`: fluid properties. `fluid.py` (`FluidModel`) is the one interface the rest calls, including the phase rates with dissolved gas; the other modules hold phase correlations.
 - `slip.py`: drift-flux closure and flow-regime classification.
-- `friction.py`, `thermal.py`: the friction model (fixed `f_D` or from roughness) and the thermal model (heat loss, frictional heating, gravity term, inflow temperature).
+- `friction.py`, `thermal.py`: the friction model (fixed `f_D` or from roughness) and the thermal model (heat loss, frictional heating, gravity term, Joule–Thomson cooling, inflow temperature).
 - `inflow.py`, `choke.py`: the bottom and top boundary models.
 - `ca_functions.py`, `units.py`: smooth approximations for CasADi, constants and unit conversions.
 
@@ -109,6 +109,19 @@ All reference data is built from v1.0.0, which is frozen. A rebuild reproduces t
 | `verification/tests/data/fixtures.npz` | `verification/build/make_test_fixtures.py` | v1.0.0 | `verification/build/README.md` |
 
 The v1.0.0 environment is a git worktree of the tag in `.worktrees/v1.0.0`, set up as `verification/build/README.md` describes. The Rust environment is a worktree of the old port, `rust_implementation` at `0e9e98b`, in `.worktrees/rust`: the reference's second search uses that port, never the Rust core in `rust/`, so that the reference stays independent of the core it checks. Run its scripts from the project root with `.worktrees/v1.0.0/.venv/bin/python`, never with `uv run`, because `develop`'s package has the same name.
+
+## Adding an equation
+
+A new equation is a model option that is off in the `v1.0.0` configuration. These are the steps feature 016 (`specs/features/016-joule-thomson.md`) took, in order:
+
+1. **Feature spec first.** Draft `specs/features/NNN-<name>.md`: motivation, the delta to `specs/model/` with new IDs (the next free number in each namespace), how the option is off in `v1.0.0`, the acceptance checks, and what is out of scope. Check the option's validity range against the ranges the sampler draws (`specs/sampling.md`): a correlation used outside its range is a finding. Put the scripts behind its measurements in `plans/evidence/`. Bjarne approves the spec before implementation starts.
+2. **A branch in a worktree.** Other sessions share the `develop` checkout, so work in `git worktree add -b <branch> .worktrees/<name> develop` and run `uv sync` there.
+3. **The spec files.** Define each ID by a `###` heading in its namespace file, and update the file's interface, options, safeguards, sources and coverage rows. Update DISC-11's row IDs and `specs/model/README.md`'s configuration table if a row or a default changes, `nomenclature.md` for new symbols and code names, and `docs/` where it derives the term.
+4. **Python.** A field on the component's dataclass (a switch, or a model name validated in `__post_init__`), with `# spec:` tags. Functions take CasADi symbols: an iterative solve is unrolled with a fixed number of steps. `configurations.py` turns the option off in `v1_well` and checks it for `develop`; `discretization.row_ids` gives a changed row's ID.
+5. **Rust.** The same option as an enum variant or a field, with `// spec:` tags, passed by `solvers/rust.py` and `Well::new` in `lib.rs`, and the component functions the vectors call added to `_component`. Add test wells with the option on to `input.rs`'s `all()`: the march's assumption tests run on every test well. A new energy term must keep the temperature solve's bracket valid (`specs/architecture.md`, Rust core, design point 4).
+6. **Vectors.** A table per new ID in `specs/tools/make_develop_vectors.py`, then regenerate. Where a default changes, pin the old option in its own tables, so that their values do not change. Add the Rust adapters to `RUST_ADAPTERS` in `tests/test_spec_vectors.py`.
+7. **Tests.** Unit and property tests in `tests/test_<module>.py`. Tests that assumed the old default pin it. In `tests/backend_cases.py`: the feature in `FEATURES` and `features()`, overlays that switch it on and off, matrix entries, and comparison-set groups. Properties of solved wells go in `tests/test_model_properties.py`.
+8. **Run and measure.** `cargo test --no-default-features`, the full suite, both verifier candidates (PASS, 100%, no expected failures), and `scripts/verification/compare_backends.py` on the new groups. Measure the option's effect on sampled wells with each backend, with the option on and off: a fall in the number of operating points found is a solver finding, as it was for feature 016 in gas wells. State the cost and gain of any solver machinery, timed on one process (principle 7).
 
 ## Done means
 

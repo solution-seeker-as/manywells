@@ -79,7 +79,10 @@ Parameters and quantities of `develop`'s options, in addition (the dataclass fie
 | $w_\text{res}$ | `w_res` | kg/s | liquid mass rate from the reservoir (the inflow model's) |
 | $w_{g,\text{res}}$, $w_d$ | `w_g_res` | kg/s | reservoir gas rate, gas dissolved in the oil |
 | $T_{lg}$ | `T_lg` | K | lift-gas temperature at injection; `None` means $T_r$ |
-| $\Phi_f$, $\Phi_g$ | – | K/m | frictional heating and gravity terms of the temperature gradient |
+| $\Phi_f$, $\Phi_g$, $\Phi_{JT}$ | – | K/m | frictional heating, gravity and Joule–Thomson terms of the temperature gradient |
+| $J$ | `jt_factor` | – | the gas's Joule–Thomson factor $T(\partial \ln Z/\partial T)_p$; $\mu_{JT} = J/(\rho_g c_{pg})$ (PVT-GAS-10) |
+| $\rho_r$ | `reduced_density` | – | the gas's reduced density of the Dranchuk–Abou-Kassem equation of state (PVT-GAS-9) |
+| – | `z_factor_model` | – | the real gas's z-factor: `'dak'` (PVT-GAS-11) or `'papay'` (PVT-GAS-3, PVT-GAS-4) |
 
 Boundary conditions and controls (v1.0.0's `BoundaryConditions`):
 

@@ -19,7 +19,8 @@ from manywells.thermal import ThermalModel
 from manywells.units import STD_GRAVITY
 
 FLUID = FluidModel(oil_model='dead_oil', cp_g=2225.0, cp_o=4180.0)
-V1 = ThermalModel(h=20.0, frictional_heating=False, gravity_term=False, lift_gas_mixing=False)
+V1 = ThermalModel(h=20.0, frictional_heating=False, gravity_term=False, lift_gas_mixing=False, joule_thomson=False)
+JT = ThermalModel(h=0.0, frictional_heating=False, gravity_term=False, lift_gas_mixing=False, joule_thomson=True)
 D, T_A = 0.15, 330.0
 
 
@@ -54,31 +55,58 @@ def test_no_heat_loss_at_ambient_temperature():
 
 def test_gravity_term_of_pure_gas_is_the_lapse_rate():
     """For pure gas (alpha=1), gravitational cooling rate equals g cos(theta) / cp_g."""
-    m = ThermalModel(h=0.0, frictional_heating=False, gravity_term=True)
+    m = ThermalModel(h=0.0, frictional_heating=False, gravity_term=True, joule_thomson=False)
     for cos_incl in (1.0, 0.5):
         assert gradient(m, state(1.0), cos_incl=cos_incl) == pytest.approx(-STD_GRAVITY * cos_incl / FLUID.cp_g, rel=1e-12)
 
 
 def test_gravity_term_of_pure_liquid_vanishes():
-    m = ThermalModel(h=0.0, frictional_heating=False, gravity_term=True)
+    m = ThermalModel(h=0.0, frictional_heating=False, gravity_term=True, joule_thomson=False)
     assert gradient(m, state(0.0)) == pytest.approx(0.0, abs=1e-15)
 
 
 def test_gravity_term_cools_a_mixture():
-    m = ThermalModel(h=0.0, frictional_heating=False, gravity_term=True)
+    m = ThermalModel(h=0.0, frictional_heating=False, gravity_term=True, joule_thomson=False)
     assert gradient(m, state(0.5)) < 0
 
 
 def test_frictional_heating_of_pure_liquid():
     """For pure liquid (alpha=0), friction heats the flow by F / (rho_l cp_l)."""
-    m = ThermalModel(h=0.0, frictional_heating=True, gravity_term=False)
+    m = ThermalModel(h=0.0, frictional_heating=True, gravity_term=False, joule_thomson=False)
     s, F = state(0.0), 500.0
     assert gradient(m, s, F=F) == pytest.approx(F / (s.rho_l * FLUID.cp_l), rel=1e-12)
 
 
 def test_frictional_heating_of_pure_gas_vanishes():
-    m = ThermalModel(h=0.0, frictional_heating=True, gravity_term=False)
+    m = ThermalModel(h=0.0, frictional_heating=True, gravity_term=False, joule_thomson=False)
     assert gradient(m, state(1.0), F=500.0) == pytest.approx(0.0, abs=1e-15)
+
+
+def test_joule_thomson_term_of_pure_gas_is_mu_jt_times_the_pressure_gradient():
+    """For pure gas, THM-8 cools by the Joule-Thomson coefficient J / (rho_g c_pg) times F + rho_g g cos(theta)."""
+    s, F = state(1.0), 500.0
+    mu_jt = FLUID.jt_factor(s.T, s.rho_g) / (s.rho_g * FLUID.cp_g)
+    assert mu_jt > 0
+    for cos_incl in (1.0, 0.5, 0.0):
+        want = -mu_jt * (F + s.rho_g * STD_GRAVITY * cos_incl)
+        assert gradient(JT, s, F=F, cos_incl=cos_incl) == pytest.approx(want, rel=1e-12)
+
+
+def test_joule_thomson_term_vanishes_for_an_ideal_gas_and_for_pure_liquid():
+    ideal = dataclasses.replace(FLUID, ideal_gas=True)
+    assert JT.temperature_gradient(state(0.5), ideal, T_A, 500.0, dp_dmd=0.0, cos_incl=1.0, D=D) == 0.0
+    assert gradient(JT, state(0.0), F=500.0) == pytest.approx(0.0, abs=1e-15)
+
+
+def test_joule_thomson_term_has_the_sign_of_the_factor():
+    """It cools where Z rises with T and heats above the inversion pressure, at high reduced density."""
+    signs = set()
+    for rho_g in (20.0, 100.0, 250.0, 300.0, 350.0):
+        s = state(0.6, T=300.0, rho_g=rho_g)
+        J, dT = float(FLUID.jt_factor(s.T, s.rho_g)), gradient(JT, s, F=500.0)
+        assert (dT < 0) == (J > 0), (rho_g, J, dT)
+        signs.add(J > 0)
+    assert signs == {True, False}
 
 
 def test_ambient_temperature_is_linear_in_true_vertical_depth():

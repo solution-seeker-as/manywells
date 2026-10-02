@@ -1,20 +1,21 @@
 # Thermal Energy Modeling
 
 The simulator's energy equation governs the fluid temperature profile along the
-wellbore. Three physical mechanisms are modeled:
+wellbore. Four physical mechanisms are modeled:
 
 ```
-cp_flux * dT/dz = -4h(T - T_a)/D  +  (1-α)*v_l*F  -  g*(mass_flux - liq_flux*ρ_m)
-                   ^^^^^^^^^^^^^^    ^^^^^^^^^^^^^    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-                   heat transfer     liquid friction  gravitational cooling
-                                    dissipation
+cp_flux * dT/dz = -4h(T - T_a)/D  +  (1-α)*v_l*F  -  g*(mass_flux - liq_flux*ρ_m)  -  α*v_g*J*(F + ρ_m g)
+                   ^^^^^^^^^^^^^^    ^^^^^^^^^^^^^    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^     ^^^^^^^^^^^^^^^^^^^
+                   heat transfer     liquid friction  gravitational cooling             Joule-Thomson cooling
+                                    dissipation                                        of the real gas
 ```
 
-where `cp_flux = cp_g*α*ρ_g*v_g + cp_l*(1-α)*ρ_l*v_l`.
+where `cp_flux = cp_g*α*ρ_g*v_g + cp_l*(1-α)*ρ_l*v_l` and `J = T (∂ln Z/∂T)_p`.
 
-The equation follows from the steady-state enthalpy balance with ideal-gas
-(`h_g = cp_g T`) and incompressible-liquid (`h_l = cp_l T + p/ρ_l`) equations
-of state, neglecting kinetic energy changes. Acceleration terms in the momentum
+The equation follows from the steady-state enthalpy balance with real-gas
+(`dh_g = cp_g dT - cp_g μ_JT dp`) and incompressible-liquid (`h_l = cp_l T + p/ρ_l`)
+equations of state, neglecting kinetic energy changes. For an ideal gas
+`μ_JT = 0` and the last term vanishes, which is the equation without it. Acceleration terms in the momentum
 equation are also neglected when substituting `dp/dz` into the energy balance;
 this is consistent with the simulator's low-fidelity, steady-state design.
 
@@ -117,27 +118,72 @@ Note that only the vertical component of gravity contributes (`Δz_tvd = Δz cos
   Eq. (7): the `g sinα / (J gc)` term represents gravitational work on the fluid. Note that `sinα` is used since `α` is the angle to the horizontal, and the conversion factors J and gc are both 1 when using SI units.
 
 
+## 4. Joule–Thomson cooling of the real gas
+
+The enthalpy of a real gas depends on pressure. With `V = 1/ρ_g = Z R_s T / p`,
+
+```
+dh_g = cp_g dT + [V - T (∂V/∂T)_p] dp = cp_g dT - cp_g μ_JT dp,
+cp_g μ_JT = (R_s T² / p) (∂Z/∂T)_p = J / ρ_g,       J = T (∂ln Z/∂T)_p
+```
+
+(Hasan and Kabir 2018, §6.4.2). Expanding gas cools while `Z` rises with `T`,
+below the inversion pressure, and heats above it. The gas's extra enthalpy flux,
+`(w_g/A) cp_g μ_JT dp/dz = α ρ_g v_g (J/ρ_g) dp/dz = α v_g J dp/dz`, enters the
+balance as the liquid's `p/ρ_l` term does, and `dp/dz ≈ -F - ρ_m g` gives
+
+```
+dT_JT = -Δz * α * v_g * J * (F + ρ_m g cos(theta)) / cp_flux
+```
+
+`J` comes from the Dranchuk–Abou-Kassem equation of state at the state's gas
+density, in closed form (`specs/model/pvt/gas.md`, PVT-GAS-10).
+
+### Limiting cases
+
+* **Ideal gas:** `J = 0`, and the term vanishes.
+* **Pure liquid (α = 0):** the term vanishes.
+* **Pure gas (α = 1):** `dT_JT/dz = -μ_JT (F + ρ_g g cos(theta))`, the gas's
+  Joule–Thomson cooling along its pressure drop; with the gravity term it is the
+  single-phase gas equation of Hasan and Kabir (2012), Eq. (7), without heat loss
+  and kinetic energy.
+
+### References
+
+* Hasan, A.R. and Kabir, C.S. (2018).
+  *Fluid Flow and Heat Transfer in Wellbores*, 2nd ed.
+  Society of Petroleum Engineers.
+  §6.4.2: the Joule–Thomson coefficient of a single-phase liquid, a real gas and a
+  two-phase mixture, weighted by mass. §6.4.1 does not recommend neglecting it,
+  "because gas in most wells is rarely ideal".
+
+* Dranchuk, P.M. and Abou-Kassem, J.H. (1975).
+  "Calculation of Z Factors for Natural Gases Using Equations of State."
+  *Journal of Canadian Petroleum Technology*, 14(3), 34–36.
+
+
 ## Derivation sketch
 
 Starting from the steady-state enthalpy balance for the mixture (no mass
 transfer between phases, constant mass fluxes `w_g/A` and `w_l/A`):
 
 ```
-d/dz [w_g/A · cp_g T  +  w_l/A · (cp_l T + p/ρ_l)]  =  -4h(T - T_a)/D  -  (w_g + w_l)/A · g
+d/dz [w_g/A · h_g  +  w_l/A · (cp_l T + p/ρ_l)]  =  -4h(T - T_a)/D  -  (w_g + w_l)/A · g
 ```
 
-Expanding the left-hand side and substituting `dp/dz ≈ -F - ρ_m g`
-(neglecting acceleration):
+with `dh_g/dz = cp_g dT/dz - cp_g μ_JT dp/dz` (§4). Expanding the left-hand side
+and substituting `dp/dz ≈ -F - ρ_m g` (neglecting acceleration):
 
 ```
-cp_flux · dT/dz  +  (1-α) v_l · (-F - ρ_m g)  =  -4h(T - T_a)/D  -  mass_flux · g
+cp_flux · dT/dz  +  [(1-α) v_l - α v_g J] · (-F - ρ_m g)  =  -4h(T - T_a)/D  -  mass_flux · g
 ```
 
 Rearranging:
 
 ```
-cp_flux · dT/dz  =  -4h(T - T_a)/D  +  (1-α) v_l · F  +  g · (liq_flux · ρ_m - mass_flux)
+cp_flux · dT/dz  =  -4h(T - T_a)/D  +  (1-α) v_l · F  +  g · (liq_flux · ρ_m - mass_flux)  -  α v_g J · (F + ρ_m g)
 ```
 
-The three terms on the right-hand side are heat transfer to surroundings
-(§1), frictional dissipation (§2), and gravitational cooling (§3).
+The four terms on the right-hand side are heat transfer to surroundings
+(§1), frictional dissipation (§2), gravitational cooling (§3) and Joule–Thomson
+cooling of the real gas (§4). With an ideal gas (`J = 0`) the last vanishes.

@@ -42,6 +42,7 @@ class TestFluidModelConstruction:
         assert fl.wlr == 0.0
         assert fl.oil_model == 'black_oil'
         assert fl.ideal_gas is False
+        assert fl.z_factor_model == 'dak'
 
     def test_dead_oil_construction(self):
         fl = FluidModel(oil_model='dead_oil')
@@ -278,6 +279,10 @@ class TestFrozenAndValidated:
             fl.rho_o = 900.0
         with pytest.raises(dataclasses.FrozenInstanceError):
             fl.rho_l_typo = 900.0  # an assignment to a field that does not exist fails too
+
+    def test_invalid_z_factor_model(self):
+        with pytest.raises(ValueError, match="z_factor_model"):
+            FluidModel(z_factor_model='standing-katz')
 
     def test_invalid_surface_tension_model(self):
         with pytest.raises(ValueError, match="surface_tension_model"):

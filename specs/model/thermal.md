@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The heat exchanged with the surroundings, the ambient temperature profile, the temperature of the fluid entering the well, and the other terms of the temperature gradient. With BAL-5 or BAL-12 they give the temperature along the well.
+The heat exchanged with the surroundings, the ambient temperature profile, the temperature of the fluid entering the well, and the other terms of the temperature gradient. With BAL-5, BAL-12 or BAL-13 they give the temperature along the well.
 
 ## Interface
 
@@ -12,9 +12,9 @@ The heat exchanged with the surroundings, the ambient temperature profile, the t
 | ambient temperature | $z$ (m), $L$, $T_r$, $T_s$; or $f_i$ (GEO-3), $T_r$, $T_s$ | $T_a$ (K) | no; yes in $T_r$, $T_s$ and $f_i$ in `develop` |
 | inflow temperature | $w_\text{res}$, $w_{lg}$ (kg/s), $T_r$, $T_{lg}$ (K), the fluid's $c_{pg}$, $c_{pl}$, $f_g$ | $T_\text{in}$ (K) | yes |
 | inflow temperature row | $T_0$ (state), $T_\text{in}$ | row (K) | yes |
-| frictional heating, gravity term | the state, $F$ (Pa/m), $\cos\theta$, $c_{pg}$, $c_{pl}$ | $\Phi_f$, $\Phi_g$ (K/m) | yes |
+| frictional heating, gravity term, Joule–Thomson term | the state, $F$ (Pa/m), $\cos\theta$, $c_{pg}$, $c_{pl}$; the gas's $J$ (PVT-GAS-10) | $\Phi_f$, $\Phi_g$, $\Phi_{JT}$ (K/m) | yes |
 
-In `develop` the thermal model is a `ThermalModel` with $h$ and one switch per option: `frictional_heating` (THM-6), `gravity_term` (THM-7) and `lift_gas_mixing` (THM-5). Its `temperature_gradient` returns $dT/d\text{MD} = -H + \Phi_f - \Phi_g$ with the terms that are on (BAL-12, DISC-10); it also takes the cell's pressure gradient, for pressure-dependent terms that no option uses yet (`specs/architecture.md`). The `v1.0.0` configuration has every switch off.
+In `develop` the thermal model is a `ThermalModel` with $h$ and one switch per option: `frictional_heating` (THM-6), `gravity_term` (THM-7), `joule_thomson` (THM-8) and `lift_gas_mixing` (THM-5). Its `temperature_gradient` returns $dT/d\text{MD} = -H + \Phi_f - \Phi_g - \Phi_{JT}$ with the terms that are on (BAL-13, DISC-10); it also takes the cell's pressure gradient, which no option uses (`specs/architecture.md`). The `v1.0.0` configuration has every switch off.
 
 ## Equations
 
@@ -68,6 +68,12 @@ $$\Phi_g = \frac{g\cos\theta\,\big(\alpha\rho_g v_g + (1-\alpha)\rho_l v_l - (1-
 
 in K/m, with $\theta$ the cell's inclination and $C$ as in THM-6. Lifting the flow against gravity cools it: for pure gas $\Phi_g = g\cos\theta/c_{pg}$, the adiabatic lapse rate; for pure liquid it vanishes, because the liquid's gravitational work is in the pressure term.
 
+### THM-8 · Joule–Thomson term
+
+$$\Phi_{JT} = \frac{\alpha\, v_g\, J\, (F + \rho_m g\cos\theta)}{C}$$
+
+in K/m, with $J$ the gas's Joule–Thomson factor (PVT-GAS-10) at the point, $F$ the viscous pressure gradient (FRIC-1), $\theta$ the cell's inclination and $C$ the heat-capacity flux of THM-1. A real gas's enthalpy changes with pressure, $dh_g = c_{pg}\,dT - c_{pg}\,\mu_{JT}\,dp$, and the gas's share of the enthalpy flux, $\alpha\rho_g v_g\, c_{pg}\mu_{JT}\, dp/dz = \alpha v_g J\, dp/dz$, enters the energy balance as THM-6 enters for the liquid, with $dp/dz = -(F + \rho_m g\cos\theta)$, neglecting acceleration as THM-6 and THM-7 do (`docs/thermal_energy_modeling.md`). The pressure gradient is positive at every admissible state, so $\Phi_{JT}$ has the sign of $J$: it cools where $Z$ rises with $T$, everywhere in the sampled range below about 300 bar, and heats above the inversion pressure. It is zero for an ideal gas and for pure liquid; for pure gas, $\Phi_{JT} = \mu_{JT}(F + \rho_g g\cos\theta)$, the gas's Joule–Thomson cooling along its pressure drop.
+
 ## Options
 
 | Option | IDs | Used by |
@@ -76,19 +82,21 @@ in K/m, with $\theta$ the cell's inclination and $C$ as in THM-6. Lifting the fl
 | Ambient profile in true vertical depth | THM-4 | `develop`, every thermal option; it is THM-2 on a vertical grid |
 | Frictional heating | THM-6 | `develop` default (`frictional_heating`) |
 | Gravity term | THM-7 | `develop` default (`gravity_term`) |
+| Joule–Thomson term | THM-8 | `develop` default (`joule_thomson`); zero with an ideal gas |
 | Lift-gas mixing temperature at the bottomhole | THM-5 | `develop` default (`lift_gas_mixing`) |
 
 The derivations of `develop`'s terms are in `docs/thermal_energy_modeling.md`.
 
 ## Safeguards
 
-None. The denominator of THM-1, THM-6 and THM-7 is positive at every admissible state (SOL-1). The denominator of THM-5 is positive wherever the reservoir delivers fluid or there is lift gas; at $p_0 = p_r$ without lift gas it is zero, which no root reaches.
+None. The denominator of THM-1, THM-6, THM-7 and THM-8 is positive at every admissible state (SOL-1); THM-8 has the safeguards of PVT-GAS-10. The denominator of THM-5 is positive wherever the reservoir delivers fluid or there is lift gas; at $p_0 = p_r$ without lift gas it is zero, which no root reaches.
 
 ## Sources
 
 - Paper (6), (15) and §2.1.
 - Zhang, Wang, Sarica and Brill (2006), "Unified model of heat transfer in gas–liquid pipe flow", *SPE Production & Operations* 21, 114–122.
-- `docs/thermal_energy_modeling.md` for THM-6 and THM-7. Feature specs `specs/features/009-energy-balance.md` and `010-lift-gas-temperature.md`.
+- `docs/thermal_energy_modeling.md` for THM-6, THM-7 and THM-8. Feature specs `specs/features/009-energy-balance.md`, `010-lift-gas-temperature.md` and `016-joule-thomson.md`.
+- Hasan and Kabir (2012), "Wellbore heat-transfer modeling and applications", *Journal of Petroleum Science and Engineering* 86–87, 127–136, Eq. (7), and Hasan and Kabir (2018), *Fluid flow and heat transfer in wellbores*, 2nd ed., §6.4.2, for THM-8.
 
 ## Test vectors
 
@@ -131,6 +139,15 @@ Generated by `specs/tools/make_develop_vectors.py` from develop (casadi 3.8.1): 
 | 0.4 | 80.0 | 6.0 | 800.0 | 2.5 | 1.0 | 2225.0 | 3000.0 | 0.0015195047675804528 |
 | 0.6 | 60.0 | 8.0 | 820.0 | 3.0 | 0.5 | 2225.0 | 2500.0 | 0.0013207098297213621 |
 | 0.5 | 60.0 | 8.0 | 820.0 | 3.0 | 0.0 | 2225.0 | 2500.0 | 0.0 |
+
+### THM-8
+
+| alpha | rho_g | v_g | rho_l | v_l | F | cos_incl | T | sg_gas | cp_g | cp_l | → Phi_JT |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1.0 | 60.0 | 10.0 | 850.0 | 2.0 | 300.0 | 1.0 | 350.0 | 0.65 | 2225.0 | 4180.0 | 0.002819369193135331 |
+| 0.5 | 80.0 | 6.0 | 800.0 | 2.5 | 900.0 | 0.7 | 330.0 | 0.7 | 2225.0 | 3000.0 | 0.002298249871027588 |
+| 0.9 | 300.0 | 3.0 | 820.0 | 1.0 | 1500.0 | 1.0 | 300.0 | 0.65 | 2225.0 | 2500.0 | -5.637110958810489e-05 |
+| 0.0 | 50.0 | 10.0 | 850.0 | 2.0 | 500.0 | 1.0 | 350.0 | 0.65 | 2225.0 | 4180.0 | 0.0 |
 <!-- vectors:end develop -->
 
 ## Coverage
@@ -144,3 +161,4 @@ Generated by `specs/tools/make_develop_vectors.py` from develop (casadi 3.8.1): 
 | THM-5 | — | — | vectors; property: tests/test_thermal.py |
 | THM-6 | — | — | vectors; property: tests/test_thermal.py |
 | THM-7 | — | — | vectors; property: tests/test_thermal.py |
+| THM-8 | — | — | vectors; property: tests/test_thermal.py |
