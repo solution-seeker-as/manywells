@@ -76,7 +76,7 @@ the reservoir volume of a unit standard volume. Not used by the simulator; the b
 
 ### PVT-GAS-9 · Dranchuk–Abou-Kassem equation of state
 
-Dranchuk and Abou-Kassem (1975), Eq. (2), a generalized Starling equation of state. $Z$ is an explicit function of the reduced density $\rho_r$ and the pseudo-reduced temperature $t = T_{pr}$:
+Dranchuk and Abou-Kassem (1975), Eq. (2), a generalized Starling equation of state with its eleven constants fitted to the Standing–Katz z-factor chart. $Z$ is an explicit function of the reduced density $\rho_r$ and the pseudo-reduced temperature $t = T_{pr}$:
 
 $$Z(\rho_r, t) = 1 + c_1\rho_r + c_2\rho_r^2 - c_3\rho_r^5 + c_4\rho_r^2(1 + A_{11}\rho_r^2)e^{-A_{11}\rho_r^2},$$
 

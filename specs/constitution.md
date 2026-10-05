@@ -18,7 +18,7 @@ Where the two conflict, Bjarne decides case by case. `specs/goals.md` has the go
 - Transient flow, including heading and other dynamic instabilities. The model is steady state.
 - Competing with commercial simulators such as OLGA or LedaFlow.
 - Closed-loop simulation in v2.
-- Compositional or equation-of-state PVT. ManyWells stays with black oil and correlations.
+- Compositional PVT: cubic equations of state and flash calculations. ManyWells stays with black oil and correlations, such as the Dranchuk–Abou-Kassem z-factor.
 - Anything downstream of the choke: flowlines, risers, manifolds, networks.
 - Oil–water slip, and complex completions (annulus flow, multilaterals, several tubing strings).
 - Publishing real-well data.
