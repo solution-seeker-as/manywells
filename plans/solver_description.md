@@ -14,7 +14,7 @@ Known problems and proposed changes are in `solver_improvements.md`. Equation nu
 
 ### Unknowns
 
-The well is discretized into grid points $z_i = i\,\Delta z$, $i = 0, \dots, N$, with $\Delta z = L/N$ and $N$ = `n_cells` (default 100). Each point carries the state of the paper's §3.1, $x(z_i) = (\alpha_g, \alpha_l, \rho_g, \rho_l, v_g, v_l, p, T)(z_i)$. The code stores seven numbers per point, in the order fixed by `DIM_X` (`simulator.rs:18`):
+The well is discretized into grid points $z_i = i\Delta z$, $i = 0, \dots, N$, with $\Delta z = L/N$ and $N$ = `n_cells` (default 100). Each point carries the state of the paper's §3.1, $x(z_i) = (\alpha_g, \alpha_l, \rho_g, \rho_l, v_g, v_l, p, T)(z_i)$. The code stores seven numbers per point, in the order fixed by `DIM_X` (`simulator.rs:18`):
 
 ```
 [p, v_g, v_l, alpha, rho_g, rho_l, T]      with alpha = α_g and α_l = 1 − alpha
@@ -77,7 +77,7 @@ v1 solves all $7(N+1)$ equations at once with Ipopt. The Rust solver fixes the b
 Given the rates $(w_g, w_l)$ from $p_0$ and a pressure $p$ at height $z$, `compute_cell_state` (`simulator.rs:252`) returns the full state:
 
 1. $T = T(z)$ from the temperature solution below.
-2. $\rho_g = 10^5\,p/(R_s T)$ and $\rho_l$ = constant.
+2. $\rho_g = 10^5 p/(R_s T)$ and $\rho_l$ = constant.
 3. $\alpha$ from `solve_alpha`.
 4. $v_g$ and $v_l$ from the mass rates.
 
@@ -85,32 +85,32 @@ Write this map as $X(p, z)$. It fails, returning `None`, only when `solve_alpha`
 
 ### Temperature
 
-With $\Delta z \to 0$, (4) with (6) and the linear ambient profile $T_a(z) = T_r - (T_r - T_s)\,z/L$ reads $dT/dz = -k\,(T - T_a(z))$, where
+With $\Delta z \to 0$, (4) with (6) and the linear ambient profile $T_a(z) = T_r - (T_r - T_s)z/L$ reads $dT/dz = -k\thinspace(T - T_a(z))$, where
 
 $$
-k = \frac{\pi h D}{c_{p,g}\,w_g + c_{p,l}\,w_l}.
+k = \frac{\pi h D}{c_{p,g}w_g + c_{p,l}w_l}.
 $$
 
-The denominator of (6) is $D(c_{p,g}\,\alpha\rho_g v_g + c_{p,l}(1-\alpha)\rho_l v_l) = D\,(c_{p,g} w_g + c_{p,l} w_l)/A$, so $k$ depends on $p_0$ only through the rates. With $T(0) = T_r$ (15), `Core::temp` uses the exact solution
+The denominator of (6) is $D(c_{p,g}\alpha\rho_g v_g + c_{p,l}(1-\alpha)\rho_l v_l) = D\thinspace(c_{p,g} w_g + c_{p,l} w_l)/A$, so $k$ depends on $p_0$ only through the rates. With $T(0) = T_r$ (15), `Core::temp` uses the exact solution
 
 $$
 T(z) = T_r - \frac{z}{L}(T_r - T_s) + \frac{T_r - T_s}{kL}\left(1 - e^{-kz}\right).
 $$
 
-Temperature therefore does not depend on pressure, and the energy balance decouples from the momentum balance. v1 instead solves (19), $T_{i+1} = T_i - \Delta z\,k\,(T_{i+1} - T_a(z_{i+1}))$. That recursion is also explicit, $T_{i+1} = (T_i + \Delta z\,k\,T_a(z_{i+1}))/(1 + \Delta z\,k)$, but the Rust code does not use it (section 8).
+Temperature therefore does not depend on pressure, and the energy balance decouples from the momentum balance. v1 instead solves (19), $T_{i+1} = T_i - \Delta z\thinspace k\thinspace(T_{i+1} - T_a(z_{i+1}))$. That recursion is also explicit, $T_{i+1} = (T_i + \Delta z\thinspace k T_a(z_{i+1}))/(1 + \Delta z\thinspace k)$, but the Rust code does not use it (section 8).
 
 ### Momentum
 
 For cell $i$, the momentum balance (18) becomes one equation in the outlet pressure $p_{i+1}$:
 
 $$
-f_i(p_{i+1}) = M\big(X(p_{i+1}, z_{i+1})\big) - M\big(X(p_i, z_i)\big) + \frac{\Delta z}{10^5}\,(F + G)\big(X(p_{i+1}, z_{i+1})\big) = 0,
+f_i(p_{i+1}) = M\big(X(p_{i+1}, z_{i+1})\big) - M\big(X(p_i, z_i)\big) + \frac{\Delta z}{10^5}\thinspace(F + G)\big(X(p_{i+1}, z_{i+1})\big) = 0,
 $$
 
 $$
 M = p + \frac{\alpha\rho_g v_g^2 + (1-\alpha)\rho_l v_l^2}{10^5}, \qquad
-F = \frac{f_D}{2D}\,\rho_m v_m |v_m|, \qquad
-G = \rho_m\,g,
+F = \frac{f_D}{2D}\rho_m v_m |v_m|, \qquad
+G = \rho_m g,
 $$
 
 with $\rho_m = \alpha\rho_g + (1-\alpha)\rho_l$ and $v_m = \alpha v_g + (1-\alpha)v_l$ (`simulator.rs:234-249`). Friction and gravity are evaluated at the outlet, which is the implicit-Euler form of (18).
@@ -120,8 +120,8 @@ with $\rho_m = \alpha\rho_g + (1-\alpha)\rho_l$ and $v_m = \alpha v_g + (1-\alph
 With the wellhead state $X(p_N, z_N)$ from the march, the shooting residual (`simulator.rs:406`) is
 
 $$
-R(p_0) = w_m^2 - \big(K_c\,\sigma(u)\big)^2\,\frac{2\rho\,\Delta p}{\Phi}, \qquad
-\Delta p = 10^5\,\big(p_L - \mathrm{smax}(c_{pr}\,p_L,\ p_s)\big),
+R(p_0) = w_m^2 - \big(K_c\sigma(u)\big)^2\frac{2\rho\Delta p}{\Phi}, \qquad
+\Delta p = 10^5\big(p_L - \mathrm{smax}(c_{pr}p_L,\ p_s)\big),
 $$
 
 where $w_m = w_g + w_l$ is recomputed from the top state. For the Simpson choke, $\rho = \rho_l$ and $\Phi = (1 + x_g(s-1))(1 + x_g(s^5 - 1))$ with $s = (\rho_l/\rho_g)^{1/6}$ and $x_g = w_g/w_m$. This is (11)–(12) squared, since $\rho_e = \rho_l/\Phi$ (paper footnote 1). For the Bernoulli choke, $\rho = \rho_m$ and $\Phi = 1$. The critical downstream pressure (14) is the smooth max of section 4.10.
@@ -168,12 +168,12 @@ The solver is deterministic and uses no initial guess.
 
 **Purpose.** Find the roots of $R(p_0)$ on $(p_s, p_r)$.
 
-**Assumption.** As $p_0$ decreases from $p_r$ to $p_s$, $R$ changes sign in the pattern $+\,-\,+$ or $-\,+$, with at most one negative region (section 7).
+**Assumption.** As $p_0$ decreases from $p_r$ to $p_s$, $R$ changes sign in the pattern $+\thinspace-\thinspace+$ or $-\thinspace+$, with at most one negative region (section 7).
 
 **Algorithm.**
 
 1. Set $p_{lo} = p_s + 10^{-3}$, $p_{hi} = p_r - 10^{-6}$ and step $= (p_{hi} - p_{lo})/100$.
-2. For $k = 0, \dots, 100$, evaluate $R$ at $p = p_{hi} - k\cdot$step, walking downward:
+2. For $k = 0, \dots, 100$, evaluate $R$ at $p = p_{hi} - k\cdot\text{step}$, walking downward:
    - If `residual(p)` is `None` (non-finite $R$), forget the previous sample and continue. No bracket is formed across such a hole.
    - If $R \ge 0$, remember $p$ as the previous sample $p_{prev}$ and continue. The sample's `failed` flag is ignored here.
    - If $R < 0$, this is the first negative sample $p_{neg}$:
@@ -208,7 +208,7 @@ The solver is deterministic and uses no initial guess.
 1. $(w_l, w_g) = \text{inflow}(p_0, p_r)$, then $w_g \mathrel{+}= w_{lg}$. Both rates stay fixed for the march.
 2. Set $p = p_0$. For $i = 0, \dots, N-1$, call `solve_cell(i, p)`:
    - **Feasible**`(x_i, p_next)`: store $x_i$ and set $p = p_{next}$.
-   - **Choked**`(x_i, p*)`: store $x_i$, set $p = p^*$ and flag the march `failed`. This continuation keeps $R$ continuous in $p_0$ across choked marches, so the outer Brent can bracket across them.
+   - **Choked**`(x_i, p*)`: store $x_i$, set $p = p^\ast$ and flag the march `failed`. This continuation keeps $R$ continuous in $p_0$ across choked marches, so the outer Brent can bracket across them.
    - **None** (the state at $p_i$ cannot be computed): flag `failed` and stop solving. The last computable state is copied to grid point $i$ and every point above it, or NaN if there is none.
 3. If the march did not stop, the top state is `compute_cell_state(z_N, p)`; otherwise it is the copied state.
 4. Return `(x, failed)`, where `failed` is also set if no state could be computed at all.
@@ -225,18 +225,18 @@ The solver is deterministic and uses no initial guess.
 
 **Purpose.** Solve $f_i(p_{i+1}) = 0$ for the physical root.
 
-**Shape of $f_i$.** As $p_{i+1}$ decreases, gas expands and the kinetic part of $M$ grows roughly like $1/p$. So $f_i$ is U-shaped with its minimum at $p^*$, the discrete choking point where $dM/dp \approx 0$ (roughly where the mixture velocity reaches the two-phase sound speed). $f_i(p_i) > 0$, since the cell loses pressure to friction and gravity. If $f_i(p^*) < 0$ there are two roots:
+**Shape of $f_i$.** As $p_{i+1}$ decreases, gas expands and the kinetic part of $M$ grows roughly like $1/p$. So $f_i$ is U-shaped with its minimum at $p^\ast$, the discrete choking point where $dM/dp \approx 0$ (roughly where the mixture velocity reaches the two-phase sound speed). $f_i(p_i) > 0$, since the cell loses pressure to friction and gravity. If $f_i(p^\ast) < 0$ there are two roots:
 
-- the physical subsonic root on $(p^*, p_i)$, typically about 1 bar below $p_i$ for $N = 100$;
-- a spurious supersonic root below $p^*$, typically below 1 bar.
+- the physical subsonic root on $(p^\ast, p_i)$, typically about 1 bar below $p_i$ for $N = 100$;
+- a spurious supersonic root below $p^\ast$, typically below 1 bar.
 
 **Algorithm.**
 
 1. $x_i = X(p_i, z_i)$. If this fails, return `None`.
 2. Set up $f_i$. Each evaluation at a trial $p_{i+1}$ computes $\rho_g$ at $T(z_{i+1})$, calls `solve_alpha`, and returns an error if $\alpha$ fails.
-3. **Fast path.** With $P_{min} = 10^{-3}$ and $lo = \max(p_i - 0.1\,(p_i - p_s),\ P_{min})$, if $lo < p_i$ run `brentq(f_i, lo, p_i)`. On success return **Feasible**. Because the upper end $p_i$ is above $p^*$, a sign change on $[lo, p_i]$ brackets the subsonic root, whether or not $lo < p^*$.
-4. **Slow path.** Run `minimize` on $[P_{min}, p_i]$, with errors and non-finite values mapped to $+\infty$, to get $p^*$. Then run `brentq(f_i, p*, p_i)`. On success return **Feasible**.
-5. Otherwise return **Choked**`(x_i, p*)`. This covers both "no subsonic root" and "an $\alpha$ failure inside Brent on $[p^*, p_i]$".
+3. **Fast path.** With $P_{min} = 10^{-3}$ and $lo = \max(p_i - 0.1(p_i - p_s),\ P_{min})$, if $lo < p_i$ run `brentq(f_i, lo, p_i)`. On success return **Feasible**. Because the upper end $p_i$ is above $p^\ast$, a sign change on $[lo, p_i]$ brackets the subsonic root, whether or not $lo < p^\ast$.
+4. **Slow path.** Run `minimize` on $[P_{min}, p_i]$, with errors and non-finite values mapped to $+\infty$, to get $p^\ast$. Then run `brentq(f_i, p*, p_i)`. On success return **Feasible**.
+5. Otherwise return **Choked**`(x_i, p*)`. This covers both "no subsonic root" and "an $\alpha$ failure inside Brent on $[p^\ast, p_i]$".
 
 **Stopping and tolerances.** Brent: xtol = 10⁻⁶ bar, rtol = 4ε, at most 100 iterations. Golden section: interval ≤ 10⁻² bar or 200 iterations.
 
@@ -262,7 +262,7 @@ Over all shoots on the sol-1 configs: 85.8% of cell solves take the fast path, 5
 **Equation.** Substituting $v_g = w_g/(A\alpha\rho_g)$ into (8) gives a fixed-point equation $\alpha = S(\alpha)$:
 
 $$
-S(\alpha) = \frac{w_g}{A\,\rho_g\,\big(C_0(\alpha)\,v_m + v_\infty(\alpha) + 10^{-6}\big)}, \qquad
+S(\alpha) = \frac{w_g}{A\rho_g\thinspace\big(C_0(\alpha)v_m + v_\infty(\alpha) + 10^{-6}\big)}, \qquad
 v_m = \frac{w_g}{A\rho_g} + \frac{w_l}{A\rho_l}.
 $$
 
@@ -271,13 +271,13 @@ $C_0$ (A.9) and $v_\infty$ (A.10, corrected) are blends of the regime values wei
 **Algorithm.**
 
 1. If $\rho_g \le 0$, replace it by $10^{-3}$. If $w_g \le 0$, return $\alpha = 10^{-6}$.
-2. Start from $\alpha_0 = \mathrm{clamp}\big(w_g / (A\rho_g(1.1\,v_m + 0.5 + 10^{-6}))\big)$, i.e. $S$ with $C_0 = 1.1$ and $v_\infty = 0.5$ m/s.
+2. Start from $\alpha_0 = \mathrm{clamp}\big(w_g / (A\rho_g(1.1 v_m + 0.5 + 10^{-6}))\big)$, i.e. $S$ with $C_0 = 1.1$ and $v_\infty = 0.5$ m/s.
 3. Repeat $\alpha_{k+1} = \mathrm{clamp}(S(\alpha_k))$, where clamp means $[10^{-6},\ 1 - 10^{-6}]$, until $|\alpha_{k+1} - \alpha_k| < 10^{-3}$ or 100 iterations.
 4. Return $\alpha_{k+1}$ if the loop converged and the value is finite; otherwise `None`.
 
 **Properties.**
 
-- The iteration converges linearly with ratio $q = S'(\alpha^*)$, provided $q < 1$. That was observed in every sampled state but is not guaranteed.
+- The iteration converges linearly with ratio $q = S'(\alpha^\ast)$, provided $q < 1$. That was observed in every sampled state but is not guaranteed.
 - It averages 3.0 iterations per call.
 - Near $\alpha \approx 0.7$, $q$ reaches 0.78–0.96. The stop tests the step size, not the error, and the remaining error is about $q/(1-q)$ times the last step, so the returned $\alpha$ can be off by several times 10⁻³ there.
 - All sampled states had a single fixed point.
@@ -304,7 +304,7 @@ It also tracks the last two step lengths, `spre` and `scur`.
 2. Repeat up to `maxiter` times:
    1. If $f(x_{pre})$ and $f(x_{cur})$ have opposite signs, set `xblk = xpre`, so the sign change lies between `xcur` and `xblk`.
    2. If $|f(x_{blk})| < |f(x_{cur})|$, swap the roles so `xcur` holds the smaller $|f|$.
-   3. Let $\delta = (\text{xtol} + \text{rtol}\,|x_{cur}|)/2$ and let $s_{bis} = (x_{blk} - x_{cur})/2$ be the bisection step. If $f(x_{cur}) = 0$ or $|s_{bis}| < \delta$, return `xcur`.
+   3. Let $\delta = (\text{xtol} + \text{rtol}\thinspace|x_{cur}|)/2$ and let $s_{bis} = (x_{blk} - x_{cur})/2$ be the bisection step. If $f(x_{cur}) = 0$ or $|s_{bis}| < \delta$, return `xcur`.
    4. If the previous step was larger than $\delta$ and $|f|$ decreased, try an interpolation step. Use a secant step if only two distinct points are available (`xpre == xblk`), otherwise inverse quadratic interpolation through `xpre`, `xcur` and `xblk`. Accept it if $2|s_{try}| < \min(|s_{pre}|,\ 3|s_{bis}| - \delta)$; otherwise bisect.
    5. Move `xcur` by the chosen step, or by $\pm\delta$ toward `xblk` if the step is smaller than $\delta$. Evaluate $f$ there.
 3. After `maxiter` iterations, return `MaxIter`.
@@ -321,7 +321,7 @@ It also tracks the last two step lengths, `spre` and `scur`.
 | Call | Function | Interval | xtol | rtol | maxiter |
 |---|---|---|---|---|---|
 | Cell, fast path (`simulator.rs:311`) | $f_i$ | $[lo, p_i]$ | 10⁻⁶ bar | 4ε | 100 |
-| Cell, slow path (`simulator.rs:334`) | $f_i$ | $[p^*, p_i]$ | 10⁻⁶ bar | 4ε | 100 |
+| Cell, slow path (`simulator.rs:334`) | $f_i$ | $[p^\ast, p_i]$ | 10⁻⁶ bar | 4ε | 100 |
 | Shoot, high-$p_0$ root (`simulator.rs:464`) | $R$ | $[p_{neg}, p_{prev}]$ | 10⁻⁶ bar | 4ε | 100 |
 | Shoot, low-$p_0$ root (`simulator.rs:472`) | $R$ | $[p_s + 10^{-3}, p_{neg}]$ | 10⁻⁶ bar | 4ε | 100 |
 
@@ -331,7 +331,7 @@ It also tracks the last two step lengths, `spre` and `scur`.
 
 *`brentq.rs:167`*
 
-**Purpose.** Find the minimum of a function on $[a, b]$ without derivatives. The solver uses it only to locate $p^*$ in the slow path of `solve_cell`.
+**Purpose.** Find the minimum of a function on $[a, b]$ without derivatives. The solver uses it only to locate $p^\ast$ in the slow path of `solve_cell`.
 
 **Signature.** `minimize(f, a, b, xtol, maxiter) -> (x_min, f_min)`. `f` returns a plain `f64`; the caller maps errors and non-finite values to $+\infty$.
 
@@ -361,7 +361,7 @@ These are part of the equations, not solvers. They are listed because they shape
 | `max_approx` (`math.rs:6`) | $\mathrm{smax}(x, y) = \tfrac12\big(x + y + \sqrt{(x-y)^2 + \epsilon}\big)$, $\epsilon = 10^{-6}$ bar² | critical pressure in the choke residual, $\mathrm{smax}(c_{pr} p_L, p_s)$ | (B.1), (14) |
 | `softmax3` (`math.rs:12`) | $p_j = e^{y_j} / \sum_k e^{y_k}$ | regime probabilities from the classifier logits | (A.7) |
 | `classify_flow_regime` (`slip.rs:17`) | affine map of four tanh features, then softmax | $C_0$, $v_\infty$ and the regime labels | (A.7)–(A.8) |
-| `identify_parameters` (`slip.rs:51`) | $C_0 = 1.0\,p_a + 1.175\,p_s + 1.2\,p_b$; $v_\infty = v_{\infty T}\,p_s + v_{\infty b}\,p_b$ | `solve_alpha` | (A.9), (A.10) corrected |
+| `identify_parameters` (`slip.rs:51`) | $C_0 = 1.0 p_a + 1.175 p_s + 1.2 p_b$; $v_\infty = v_{\infty T}p_s + v_{\infty b}p_b$ | `solve_alpha` | (A.9), (A.10) corrected |
 
 $v_{\infty b}$ is Harmathy's bubble rise velocity (A.1) and $v_{\infty T}$ the Taylor-bubble rise velocity (A.2); $p_a$, $p_s$ and $p_b$ are the annular, slug/churn and bubbly probabilities. `smax` overestimates $\max(x, y)$ by at most 5·10⁻⁴ bar, at $x = y$. The critical pressure ratio is $c_{pr} = (2/(\gamma+1))^{\gamma/(\gamma-1)}$ with $\gamma = 1.307$, i.e. $c_{pr} \approx 0.5445$ (`choke.rs:15`).
 
@@ -374,9 +374,9 @@ $v_{\infty b}$ is Harmathy's bubble rise velocity (A.1) and $v_{\infty T}$ the T
 | $p_{hi}$, $p_{lo}$ | $p_r - 10^{-6}$ bar, $p_s + 10^{-3}$ bar | `shoot` | scan range |
 | Outer Brent | xtol 10⁻⁶ bar, rtol 4ε, 100 iterations | `shoot` | roots of $R$ |
 | $P_{min}$ | 10⁻³ bar | `solve_cell` | lowest trial outlet pressure |
-| Fast bracket | $0.1\,(p_i - p_s)$ below $p_i$ | `solve_cell` | first bracket for $f_i$ |
+| Fast bracket | $0.1(p_i - p_s)$ below $p_i$ | `solve_cell` | first bracket for $f_i$ |
 | Cell Brent | xtol 10⁻⁶ bar, rtol 4ε, 100 iterations | `solve_cell` | roots of $f_i$ |
-| Golden section | interval 10⁻² bar, 200 iterations | `solve_cell` | $p^*$ |
+| Golden section | interval 10⁻² bar, 200 iterations | `solve_cell` | $p^\ast$ |
 | $\alpha$ stop | $\lvert\Delta\alpha\rvert < 10^{-3}$, 100 iterations | `solve_alpha` | fixed-point termination |
 | $\alpha$ bounds | $[10^{-6},\ 1 - 10^{-6}]$ | `solve_alpha` | clamp on every iterate |
 | $\alpha_0$ | $C_0 = 1.1$, $v_\infty = 0.5$ m/s | `solve_alpha` | starting guess |
@@ -392,7 +392,7 @@ $v_{\infty b}$ is Harmathy's bubble rise velocity (A.1) and $v_{\infty T}$ the T
 |---|---|---|---|
 | `solve_alpha` | no convergence in 100 iterations, or non-finite value | `None` | an error inside $f_i$ or `compute_cell_state` |
 | `brentq` in the fast path | no sign change, `MaxIter`, or $\alpha$ error | error | falls through to the slow path |
-| `brentq` in the slow path | same | error | cell returns **Choked** at $p^*$ |
+| `brentq` in the slow path | same | error | cell returns **Choked** at $p^\ast$ |
 | `compute_cell_state` at $p_i$ | $\alpha$ fails | `None` | march **stops**; last state copied upward |
 | `simulate_inner` | any Choked or stopped cell | `failed = true` | $R$ is still returned, but a root there is rejected |
 | `residual` | $R$ not finite | `None` | a hole in the scan, or an error inside the outer Brent |
@@ -402,7 +402,7 @@ $v_{\infty b}$ is Harmathy's bubble rise velocity (A.1) and $v_{\infty T}$ the T
 
 On the sol-1 configs:
 
-- **Number of roots.** $R$ follows $+\,-\,+$ (two roots) or $-\,+$ (one root). Two roots occur exactly when $p_r - p_s < \rho_l\,g\,L/10^5$, i.e. when a static liquid column cannot reach the separator, so $R > 0$ at zero rate. This criterion split all 2,000 configs without exception (1,254 two-root, 746 one-root). If the negative region never forms, there is no root and the well cannot flow.
+- **Number of roots.** $R$ follows $+\thinspace-\thinspace+$ (two roots) or $-\thinspace+$ (one root). Two roots occur exactly when $p_r - p_s < \rho_l g L/10^5$, i.e. when a static liquid column cannot reach the separator, so $R > 0$ at zero rate. This criterion split all 2,000 configs without exception (1,254 two-root, 746 one-root). If the negative region never forms, there is no root and the well cannot flow.
 - **Stability.** The root from the right bracket has $dR/dp_0 > 0$ and is statically unstable; the root from the left bracket has $dR/dp_0 < 0$ and is stable. The label follows from the bracket a root came from, given one crossing per bracket. The unstable root is usually a near-dead trickle, with a median drawdown of 0.13 bar and the wellhead within about a millibar of $p_s$.
 - **Order.** `simulate()` returns the unstable root first. It is not the root v1 usually converges to: on 151 sampled two-root wells, v1 found the stable root in 139.
 
@@ -417,8 +417,8 @@ A Rust solution is a state vector on the same grid as v1. Evaluated with v1's eq
 | (7), gas law (9), constant $\rho_l$ | exactly | rounding |
 | Slip law (8) | to the $\alpha$ stopping rule | $\alpha$ errors up to several 10⁻³ near $\alpha \approx 0.7$; observed 5.2·10⁻³ at well 6, cell 70 |
 | Momentum (18) | to cell Brent's xtol | about 10⁻⁶ bar per cell, since $f_i' = O(1)$ near the subsonic root |
-| Energy (19) | no | Rust uses the exact ODE solution, so each row is the implicit-Euler truncation error, which grows with $\Delta z\,k$ and is largest at low rates. Well 977: 0.031 K in the first cell of the high-$p_0$ root, 2.3·10⁻³ K at most for the low-$p_0$ root. Largest row per solution over sol-1: median 5·10⁻³ K, 95th percentile 0.30 K, maximum 0.43 K |
-| Choke (11)/(14) | to outer Brent's xtol | small for flowing roots. Poorly resolved for trickle roots with tiny drawdown: at well 87, $\lvert R\rvert \approx 9\cdot10^4\,w_m^2$ |
+| Energy (19) | no | Rust uses the exact ODE solution, so each row is the implicit-Euler truncation error, which grows with $\Delta z\thinspace k$ and is largest at low rates. Well 977: 0.031 K in the first cell of the high-$p_0$ root, 2.3·10⁻³ K at most for the low-$p_0$ root. Largest row per solution over sol-1: median 5·10⁻³ K, 95th percentile 0.30 K, maximum 0.43 K |
+| Choke (11)/(14) | to outer Brent's xtol | small for flowing roots. Poorly resolved for trickle roots with tiny drawdown: at well 87, $\lvert R\rvert \approx 9\cdot10^4 w_m^2$ |
 | v1 bounds $p \in [p_s, p_r]$, $T \in [T_s, T_r + 1]$, $\alpha \le 1$ | yes, at accepted roots | $p$ decreases up the well and $p_L > p_s$ at a root; $T$ lies between $T_a(z)$ and $T_r$ |
 
 To make the energy rows exact, use the explicit recursion of section 2 instead of the analytic solution. It costs the same and changes $T$ by O($\Delta z$).

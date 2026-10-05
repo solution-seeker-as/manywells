@@ -8,7 +8,7 @@ In an inclined pipe, gas bubbles migrate to the upper wall: the transition from 
 
 ## Delta
 
-- `slip.md`: SLIP-10, the deviation factor $\sqrt{\cos\theta}\,(1 + \sin\theta)^{1.2}$ on the Taylor-bubble rise velocity (Hasan et al. (A-10)); SLIP-11, the bubbly–slug threshold $0.25\cos\theta$ in the classifier's fourth feature. The classifier's weights are not refitted.
+- `slip.md`: SLIP-10, the deviation factor $\sqrt{\cos\theta}\thinspace(1 + \sin\theta)^{1.2}$ on the Taylor-bubble rise velocity (Hasan et al. (A-10)); SLIP-11, the bubbly–slug threshold $0.25\cos\theta$ in the classifier's fourth feature. The classifier's weights are not refitted.
 - The slip model's four regime constants become fields of `SlipModel`, with v1.0.0's values as defaults (`plans/improvements.md` §2.7).
 - Step 7 dropped the guard $\cos\theta + 10^{-9}$ in the square root. GEO-3 already rules out $\cos\theta < 0$, and without the guard the factor is exactly 1 in a vertical cell. Signed off by Bjarne, 2026-10-01.
 - Code: `slip.classify_flow_regime`, `SlipModel.identify_parameters`.

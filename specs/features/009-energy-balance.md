@@ -8,9 +8,9 @@ v1.0.0's energy balance has heat loss to the surroundings only (paper §8, limit
 
 ## Delta
 
-- `thermal.md`: THM-6 (frictional heating, $\Phi_f = (1-\alpha)v_l F/C$) and THM-7 (gravity term, $\Phi_g = g\cos\theta\,(\alpha\rho_g v_g + (1-\alpha)\rho_l v_l - (1-\alpha)v_l\rho_m)/C$), with $C$ the heat-capacity flux.
+- `thermal.md`: THM-6 (frictional heating, $\Phi_f = (1-\alpha)v_l F/C$) and THM-7 (gravity term, $\Phi_g = g\cos\theta\thinspace(\alpha\rho_g v_g + (1-\alpha)\rho_l v_l - (1-\alpha)v_l\rho_m)/C$), with $C$ the heat-capacity flux.
 - `balances.md`: BAL-12, $dT/dz = -H + \Phi_f - \Phi_g$.
-- `discretization.md`: DISC-10, $T_i - T_{i-1} - \Delta\text{MD}_i\,(dT/d\text{MD})_i$.
+- `discretization.md`: DISC-10, $T_i - T_{i-1} - \Delta\text{MD}_ i\thinspace(dT/d\text{MD})_ i$.
 - The terms move out of the simulator into `thermal.ThermalModel`, with a switch each (`frictional_heating`, `gravity_term`; `specs/architecture.md`). Before Step 7 they were always on.
 - Test vectors pin the terms (`plans/improvements.md` §3).
 

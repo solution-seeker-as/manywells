@@ -14,7 +14,7 @@ Each row is a function of the state at one grid point, or at two neighbouring po
 
 ### DISC-1 · Grid
 
-The pipe of length $L$ is split into $N$ cells of length $\Delta z = L/N$. The grid points are $z_i = i\,\Delta z$, $i = 0, \dots, N$: point 0 is the bottomhole and point $N$ the wellhead. Cell $i$ lies between points $i-1$ and $i$. The paper speaks of "$N + 1$ cells"; it means these $N + 1$ grid points.
+The pipe of length $L$ is split into $N$ cells of length $\Delta z = L/N$. The grid points are $z_i = i\Delta z$, $i = 0, \dots, N$: point 0 is the bottomhole and point $N$ the wellhead. Cell $i$ lies between points $i-1$ and $i$. The paper speaks of "$N + 1$ cells"; it means these $N + 1$ grid points.
 
 ### DISC-2 · Gas mass row
 
@@ -34,7 +34,7 @@ $$r = ((1-\alpha)\rho_l v_l)_i - ((1-\alpha)\rho_l v_l)_{i-1} \quad \text{[kg/(m
 
 BAL-4 by implicit Euler. For $i = 1, \dots, N$, with pressures in bar:
 
-$$r = \left(\frac{M_i}{c_\text{bar}} + p_i\right) - \left(\frac{M_{i-1}}{c_\text{bar}} + p_{i-1}\right) + \frac{\Delta z\,(F_i + G_i)}{c_\text{bar}} \quad \text{[bar]}$$
+$$r = \left(\frac{M_i}{c_\text{bar}} + p_i\right) - \left(\frac{M_{i-1}}{c_\text{bar}} + p_{i-1}\right) + \frac{\Delta z\thinspace(F_i + G_i)}{c_\text{bar}} \quad \text{[bar]}$$
 
 where $M = \alpha\rho_g v_g^2 + (1-\alpha)\rho_l v_l^2$ (Pa) is the momentum flux, and $F_i$ (FRIC-1) and $G_i$ (BAL-6) are evaluated at point $i$.
 
@@ -42,7 +42,7 @@ where $M = \alpha\rho_g v_g^2 + (1-\alpha)\rho_l v_l^2$ (Pa) is the momentum flu
 
 BAL-5 by implicit Euler. For $i = 1, \dots, N$:
 
-$$r = T_i - T_{i-1} + \Delta z\, H_i \quad \text{[K]}$$
+$$r = T_i - T_{i-1} + \Delta z\thinspace H_i \quad \text{[K]}$$
 
 where $H_i$ is THM-1 evaluated at point $i$, with the ambient temperature $T_{a,i} = T_a(z_i)$ of THM-2.
 
@@ -78,7 +78,7 @@ On the grid of GEO-3, for $i = 1, \dots, N$:
 
 $$r = (\alpha\rho_g v_g)_i - (\alpha\rho_g v_g)_{i-1} - \frac{w_g(p_i, T_i) - w_g(p_{i-1}, T_{i-1})}{A} \quad \text{[kg/(m² s)]}$$
 
-$w_g(p, T)$ is the gas mass rate of the fluid model at $(p, T)$, for the reservoir liquid rate $w_\text{res}$ of the case and its lift-gas rate (PVT-OIL-13; INF-5 for dead oil). This is BAL-1 with BAL-10, integrated exactly. Without mass transfer $w_g$ is the same at every point and the rate difference is identically zero, so this is DISC-2 as a function of the state. With mass transfer it has the same roots as the local rows $A(\alpha\rho_g v_g)_i - w_g(p_i, T_i)$, because INF-6 fixes point 0 (decided by Bjarne, 2026-09-30, `specs/architecture.md`, decision 4; this text signed off 2026-10-01).
+$w_g(p, T)$ is the gas mass rate of the fluid model at $(p, T)$, for the reservoir liquid rate $w_\text{res}$ of the case and its lift-gas rate (PVT-OIL-13; INF-5 for dead oil). This is BAL-1 with BAL-10, integrated exactly. Without mass transfer $w_g$ is the same at every point and the rate difference is identically zero, so this is DISC-2 as a function of the state. With mass transfer it has the same roots as the local rows $A(\alpha\rho_g v_g)_ i - w_g(p_i, T_i)$, because INF-6 fixes point 0 (decided by Bjarne, 2026-09-30, `specs/architecture.md`, decision 4; this text signed off 2026-10-01).
 
 ### DISC-8 · Liquid mass row with mass transfer
 
@@ -92,9 +92,9 @@ with $w_l(p, T)$ the fluid model's liquid mass rate. Without mass transfer it is
 
 BAL-11 by implicit Euler on the grid of GEO-3. For $i = 1, \dots, N$, with pressures in bar:
 
-$$r = \left(\frac{M_i}{c_\text{bar}} + p_i\right) - \left(\frac{M_{i-1}}{c_\text{bar}} + p_{i-1}\right) + \frac{\Delta\text{MD}_i\,(F_i + G_i\cos\theta_i)}{c_\text{bar}} \quad \text{[bar]}$$
+$$r = \left(\frac{M_i}{c_\text{bar}} + p_i\right) - \left(\frac{M_{i-1}}{c_\text{bar}} + p_{i-1}\right) + \frac{\Delta\text{MD}_i\thinspace(F_i + G_i\cos\theta_i)}{c_\text{bar}} \quad \text{[bar]}$$
 
-with $M$ as in DISC-4, $F_i$ the viscous pressure gradient of the friction model (FRIC-1) and $G_i$ (BAL-6) at point $i$. Friction acts along the cell's measured depth, gravity along its vertical depth $\Delta\text{MD}_i\cos\theta_i$. On GEO-1's grid it is DISC-4.
+with $M$ as in DISC-4, $F_i$ the viscous pressure gradient of the friction model (FRIC-1) and $G_i$ (BAL-6) at point $i$. Friction acts along the cell's measured depth, gravity along its vertical depth $\Delta\text{MD}_ i\cos\theta_i$. On GEO-1's grid it is DISC-4.
 
 ### DISC-10 · Energy row along the flow path
 
@@ -102,7 +102,7 @@ BAL-13 (BAL-12 without the Joule–Thomson term) by implicit Euler. For $i = 1, 
 
 $$r = T_i - T_{i-1} - \Delta\text{MD}_i \left(\frac{dT}{d\text{MD}}\right)_i \quad \text{[K]}$$
 
-where $(dT/d\text{MD})_i = -H_i + \Phi_{f,i} - \Phi_{g,i} - \Phi_{JT,i}$ at point $i$: the heat loss of THM-1 to the ambient temperature of THM-4 at $f_i$, and the frictional-heating, gravity and Joule–Thomson terms of THM-6, THM-7 and THM-8 where the thermal model has them, with the cell's $\cos\theta_i$. With none of the three, on GEO-1's grid, it is DISC-5.
+where $(dT/d\text{MD})_ i = -H_i + \Phi_{f,i} - \Phi_{g,i} - \Phi_{JT,i}$ at point $i$: the heat loss of THM-1 to the ambient temperature of THM-4 at $f_i$, and the frictional-heating, gravity and Joule–Thomson terms of THM-6, THM-7 and THM-8 where the thermal model has them, with the cell's $\cos\theta_i$. With none of the three, on GEO-1's grid, it is DISC-5.
 
 ### DISC-11 · System and row order on a survey grid
 

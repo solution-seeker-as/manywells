@@ -17,13 +17,13 @@ In `develop` an inflow model returns the liquid rate only, `liquid_mass_flow_rat
 
 ### INF-1 · Vogel inflow performance
 
-$$w_l = w_{l,\max}\left[1 - 0.2\,\frac{p_0}{p_r} - 0.8\left(\frac{p_0}{p_r}\right)^2\right]$$
+$$w_l = w_{l,\max}\left[1 - 0.2\frac{p_0}{p_r} - 0.8\left(\frac{p_0}{p_r}\right)^2\right]$$
 
 $w_{l,\max} \ge 0$ is the liquid rate at $p_0 = 0$. Used by the published datasets.
 
 ### INF-2 · Productivity index
 
-$$w_l = k_l\,(p_r - p_0)$$
+$$w_l = k_l\thinspace(p_r - p_0)$$
 
 with $k_l \ge 0$ in kg/(s bar). Not in the paper; v1.0.0's default inflow model, with $k_l = 0.5$ and $f_g = 0.1379$.
 
@@ -37,7 +37,7 @@ Both rates are constants, independent of $p_0$; INF-4 does not apply. Not in the
 
 For INF-1 and INF-2:
 
-$$w_{g,\text{res}} = \frac{f_g}{1 - f_g}\,w_l$$
+$$w_{g,\text{res}} = \frac{f_g}{1 - f_g}w_l$$
 
 where $f_g \in (0, 1)$ is the gas mass fraction of the reservoir inflow.
 
@@ -49,11 +49,11 @@ The lift gas is the produced gas, injected at the bottomhole at the rate $w_{lg}
 
 ### INF-6 · Gas inflow row
 
-$$r = A\,\alpha_0\,\rho_{g,0}\,v_{g,0} - w_g(z_0) \quad \text{[kg/s]}$$
+$$r = A\alpha_0\rho_{g,0}v_{g,0} - w_g(z_0) \quad \text{[kg/s]}$$
 
 ### INF-7 · Liquid inflow row
 
-$$r = A\,(1 - \alpha_0)\,\rho_{l,0}\,v_{l,0} - w_l(z_0) \quad \text{[kg/s]}$$
+$$r = A\thinspace(1 - \alpha_0)\rho_{l,0}v_{l,0} - w_l(z_0) \quad \text{[kg/s]}$$
 
 ### INF-8 · Fixed liquid rate
 

@@ -56,6 +56,7 @@ These files cut across modules:
 | `test_rust_backend.py` | The Rust core as the simulator's backend on v1.0.0's wells, and what it refuses. |
 | `test_backend_comparison.py` | The Rust core against the CasADi backend in every configuration of the matrix in `backend_cases.py`: the rows at the same state, and, in the slow test, the root sets on the comparison set. |
 | `test_examples.py` | Every script in `scripts/sim_examples/` runs to the end headless (`slow`). |
+| `test_markdown_math.py` | The math in every markdown file renders on GitHub as in VS Code (`AGENTS.md`, Math in markdown): no backslash before punctuation, emphasis delimiter or HTML tag that GitHub's markdown parser would change before MathJax sees the math, and no `\operatorname`. |
 | `test_calibration_recovery.py` | The calibration recovers known parameters from wells simulated with them, in every instrumentation (`specs/calibration.md`, Checks; `slow`). `test_calibration.py` tests the package's parts without a solve. |
 
 `verification/tests/` reads v1.0.0 roots from `verification/tests/data/fixtures.npz`, which

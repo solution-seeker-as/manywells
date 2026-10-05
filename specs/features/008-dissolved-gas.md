@@ -8,9 +8,9 @@ With black oil (007), part of the reservoir gas travels dissolved in the oil and
 
 ## Delta
 
-- `pvt/oil.md`: PVT-OIL-13, the dissolved gas $w_d = \operatorname{smin}(R_{so}\rho_{g,\text{sc}}/\rho_o\, x_o w_\text{res},\ w_{g,\text{res}})$ and the phase rates $w_g = \operatorname{smax}(w_{g,\text{res}} + w_{lg} - w_d, 0)$, $w_l = w_\text{res} + w_d$; with dead oil the rates are INF-5's, exactly, with no smoothing. `FluidModel.phase_rates(p, T, w_res, w_lg)`.
-- `balances.md`: BAL-10, $\Gamma = (1/A)\, dw_g/dz$.
-- `discretization.md`: DISC-7 and DISC-8, the flux-difference mass rows $(\alpha\rho_g v_g)_i - (\alpha\rho_g v_g)_{i-1} - (w_g(p_i, T_i) - w_g(p_{i-1}, T_{i-1}))/A$, one form for every fluid (`specs/architecture.md`, decision 4). They replace `develop`'s local rows $A\alpha\rho_g v_g = w_g(p_i, T_i)$, with the same roots. Bjarne signed off the spec text of decision 4 on 2026-10-01.
+- `pvt/oil.md`: PVT-OIL-13, the dissolved gas $w_d = \mathop{\mathrm{smin}}(R_{so}\rho_{g,\text{sc}}/\rho_o x_o w_\text{res},\ w_{g,\text{res}})$ and the phase rates $w_g = \mathop{\mathrm{smax}}(w_{g,\text{res}} + w_{lg} - w_d, 0)$, $w_l = w_\text{res} + w_d$; with dead oil the rates are INF-5's, exactly, with no smoothing. `FluidModel.phase_rates(p, T, w_res, w_lg)`.
+- `balances.md`: BAL-10, $\Gamma = (1/A)\thinspace dw_g/dz$.
+- `discretization.md`: DISC-7 and DISC-8, the flux-difference mass rows $(\alpha\rho_g v_g)_ i - (\alpha\rho_g v_g)_ {i-1} - (w_g(p_i, T_i) - w_g(p_{i-1}, T_{i-1}))/A$, one form for every fluid (`specs/architecture.md`, decision 4). They replace `develop`'s local rows $A\alpha\rho_g v_g = w_g(p_i, T_i)$, with the same roots. Bjarne signed off the spec text of decision 4 on 2026-10-01.
 - The reservoir liquid rate $w_\text{res}$ is a function of $x_0$, passed to every point's rows; the hidden state `self._w_l_inflow` is gone (`plans/improvements.md` §2.4).
 - Code: `FluidModel.phase_rates`, `discretization.cell_rows`.
 

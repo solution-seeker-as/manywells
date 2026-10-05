@@ -34,13 +34,13 @@ On 24 CPUs, 2026-10-02. The scripts are `scripts/calibration/twins.py` (items 6 
 
 1. **Cost of a row** on the Rust core, the full search (`simulate`), for wells drawn with `manywells.sampling` (seed 1) at 20, 50 and 100 cells: vertical wells 32, 65 and 117 ms (well 1), 166–200, 258–336 and 296–437 ms (well 3); a deviated well 334–373, 347–354 and 413–420 ms (well 0); an L-shaped well 318–326, 575–581 and 809–812 ms (well 2).
 2. **Threads.** 16 rows of well 1 at 50 cells: 1.05 s on 1 thread, 0.27 s on 4, 0.14 s on 8, 0.09 s on 16, a speed-up of 12 on 16 threads.
-3. **The Jacobian's step.** The forward difference of PBH, PWH, TWH and $\log W$ in $\log\theta$, for each of `K_c`, `w_l_max`, `roughness` and `h` on well 1 at 50 cells and $u = 0.6$, with steps $10^{-1}$ to $10^{-8}$: the quotients agree to four digits from $10^{-4}$ and to five from $10^{-5}$ to $10^{-8}$. So a step of $10^{-6}$ in $z$ (a change of $s \cdot 10^{-6}$ in $\log\theta$) is well inside the range where the solves' tolerance does not matter. For example, $d\,\text{PWH}/d\log K_c$ is $-2.62129$ at $10^{-4}$ and $-2.62149$ from $10^{-6}$ to $10^{-8}$.
-4. **Identification**, on wells 0 to 7 of seed 1 (vertical, deviated and L-shaped, 20 cells, 10 rows), noise-free rows with the noise scaled down by 1000, $z^* = (1.5, -1, 1, -1.5)$: every parameter within $2\cdot10^{-7}$ of $z^*$ in every well, in 280 to 400 solves, 1 to 23 s per fit.
-5. **Getting close** on the same wells with noise (items 4 and 5 were measured with the fit started at the medians, before item 7's start search; the recovery tests pass with it): the distance to $z^*$ after the fit is 0.04 to 1.11, against 2.55 at the medians; `K_c`, `w_l_max` and `h` are each within 0.27 in every instrumentation tested. The largest errors are the roughness's on well 1, whose tubing is almost smooth (Findings, 1).
+3. **The Jacobian's step.** The forward difference of PBH, PWH, TWH and $\log W$ in $\log\theta$, for each of `K_c`, `w_l_max`, `roughness` and `h` on well 1 at 50 cells and $u = 0.6$, with steps $10^{-1}$ to $10^{-8}$: the quotients agree to four digits from $10^{-4}$ and to five from $10^{-5}$ to $10^{-8}$. So a step of $10^{-6}$ in $z$ (a change of $s \cdot 10^{-6}$ in $\log\theta$) is well inside the range where the solves' tolerance does not matter. For example, $d\thinspace\text{PWH}/d\log K_c$ is $-2.62129$ at $10^{-4}$ and $-2.62149$ from $10^{-6}$ to $10^{-8}$.
+4. **Identification**, on wells 0 to 7 of seed 1 (vertical, deviated and L-shaped, 20 cells, 10 rows), noise-free rows with the noise scaled down by 1000, $z^\ast = (1.5, -1, 1, -1.5)$: every parameter within $2\cdot10^{-7}$ of $z^\ast$ in every well, in 280 to 400 solves, 1 to 23 s per fit.
+5. **Getting close** on the same wells with noise (items 4 and 5 were measured with the fit started at the medians, before item 7's start search; the recovery tests pass with it): the distance to $z^\ast$ after the fit is 0.04 to 1.11, against 2.55 at the medians; `K_c`, `w_l_max` and `h` are each within 0.27 in every instrumentation tested. The largest errors are the roughness's on well 1, whose tubing is almost smooth (Findings, 1).
 
 6. **The twin study** (`uv run python -m scripts.calibration.twins twins.json --wells 30`).
-   - **Setup.** Wells 0 to 29 of seed 2026 from `manywells.sampling` on `develop`'s model, 20 cells: vertical, deviated and L-shaped wells, Vogel inflow, Simpson chokes of every profile, black oil, roughness friction. Well 11 has no operating point at its nominal conditions and is left out. Each well has $z^*$ drawn from the priors, $N(0, 1)$ per parameter clipped to ±2.5, with all four parameters free.
-   - **Recovery.** 20 noisy rows in each instrumentation; held out, 10 new rows with full instrumentation. Errors $|\hat z - z^*|$ in prior standard deviations:
+   - **Setup.** Wells 0 to 29 of seed 2026 from `manywells.sampling` on `develop`'s model, 20 cells: vertical, deviated and L-shaped wells, Vogel inflow, Simpson chokes of every profile, black oil, roughness friction. Well 11 has no operating point at its nominal conditions and is left out. Each well has $z^\ast$ drawn from the priors, $N(0, 1)$ per parameter clipped to ±2.5, with all four parameters free.
+   - **Recovery.** 20 noisy rows in each instrumentation; held out, 10 new rows with full instrumentation. Errors $|\hat z - z^\ast|$ in prior standard deviations:
 
    | Instrumentation | fits | converged | closer than the medians | median error (`K_c`, `w_l_max`, `roughness`, `h`) | largest error | held-out RMS, median |
    |---|---|---|---|---|---|---|
@@ -67,7 +67,7 @@ On 24 CPUs, 2026-10-02. The scripts are `scripts/calibration/twins.py` (items 6 
    | 20 rows, noise / 4 | 0.003 | 0.002 | 0.015 | 0.005 |
 
    A fit of 160 rows takes 40 to 65 s.
-9. **Misspecified twins** (wells 0 to 7, 20 rows, full instrumentation): data from a model the calibration lacks, calibrated with the shared parameters' priors. Bias of $\hat z$ from $z^*$:
+9. **Misspecified twins** (wells 0 to 7, 20 rows, full instrumentation): data from a model the calibration lacks, calibrated with the shared parameters' priors. Bias of $\hat z$ from $z^\ast$:
 
    | Model error | median bias (`K_c`, `w_l_max`, `h`) | largest bias | held-out RMS, median and largest |
    |---|---|---|---|
@@ -91,7 +91,7 @@ On 24 CPUs, 2026-10-02. The scripts are `scripts/calibration/twins.py` (items 6 
 
 - `tests/test_calibration.py` (fast): the data's validation, the noise, the parameters and priors, the predicted observations, the residuals and the synthetic data's instrumentation.
 - `tests/test_calibration_recovery.py` (slow): the Checks of `specs/calibration.md` (identification, getting close in every instrumentation, determinism), the result and its diagnostics, the start off the medians and a row that cannot flow anywhere, on seeded wells.
-- The twin study: in every instrumentation, at least 95% of the fits converge, end closer to $z^*$ than the medians are where $z^*$ is more than 0.5 from them, have `K_c`, `w_l_max` and `h` within 0.5 of $z^*$, and have every RMS of scaled residuals below 2. Measured: 100%, 100%, 96.6% to 100% (28 of 29 in `periodic_tests`, whose largest `K_c` error is 0.51) and 100%.
+- The twin study: in every instrumentation, at least 95% of the fits converge, end closer to $z^\ast$ than the medians are where $z^\ast$ is more than 0.5 from them, have `K_c`, `w_l_max` and `h` within 0.5 of $z^\ast$, and have every RMS of scaled residuals below 2. Measured: 100%, 100%, 96.6% to 100% (28 of 29 in `periodic_tests`, whose largest `K_c` error is 0.51) and 100%.
 - `tests/test_spec_traceability.py` passes with the CAL namespace; `tests/test_sampling.py` passes unchanged after the extraction; `scripts/sim_examples/calibrate_well.py` runs (`tests/test_examples.py`).
 
 ## Findings

@@ -11,7 +11,7 @@ The model's answer is a root set, and the operating point is its stable root (`s
 No change to `specs/model/`, whose SOL-1 to SOL-6 already define the answer; `solution.md` gets an informative section on `develop`'s search.
 
 - `solution.py`: `Root` (state, label, normalized slope, CHOKED, flow regimes, reservoir rates), `RootSet` (roots sorted by $p_0$, operating point, the several-stable flag, the search record), `select_operating_point` (SOL-4 to SOL-6).
-- `solvers/roots.py`: the multi-start search. Starts: an optional guess; the default march from $p_0 = p_r - 0.05\,(p_r - p_s)$; marches from $p_0 = p_s + f(p_r - p_s)$ for $f$ in 0.5, 0.7, 0.85, 0.975, 0.995, 0.999. A solve is accepted on `Solve_Succeeded` and SOL-1, solutions within `tol_x` are merged, and each root is labelled by SOL-3 with `label_min`, both copied from the verifier (`specs/architecture.md`, decision 5).
+- `solvers/roots.py`: the multi-start search. Starts: an optional guess; the default march from $p_0 = p_r - 0.05(p_r - p_s)$; marches from $p_0 = p_s + f(p_r - p_s)$ for $f$ in 0.5, 0.7, 0.85, 0.975, 0.995, 0.999. A solve is accepted on `Solve_Succeeded` and SOL-1, solutions within `tol_x` are merged, and each root is labelled by SOL-3 with `label_min`, both copied from the verifier (`specs/architecture.md`, decision 5).
 - `solvers/march.py`: the march solves each point by Newton's method from the previous point, and by Ipopt with v1.0.0's bounds where Newton fails. `solvers/ipopt.py`: the feasibility NLP, built once per well with the operating point as parameters.
 - `SSDFSimulator(wp)`: `simulate(bc)` returns the operating point and raises `NoOperatingPoint` (a `SimError`, with the root set) without one; `root_set(bc)` returns every root found.
 

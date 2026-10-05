@@ -22,7 +22,7 @@ In `develop` the thermal model is a `ThermalModel` with $h$ and one switch per o
 
 After Zhang et al. (2006):
 
-$$H = \frac{4h\,(T - T_a)}{D\,\big(c_{pg}\,\alpha\rho_g v_g + c_{pl}\,(1-\alpha)\rho_l v_l\big)}$$
+$$H = \frac{4h\thinspace(T - T_a)}{D\thinspace\big(c_{pg}\alpha\rho_g v_g + c_{pl}\thinspace(1-\alpha)\rho_l v_l\big)}$$
 
 $h$ is the overall heat transfer coefficient, and the heat capacities $c_{pg}$ and $c_{pl}$ are constants. The denominator is the heat-capacity flux of the flow.
 
@@ -30,7 +30,7 @@ $h$ is the overall heat transfer coefficient, and the heat capacities $c_{pg}$ a
 
 The ambient temperature falls linearly from the reservoir temperature at the bottomhole to the surface temperature at the wellhead:
 
-$$T_a(z) = T_r - \frac{z}{L}\,(T_r - T_s), \qquad T_{a,i} = T_r - \frac{i}{N}\,(T_r - T_s).$$
+$$T_a(z) = T_r - \frac{z}{L}\thinspace(T_r - T_s), \qquad T_{a,i} = T_r - \frac{i}{N}\thinspace(T_r - T_s).$$
 
 Used by `v1.0.0`.
 
@@ -44,7 +44,7 @@ Its row in DISC-6 is $T_0 - T_r$ (K). The lift gas, injected at $z = 0$, is take
 
 ### THM-4 · Ambient temperature in true vertical depth
 
-$$T_{a,i} = T_s + (T_r - T_s)\, f_i$$
+$$T_{a,i} = T_s + (T_r - T_s) f_i$$
 
 with $f_i$ the TVD fraction of grid point $i$ (GEO-3): the ambient temperature falls linearly in true vertical depth, from $T_r$ at the bottomhole to $T_s$ at the surface. On GEO-1's grid $f_i = 1 - i/N$, and it is THM-2.
 
@@ -52,27 +52,27 @@ with $f_i$ the TVD fraction of grid point $i$ (GEO-3): the ambient temperature f
 
 The reservoir fluid at $T_r$ and the lift gas at $T_{lg}$ mix at the bottomhole, weighted by their heat-capacity rates:
 
-$$T_\text{in} = T_r + \frac{H_{lg}\,(T_{lg} - T_r)}{H_\text{res} + H_{lg}}, \qquad H_\text{res} = c_{pl}\, w_\text{res} + c_{pg}\, w_{g,\text{res}}, \qquad H_{lg} = c_{pg}\, w_{lg},$$
+$$T_\text{in} = T_r + \frac{H_{lg}\thinspace(T_{lg} - T_r)}{H_\text{res} + H_{lg}}, \qquad H_\text{res} = c_{pl} w_\text{res} + c_{pg} w_{g,\text{res}}, \qquad H_{lg} = c_{pg} w_{lg},$$
 
 with $w_{g,\text{res}}$ from INF-4. Its row is $T_0 - T_\text{in}$ (K). When $T_{lg}$ is not given it is $T_r$, and the row is exactly THM-3's; so it is without lift gas. Mixing at constant heat capacities, with no heat of solution; the lift gas is the same gas as the produced gas.
 
 ### THM-6 · Frictional heating
 
-$$\Phi_f = \frac{(1-\alpha)\, v_l\, F}{C}, \qquad C = c_{pg}\,\alpha\rho_g v_g + c_{pl}\,(1-\alpha)\rho_l v_l$$
+$$\Phi_f = \frac{(1-\alpha) v_l F}{C}, \qquad C = c_{pg}\alpha\rho_g v_g + c_{pl}\thinspace(1-\alpha)\rho_l v_l$$
 
 in K/m, with $F$ the viscous pressure gradient (FRIC-1) and $C$ the heat-capacity flux of THM-1. The work against friction heats the liquid; an ideal gas's enthalpy does not change with it, so the gas phase gets none (`docs/thermal_energy_modeling.md`). For pure liquid, $\Phi_f = F/(\rho_l c_{pl})$.
 
 ### THM-7 · Gravity term
 
-$$\Phi_g = \frac{g\cos\theta\,\big(\alpha\rho_g v_g + (1-\alpha)\rho_l v_l - (1-\alpha)\, v_l\,\rho_m\big)}{C}$$
+$$\Phi_g = \frac{g\cos\theta\thinspace\big(\alpha\rho_g v_g + (1-\alpha)\rho_l v_l - (1-\alpha) v_l\rho_m\big)}{C}$$
 
 in K/m, with $\theta$ the cell's inclination and $C$ as in THM-6. Lifting the flow against gravity cools it: for pure gas $\Phi_g = g\cos\theta/c_{pg}$, the adiabatic lapse rate; for pure liquid it vanishes, because the liquid's gravitational work is in the pressure term.
 
 ### THM-8 · Joule–Thomson term
 
-$$\Phi_{JT} = \frac{\alpha\, v_g\, J\, (F + \rho_m g\cos\theta)}{C}$$
+$$\Phi_{JT} = \frac{\alpha v_g J\thinspace (F + \rho_m g\cos\theta)}{C}$$
 
-in K/m, with $J$ the gas's Joule–Thomson factor (PVT-GAS-10) at the point, $F$ the viscous pressure gradient (FRIC-1), $\theta$ the cell's inclination and $C$ the heat-capacity flux of THM-1. A real gas's enthalpy changes with pressure, $dh_g = c_{pg}\,dT - c_{pg}\,\mu_{JT}\,dp$, and the gas's share of the enthalpy flux, $\alpha\rho_g v_g\, c_{pg}\mu_{JT}\, dp/dz = \alpha v_g J\, dp/dz$, enters the energy balance as THM-6 enters for the liquid, with $dp/dz = -(F + \rho_m g\cos\theta)$, neglecting acceleration as THM-6 and THM-7 do (`docs/thermal_energy_modeling.md`). The pressure gradient is positive at every admissible state, so $\Phi_{JT}$ has the sign of $J$: it cools where $Z$ rises with $T$, everywhere in the sampled range below about 300 bar, and heats above the inversion pressure. It is zero for an ideal gas and for pure liquid; for pure gas, $\Phi_{JT} = \mu_{JT}(F + \rho_g g\cos\theta)$, the gas's Joule–Thomson cooling along its pressure drop. Near a gas well's choked wellhead the term can give a cell's energy row two roots in $T_i$; only the one where the row rises in $T_i$ is a root of the model (SOL-9).
+in K/m, with $J$ the gas's Joule–Thomson factor (PVT-GAS-10) at the point, $F$ the viscous pressure gradient (FRIC-1), $\theta$ the cell's inclination and $C$ the heat-capacity flux of THM-1. A real gas's enthalpy changes with pressure, $dh_g = c_{pg}\thinspace dT - c_{pg}\mu_{JT}\thinspace dp$, and the gas's share of the enthalpy flux, $\alpha\rho_g v_g c_{pg}\mu_{JT}\thinspace dp/dz = \alpha v_g J\thinspace dp/dz$, enters the energy balance as THM-6 enters for the liquid, with $dp/dz = -(F + \rho_m g\cos\theta)$, neglecting acceleration as THM-6 and THM-7 do (`docs/thermal_energy_modeling.md`). The pressure gradient is positive at every admissible state, so $\Phi_{JT}$ has the sign of $J$: it cools where $Z$ rises with $T$, everywhere in the sampled range below about 300 bar, and heats above the inversion pressure. It is zero for an ideal gas and for pure liquid; for pure gas, $\Phi_{JT} = \mu_{JT}(F + \rho_g g\cos\theta)$, the gas's Joule–Thomson cooling along its pressure drop. Near a gas well's choked wellhead the term can give a cell's energy row two roots in $T_i$; only the one where the row rises in $T_i$ is a root of the model (SOL-9).
 
 ## Options
 

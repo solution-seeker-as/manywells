@@ -26,13 +26,13 @@ The oil is incompressible, with a constant density $\rho_o$ and heat capacity $c
 
 $$\text{API} = \frac{141.5}{\text{SG}} - 131.5, \qquad \text{SG} = \frac{\rho}{\rho_{w,\text{ref}}}, \qquad \rho_{w,\text{ref}} = 999.1\ \text{kg/m³}.$$
 
-$\rho$ is a density at standard conditions. The inverse is $\rho = 141.5\,\rho_{w,\text{ref}}/(\text{API} + 131.5)$.
+$\rho$ is a density at standard conditions. The inverse is $\rho = 141.5\rho_{w,\text{ref}}/(\text{API} + 131.5)$.
 
 ### PVT-OIL-3 · Dead-oil surface tension
 
 Abdul-Majeed and Abu Al-Soof (2000), Eqs. (1)–(3), with $T$ in °C ($T_C = T - 273.15$) and the result converted from dyn/cm to J/m²:
 
-$$\sigma_{od}(\rho, T) = 10^{-3}\,\big(1.11591 - 0.00305\,T_C\big)\big(38.085 - 0.259\,\text{API}(\rho)\big).$$
+$$\sigma_{od}(\rho, T) = 10^{-3}\thinspace\big(1.11591 - 0.00305 T_C\big)\big(38.085 - 0.259\thinspace\text{API}(\rho)\big).$$
 
 The coefficients are the source's, which gives the correlation in °C. It was fitted to dead-oil data at 15.6, 37.8 and 54.4 °C and API gravities 15 to 50; ManyWells evaluates it up to the reservoir temperature, 150 °C at most (`specs/sampling.md`, SMP-14), and down to API 10 (PVT-MIX-5). Which density it is evaluated at is set by PVT-MIX-5 or PVT-MIX-7.
 
@@ -44,33 +44,33 @@ Gas dissolves into the oil up to the solution gas–oil ratio $R_{so}(p, T)$ of 
 
 The gas gravity corrected to a reference separator at 114.7 psia, Vazquez and Beggs (1980):
 
-$$\gamma_{gs} = \gamma_g \left[1 + 5.912\cdot10^{-5}\,\text{API}\; T_\text{sep}\, \log_{10}\!\left(\frac{p_\text{sep}}{114.7}\right)\right],$$
+$$\gamma_{gs} = \gamma_g \left[1 + 5.912\cdot10^{-5}\thinspace\text{API}\ T_\text{sep}\thinspace \log_{10}\negthinspace\left(\frac{p_\text{sep}}{114.7}\right)\right],$$
 
-with $T_\text{sep}$ in °F and $p_\text{sep}$ in psia; at the reference separator, 114.7 psia, $\gamma_{gs} = \gamma_g$. At standard separator conditions (14.7 psia, 59 °F) and API 35 it is $0.891\,\gamma_g$. Decided by Bjarne, 2026-10-01: $\log_{10}$, as in the source. Until then `develop` had the natural log, which gave $0.75\,\gamma_g$ there and an $R_{so}$ 16% below the source's (Step 7 finding; `specs/features/007-black-oil.md`).
+with $T_\text{sep}$ in °F and $p_\text{sep}$ in psia; at the reference separator, 114.7 psia, $\gamma_{gs} = \gamma_g$. At standard separator conditions (14.7 psia, 59 °F) and API 35 it is $0.891\gamma_g$. Decided by Bjarne, 2026-10-01: $\log_{10}$, as in the source. Until then `develop` had the natural log, which gave $0.75\gamma_g$ there and an $R_{so}$ 16% below the source's (Step 7 finding; `specs/features/007-black-oil.md`).
 
 ### PVT-OIL-6 · Solution gas–oil ratio
 
 Vazquez and Beggs (1980):
 
-$$R_{so} = C_1\,\gamma_{gs}\, p^{C_2} \exp\!\left(\frac{C_3\,\text{API}}{T + 460}\right)\ \text{scf/STB},$$
+$$R_{so} = C_1\gamma_{gs} p^{C_2} \exp\negthinspace\left(\frac{C_3\thinspace\text{API}}{T + 460}\right)\ \text{scf/STB},$$
 
 with $p$ in psia and $T$ in °F; $(C_1, C_2, C_3) = (0.0362, 1.0937, 25.7240)$ for API $\le 30$ and $(0.0178, 1.1870, 23.9310)$ above.
 
 ### PVT-OIL-7 · Bubble-point cap
 
-If a bubble-point pressure $p_b$ is given, $R_{so} = \operatorname{smin}\big(R_{so}(p), R_{so}(p_b)\big)$ (SMO-2, $\epsilon = 10^{-6}$ in (scf/STB)²), so that no more gas dissolves above $p_b$. Without $p_b$ there is no cap: gas dissolves up to the gas available (PVT-OIL-13).
+If a bubble-point pressure $p_b$ is given, $R_{so} = \mathop{\mathrm{smin}}\big(R_{so}(p), R_{so}(p_b)\big)$ (SMO-2, $\epsilon = 10^{-6}$ in (scf/STB)²), so that no more gas dissolves above $p_b$. Without $p_b$ there is no cap: gas dissolves up to the gas available (PVT-OIL-13).
 
 ### PVT-OIL-8 · Oil formation volume factor
 
 Vazquez and Beggs (1980), with $R_{so}$ in scf/STB (capped by PVT-OIL-7) and $T$ in °F:
 
-$$B_o = 1 + C_4 R_{so} + (C_5 + C_6 R_{so})\,(T - 60)\,\frac{\text{API}}{\gamma_{gs}},$$
+$$B_o = 1 + C_4 R_{so} + (C_5 + C_6 R_{so})(T - 60)\frac{\text{API}}{\gamma_{gs}},$$
 
 with $(C_4, C_5, C_6) = (4.677\cdot10^{-4}, 1.751\cdot10^{-5}, -1.811\cdot10^{-8})$ for API $\le 30$ and $(4.670\cdot10^{-4}, 1.100\cdot10^{-5}, 1.337\cdot10^{-9})$ above.
 
 ### PVT-OIL-9 · Live-oil density
 
-$$\rho_{lo} = \frac{\rho_o + R_{so}\,\rho_{g,\text{sc}}}{B_o}$$
+$$\rho_{lo} = \frac{\rho_o + R_{so}\rho_{g,\text{sc}}}{B_o}$$
 
 with $R_{so}$ in Sm³/Sm³: the stock-tank oil and its dissolved gas, in the swollen volume.
 
@@ -78,7 +78,7 @@ with $R_{so}$ in Sm³/Sm³: the stock-tank oil and its dissolved gas, in the swo
 
 Beggs and Robinson (1975), with $T$ in °F:
 
-$$\mu_{od} = 10^{X} - 1\ \text{cP}, \qquad X = 10^{\,3.0324 - 0.02023\,\text{API}}\; T^{-1.163}.$$
+$$\mu_{od} = 10^{X} - 1\ \text{cP}, \qquad X = 10^{3.0324 - 0.02023\thinspace\text{API}}\ T^{-1.163}.$$
 
 The code's stated range is API 10 to 58 and 100 to 295 °F (38 to 146 °C); wellhead temperatures are often colder.
 
@@ -86,7 +86,7 @@ The code's stated range is API 10 to 58 and 100 to 295 °F (38 to 146 °C); well
 
 Beggs and Robinson (1975), with $R_{so}$ in scf/STB:
 
-$$\mu_o = A\,\mu_{od}^{\,B}, \qquad A = 10.715\,(R_{so} + 100)^{-0.515}, \qquad B = 5.44\,(R_{so} + 150)^{-0.338},$$
+$$\mu_o = A\mu_{od}^{B}, \qquad A = 10.715(R_{so} + 100)^{-0.515}, \qquad B = 5.44(R_{so} + 150)^{-0.338},$$
 
 in cP. With dead oil, $\mu_o = \mu_{od}$.
 
@@ -94,15 +94,15 @@ in cP. With dead oil, $\mu_o = \mu_{od}$.
 
 Abdul-Majeed and Abu Al-Soof (2000), Eqs. (4) and (5), with $R_{so}$ in Sm³/Sm³:
 
-$$\sigma_{lo} = (1 - b)\,\frac{\sigma_{od}}{1 + 0.02549\,R^{1.0157}} + b\cdot 32.0436\,\sigma_{od}\,R^{-1.1367}, \qquad b = \frac{1}{1 + e^{-0.5\,(R_{so} - 50)}},$$
+$$\sigma_{lo} = (1 - b)\frac{\sigma_{od}}{1 + 0.02549 R^{1.0157}} + b\cdot 32.0436\sigma_{od}R^{-1.1367}, \qquad b = \frac{1}{1 + e^{-0.5(R_{so} - 50)}},$$
 
-where $R = \operatorname{smax}(R_{so}, 10^{-6})$ (SMO-1) and $\sigma_{od}$ is PVT-OIL-3. The source switches from (4) to (5) at 50 Sm³/Sm³; the sigmoid (SMO-4) blends them over a few Sm³/Sm³. The two branches do not meet there: $\sigma_{lo}/\sigma_{od}$ is 0.425 by (4) and 0.375 by (5), a step of 12% that the blend smooths (`plans/develop_model_changes.md`, change 3; the code's docstring said they meet, and is corrected).
+where $R = \mathop{\mathrm{smax}}(R_{so}, 10^{-6})$ (SMO-1) and $\sigma_{od}$ is PVT-OIL-3. The source switches from (4) to (5) at 50 Sm³/Sm³; the sigmoid (SMO-4) blends them over a few Sm³/Sm³. The two branches do not meet there: $\sigma_{lo}/\sigma_{od}$ is 0.425 by (4) and 0.375 by (5), a step of 12% that the blend smooths (`plans/develop_model_changes.md`, change 3; the code's docstring said they meet, and is corrected).
 
 ### PVT-OIL-13 · Dissolved gas and phase rates
 
 With the reservoir liquid rate $w_\text{res}$ (INF-1, INF-2 or INF-8), the reservoir gas rate $w_{g,\text{res}}$ of INF-4 and the lift-gas rate $w_{lg}$, the gas dissolved at $(p, T)$ and the phase mass rates are
 
-$$w_d = \operatorname{smin}\!\left(R_{so}\,\frac{\rho_{g,\text{sc}}}{\rho_o}\, x_o\, w_\text{res},\ w_{g,\text{res}}\right), \qquad w_g = \operatorname{smax}\big(w_{g,\text{res}} + w_{lg} - w_d,\ 0\big), \qquad w_l = w_\text{res} + w_d,$$
+$$w_d = \mathop{\mathrm{smin}}\negthinspace\left(R_{so}\frac{\rho_{g,\text{sc}}}{\rho_o} x_o w_\text{res},\ w_{g,\text{res}}\right), \qquad w_g = \mathop{\mathrm{smax}}\big(w_{g,\text{res}} + w_{lg} - w_d,\ 0\big), \qquad w_l = w_\text{res} + w_d,$$
 
 with $R_{so}$ in Sm³/Sm³, $x_o$ the oil mass fraction of the liquid at standard conditions (PVT-MIX-10), and SMO-1 and SMO-2 with $\epsilon = 10^{-6}$ (kg/s)². Only reservoir gas dissolves, not the lift gas. With dead oil the phase rates are INF-5's exactly, with no smoothing: the smooth min of PVT-OIL-13 would be $-\epsilon/(4 w_{g,\text{res}})$ at $R_{so} = 0$, not 0 (`plans/develop_model_changes.md`, change 8). The total $w_g + w_l$ is $w_{g,\text{res}} + w_{lg} + w_\text{res}$ wherever neither smoothing is active.
 
@@ -110,7 +110,7 @@ with $R_{so}$ in Sm³/Sm³, $x_o$ the oil mass fraction of the liquid at standar
 
 Standing (1947), with $R_{so}$ in scf/STB and $T$ in °F:
 
-$$p_b = 18.2\left[\left(\frac{R_{so}}{\gamma_g}\right)^{0.83} 10^{\,0.00091\,T - 0.0125\,\text{API}} - 1.4\right]\ \text{psia},$$
+$$p_b = 18.2\left[\left(\frac{R_{so}}{\gamma_g}\right)^{0.83} 10^{0.00091 T - 0.0125\thinspace\text{API}} - 1.4\right]\ \text{psia},$$
 
 or the given $p_b$ if there is one. Not used by the simulator.
 

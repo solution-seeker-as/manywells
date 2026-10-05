@@ -23,13 +23,13 @@ where $w_m(z_N) = A\alpha_N\rho_{g,N}v_{g,N} + A(1-\alpha_N)\rho_{l,N}v_{l,N}$ i
 
 ### CHK-2 · Choke equation
 
-$$w_c = K_c\,\sigma(u)\,\sqrt{\frac{2\rho\,\Delta p}{\Phi}}, \qquad \Delta p = c_\text{bar}\,(p_N - p_c)\ \text{[Pa]}$$
+$$w_c = K_c\sigma(u)\sqrt{\frac{2\rho\Delta p}{\Phi}}, \qquad \Delta p = c_\text{bar}\thinspace(p_N - p_c)\ \text{[Pa]}$$
 
 $K_c > 0$ is the choke coefficient, $\sigma$ the choke profile (CHK-7 to CHK-10), $p_c$ the effective downstream pressure (CHK-3), and $\rho$ and $\Phi$ the density and two-phase multiplier of the choke model (CHK-5, CHK-6). The paper's (11) writes $\sqrt{2\rho_e\Delta p}$ with $\rho_e = \rho/\Phi$. v1.0.0's class docstring puts $\Phi$ outside the square root; the code and this equation have it inside (the docstring is fixed on `develop`).
 
 ### CHK-3 · Critical downstream pressure
 
-$$p_c = \operatorname{smax}(r_c\, p_N,\ p_s)$$
+$$p_c = \mathop{\mathrm{smax}}(r_c p_N,\ p_s)$$
 
 with the smooth max of SMO-1 on pressures in bar, $\epsilon = 10^{-6}$ bar². When $p_s \le r_c p_N$ the flow is critical and the rate no longer depends on $p_s$ (paper (14)). The smooth max exceeds the exact max by at most $\sqrt{\epsilon}/2 = 5\cdot10^{-4}$ bar, at $r_c p_N = p_s$.
 
@@ -43,7 +43,7 @@ which gives $r_c = 0.5445$. $\gamma$ is the heat capacity ratio of methane at 20
 
 $$\rho = \rho_l, \qquad \Phi = \big(1 + x_g(k - 1)\big)\big(1 + x_g(k^5 - 1)\big), \qquad k = (\rho_l/\rho_g)^{1/6}$$
 
-evaluated at point $N$, with $x_g = w_g/w_m$ there; $w_g$ includes the lift gas (`specs/discrepancies.md`, D-23). This is the paper's (12): with Simpson's slip factor $k$, $\rho_l/\Phi = \rho_e$, where $1/\rho_e = (x_g/\rho_g + k\,x_l/\rho_l)(x_g + x_l/k)$ and $x_l = 1 - x_g$. Used by the published datasets.
+evaluated at point $N$, with $x_g = w_g/w_m$ there; $w_g$ includes the lift gas (`specs/discrepancies.md`, D-23). This is the paper's (12): with Simpson's slip factor $k$, $\rho_l/\Phi = \rho_e$, where $1/\rho_e = (x_g/\rho_g + k x_l/\rho_l)(x_g + x_l/k)$ and $x_l = 1 - x_g$. Used by the published datasets.
 
 ### CHK-6 · Bernoulli choke
 
@@ -61,7 +61,7 @@ $$\sigma_s(u) = \frac{u^b}{u^b + (1 - u)^b}, \qquad b = 3/2$$
 
 ### CHK-9 · Convex profile
 
-$$\sigma_c(u) = b\,u + (1 - b)\,u^2, \qquad b = 1/4$$
+$$\sigma_c(u) = b u + (1 - b)u^2, \qquad b = 1/4$$
 
 ### CHK-10 · Concave profile
 
@@ -73,9 +73,9 @@ A quick-opening valve. Every profile has $\sigma(0) = 0$ and $\sigma(1) = 1$.
 
 Decided by Bjarne, 2026-09-30 (`specs/discrepancies.md`, D-19). Where $p_N \le p_c$ the choke passes no flow from the well:
 
-$$w_c = K_c\,\sigma(u)\,\sqrt{\frac{2\rho\,\max(\Delta p, 0)}{\Phi}},$$
+$$w_c = K_c\sigma(u)\sqrt{\frac{2\rho\max(\Delta p, 0)}{\Phi}},$$
 
-so the CHK-1 row is $w_m(z_N) > 0$ there. The row is then defined for every admissible state, continuous at $\Delta p = 0$, and positive wherever $\Delta p \le 0$. An implementation may use any row with the sign of $w_m - w_c$ everywhere; the Rust port's squared row $w_m^2 - (K_c\sigma(u))^2\, 2\rho\,\Delta p/\Phi$ qualifies.
+so the CHK-1 row is $w_m(z_N) > 0$ there. The row is then defined for every admissible state, continuous at $\Delta p = 0$, and positive wherever $\Delta p \le 0$. An implementation may use any row with the sign of $w_m - w_c$ everywhere; the Rust port's squared row $w_m^2 - (K_c\sigma(u))^2\thinspace 2\rho\Delta p/\Phi$ qualifies.
 
 The root set does not depend on this choice: a root has $w_m > 0$, so its $\Delta p > 0$ (SOL-2). The stability label does not either (SOL-3). The choice matters to solvers that evaluate the row near $p_N = p_s$, such as a shooting method that brackets the trickle root. v1.0.0's row is NaN there, the square root of a negative number, so the `v1.0.0` configuration extends v1.0.0 here; no root reaches this region, so its roots are unchanged.
 
@@ -83,7 +83,7 @@ The root set does not depend on this choice: a root has $w_m > 0$, so its $\Delt
 
 The flow is choked if
 
-$$p_s \le r_c\, p_N,$$
+$$p_s \le r_c p_N,$$
 
 evaluated exactly, without smoothing, after the solve. It is the `CHOKED` feature of the datasets, and not part of the discretized system.
 

@@ -45,8 +45,8 @@ The march of 014 with three changes:
 
 1. **Phase rates at each point.** `phase_rates(p_i, T_i, w_res, w_lg)` gives each point's rates, and the velocities carry them, so the mass rows hold by construction with dissolved gas too.
 2. **Temperature per cell.** Where the energy row is linear in $T_i$ and does not depend on $p_i$ (heat loss alone, without mass transfer, as in `v1.0.0`), $T_i$ is v1's one closed-form step, as in 014. Otherwise $T_i$ is solved at each trial pressure of the cell solve:
-   - **Chord iteration.** It starts from the temperature at the cell's previous trial pressure, with steps $T \leftarrow T - r_T / (1 + \Delta\text{MD}\, 4h/(D\, c_p\text{-flux}))$, Newton's method with the heat loss's slope. It stops when the step is a few ulp, at most 10 steps.
-   - **Bracketed Brent** takes over if a step does not shrink. Its lower end, $\min(T_{i-1}, T_a) - \Delta\text{MD}\, g\cos\theta/\min(c_{pg}, c_{pl})$, is proven: $r_T \le 0$ there for every state, because the heat loss has the sign of $T - T_a$, frictional heating is non-negative, and the gravity term lies in $[0, g\cos\theta/\min(c_p)]$. Its upper end, $\max(T_{i-1}, T_a)$, has $r_T \ge 0$ without frictional heating; where frictional heating keeps $r_T$ negative there, it steps out by doubling steps (at most 30).
+   - **Chord iteration.** It starts from the temperature at the cell's previous trial pressure, with steps $T \leftarrow T - r_T / (1 + \Delta\text{MD}\thinspace 4h/(D c_p\text{-flux}))$, Newton's method with the heat loss's slope. It stops when the step is a few ulp, at most 10 steps.
+   - **Bracketed Brent** takes over if a step does not shrink. Its lower end, $\min(T_{i-1}, T_a) - \Delta\text{MD}\thinspace g\cos\theta/\min(c_{pg}, c_{pl})$, is proven: $r_T \le 0$ there for every state, because the heat loss has the sign of $T - T_a$, frictional heating is non-negative, and the gravity term lies in $[0, g\cos\theta/\min(c_p)]$. Its upper end, $\max(T_{i-1}, T_a)$, has $r_T \ge 0$ without frictional heating; where frictional heating keeps $r_T$ negative there, it steps out by doubling steps (at most 30).
    - **Solved or not.** A temperature counts as solved if $|r_T|$ over the heat-loss slope is at most $10^{-8}$ K. At a jump in the closures (the slip law switching void fraction), the march continues at the jump and fails, as at a cell whose momentum row is not solved.
 3. **Inclination.** At each point, the slip law takes the cell's inclination (point 0 takes cell 1's), as the CasADi rows do.
 
@@ -99,7 +99,7 @@ With a fixed rate, every march that falls below $p_s$ gives the same $R$, the ra
   - every CasADi root is matched by a core root within `tol_x`, with the same label;
   - every root only the core finds zeroes every CasADi row: CHK-1 to the larger of $10^{-6} w_m$ and 8 ulp of $p_r$ times $|dR/dp_0|$, the others to $10^{-8}$;
   - the rows agree at the perturbed roots;
-  - a case where the slip law has several void fractions at a root's point, or where a root lies on another branch of a point's rows, is compared on rows only. A root is on another branch where the sign of $\det(\partial\,\text{rows of point } i / \partial x_i)$ differs from the rest of the well's; the determinant changes sign only through a fold.
+  - a case where the slip law has several void fractions at a root's point, or where a root lies on another branch of a point's rows, is compared on rows only. A root is on another branch where the sign of $\det(\partial\thinspace\text{rows of point } i / \partial x_i)$ differs from the rest of the well's; the determinant changes sign only through a fold.
 - **Property checks** (`tests/test_model_properties.py`): every check runs on both backends, and the two find the same roots.
 
 **Result**, 520 cases: all pass.

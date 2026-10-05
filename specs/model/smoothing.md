@@ -16,13 +16,13 @@ Smooth approximations that take the place of non-differentiable functions, so th
 
 ### SMO-1 · Smooth max
 
-$$\operatorname{smax}(x, y) = \tfrac12\Big(x + y + \sqrt{(x - y)^2 + \epsilon}\Big), \qquad \epsilon = 10^{-6}$$
+$$\mathop{\mathrm{smax}}(x, y) = \tfrac12\Big(x + y + \sqrt{(x - y)^2 + \epsilon}\Big), \qquad \epsilon = 10^{-6}$$
 
-$\epsilon$ has the unit of $x^2$. $\operatorname{smax}(x, y) - \max(x, y)$ lies in $(0, \sqrt\epsilon/2]$, largest at $x = y$.
+$\epsilon$ has the unit of $x^2$. $\mathop{\mathrm{smax}}(x, y) - \max(x, y)$ lies in $(0, \sqrt\epsilon/2]$, largest at $x = y$.
 
 ### SMO-2 · Smooth min
 
-$$\operatorname{smin}(x, y) = \tfrac12\Big(x + y - \sqrt{(x - y)^2 + \epsilon}\Big), \qquad \epsilon = 10^{-6}$$
+$$\mathop{\mathrm{smin}}(x, y) = \tfrac12\Big(x + y - \sqrt{(x - y)^2 + \epsilon}\Big), \qquad \epsilon = 10^{-6}$$
 
 The open-loop model of `v1.0.0` does not use it; v1.0.0's closed-loop controller does, with $\epsilon = 10^{-9}$ (`specs/discrepancies.md`, C-1), and `develop` uses it for dissolved gas (PVT-OIL-7, PVT-OIL-13).
 

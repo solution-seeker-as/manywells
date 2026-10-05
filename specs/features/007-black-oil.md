@@ -22,5 +22,5 @@ The PVT-MIX-1 row vectors in the `v1.0.0` configuration; the develop vectors of 
 
 ## Rulings and open items
 
-- **Separator correction (PVT-OIL-5).** The code took the natural log of $p_\text{sep}/114.7$; Vazquez and Beggs (1980) have $\log_{10}$. At standard separator conditions the code's corrected gas gravity was $0.75\,\gamma_g$ instead of $0.89\,\gamma_g$, so $R_{so}$ was 16% lower than the source's. Found in Step 7; Bjarne ruled on 2026-10-01 to follow the source, and the code now has $\log_{10}$, checked against hand values in `tests/test_black_oil.py`. A change of `develop`'s default model, not of the `v1.0.0` configuration.
+- **Separator correction (PVT-OIL-5).** The code took the natural log of $p_\text{sep}/114.7$; Vazquez and Beggs (1980) have $\log_{10}$. At standard separator conditions the code's corrected gas gravity was $0.75\gamma_g$ instead of $0.89\gamma_g$, so $R_{so}$ was 16% lower than the source's. Found in Step 7; Bjarne ruled on 2026-10-01 to follow the source, and the code now has $\log_{10}$, checked against hand values in `tests/test_black_oil.py`. A change of `develop`'s default model, not of the `v1.0.0` configuration.
 - **Range (open).** API gravity is checked against 10 to 40; pressures and temperatures are not. Wells with a small oil fraction get gas–oil ratios above $10^4$ Sm³/Sm³ in the sampler (SMP-43).

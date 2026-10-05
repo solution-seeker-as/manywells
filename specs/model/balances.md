@@ -6,7 +6,7 @@ The continuous model: steady-state conservation of gas mass, liquid mass, mixtur
 
 ## Interface
 
-The balances are ordinary differential equations in $z$ for the state of `nomenclature.md`; on a survey trajectory (GEO-3), $z$ is the measured depth from the bottomhole, $z = \text{MD}_\text{bh} - \text{MD}$, and $\theta(z)$ the inclination from vertical. They are not implemented as functions of their own: each is implemented through its discretized row (DISC-2 to DISC-5, or DISC-7 to DISC-10). Pressures are in Pa in this file.
+The balances are ordinary differential equations in $z$ for the state of `nomenclature.md`; on a survey trajectory (GEO-3), $z$ is the measured depth from the bottomhole, $z = \text{MD}_ \text{bh} - \text{MD}$, and $\theta(z)$ the inclination from vertical. They are not implemented as functions of their own: each is implemented through its discretized row (DISC-2 to DISC-5, or DISC-7 to DISC-10). Pressures are in Pa in this file.
 
 ## Equations
 
@@ -60,7 +60,7 @@ The state carries $\alpha = \alpha_g$ only, and every equation uses $1 - \alpha$
 
 ### BAL-10 · Mass transfer from dissolved gas
 
-$$\Gamma = \frac{1}{A}\,\frac{d\,w_g\big(p(z), T(z)\big)}{dz}$$
+$$\Gamma = \frac{1}{A}\frac{d\thinspace w_g\big(p(z), T(z)\big)}{dz}$$
 
 where $w_g(p, T)$ is the free-gas mass rate that the fluid model gives at the local pressure and temperature, for the case's reservoir and lift-gas rates (PVT-OIL-13). Gas leaves solution as the pressure falls, so $\Gamma > 0$ up the well. The total mass rate $w_g + w_l$ is the same at every point. Without dissolved gas $w_g$ is constant and this is BAL-3. Used by `develop` with black oil.
 

@@ -34,7 +34,7 @@ A row's observations, each of which may be missing (NaN): `PBH`, `PWH` (bar) and
 
 The phase rates of a row give one observation, the reservoir mass rate
 
-$$W_\text{res} = \frac{\rho_{o,sc}\,Q_\text{OIL} + \rho_{g,sc}\,Q_\text{GAS} + \rho_{w,sc}\,Q_\text{WAT}}{3600} \quad [\text{kg/s}],$$
+$$W_\text{res} = \frac{\rho_{o,sc}Q_\text{OIL} + \rho_{g,sc}Q_\text{GAS} + \rho_{w,sc}Q_\text{WAT}}{3600} \quad [\text{kg/s}],$$
 
 with the row's fluid's densities at standard conditions. When a row's `gor` and `wlr` come from the same rates, the phase split is an input and says nothing about $\theta$, so counting each phase rate would count the same information three times. The total mass rate suits oil and gas wells alike.
 
@@ -73,7 +73,7 @@ Each has a log-normal prior, $\log\theta_i \sim N(\log m_i, s_i^2)$, which keeps
 
 | Name | Median $m$ | $s$ (95% range) | Basis |
 |---|---|---|---|
-| `K_c` | $0.6\,A_c$, with $A_c$ the choke's full-open throat area, if given; otherwise $0.12\,A$, with $A$ the tubing's area | 0.2 with $A_c$ ($C_D$ 0.40–0.89); otherwise 0.35 ($0.06A$ to $0.24A$) | $K_c = C_D A_c$. With Simpson's multiplier (CHK-5), tuned $C_D$ is 0.61–0.69 in the lab and 0.47–0.67 in the field (Haug 2012, Table 1); the sharp-edge contraction coefficient is 0.61; 0.65 is best in Mwalyepelo and Stanko (2016). $0.12A$ is the paper's reference ($C_D = 0.6$ for a throat of $A/5$), and $0.06A$ to $0.24A$ is SMP-5. |
+| `K_c` | $0.6 A_c$, with $A_c$ the choke's full-open throat area, if given; otherwise $0.12 A$, with $A$ the tubing's area | 0.2 with $A_c$ ($C_D$ 0.40–0.89); otherwise 0.35 ($0.06A$ to $0.24A$) | $K_c = C_D A_c$. With Simpson's multiplier (CHK-5), tuned $C_D$ is 0.61–0.69 in the lab and 0.47–0.67 in the field (Haug 2012, Table 1); the sharp-edge contraction coefficient is 0.61; 0.65 is best in Mwalyepelo and Stanko (2016). $0.12A$ is the paper's reference ($C_D = 0.6$ for a throat of $A/5$), and $0.06A$ to $0.24A$ is SMP-5. |
 | `k_l`, `w_l_max` | the well's value: the user's estimate, from CAL-7 or a well-test analysis | 1.15 (a factor of 10 either way) | a well's productivity has no generic value; the prior carries what the user knows |
 | `f_D` | 0.02 | 0.5 (0.0075–0.053) | Moody gives 0.009–0.025 for steel tubing; the upper tail is wider because in a vertical well $f_D$ also absorbs holdup error. SMP-3 samples $U(0.01, 0.08)$. |
 | `roughness` | $4.6\cdot10^{-5}$ m, commercial steel (Moody 1944) | 1.15 ($4.6\cdot10^{-6}$ to $4.6\cdot10^{-4}$ m) | from drawn to corroded tubing; SMP-42 samples LogUniform($1.5\cdot10^{-6}$, $1.5\cdot10^{-4}$) |
@@ -85,9 +85,9 @@ A user's prior replaces a default parameter by parameter.
 
 A physics-based median for the productivity, where the reservoir is known: the pseudo-steady radial-inflow (Darcy) index
 
-$$k_l = \rho_{l,sc}\,\frac{2\pi k h_\text{net}}{\mu B\left(\ln(r_e/r_w) - 3/4 + S\right)}\cdot 10^5 \quad [\text{kg/(s bar)}],$$
+$$k_l = \rho_{l,sc}\frac{2\pi k h_\text{net}}{\mu B\left(\ln(r_e/r_w) - 3/4 + S\right)}\cdot 10^5 \quad [\text{kg/(s bar)}],$$
 
-with permeability $k$ (m²), net pay $h_\text{net}$ (m), the liquid's viscosity $\mu$ (Pa s) and formation volume factor $B$ at reservoir conditions, drainage and wellbore radii $r_e > r_w$ (m), skin $S$, and the liquid's density at standard conditions $\rho_{l,sc}$ (Ahmed 2006; Guo et al. 2008). For Vogel inflow, $w_{l,\max} = k_l\,p_r/1.8$, whose slope at $p_0 = p_r$ is $k_l$ (INF-1).
+with permeability $k$ (m²), net pay $h_\text{net}$ (m), the liquid's viscosity $\mu$ (Pa s) and formation volume factor $B$ at reservoir conditions, drainage and wellbore radii $r_e > r_w$ (m), skin $S$, and the liquid's density at standard conditions $\rho_{l,sc}$ (Ahmed 2006; Guo et al. 2008). For Vogel inflow, $w_{l,\max} = k_l p_r/1.8$, whose slope at $p_0 = p_r$ is $k_l$ (INF-1).
 
 ## Forward model
 
@@ -128,7 +128,7 @@ The result holds the estimate $\hat\theta$, the calibrated `WellProperties`, the
 
 ### CAL-13 · Synthetic data
 
-For a well and known parameters $\theta^*$: operating points around the well's boundary conditions, spread evenly over the choke position (0.2 to 1 by default), uniformly within ±10% of $p_s$ and over a lift-gas range if given; each solved for its operating point (an operating point without one is left out); noise at the $\sigma$ of CAL-4, Gaussian on PBH, PWH and TWH, and one log-normal factor per row on the three phase rates together, so the fractions stay the well's; then the observations of an instrumentation:
+For a well and known parameters $\theta^\ast$: operating points around the well's boundary conditions, spread evenly over the choke position (0.2 to 1 by default), uniformly within ±10% of $p_s$ and over a lift-gas range if given; each solved for its operating point (an operating point without one is left out); noise at the $\sigma$ of CAL-4, Gaussian on PBH, PWH and TWH, and one log-normal factor per row on the three phase rates together, so the fractions stay the well's; then the observations of an instrumentation:
 
 | Instrumentation | Observations |
 |---|---|
@@ -142,13 +142,13 @@ Every draw comes from `numpy.random.default_rng(seed)`.
 
 ### Checks
 
-The calibration is checked on wells simulated with known parameters (`tests/test_calibration_recovery.py`), drawn with `manywells.sampling` in the `develop` configuration on 20 cells, with $z^* = (1.5, -1, 1, -1.5)$ for (`K_c`, `w_l_max`, `roughness`, `h`), all four free, from the start of CAL-9. Bjarne signed off the tolerances on 2026-10-02.
+The calibration is checked on wells simulated with known parameters (`tests/test_calibration_recovery.py`), drawn with `manywells.sampling` in the `develop` configuration on 20 cells, with $z^\ast = (1.5, -1, 1, -1.5)$ for (`K_c`, `w_l_max`, `roughness`, `h`), all four free, from the start of CAL-9. Bjarne signed off the tolerances on 2026-10-02.
 
-1. **Identification.** With noise-free rows, full instrumentation and the $\sigma$ scaled down by 1000, so that the priors' pull is negligible, every parameter is within $10^{-3}$ of $z^*$.
-2. **Getting close.** With noise, in each instrumentation: the fit converges; $\lVert\hat z - z^*\rVert < \lVert z^*\rVert$, closer to the truth than the medians; `K_c`, `w_l_max` and `h` are each within 0.5 of $z^*$; and every observation's RMS of scaled residuals is below 2. Where the data fix only a combination of parameters, the fit can only move along that ridge; it still moves towards $z^*$, since in a linearized model with noise-free rows the MAP is the point of the ridge nearest the medians, and $z^*$ lies on the ridge.
+1. **Identification.** With noise-free rows, full instrumentation and the $\sigma$ scaled down by 1000, so that the priors' pull is negligible, every parameter is within $10^{-3}$ of $z^\ast$.
+2. **Getting close.** With noise, in each instrumentation: the fit converges; $\lVert\hat z - z^\ast\rVert < \lVert z^\ast\rVert$, closer to the truth than the medians; `K_c`, `w_l_max` and `h` are each within 0.5 of $z^\ast$; and every observation's RMS of scaled residuals is below 2. Where the data fix only a combination of parameters, the fit can only move along that ridge; it still moves towards $z^\ast$, since in a linearized model with noise-free rows the MAP is the point of the ridge nearest the medians, and $z^\ast$ lies on the ridge.
 3. **Determinism.** The same inputs give the same $\hat\theta$.
 
-4. **Twin study** (`scripts/calibration/twins.py`): the same checks on 30 sampled wells, with $z^*$ drawn from the priors and 20 rows per well. In every instrumentation, at least 95% of the fits converge, end closer to $z^*$ than the medians where $z^*$ is more than 0.5 from them, have `K_c`, `w_l_max` and `h` within 0.5 of $z^*$, and have every RMS of scaled residuals below 2. The study also measures how the error falls with rows and noise and what a wrong model does to $\hat\theta$, and compares the backends; its results are in the feature spec.
+4. **Twin study** (`scripts/calibration/twins.py`): the same checks on 30 sampled wells, with $z^\ast$ drawn from the priors and 20 rows per well. In every instrumentation, at least 95% of the fits converge, end closer to $z^\ast$ than the medians where $z^\ast$ is more than 0.5 from them, have `K_c`, `w_l_max` and `h` within 0.5 of $z^\ast$, and have every RMS of scaled residuals below 2. The study also measures how the error falls with rows and noise and what a wrong model does to $\hat\theta$, and compares the backends; its results are in the feature spec.
 
 ## Coverage
 

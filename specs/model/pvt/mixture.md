@@ -26,19 +26,19 @@ The mixed liquid is incompressible. Its row in DISC-6 is $\rho_l - \rho_{l,\text
 
 ### PVT-MIX-2 · Water volume fraction of the liquid
 
-$$\alpha_{w,l} = \frac{(1 - x_o)/\rho_w}{(1 - x_o)/\rho_w + x_o/\rho_o} = \frac{1}{1 + (\rho_w/\rho_o)\,(f_o/f_w)}$$
+$$\alpha_{w,l} = \frac{(1 - x_o)/\rho_w}{(1 - x_o)/\rho_w + x_o/\rho_o} = \frac{1}{1 + (\rho_w/\rho_o)(f_o/f_w)}$$
 
 The paper's (29) prints $1/\big(1 + (\rho_o/\rho_w)(f_w/f_o)\big)$, which is the oil volume fraction. v1.0.0's code weights each liquid by its own volume fraction, as here (`specs/discrepancies.md`, D-2).
 
 ### PVT-MIX-3 · Liquid density from mixing
 
-$$\rho_l = \alpha_{w,l}\,\rho_w + (1 - \alpha_{w,l})\,\rho_o$$
+$$\rho_l = \alpha_{w,l}\rho_w + (1 - \alpha_{w,l})\rho_o$$
 
 Equivalently $1/\rho_l = x_o/\rho_o + (1 - x_o)/\rho_w$: the mixture conserves mass and volume.
 
 ### PVT-MIX-4 · Liquid heat capacity
 
-$$c_{pl} = \alpha_{w,l}\,c_{pw} + (1 - \alpha_{w,l})\,c_{po}$$
+$$c_{pl} = \alpha_{w,l}c_{pw} + (1 - \alpha_{w,l})c_{po}$$
 
 A volume-weighted average, as the paper states.
 
@@ -50,7 +50,7 @@ The dead-oil correlation PVT-OIL-3, evaluated at the liquid's density and the lo
 
 ### PVT-MIX-6 · Liquid density with black oil
 
-$$\rho_l(p, T) = \alpha_{w,l}\,\rho_w + (1 - \alpha_{w,l})\,\rho_{lo}(p, T)$$
+$$\rho_l(p, T) = \alpha_{w,l}\rho_w + (1 - \alpha_{w,l})\rho_{lo}(p, T)$$
 
 with the live-oil density of PVT-OIL-9 and the water–liquid ratio $\alpha_{w,l}$ at standard conditions; the water is incompressible (PVT-WAT-1), and the in-situ water fraction is not recomputed as the oil swells. Its row is $\rho_l - \rho_l(p, T)$ (kg/m³). With dead oil, $\rho_{lo} = \rho_o$ and this is PVT-MIX-1 with PVT-MIX-3's constant, exactly.
 
@@ -62,7 +62,7 @@ the dead-oil correlation at the oil's density at standard conditions, with the l
 
 ### PVT-MIX-8 · Liquid viscosity
 
-$$\mu_l = \alpha_{w,l}\,\mu_w + (1 - \alpha_{w,l})\,\mu_o$$
+$$\mu_l = \alpha_{w,l}\mu_w + (1 - \alpha_{w,l})\mu_o$$
 
 by volume at standard conditions, with $\mu_w$ from PVT-WAT-3 and $\mu_o$ from PVT-OIL-10 or PVT-OIL-11.
 
@@ -70,7 +70,7 @@ by volume at standard conditions, with $\mu_w$ from PVT-WAT-3 and $\mu_o$ from P
 
 Hasan, Kabir and Sayarpour (2010), Eq. (A-3), weighted by the in-situ mass fraction of gas:
 
-$$\mu_m = x\,\mu_g + (1 - x)\,\mu_l, \qquad x = \frac{\alpha\rho_g}{\alpha\rho_g + (1-\alpha)\rho_l},$$
+$$\mu_m = x\mu_g + (1 - x)\mu_l, \qquad x = \frac{\alpha\rho_g}{\alpha\rho_g + (1-\alpha)\rho_l},$$
 
 with $\mu_g$ from PVT-GAS-7 at $(T, \rho_g)$. Used by FRIC-3.
 
@@ -82,7 +82,7 @@ $$\rho_{l,\text{sc}} = \alpha_{w,l}\rho_w + (1-\alpha_{w,l})\rho_o, \qquad c_{pl
 
 (PVT-MIX-3 and PVT-MIX-4), the oil mass fraction of the liquid $x_o = (1 - \alpha_{w,l})\rho_o/\rho_{l,\text{sc}}$, and the gas mass fraction of the reservoir inflow
 
-$$f_g = \frac{\rho_{g,\text{sc}} R_{go}}{\rho_{g,\text{sc}} R_{go} + \rho_o + \rho_w\,\alpha_{w,l}/(1 - \alpha_{w,l})},$$
+$$f_g = \frac{\rho_{g,\text{sc}} R_{go}}{\rho_{g,\text{sc}} R_{go} + \rho_o + \rho_w\alpha_{w,l}/(1 - \alpha_{w,l})},$$
 
 per unit volume of stock-tank oil, with $0 \le \alpha_{w,l} < 1$. The `v1.0.0` configuration maps v1.0.0's $\rho_l$, $c_{pl}$ and $f_g$ to these parameters (`specs/sampling.md`, SMP-40).
 

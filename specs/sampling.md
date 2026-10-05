@@ -67,11 +67,11 @@ $\rho_l$ and $c_{pl}$ from the mixing rules PVT-MIX-2 to PVT-MIX-4, with $x_o = 
 
 ### SMP-13 · Nominal reservoir pressure
 
-$p_{r,\text{nom}} = \rho_{sw}\, g\, L / c_\text{bar} + 1$ bar, with $\rho_{sw} = 1012.05$ kg/m³, the mean of seawater (1025) and water (999.1). Paper (33).
+$p_{r,\text{nom}} = \rho_{sw} g L / c_\text{bar} + 1$ bar, with $\rho_{sw} = 1012.05$ kg/m³, the mean of seawater (1025) and water (999.1). Paper (33).
 
 ### SMP-14 · Reservoir temperature
 
-$T_r = 333.15 + 0.03\,(L - 1500)$ K, that is 60 °C at 1500 m and 150 °C at 4500 m. Paper (36).
+$T_r = 333.15 + 0.03(L - 1500)$ K, that is 60 °C at 1500 m and 150 °C at 4500 m. Paper (36).
 
 ### SMP-15 · Surface temperature
 
@@ -99,11 +99,11 @@ $w_{lg} \sim U(0, 5)$ kg/s if the well has gas lift, otherwise 0. Paper (45).
 
 ### SMP-20 · Separator pressure
 
-$p_s \sim U(0.9\,p_{s,\text{nom}},\ 1.1\,p_{s,\text{nom}})$. Paper (35).
+$p_s \sim U(0.9 p_{s,\text{nom}},\ 1.1 p_{s,\text{nom}})$. Paper (35).
 
 ### SMP-21 · Reservoir pressure
 
-$p_r \sim U(0.98\,p_{r,\text{nom}},\ 1.02\,p_{r,\text{nom}})$. It is not stored in the datasets. Paper (32).
+$p_r \sim U(0.98 p_{r,\text{nom}},\ 1.02 p_{r,\text{nom}})$. It is not stored in the datasets. Paper (32).
 
 ### SMP-22 · Fractions
 
@@ -121,7 +121,7 @@ $t_\text{life}/52 \sim U(10, 20)$ years.
 
 Weekly drifts $\gamma_g = U\big(f_g(t_0)/2,\ f_g(t_0)\big)/t_\text{life}$ and $\gamma_o = U\big(f_o(t_0)/2,\ f_o(t_0)\big)/t_\text{life}$, drawn once per well. Each week
 
-$$f_g \leftarrow \min\{0.99, \max\{f_g - \gamma_g + X_g, 0.002\}\}, \qquad f_o \leftarrow \min\{0.99, \max\{f_o - \gamma_o + X_o, 0.002\}\},$$
+$$f_g \leftarrow \min\lbrace 0.99, \max\lbrace f_g - \gamma_g + X_g, 0.002\rbrace\rbrace, \qquad f_o \leftarrow \min\lbrace 0.99, \max\lbrace f_o - \gamma_o + X_o, 0.002\rbrace\rbrace,$$
 
 with $X_g, X_o \sim N(0, 0.015^2)$, both redrawn until $f_g + f_o \le 0.999$; then $f_w = 1 - f_g - f_o$, and the liquid and inflow follow (SMP-12). Paper (37)–(39).
 
@@ -129,7 +129,7 @@ The generator steps the walk on every attempt, not once per week (SMP-29). An at
 
 ### SMP-25 · Reservoir pressure decay
 
-$p_r(\infty) = p_r(t_0) - U\big(0.2\,p_r(t_0),\ 0.4\,p_r(t_0)\big)$ and $\gamma_{pr} = 1 - 0.01^{52/t_\text{life}}$ initially. At every attempt, $\gamma_{pr} \leftarrow \min\{0.9, \max\{0.1, \gamma_{pr} + \epsilon\}\}$ with $\epsilon \sim U(-\gamma_{pr}(t_0)/20,\ \gamma_{pr}(t_0)/20)$, and
+$p_r(\infty) = p_r(t_0) - U\big(0.2 p_r(t_0),\ 0.4 p_r(t_0)\big)$ and $\gamma_{pr} = 1 - 0.01^{52/t_\text{life}}$ initially. At every attempt, $\gamma_{pr} \leftarrow \min\lbrace 0.9, \max\lbrace 0.1, \gamma_{pr} + \epsilon\rbrace\rbrace$ with $\epsilon \sim U(-\gamma_{pr}(t_0)/20,\ \gamma_{pr}(t_0)/20)$, and
 
 $$p_r(t_i) = \big(p_r(t_0) - p_r(\infty)\big)(1 - \gamma_{pr})^{i/52} + p_r(\infty).$$
 
@@ -137,7 +137,7 @@ Paper (40)–(43).
 
 ### SMP-26 · Separator pressure
 
-$p_s \sim U(0.9\,p_{s,\text{nom}},\ 1.1\,p_{s,\text{nom}})$ every week. Paper (35).
+$p_s \sim U(0.9 p_{s,\text{nom}},\ 1.1 p_{s,\text{nom}})$ every week. Paper (35).
 
 ### SMP-27 · Controls
 

@@ -20,13 +20,13 @@ In `develop` the gas is parameterized by its density at standard conditions $\rh
 
 ### PVT-GAS-1 · Ideal gas law
 
-$$c_\text{bar}\, p = \rho_g R_s T$$
+$$c_\text{bar}\thinspace p = \rho_g R_s T$$
 
 with $p$ in bar. $R_s$ is constant per well. Its row in DISC-6 is $p - \rho_g R_s T / c_\text{bar}$ (bar). Used by `v1.0.0`.
 
 ### PVT-GAS-2 · Standard conditions
 
-Standard conditions are $p_\text{ref} = 101\,325$ Pa and $T_\text{ref} = 288.15$ K (ISO 13443), and the gas density there is
+Standard conditions are $p_\text{ref} = 101\thinspace 325$ Pa and $T_\text{ref} = 288.15$ K (ISO 13443), and the gas density there is
 
 $$\rho_{g,\text{sc}} = \frac{p_\text{ref}}{R_s T_\text{ref}}.$$
 
@@ -34,7 +34,7 @@ It is not part of the discretized system. The datasets use it for standard volum
 
 ### PVT-GAS-3 · Real gas law
 
-$$c_\text{bar}\, p = Z(p, T)\, \rho_g R_s T$$
+$$c_\text{bar}\thinspace p = Z(p, T) \rho_g R_s T$$
 
 with the z-factor of PVT-GAS-4 and $p$ in bar. Its row in DISC-11 is $p - \rho_g Z R_s T / c_\text{bar}$ (bar), the canonical form of PVT-GAS-1 with $Z$; with $Z = 1$ it is PVT-GAS-1. The form matters to the solver, not to the roots: in bar, like the momentum row, it lets Ipopt converge tightly on long grids, where the density form $\rho_g - c_\text{bar} p/(Z R_s T)$ left the phase mass rates drifting by up to $1.3\cdot10^{-6}$ of the total rate at $N = 400$ (verifier case set, 2026-10-01).
 
@@ -42,7 +42,7 @@ with the z-factor of PVT-GAS-4 and $p$ in bar. Its row in DISC-11 is $p - \rho_g
 
 Papay (1968):
 
-$$Z = 1 - \frac{3.52\, p_{pr}}{10^{0.9813\, T_{pr}}} + \frac{0.274\, p_{pr}^2}{10^{0.8157\, T_{pr}}}, \qquad p_{pr} = \frac{p}{p_{pc}}, \quad T_{pr} = \frac{T}{T_{pc}},$$
+$$Z = 1 - \frac{3.52 p_{pr}}{10^{0.9813 T_{pr}}} + \frac{0.274 p_{pr}^2}{10^{0.8157 T_{pr}}}, \qquad p_{pr} = \frac{p}{p_{pc}}, \quad T_{pr} = \frac{T}{T_{pc}},$$
 
 explicit and smooth, with the pseudo-critical properties of PVT-GAS-5. Valid for $p_{pr} < 6$ and $T_{pr} > 1.05$.
 
@@ -50,13 +50,13 @@ explicit and smooth, with the pseudo-critical properties of PVT-GAS-5. Valid for
 
 Sutton (1985), from the gas specific gravity $\gamma_g$:
 
-$$p_{pc} = 756.8 - 131.07\,\gamma_g - 3.6\,\gamma_g^2\ \text{psia}, \qquad T_{pc} = 169.2 + 349.5\,\gamma_g - 74.0\,\gamma_g^2\ \text{°R},$$
+$$p_{pc} = 756.8 - 131.07\gamma_g - 3.6\gamma_g^2\ \text{psia}, \qquad T_{pc} = 169.2 + 349.5\gamma_g - 74.0\gamma_g^2\ \text{°R},$$
 
 converted to Pa ($1\ \text{psi} = 6894.76$ Pa) and K ($T_{pc}/1.8$).
 
 ### PVT-GAS-6 · Gas gravity and gas constant
 
-$$\gamma_g = \frac{\rho_{g,\text{sc}}\, R_u\, T_\text{ref}}{p_\text{ref}\, M_\text{air}}, \qquad M_g = M_\text{air}\,\gamma_g, \qquad R_s = \frac{R_u}{M_g},$$
+$$\gamma_g = \frac{\rho_{g,\text{sc}} R_u T_\text{ref}}{p_\text{ref}\thinspace M_\text{air}}, \qquad M_g = M_\text{air}\thinspace\gamma_g, \qquad R_s = \frac{R_u}{M_g},$$
 
 with $R_u = 8314.46$ J/(kmol K) and $M_\text{air} = 28.97$ kg/kmol. It agrees with PVT-GAS-2: $R_s = p_\text{ref}/(\rho_{g,\text{sc}} T_\text{ref})$.
 
@@ -64,13 +64,13 @@ with $R_u = 8314.46$ J/(kmol K) and $M_\text{air} = 28.97$ kg/kmol. It agrees wi
 
 Lee, Gonzalez and Eakin (1966), with $T$ in °R, $\rho_g$ in g/cm³ and $M_g$ in kg/kmol:
 
-$$\mu_g = 10^{-7} K \exp\!\left(X \rho_g^{\,Y}\right)\ \text{Pa s}, \qquad K = \frac{(9.4 + 0.02 M_g)\, T^{1.5}}{209 + 19 M_g + T}, \quad X = 3.5 + \frac{986}{T} + 0.01 M_g, \quad Y = 2.4 - 0.2X.$$
+$$\mu_g = 10^{-7} K \exp\negthinspace\left(X \rho_g^{Y}\right)\ \text{Pa s}, \qquad K = \frac{(9.4 + 0.02 M_g) T^{1.5}}{209 + 19 M_g + T}, \quad X = 3.5 + \frac{986}{T} + 0.01 M_g, \quad Y = 2.4 - 0.2X.$$
 
 The source gives $10^{-4}K\exp(\cdot)$ in cP. Used by friction (PVT-MIX-9).
 
 ### PVT-GAS-8 · Gas formation volume factor
 
-$$B_g = \frac{Z}{Z_\text{ref}}\,\frac{p_\text{ref}\, T}{T_\text{ref}\, p},$$
+$$B_g = \frac{Z}{Z_\text{ref}}\frac{p_\text{ref}\thinspace T}{T_\text{ref}\thinspace p},$$
 
 the reservoir volume of a unit standard volume. Not used by the simulator; the black-oil consistency tests use it.
 
@@ -78,13 +78,13 @@ the reservoir volume of a unit standard volume. Not used by the simulator; the b
 
 Dranchuk and Abou-Kassem (1975), Eq. (2), a generalized Starling equation of state. $Z$ is an explicit function of the reduced density $\rho_r$ and the pseudo-reduced temperature $t = T_{pr}$:
 
-$$Z(\rho_r, t) = 1 + c_1\rho_r + c_2\rho_r^2 - c_3\rho_r^5 + c_4\,\rho_r^2\,(1 + A_{11}\rho_r^2)\,e^{-A_{11}\rho_r^2},$$
+$$Z(\rho_r, t) = 1 + c_1\rho_r + c_2\rho_r^2 - c_3\rho_r^5 + c_4\rho_r^2(1 + A_{11}\rho_r^2)e^{-A_{11}\rho_r^2},$$
 
 $$c_1 = A_1 + \frac{A_2}{t} + \frac{A_3}{t^3} + \frac{A_4}{t^4} + \frac{A_5}{t^5}, \quad c_2 = A_6 + \frac{A_7}{t} + \frac{A_8}{t^2}, \quad c_3 = A_9\left(\frac{A_7}{t} + \frac{A_8}{t^2}\right), \quad c_4 = \frac{A_{10}}{t^3},$$
 
-with $A_1, \dots, A_{11}$ = 0.3265, −1.0700, −0.5339, 0.01569, −0.05165, 0.5475, −0.7361, 0.1844, 0.1056, 0.6134, 0.7210, and the reduced density of their Eq. (3), $\rho_r = Z_c\,p_{pr}/(Z t)$ with $Z_c = 0.270$. With $Z = c_\text{bar}\,p/(\rho_g R_s T)$,
+with $A_1, \dots, A_{11}$ = 0.3265, −1.0700, −0.5339, 0.01569, −0.05165, 0.5475, −0.7361, 0.1844, 0.1056, 0.6134, 0.7210, and the reduced density of their Eq. (3), $\rho_r = Z_c p_{pr}/(Z t)$ with $Z_c = 0.270$. With $Z = c_\text{bar}\thinspace p/(\rho_g R_s T)$,
 
-$$\rho_r = \frac{Z_c\,\rho_g R_s T_{pc}}{p_{pc}},$$
+$$\rho_r = \frac{Z_c\rho_g R_s T_{pc}}{p_{pc}},$$
 
 a scaled gas density, with the pseudo-critical properties of PVT-GAS-5 ($p_{pc}$ in Pa). Fitted to 1,500 points of the Standing–Katz chart: an average absolute error in $Z$ of 0.585% against the original chart and 0.307% against the smoothed one (their Table 1), and 0.486% with $Z$ as a function of $t$ and $\rho_r$, the form used here. Recommended for $0.2 \le p_{pr} < 30$ with $1.0 < T_{pr} \le 3.0$, and for $p_{pr} < 1.0$ with $0.7 < T_{pr} \le 1.0$; its accuracy is unacceptable at $T_{pr} = 1.0$ with $p_{pr} \ge 1.0$.
 
@@ -96,17 +96,17 @@ For an ideal gas (PVT-GAS-1), $J = 0$. For a real gas, whatever its z-factor, $J
 
 $$J = \frac{t Z_t - \rho_r Z_\rho}{Z + \rho_r Z_\rho},$$
 
-$$Z_\rho = \frac{\partial Z}{\partial \rho_r} = c_1 + 2c_2\rho_r - 5c_3\rho_r^4 + 2c_4\,\rho_r\,(1 + A_{11}\rho_r^2 - A_{11}^2\rho_r^4)\,e^{-A_{11}\rho_r^2},$$
+$$Z_\rho = \frac{\partial Z}{\partial \rho_r} = c_1 + 2c_2\rho_r - 5c_3\rho_r^4 + 2c_4\rho_r\thinspace(1 + A_{11}\rho_r^2 - A_{11}^2\rho_r^4)e^{-A_{11}\rho_r^2},$$
 
-$$t Z_t = t\frac{\partial Z}{\partial t} = \tilde c_1\rho_r + \tilde c_2\rho_r^2 - \tilde c_3\rho_r^5 + \tilde c_4\,\rho_r^2(1 + A_{11}\rho_r^2)\,e^{-A_{11}\rho_r^2},$$
+$$t Z_t = t\frac{\partial Z}{\partial t} = \tilde c_1\rho_r + \tilde c_2\rho_r^2 - \tilde c_3\rho_r^5 + \tilde c_4\rho_r^2(1 + A_{11}\rho_r^2)e^{-A_{11}\rho_r^2},$$
 
-with $\tilde c_1 = -A_2/t - 3A_3/t^3 - 4A_4/t^4 - 5A_5/t^5$, $\tilde c_2 = -A_7/t - 2A_8/t^2$, $\tilde c_3 = -A_9(A_7/t + 2A_8/t^2)$ and $\tilde c_4 = -3A_{10}/t^3$. Along an isobar, $p_{pr} = \rho_r t Z/Z_c$ gives $d\rho_r/dt = -\rho_r(Z + tZ_t)/\big(t(Z + \rho_r Z_\rho)\big)$, and $J = (t/Z)(Z_t + Z_\rho\, d\rho_r/dt)$ simplifies to the form above. The Joule–Thomson coefficient is $\mu_{JT} = J/(\rho_g c_{pg})$ (Hasan and Kabir 2018, §6.4.2, with $V = ZR_sT/p$). With PVT-GAS-11 the factor is the gas law's own; with Papay's PVT-GAS-4 it is DAK's at Papay's density, whose derivative has the wrong sign above about 300 bar (`specs/features/016-joule-thomson.md`).
+with $\tilde c_1 = -A_2/t - 3A_3/t^3 - 4A_4/t^4 - 5A_5/t^5$, $\tilde c_2 = -A_7/t - 2A_8/t^2$, $\tilde c_3 = -A_9(A_7/t + 2A_8/t^2)$ and $\tilde c_4 = -3A_{10}/t^3$. Along an isobar, $p_{pr} = \rho_r t Z/Z_c$ gives $d\rho_r/dt = -\rho_r(Z + tZ_t)/\big(t(Z + \rho_r Z_\rho)\big)$, and $J = (t/Z)(Z_t + Z_\rho\thinspace d\rho_r/dt)$ simplifies to the form above. The Joule–Thomson coefficient is $\mu_{JT} = J/(\rho_g c_{pg})$ (Hasan and Kabir 2018, §6.4.2, with $V = ZR_sT/p$). With PVT-GAS-11 the factor is the gas law's own; with Papay's PVT-GAS-4 it is DAK's at Papay's density, whose derivative has the wrong sign above about 300 bar (`specs/features/016-joule-thomson.md`).
 
 ### PVT-GAS-11 · Real gas law with the Dranchuk–Abou-Kassem equation of state
 
-$$c_\text{bar}\, p = Z(\rho_r, T_{pr})\, \rho_g R_s T$$
+$$c_\text{bar}\thinspace p = Z(\rho_r, T_{pr}) \rho_g R_s T$$
 
-with $Z$ and $\rho_r$ of PVT-GAS-9 and $p$ in bar. $Z$ is explicit in the state's $\rho_g$ and $T$, so its row in DISC-11, $p - \rho_g Z R_s T / c_\text{bar}$ (bar), the canonical form of PVT-GAS-3, needs no inner solve. The density at a given $(p, T)$ is the root of $\rho_r t Z(\rho_r, t) = Z_c\,p_{pr}$, by Newton's method from the ideal-gas density $\rho_r = Z_c\,p_{pr}/t$: it converges to $10^{-12}$ in at most 17 steps for $1.05 \le T_{pr} \le 3$ and $p_{pr} \le 30$. The CasADi backend takes 20 steps, unrolled, so that the density accepts symbols; the Rust core steps until the step is at most $10^{-13}$ of $\rho_r$, at most 50 steps. Used by `develop`'s default.
+with $Z$ and $\rho_r$ of PVT-GAS-9 and $p$ in bar. $Z$ is explicit in the state's $\rho_g$ and $T$, so its row in DISC-11, $p - \rho_g Z R_s T / c_\text{bar}$ (bar), the canonical form of PVT-GAS-3, needs no inner solve. The density at a given $(p, T)$ is the root of $\rho_r t Z(\rho_r, t) = Z_c p_{pr}$, by Newton's method from the ideal-gas density $\rho_r = Z_c p_{pr}/t$: it converges to $10^{-12}$ in at most 17 steps for $1.05 \le T_{pr} \le 3$ and $p_{pr} \le 30$. The CasADi backend takes 20 steps, unrolled, so that the density accepts symbols; the Rust core steps until the step is at most $10^{-13}$ of $\rho_r$, at most 50 steps. Used by `develop`'s default.
 
 ## Options
 
@@ -122,7 +122,7 @@ The heat capacity $c_{pg}$ is a constant parameter (THM-1). The lift gas is the 
 
 ## Safeguards
 
-None in the equations. Nothing checks that $p_{pr}$ and $T_{pr}$ are in PVT-GAS-4's range; at high $p_{pr}$ its $Z$ has a minimum and then rises steeply, and at 460 bar it is 11% (methane) to 29% (gravity 0.80) above the reference equations of state (`specs/features/016-joule-thomson.md`). Nothing checks PVT-GAS-9's range either: below $T_{pr} = 1.05$, near the critical point, $Z + \rho_r Z_\rho$ (proportional to $(\partial p/\partial \rho_g)_T$) can change sign, which gives PVT-GAS-10 a pole and can stop PVT-GAS-11's Newton iteration from converging; the Rust core then returns NaN, which fails the state.
+None in the equations. Nothing checks that $p_{pr}$ and $T_{pr}$ are in PVT-GAS-4's range; at high $p_{pr}$ its $Z$ has a minimum and then rises steeply, and at 460 bar it is 11% (methane) to 29% (gravity 0.80) above the reference equations of state (`specs/features/016-joule-thomson.md`). Nothing checks PVT-GAS-9's range either: below $T_{pr} = 1.05$, near the critical point, $Z + \rho_r Z_\rho$ (proportional to $(\partial p/\partial \rho_g)_ T$) can change sign, which gives PVT-GAS-10 a pole and can stop PVT-GAS-11's Newton iteration from converging; the Rust core then returns NaN, which fails the state.
 
 ## Sources
 

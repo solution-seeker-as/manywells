@@ -60,7 +60,7 @@ Why the lowest $p_0$: of the stable roots, it is the one a flowing well reaches 
 
 A tested property, not a definition. Without gas lift, a well has two roots, one stable and one unstable at higher $p_0$, if
 
-$$p_r - p_s < \rho_l\, g\, L / c_\text{bar},$$
+$$p_r - p_s < \rho_l g L / c_\text{bar},$$
 
 that is, if a static liquid column cannot reach the separator; otherwise it has one root, which is stable. The criterion split all 2,000 `sol-1` configs, solved with the Rust port (`plans/solver_description.md` §7), and held on 50 configs solved with v1.0.0 from six starts each (`plans/evidence/root_sets.py`). It fails near the fold (SOL-6) and is untested with gas lift, which can remove the trickle root: in Step 2's case set it did so in 9 of 10 two-root wells.
 
@@ -70,7 +70,7 @@ Decided by Bjarne, 2026-10-02 (`specs/features/015-rust-develop-model.md`, Findi
 
 $$\sigma_i = \frac{\partial r_{p,i}}{\partial p_i} - \frac{\partial r_{p,i}}{\partial y_i}\left(\frac{\partial r_{o,i}}{\partial y_i}\right)^{-1}\frac{\partial r_{o,i}}{\partial p_i}.$$
 
-Cell $i$ is **subsonic** if $\sigma_i > 0$. Along the curve the momentum row is U-shaped in $p_i$: positive at $p_{i-1}$, falling to a minimum at the cell's sonic pressure $p^*$, and rising again below it. Its root on the rising side, $p^* < p_i < p_{i-1}$, is the subsonic one; a root below $p^*$ has the flow pass through sonic speed within the cell, which a steady flow in a pipe of constant area cannot. A state with a cell where $\sigma_i \le 0$ is not a root of the model.
+Cell $i$ is **subsonic** if $\sigma_i > 0$. Along the curve the momentum row is U-shaped in $p_i$: positive at $p_{i-1}$, falling to a minimum at the cell's sonic pressure $p^\ast$, and rising again below it. Its root on the rising side, $p^\ast < p_i < p_{i-1}$, is the subsonic one; a root below $p^\ast$ has the flow pass through sonic speed within the cell, which a steady flow in a pipe of constant area cannot. A state with a cell where $\sigma_i \le 0$ is not a root of the model.
 
 Step 9 found such a state: at `v1.0.0+chen#6` of the comparison set, the CasADi search reached a state with every row zero whose last cell falls from 106 to 10.3 bar, past its sonic point. None of the verifier's 200 reference roots has a supersonic cell.
 
@@ -80,21 +80,21 @@ Decided by Bjarne, 2026-10-02 (`specs/features/016-joule-thomson.md`). Write the
 
 $$\tau_i = \frac{\partial r_{T,i}}{\partial T_i} - \frac{\partial r_{T,i}}{\partial y_i}\left(\frac{\partial r_{c,i}}{\partial y_i}\right)^{-1}\frac{\partial r_{c,i}}{\partial T_i}.$$
 
-A state with a cell where $\tau_i \le 0$ is not a root of the model. With heat loss alone (THM-1), $\tau_i = 1 + \Delta\text{MD}_i\,4h/(D\,C) > 0$ at every state, and frictional heating and the gravity term change it little; so the rule matters only with the Joule–Thomson term (THM-8). Near a gas well's choked wellhead that term can make the energy row U-shaped in $T_i$, with two roots: the one on the rising side continues the root without the term, and the other comes from the growth of the gas's Joule–Thomson factor towards the critical point (PVT-GAS-10). Step 10 found such a cell: at well 22 of `plans/evidence/dak_jt_default.py`, roots at 279.3 and 293.4 K, of which the CasADi backend's root has the upper one.
+A state with a cell where $\tau_i \le 0$ is not a root of the model. With heat loss alone (THM-1), $\tau_i = 1 + \Delta\text{MD}_ i\thinspace 4h/(D C) > 0$ at every state, and frictional heating and the gravity term change it little; so the rule matters only with the Joule–Thomson term (THM-8). Near a gas well's choked wellhead that term can make the energy row U-shaped in $T_i$, with two roots: the one on the rising side continues the root without the term, and the other comes from the growth of the gas's Joule–Thomson factor towards the critical point (PVT-GAS-10). Step 10 found such a cell: at well 22 of `plans/evidence/dak_jt_default.py`, roots at 279.3 and 293.4 K, of which the CasADi backend's root has the upper one.
 
 ## Informative: v1.0.0's solver
 
 Not part of the model; recorded because the verifier records which root v1.0.0 returns from its default guess (`specs/verification.md`, `v1_cold.parquet`).
 
 - v1.0.0 solves DISC-6 as a feasibility NLP with Ipopt (objective zero), with bounds $p \in [p_s, p_r]$, $\alpha \le 1$, $T \in [T_s, T_r + 1]$ and all other unknowns $\ge 0$. The temperature bounds are never active at a root (SOL-1).
-- Its default initial guess marches up the well: $p_0 = p_r - 0.05\,(p_r - p_s)$ and $T_0 = T_r$; the bottom point's $(v_g, v_l, \alpha)$ from INF-6, INF-7 and SLIP-1 by Ipopt, starting from $\alpha = 0.5$; then each point from DISC-2 to DISC-5 and the closures by Ipopt, starting from the previous point. A user-supplied `x_guess` replaces the march.
+- Its default initial guess marches up the well: $p_0 = p_r - 0.05(p_r - p_s)$ and $T_0 = T_r$; the bottom point's $(v_g, v_l, \alpha)$ from INF-6, INF-7 and SLIP-1 by Ipopt, starting from $\alpha = 0.5$; then each point from DISC-2 to DISC-5 and the closures by Ipopt, starting from the previous point. A user-supplied `x_guess` replaces the march.
 - It returns whichever root Ipopt reaches, which is the unstable trickle root in some cases (20 of the 141 cases in the case set). The dataset generators' warm starts are described in `specs/sampling.md`.
 
 ## Informative: `develop`'s root search
 
 Not part of the model: only the operating point and the root set are specified (principle 6). Recorded so that a reader can follow `manywells.solvers` next to this file (principle 7).
 
-- `SSDFSimulator(wp)` builds the well's system once (DISC-11), with the operating point as parameters, and an Ipopt feasibility NLP on it. `root_set(bc)` solves it from up to eight starts: a given guess (`x_guess`), the default march from $p_0 = p_r - 0.05\,(p_r - p_s)$, and marches from $p_0 = p_s + f\,(p_r - p_s)$ for $f$ in 0.5, 0.7, 0.85, 0.975, 0.995 and 0.999. The march solves point 0's rows at fixed $p_0$, then each point's rows up the well, by Newton's method, and by Ipopt with v1.0.0's bounds where Newton fails.
+- `SSDFSimulator(wp)` builds the well's system once (DISC-11), with the operating point as parameters, and an Ipopt feasibility NLP on it. `root_set(bc)` solves it from up to eight starts: a given guess (`x_guess`), the default march from $p_0 = p_r - 0.05(p_r - p_s)$, and marches from $p_0 = p_s + f\thinspace(p_r - p_s)$ for $f$ in 0.5, 0.7, 0.85, 0.975, 0.995 and 0.999. The march solves point 0's rows at fixed $p_0$, then each point's rows up the well, by Newton's method, and by Ipopt with v1.0.0's bounds where Newton fails.
 - A solve is accepted if Ipopt reports `Solve_Succeeded`, as the verifier's reference build requires, the state is admissible (SOL-1), and every cell is subsonic (SOL-8). Solutions within the verifier's `tol_x` of each other are one root. Each root is labelled by SOL-3 from the residual's Jacobian, with the verifier's `label_min`. `simulate(bc)` returns the operating point of the root set (SOL-4 to SOL-6) and raises `NoOperatingPoint` without one.
 - Measured on the verifier's case set in the `v1.0.0` configuration (2026-10-01): every reference root found with the right label and no other root, a stable-root rate of 100% against v1.0.0's 74.3%, at 0.8 s to build a well's system and 1.6 s to search, per case. The starts after v1.0.0's (method A of the reference build) and the march's fallback are solver machinery, with their measured gains in `manywells/solvers/roots.py` and `march.py` (`plans/manywells-v2-plan.md`, Step 7).
 

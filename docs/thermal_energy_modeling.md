@@ -13,19 +13,19 @@ $$\frac{dT}{dz} = -H + \Phi_f - \Phi_g - \Phi_{JT},$$
 
 where each term is in K/m and has the heat-capacity flux of the flow,
 
-$$C = c_{pg}\,\alpha\rho_g v_g + c_{pl}\,(1-\alpha)\rho_l v_l,$$
+$$C = c_{pg}\alpha\rho_g v_g + c_{pl}\thinspace(1-\alpha)\rho_l v_l,$$
 
 in its denominator:
 
 | Term | ID | Expression | Effect | Switch |
 |---|---|---|---|---|
-| Heat loss | THM-1 | $H = \dfrac{4h\,(T - T_a)}{D\,C}$ | cools the fluid while it is warmer than its surroundings | always on |
-| Frictional heating | THM-6 | $\Phi_f = \dfrac{(1-\alpha)\,v_l\,F}{C}$ | heats | `frictional_heating` |
-| Gravity term | THM-7 | $\Phi_g = \dfrac{g\cos\theta\,\big(\alpha\rho_g v_g + (1-\alpha)\rho_l v_l - (1-\alpha)\,v_l\,\rho_m\big)}{C}$ | cools | `gravity_term` |
-| Joule–Thomson term | THM-8 | $\Phi_{JT} = \dfrac{\alpha\,v_g\,J\,(F + \rho_m g\cos\theta)}{C}$ | cools where $J > 0$, heats where $J < 0$ | `joule_thomson` |
+| Heat loss | THM-1 | $H = \dfrac{4h\thinspace(T - T_a)}{D C}$ | cools the fluid while it is warmer than its surroundings | always on |
+| Frictional heating | THM-6 | $\Phi_f = \dfrac{(1-\alpha)v_l F}{C}$ | heats | `frictional_heating` |
+| Gravity term | THM-7 | $\Phi_g = \dfrac{g\cos\theta\thinspace\big(\alpha\rho_g v_g + (1-\alpha)\rho_l v_l - (1-\alpha)v_l\rho_m\big)}{C}$ | cools | `gravity_term` |
+| Joule–Thomson term | THM-8 | $\Phi_{JT} = \dfrac{\alpha v_g J\thinspace(F + \rho_m g\cos\theta)}{C}$ | cools where $J > 0$, heats where $J < 0$ | `joule_thomson` |
 
 $h$ is the overall heat transfer coefficient, $D$ the inner diameter, $T_a$ the ambient temperature, $F$ the
-viscous pressure gradient (FRIC-1), $\rho_m$ the mixture density and $J = T(\partial \ln Z/\partial T)_p$ the gas's
+viscous pressure gradient (FRIC-1), $\rho_m$ the mixture density and $J = T(\partial \ln Z/\partial T)_ p$ the gas's
 Joule–Thomson factor (PVT-GAS-10).
 
 The switches are fields of `ThermalModel` (`src/manywells/thermal.py`). The `v1.0.0` configuration has heat loss
@@ -47,7 +47,7 @@ converts with $c_\text{bar}$.
 $\dot m_g$ and $\dot m_l$ are constant, the total energy of the mixture changes by the heat lost through the wall
 and the work done against gravity:
 
-$$\frac{d}{dz}\big(\dot m_g h_g + \dot m_l h_l\big) = -\frac{4h\,(T - T_a)}{D} - (\dot m_g + \dot m_l)\,g\cos\theta,$$
+$$\frac{d}{dz}\big(\dot m_g h_g + \dot m_l h_l\big) = -\frac{4h\thinspace(T - T_a)}{D} - (\dot m_g + \dot m_l)g\cos\theta,$$
 
 with $h_g$ and $h_l$ the phases' specific enthalpies. (The subscripted $h_g$ and $h_l$ are enthalpies; $h$ alone is
 the heat transfer coefficient.) The factor $4/D$ is the pipe's perimeter over its cross-section.
@@ -55,21 +55,21 @@ the heat transfer coefficient.) The factor $4/D$ is the pipe's perimeter over it
 **Enthalpies.** Both phases have constant heat capacities. The liquid is incompressible, and the gas obeys
 $1/\rho_g = Z R_s T/p$:
 
-$$dh_l = c_{pl}\,dT + \frac{dp}{\rho_l}, \qquad dh_g = c_{pg}\,dT + \left[\frac{1}{\rho_g} - T\left(\frac{\partial (1/\rho_g)}{\partial T}\right)_p\right]dp = c_{pg}\,dT - \frac{J}{\rho_g}\,dp.$$
+$$dh_l = c_{pl}\thinspace dT + \frac{dp}{\rho_l}, \qquad dh_g = c_{pg}\thinspace dT + \left[\frac{1}{\rho_g} - T\left(\frac{\partial (1/\rho_g)}{\partial T}\right)_p\right]dp = c_{pg}\thinspace dT - \frac{J}{\rho_g}\thinspace dp.$$
 
-The bracket is $-(R_s T^2/p)(\partial Z/\partial T)_p = -J/\rho_g$, so the gas's Joule–Thomson coefficient is
+The bracket is $-(R_s T^2/p)(\partial Z/\partial T)_ p = -J/\rho_g$, so the gas's Joule–Thomson coefficient is
 $\mu_{JT} = J/(\rho_g c_{pg})$. For an ideal gas $Z = 1$ and $J = 0$, so its enthalpy does not depend on pressure.
 The liquid's enthalpy does, through $p/\rho_l$: an incompressible liquid heats as it expands.
 
 **Substitution.** With $\dot m_l/\rho_l = (1-\alpha)v_l$ and $\dot m_g J/\rho_g = \alpha v_g J$, the balance
 becomes
 
-$$C\,\frac{dT}{dz} + \big[(1-\alpha)\,v_l - \alpha\,v_g J\big]\frac{dp}{dz} = -\frac{4h\,(T - T_a)}{D} - (\dot m_g + \dot m_l)\,g\cos\theta.$$
+$$C\frac{dT}{dz} + \big[(1-\alpha)v_l - \alpha v_g J\big]\frac{dp}{dz} = -\frac{4h\thinspace(T - T_a)}{D} - (\dot m_g + \dot m_l)g\cos\theta.$$
 
 The momentum balance (BAL-11) without its acceleration term gives the pressure gradient,
 $dp/dz = -(F + \rho_m g\cos\theta)$. Substituting it and dividing by $C$:
 
-$$\frac{dT}{dz} = -\underbrace{\frac{4h\,(T - T_a)}{D\,C}}_{H} + \underbrace{\frac{(1-\alpha)\,v_l F}{C}}_{\Phi_f} - \underbrace{\frac{g\cos\theta\,\big(\dot m_g + \dot m_l - (1-\alpha)\,v_l\,\rho_m\big)}{C}}_{\Phi_g} - \underbrace{\frac{\alpha\,v_g J\,(F + \rho_m g\cos\theta)}{C}}_{\Phi_{JT}}.$$
+$$\frac{dT}{dz} = -\underbrace{\frac{4h\thinspace(T - T_a)}{D C}}_{H} + \underbrace{\frac{(1-\alpha)v_l F}{C}}_{\Phi_f} - \underbrace{\frac{g\cos\theta\thinspace\big(\dot m_g + \dot m_l - (1-\alpha)v_l\rho_m\big)}{C}}_{\Phi_g} - \underbrace{\frac{\alpha v_g J\thinspace(F + \rho_m g\cos\theta)}{C}}_{\Phi_{JT}}.$$
 
 ## The terms
 
@@ -86,7 +86,7 @@ $\Phi_f = F/(\rho_l c_{pl})$, viscous dissipation. The gas's share is in $\Phi_{
 paid by the hydrostatic pressure drop through its $p/\rho_l$ term, so only the gas's share is left; with
 $\rho_m = \alpha\rho_g + (1-\alpha)\rho_l$,
 
-$$\Phi_g = \frac{\alpha\, g\cos\theta\,\big(\rho_g v_g + (1-\alpha)\,v_l\,(\rho_l - \rho_g)\big)}{C} \ge 0.$$
+$$\Phi_g = \frac{\alpha g\cos\theta\thinspace\big(\rho_g v_g + (1-\alpha)v_l\thinspace(\rho_l - \rho_g)\big)}{C} \ge 0.$$
 
 For pure liquid it vanishes. For pure gas it is the adiabatic lapse rate $g\cos\theta/c_{pg}$: about 0.0044 K/m with
 $c_{pg} = 2225$ J/(kg K), or 13 K over 3000 m of vertical depth.
@@ -128,7 +128,7 @@ one where the row rises in the temperature is a root of the model (SOL-9).
 
 - Zhang, H.-Q., Wang, Q., Sarica, C. and Brill, J.P. (2006). "Unified model of heat transfer in gas/liquid pipe flow."
   *SPE Production & Operations* 21(1), 114–122. Eqs. (13) and (26) give the temperature gradient for
-  bubbly/dispersed-bubble and for stratified/annular flow, both of the form $dT/dl = -4U(T - T_O)/(d\,C)$: THM-1.
+  bubbly/dispersed-bubble and for stratified/annular flow, both of the form $dT/dl = -4U(T - T_O)/(d\thinspace C)$: THM-1.
 - Ramey, H.J. Jr. (1962). "Wellbore heat transmission." *Journal of Petroleum Technology* 14(4), 427–435. The
   foundational paper on wellbore temperatures.
 - Hasan, A.R. and Kabir, C.S. (2002). *Fluid Flow and Heat Transfer in Wellbores*. Society of Petroleum Engineers.
@@ -136,7 +136,7 @@ one where the row rises in the temperature is a root of the model (SOL-9).
   balance.
 - Hasan, A.R. and Kabir, C.S. (2012). "Wellbore heat-transfer modeling and applications." *Journal of Petroleum
   Science and Engineering* 86–87, 127–136. Eq. (7) is the single-conduit energy balance: its $\mp Q/w$ term is the
-  heat exchange (THM-1); its $C_J\,dp/dz$ term the Joule–Thomson effect, which for an incompressible liquid,
+  heat exchange (THM-1); its $C_J\thinspace dp/dz$ term the Joule–Thomson effect, which for an incompressible liquid,
   $C_J = -1/(\rho_l c_{pl})$, gives the frictional heating (THM-6) and for a real gas THM-8; its
   $g\sin\alpha/(J g_c)$ term the gravitational work (THM-7), where $\alpha$ is the angle from horizontal and
   $J = g_c = 1$ in SI units.

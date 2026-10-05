@@ -92,8 +92,8 @@ Model changes made on `develop` since v1.0.0 are not discrepancies; they are lis
 ### D-9 · Coefficients of the dead-oil surface tension
 
 - **Paper.** Cites the correlation without the formula.
-- **v1.0.0.** $10^{-3}(1.11591 - 0.00305\,T_C)(38.085 - 0.259\,\text{API})$ (`pvt.py:176`).
-- **Source.** Abdul-Majeed and Abu Al-Soof (2000), Eqs. (1)–(3): $\sigma_{do} = A\,(38.085 - 0.259\,\text{API})$ dyn/cm with $A = 1.11591 - 0.00305\,T$ and $T$ in °C, fitted at 15.6, 37.8 and 54.4 °C and API 15 to 50. An earlier draft of this item gave a form in °F from memory; the source has no such form.
+- **v1.0.0.** $10^{-3}(1.11591 - 0.00305 T_C)(38.085 - 0.259\thinspace\text{API})$ (`pvt.py:176`).
+- **Source.** Abdul-Majeed and Abu Al-Soof (2000), Eqs. (1)–(3): $\sigma_{do} = A\thinspace(38.085 - 0.259\thinspace\text{API})$ dyn/cm with $A = 1.11591 - 0.00305 T$ and $T$ in °C, fitted at 15.6, 37.8 and 54.4 °C and API 15 to 50. An earlier draft of this item gave a form in °F from memory; the source has no such form.
 - **Ruling.** The code is right: it matches the source exactly. PVT-OIL-3 records the source's data range; ManyWells evaluates the correlation outside it, up to 150 °C.
 
 ### D-10 · Regime label and ties

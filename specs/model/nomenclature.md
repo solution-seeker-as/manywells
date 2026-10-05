@@ -64,7 +64,7 @@ Parameters and quantities of `develop`'s options, in addition (the dataclass fie
 | Symbol | Code | Unit | Meaning |
 |---|---|---|---|
 | $\text{MD}$, $\text{TVD}$ | `md`, `tvd` | m | measured and true vertical depth from the surface (GEO-3) |
-| $\Delta\text{MD}_i$, $\cos\theta_i$ | `delta_md`, `cos_incl` | m, – | length and inclination from vertical of cell $i$ |
+| $\Delta\text{MD}_ i$, $\cos\theta_i$ | `delta_md`, `cos_incl` | m, – | length and inclination from vertical of cell $i$ |
 | $f_i$ | `tvd_frac` | – | TVD fraction of grid point $i$ (1 at the bottomhole) |
 | $\rho_o$, $\rho_{g,\text{sc}}$, $\rho_w$ | `rho_o`, `rho_g`, `rho_w` | kg/m³ | oil, gas and water densities at standard conditions |
 | $R_{go}$ | `gor` | Sm³/Sm³ | gas–oil ratio at standard conditions |
@@ -80,7 +80,7 @@ Parameters and quantities of `develop`'s options, in addition (the dataclass fie
 | $w_{g,\text{res}}$, $w_d$ | `w_g_res` | kg/s | reservoir gas rate, gas dissolved in the oil |
 | $T_{lg}$ | `T_lg` | K | lift-gas temperature at injection; `None` means $T_r$ |
 | $\Phi_f$, $\Phi_g$, $\Phi_{JT}$ | – | K/m | frictional heating, gravity and Joule–Thomson terms of the temperature gradient |
-| $J$ | `jt_factor` | – | the gas's Joule–Thomson factor $T(\partial \ln Z/\partial T)_p$; $\mu_{JT} = J/(\rho_g c_{pg})$ (PVT-GAS-10) |
+| $J$ | `jt_factor` | – | the gas's Joule–Thomson factor $T(\partial \ln Z/\partial T)_ p$; $\mu_{JT} = J/(\rho_g c_{pg})$ (PVT-GAS-10) |
 | $\rho_r$ | `reduced_density` | – | the gas's reduced density of the Dranchuk–Abou-Kassem equation of state (PVT-GAS-9) |
 | – | `z_factor_model` | – | the real gas's z-factor: `'dak'` (PVT-GAS-11) or `'papay'` (PVT-GAS-3, PVT-GAS-4) |
 

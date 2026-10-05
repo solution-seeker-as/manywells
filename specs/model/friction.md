@@ -19,7 +19,7 @@ In `develop` the friction model is a component of the well, a `FrictionModel` wh
 
 Darcy–Weisbach for the mixture:
 
-$$F = \frac{f_D}{2D}\,\rho_m\, v_m \lvert v_m\rvert$$
+$$F = \frac{f_D}{2D}\rho_m v_m \lvert v_m\rvert$$
 
 v1.0.0 implements $\rho_m v_m^2$, which is the same for $v_m \ge 0$; every admissible state has $v_m > 0$ (SOL-1).
 
@@ -29,7 +29,7 @@ $f_D$ is a constant parameter of the well, the same in every cell. Used by `v1.0
 
 ### FRIC-3 · Reynolds number
 
-$$\text{Re} = \frac{\rho_m\,\lvert v_m\rvert\, D}{\mu_m}$$
+$$\text{Re} = \frac{\rho_m\lvert v_m\rvert D}{\mu_m}$$
 
 with the mixture viscosity $\mu_m$ of PVT-MIX-9 at the point, and $f_D$ from FRIC-6 at this Re and the relative roughness $\varepsilon/D$, where $\varepsilon > 0$ is the pipe wall's roughness (m).
 
@@ -37,7 +37,7 @@ with the mixture viscosity $\mu_m$ of PVT-MIX-9 at the point, and $f_D$ from FRI
 
 Chen (1979), an explicit approximation of the Colebrook–White equation for turbulent flow, as used by Hasan, Kabir and Sayarpour (2010), Eqs. (A-4) and (A-5):
 
-$$\frac{1}{\sqrt{f_t}} = -2\log_{10}\!\left[\frac{\varepsilon/D}{3.7065} - \frac{5.0452}{\text{Re}}\,\log_{10}\!\left(\frac{(\varepsilon/D)^{1.1098}}{2.8257} + \left(\frac{7.149}{\text{Re}}\right)^{0.8981}\right)\right]$$
+$$\frac{1}{\sqrt{f_t}} = -2\log_{10}\negthinspace\left[\frac{\varepsilon/D}{3.7065} - \frac{5.0452}{\text{Re}}\log_{10}\negthinspace\left(\frac{(\varepsilon/D)^{1.1098}}{2.8257} + \left(\frac{7.149}{\text{Re}}\right)^{0.8981}\right)\right]$$
 
 Within about 0.5% of Colebrook–White.
 
@@ -45,15 +45,15 @@ Within about 0.5% of Colebrook–White.
 
 Haaland (1983), an alternative to FRIC-4:
 
-$$\frac{1}{\sqrt{f_t}} = -1.8\log_{10}\!\left[\left(\frac{\varepsilon/D}{3.7}\right)^{1.11} + \frac{6.9}{\text{Re}}\right]$$
+$$\frac{1}{\sqrt{f_t}} = -1.8\log_{10}\negthinspace\left[\left(\frac{\varepsilon/D}{3.7}\right)^{1.11} + \frac{6.9}{\text{Re}}\right]$$
 
 Within about 1.5% of Colebrook–White.
 
 ### FRIC-6 · Laminar–turbulent blend
 
-$$f_D = (1 - s)\,\frac{64}{\text{Re}_1} + s\, f_t(\text{Re}_2), \qquad s = \frac{1}{1 + e^{-0.005\,(\text{Re}_1 - 3000)}},$$
+$$f_D = (1 - s)\frac{64}{\text{Re}_1} + s f_t(\text{Re}_2), \qquad s = \frac{1}{1 + e^{-0.005(\text{Re}_1 - 3000)}},$$
 
-with $\text{Re}_1 = \operatorname{smax}(\text{Re}, 1)$, $\text{Re}_2 = \operatorname{smax}(\text{Re}_1, 1000)$ (SMO-1, $\epsilon = 10^{-6}$), and $f_t$ the turbulent friction factor of FRIC-4 or FRIC-5. The sigmoid (SMO-4) blends the laminar $64/\text{Re}$ into the turbulent value around Re = 3000, over a width of about 1000; the smooth maxima keep both branches finite at small Re.
+with $\text{Re}_ 1 = \mathop{\mathrm{smax}}(\text{Re}, 1)$, $\text{Re}_ 2 = \mathop{\mathrm{smax}}(\text{Re}_ 1, 1000)$ (SMO-1, $\epsilon = 10^{-6}$), and $f_t$ the turbulent friction factor of FRIC-4 or FRIC-5. The sigmoid (SMO-4) blends the laminar $64/\text{Re}$ into the turbulent value around Re = 3000, over a width of about 1000; the smooth maxima keep both branches finite at small Re.
 
 ## Options
 

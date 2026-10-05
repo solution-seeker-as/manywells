@@ -34,7 +34,7 @@ The row vectors of `specs/model/discretization.md` measure the gap. `tests/test_
 
 ### 2. Inclination in the slip model
 
-- **What.** `slip.py`: the bubbly–slug threshold of SLIP-6 becomes $0.25\cos\theta$, and the Taylor velocity is multiplied by $\sqrt{\cos\theta + 10^{-9}}\,(1 + \sin\theta)^{1.2}$ (Hasan, Kabir and Sayarpour, 2010, Eq. (A-10)).
+- **What.** `slip.py`: the bubbly–slug threshold of SLIP-6 becomes $0.25\cos\theta$, and the Taylor velocity is multiplied by $\sqrt{\cos\theta + 10^{-9}}\thinspace(1 + \sin\theta)^{1.2}$ (Hasan, Kabir and Sayarpour, 2010, Eq. (A-10)).
 - **Gap.** At $\cos\theta = 1$ the $10^{-9}$ changes $v_{\infty T}$ by $5\cdot10^{-10}$ relative, so the SLIP-2/SLIP-3 vectors fail at their tolerance of $10^{-12}$. `WellGeometry` already rejects $\cos\theta < 0$, so the guard is not needed for real square roots; dropping it would make the vertical case exact. Decide in Step 7.
 - **Commits.** `8385ad0`, `9267ed9`.
 
@@ -70,13 +70,13 @@ The row vectors of `specs/model/discretization.md` measure the gap. `tests/test_
 
 ### 8. Gas dissolving into oil
 
-- **What.** `SSDFSimulator._gas_and_liquid_flow_rate`: dissolved gas $w_d = \operatorname{smin}(R_{so}\,\rho_{g,\text{sc}}/\rho_o \cdot w_o,\ w_g)$, gas rate $\operatorname{smax}(w_g + w_{lg} - w_d,\ 0)$, liquid rate $w_l + w_d$. The mass rows become $A\alpha\rho_g v_g = w_g(p_i, T_i)$ and the liquid equivalent at every point, replacing the flux continuity of DISC-2 and DISC-3. The liquid inflow rate reaches those rows through hidden state, `self._w_l_inflow` (`improvements.md` §2.4).
+- **What.** `SSDFSimulator._gas_and_liquid_flow_rate`: dissolved gas $w_d = \mathop{\mathrm{smin}}(R_{so}\rho_{g,\text{sc}}/\rho_o \cdot w_o,\ w_g)$, gas rate $\mathop{\mathrm{smax}}(w_g + w_{lg} - w_d,\ 0)$, liquid rate $w_l + w_d$. The mass rows become $A\alpha\rho_g v_g = w_g(p_i, T_i)$ and the liquid equivalent at every point, replacing the flux continuity of DISC-2 and DISC-3. The liquid inflow rate reaches those rows through hidden state, `self._w_l_inflow` (`improvements.md` §2.4).
 - **Gap.** With dead oil ($R_{so} = 0$) the smooth min is $-\epsilon/(4 w_g) \approx -2.5\cdot10^{-7}/w_g$ kg/s, not 0, and with $w_g = 0$ it is $-5\cdot10^{-4}$ kg/s, which makes a gas rate of $8\cdot10^{-4}$ kg/s out of nothing. Measured: INF-6 rows differ by up to $2.3\cdot10^{-7}$ relative and INF-7 by $1.6\cdot10^{-8}$ (W1). The v1-compatibility configuration needs $\Gamma = 0$ exactly (BAL-3), so the path must be bypassed, not only fed $R_{so} = 0$. The mass rows' form also differs, so DISC-2 and DISC-3 vectors are skipped until the configuration exists.
 - **Commits.** `5708460`, `64bad4e`, `28c5ca7`.
 
 ### 9. Frictional heating and a gravity term in the energy balance
 
-- **What.** `_differential_equations`: $dT = dT_\text{heat} - dT_\text{fric} + dT_\text{grav}$ with $dT_\text{fric} = \Delta\text{MD}\,(1-\alpha)v_l F/\text{cp\_flux}$ and $dT_\text{grav} = \Delta\text{TVD}\, g\,(\text{mass\_flux} - \text{liq\_flux}\,\rho_m)/\text{cp\_flux}$. Derivation in `docs/thermal_energy_modeling.md`.
+- **What.** `_differential_equations`: $dT = dT_\text{heat} - dT_\text{fric} + dT_\text{grav}$ with $dT_\text{fric} = \Delta\text{MD}\thinspace(1-\alpha)v_l F/\text{cp\_flux}$ and $dT_\text{grav} = \Delta\text{TVD}\thinspace g\thinspace(\text{mass\_flux} - \text{liq\_flux}\thinspace\rho_m)/\text{cp\_flux}$. Derivation in `docs/thermal_energy_modeling.md`.
 - **Gap.** Always on; no switch. Measured: DISC-5 rows differ by up to 0.62 K per cell (W2). The v1-compatibility configuration needs a switch (plan, Step 7 item 2). Pin the terms with test vectors in `thermal.md` (`improvements.md` §3).
 - **Commits.** `82344c6`, `be80b70` (the TVD in the gravity term).
 

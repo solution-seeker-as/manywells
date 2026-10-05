@@ -21,39 +21,39 @@ In `develop` the four regime constants of SLIP-2 and SLIP-3 (1.0, 1.175 and 1.2 
 
 ### SLIP-1 · Slip law
 
-$$v_g = C_0\, v_m + v_\infty$$
+$$v_g = C_0 v_m + v_\infty$$
 
 with $v_m$ from BAL-8. Its row in DISC-6 is $v_g - C_0 v_m - v_\infty$ (m/s), at every grid point.
 
 ### SLIP-2 · Profile parameter
 
-$$C_0 = 1.0\, p_a + 1.175\, p_s + 1.2\, p_b$$
+$$C_0 = 1.0 p_a + 1.175 p_s + 1.2 p_b$$
 
 The regime values are those of Table A.6: 1.2 for bubbly flow, 1.0 for annular flow, and for slug/churn flow the average of the values for slug (1.2) and churn (1.15) flow.
 
 ### SLIP-3 · Drift velocity
 
-$$v_\infty = 0 \cdot p_a + v_{\infty T}\, p_s + v_{\infty b}\, p_b$$
+$$v_\infty = 0 \cdot p_a + v_{\infty T} p_s + v_{\infty b} p_b$$
 
 This is (A.10) as corrected in `docs/corrigendum.md`: the paper swaps the two rise velocities, and the code does not.
 
 ### SLIP-4 · Bubble rise velocity (Harmathy)
 
-$$v_{\infty b} = 1.53 \left(\frac{g\,\sigma\,(\rho_l - \rho_g)}{\rho_l^2}\right)^{1/4}$$
+$$v_{\infty b} = 1.53 \left(\frac{g\sigma\thinspace(\rho_l - \rho_g)}{\rho_l^2}\right)^{1/4}$$
 
 ### SLIP-5 · Taylor-bubble rise velocity
 
-$$v_{\infty T} = 0.35\,\sqrt{g\,D\,(1 - \rho_g/\rho_l)}$$
+$$v_{\infty T} = 0.35\sqrt{g D\thinspace(1 - \rho_g/\rho_l)}$$
 
 for a vertical pipe; SLIP-10 corrects it for inclination.
 
 ### SLIP-6 · Classifier features
 
 $$
-c_1 = \tanh\!\Big(v_{gs} - 3.1\,\big(g\,\sigma\,(\rho_l - \rho_g)/\rho_g^2\big)^{1/4}\Big), \quad
-c_2 = \tanh\!\big(2(\alpha - 0.7)\big), \quad
-c_3 = \tanh\!\big(v_{gs} - 1.08\, v_{ls}\big), \quad
-c_4 = \tanh\!\big(2(\alpha - 0.25)\big)
+c_1 = \tanh\Big(v_{gs} - 3.1\big(g\sigma\thinspace(\rho_l - \rho_g)/\rho_g^2\big)^{1/4}\Big), \quad
+c_2 = \tanh\big(2(\alpha - 0.7)\big), \quad
+c_3 = \tanh\big(v_{gs} - 1.08 v_{ls}\big), \quad
+c_4 = \tanh\big(2(\alpha - 0.25)\big)
 $$
 
 with $v_{gs} = \alpha v_g$ and $v_{ls} = (1 - \alpha) v_l$ in m/s. The arguments of $c_1$ and $c_3$ are velocities in m/s, not dimensionless. The factor 2 in $c_2$ and $c_4$ is in v1.0.0's code and not in the paper's (A.8) (`specs/discrepancies.md`, D-1). The paper lists the features in the reverse order.
@@ -62,13 +62,13 @@ with $v_{gs} = \alpha v_g$ and $v_{ls} = (1 - \alpha) v_l$ in m/s. The arguments
 
 $$
 \begin{aligned}
-y_a &= \phantom{-}3.17715258\,c_1 + 6.81938489\,c_2 + 0.30182974\,c_3 + 3.58362465\,c_4 - 3.92904391\\
-y_s &= -1.47973427\,c_1 - 4.34033317\,c_2 + 2.58200006\,c_3 + 3.49656911\,c_4 - 1.46509477\\
-y_b &= -1.6974183\,c_1 - 2.47905172\,c_2 - 2.8838298\,c_3 - 7.08019376\,c_4 + 5.39413869
+y_a &= \phantom{-}3.17715258 c_1 + 6.81938489 c_2 + 0.30182974 c_3 + 3.58362465 c_4 - 3.92904391\\
+y_s &= -1.47973427 c_1 - 4.34033317 c_2 + 2.58200006 c_3 + 3.49656911 c_4 - 1.46509477\\
+y_b &= -1.6974183 c_1 - 2.47905172 c_2 - 2.8838298 c_3 - 7.08019376 c_4 + 5.39413869
 \end{aligned}
 $$
 
-$$(p_a, p_s, p_b) = \operatorname{softmax}(y_a, y_s, y_b)$$
+$$(p_a, p_s, p_b) = \mathop{\mathrm{softmax}}(y_a, y_s, y_b)$$
 
 with the softmax of SMO-3. This is (A.7) with v1.0.0's weights $A$ and $b$, which the paper does not list; the paper orders the outputs (bubbly, slug/churn, annular).
 
@@ -78,13 +78,13 @@ The label of a point is the regime with the highest probability: `annular` if $p
 
 ### SLIP-9 · Reference regime hierarchy
 
-The hierarchy that the classifier approximates, from (A.3)–(A.6): the flow is annular if $\alpha \ge 0.7$ and $v_{gs} \ge 3.1\,\big(g\sigma(\rho_l - \rho_g)/\rho_g^2\big)^{1/4}$; else slug/churn if $\alpha \ge 0.25$ and $v_{gs} \ge 1.08\,v_{ls}$; else bubbly. The weights of SLIP-7 were fitted to it by multinomial logistic regression on sampled points (scikit-learn, L2 penalty, $C = 0.01$). The model never evaluates the hierarchy itself.
+The hierarchy that the classifier approximates, from (A.3)–(A.6): the flow is annular if $\alpha \ge 0.7$ and $v_{gs} \ge 3.1\big(g\sigma(\rho_l - \rho_g)/\rho_g^2\big)^{1/4}$; else slug/churn if $\alpha \ge 0.25$ and $v_{gs} \ge 1.08 v_{ls}$; else bubbly. The weights of SLIP-7 were fitted to it by multinomial logistic regression on sampled points (scikit-learn, L2 penalty, $C = 0.01$). The model never evaluates the hierarchy itself.
 
 ### SLIP-10 · Deviation factor of the Taylor-bubble rise velocity
 
 In an inclined cell, the Taylor-bubble rise velocity of SLIP-5 is multiplied by
 
-$$\sqrt{\cos\theta}\,(1 + \sin\theta)^{1.2}, \qquad \sin\theta = \sqrt{1 - \cos^2\theta},$$
+$$\sqrt{\cos\theta}\thinspace(1 + \sin\theta)^{1.2}, \qquad \sin\theta = \sqrt{1 - \cos^2\theta},$$
 
 Hasan, Kabir and Sayarpour (2010), Eq. (A-10), with $\theta$ the inclination from vertical. The factor is exactly 1 in a vertical cell, and 0 in a horizontal one. `develop` had $\sqrt{\cos\theta + 10^{-9}}$, a guard against a negative argument that GEO-3 already rules out ($\cos\theta \ge 0$); Step 7 dropped it, so the vertical case is exact (`plans/develop_model_changes.md`, change 2; decided by Bjarne, 2026-10-01).
 
@@ -92,7 +92,7 @@ Hasan, Kabir and Sayarpour (2010), Eq. (A-10), with $\theta$ the inclination fro
 
 The fourth classifier feature of SLIP-6 becomes
 
-$$c_4 = \tanh\!\big(2(\alpha - 0.25\cos\theta)\big),$$
+$$c_4 = \tanh\big(2(\alpha - 0.25\cos\theta)\big),$$
 
 so the transition from bubbly to slug flow comes at a lower void fraction in an inclined cell. The weights of SLIP-7 are unchanged, and were fitted for the vertical threshold. At $\cos\theta = 1$ it is SLIP-6's $c_4$.
 
@@ -112,7 +112,7 @@ so the transition from bubbly to slug flow comes at a lower void fraction in an 
 
 ## Open question: several void fractions
 
-At fixed superficial velocities $j_g = \alpha v_g$ and $j_l = (1 - \alpha) v_l$, which the mass rows fix at a point, SLIP-1 is one equation in $\alpha$: $h(\alpha) = \alpha\,(C_0 j_m + v_\infty) - j_g = 0$, which is $-\alpha$ times its row. The classifier sees $\alpha$ only through $c_2$ and $c_4$, and $C_0 \ge 1$ and $v_\infty \ge 0$ for every mix of the regimes. So $h(0) < 0 < h(1)$, and a root always exists, but it need not be unique.
+At fixed superficial velocities $j_g = \alpha v_g$ and $j_l = (1 - \alpha) v_l$, which the mass rows fix at a point, SLIP-1 is one equation in $\alpha$: $h(\alpha) = \alpha\thinspace(C_0 j_m + v_\infty) - j_g = 0$, which is $-\alpha$ times its row. The classifier sees $\alpha$ only through $c_2$ and $c_4$, and $C_0 \ge 1$ and $v_\infty \ge 0$ for every mix of the regimes. So $h(0) < 0 < h(1)$, and a root always exists, but it need not be unique.
 - **Where it occurs.** Near the slug–annular transition with little liquid there can be three roots. In Step 8's regenerated `sol-1` samples, at well 44 (k = 4: $u$ = 0.056, 3.8 kg/s of lift gas, $j_l$ = 0.016 m/s), point 95 has $\alpha$ = 0.662, 0.915 and 0.920.
 - **Consequence for the root set.** SOL-2 then holds roots that differ only in the branch at some points, and which branch is physical is not specified (`solution.md`, informative section).
 - **The case set.** At every point of every reference root, the root is unique (`tests/test_rust_backend.py`).
