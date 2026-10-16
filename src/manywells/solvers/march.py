@@ -15,6 +15,15 @@ Newton fails at the slug-annular transition of the classifier (alpha near 0.7), 
 along the well. Measured on the verifier's case set (2026-10-01), the fallback raised the stable-root rate from
 98.5% to 100% and completed every reference root set, for 13% more search time (plans/manywells-v2-plan.md, Step 7);
 Bjarne accepted it, under principle 7, on 2026-10-01.
+
+Newton also fails where it returns a point whose rows are not zero. CasADi's Newton reports success where it steps
+into a region in which the rows are NaN, and returns that point (issue #7): a march that runs out of pressure steps
+to p < 0, where the black-oil properties are NaN. Its result is therefore accepted only if every row is finite and
+at most NEWTON_ROW_TOL. On the verifier's case set, where no row is NaN, Newton's converged points leave at most
+2.6e-9 and the check changes nothing. On the comparison set's 90 develop wells (tests/backend_cases.py, 6 per
+configuration, 2026-10-16) it turned 101 marches with negative pressures into march failures, found the same 228
+roots, and cut Ipopt's iterations in the search by 70% (specs/features/012-root-search.md); Bjarne accepted it,
+under principle 7, on 2026-10-16.
 """
 
 import casadi as ca
@@ -26,6 +35,7 @@ QUIET = {'show_eval_warnings': False}  # A failed solve raises MarchFailed; CasA
 IPOPT = {'ipopt.print_level': 0, 'ipopt.sb': 'yes', 'print_time': 0, 'show_eval_warnings': False, 'calc_lam_p': False}
 LOWER = [0.0] * DIM_X                                          # v1.0.0's march: every unknown non-negative,
 UPPER = [np.inf, np.inf, np.inf, 1.0, np.inf, np.inf, np.inf]  # and alpha <= 1
+NEWTON_ROW_TOL = 1e-6  # Largest |row| of a point Newton solved (bar, K, m/s, kg/(m² s), kg/m³)
 
 
 class MarchFailed(RuntimeError):
@@ -36,19 +46,23 @@ class _PointSolver:
     """Newton on the rows of one point, with Ipopt as the fallback; F(unknowns, parameters) -> rows."""
 
     def __init__(self, name, unknowns, parameters, rows, lower, upper):
-        self._newton = ca.rootfinder(f'{name}_newton', 'newton', ca.Function(f'F_{name}', [unknowns, parameters],
-                                                                             [rows]), QUIET)
+        self._rows = ca.Function(f'F_{name}', [unknowns, parameters], [rows])
+        self._newton = ca.rootfinder(f'{name}_newton', 'newton', self._rows, QUIET)
         self._ipopt = ca.nlpsol(f'{name}_ipopt', 'ipopt', {'x': unknowns, 'p': parameters, 'f': 0, 'g': rows}, IPOPT)
         self._lower, self._upper = lower, upper
 
     def __call__(self, guess, parameters) -> np.ndarray:
         try:
-            return np.asarray(self._newton(guess, parameters), dtype=float).ravel()
+            x = np.asarray(self._newton(guess, parameters), dtype=float).ravel()
+            r = np.asarray(self._rows(x, parameters), dtype=float)
+            if np.all(np.isfinite(x)) and np.max(np.abs(r)) <= NEWTON_ROW_TOL:  # NaN rows fail this test
+                return x
         except RuntimeError:
-            result = self._ipopt(x0=guess, p=parameters, lbx=self._lower, ubx=self._upper, lbg=0, ubg=0)
-            if not self._ipopt.stats()['success']:
-                raise MarchFailed(self._ipopt.stats()['return_status'])
-            return np.asarray(result['x'], dtype=float).ravel()
+            pass
+        result = self._ipopt(x0=guess, p=parameters, lbx=self._lower, ubx=self._upper, lbg=0, ubg=0)
+        if not self._ipopt.stats()['success']:
+            raise MarchFailed(self._ipopt.stats()['return_status'])
+        return np.asarray(result['x'], dtype=float).ravel()
 
 
 class Marcher:
