@@ -192,7 +192,8 @@ class SSDFSimulator:
         :param bc: Boundary conditions. Deprecated: None, with the boundary conditions given to the constructor
         :param x_guess: An extra start for the search; it makes the search faster, not the answer different
         :return: The operating point (Root); a flat list of its state in the deprecated form
-        :raises NoOperatingPoint: if there is no stable root
+        :raises NoOperatingPoint: if there is no stable root. A closed choke (u = 0) has none: its only steady state
+            is the zero flow of a shut-in well, which is not an admissible state (SOL-1)
         """
         legacy = bc is None
         if legacy:
