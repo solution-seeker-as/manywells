@@ -293,6 +293,21 @@ class TestFrozenAndValidated:
         with pytest.raises(ValueError, match="Water-liquid ratio"):
             FluidModel(wlr=1.0)
 
+    @pytest.mark.parametrize('field, kw', [
+        ('p_bubble', dict(p_bubble=-10.0)),                     # gave NaN rows
+        ('gor', dict(gor=-50.0)),                               # gave a negative gas rate
+        ('rho_o', dict(rho_o=-800.0, oil_model='dead_oil')),    # gave a negative liquid density
+        ('rho_g', dict(rho_g=-0.8, oil_model='dead_oil')),
+        ('rho_w', dict(rho_w=0.0, wlr=0.5)),
+        ('cp_g', dict(cp_g=-1.0)),
+        ('p_sep', dict(p_sep=0.0)),                             # gave a bare 'math domain error'
+        ('T_sep', dict(T_sep=float('inf'))),
+        ('gor', dict(gor=float('nan'))),
+    ])
+    def test_non_physical_inputs(self, field, kw):
+        with pytest.raises(ValueError, match=field):
+            FluidModel(**kw)
+
 
 class TestSurfaceTensionModels:
 

@@ -6,6 +6,7 @@ terms of the CC BY-NC 4.0 International Public License.
 Unified fluid model for wellbore simulations.
 """
 
+import math
 from dataclasses import dataclass
 
 from manywells.ca_functions import ca_min_approx, ca_max_approx
@@ -83,6 +84,13 @@ class FluidModel:
             raise ValueError(f"Unknown z_factor_model: {self.z_factor_model!r}")
         if not 0 <= self.wlr < 1:
             raise ValueError('Water-liquid ratio must be in [0, 1)')
+        for name in ('rho_o', 'rho_g', 'rho_w', 'p_sep', 'T_sep', 'cp_g', 'cp_o', 'cp_w'):
+            if not (math.isfinite(getattr(self, name)) and getattr(self, name) > 0):
+                raise ValueError(f'{name} must be positive and finite, got {getattr(self, name)}')
+        if not (math.isfinite(self.gor) and self.gor >= 0):
+            raise ValueError(f'gor must be non-negative and finite, got {self.gor}')
+        if self.p_bubble is not None and not (math.isfinite(self.p_bubble) and self.p_bubble > 0):
+            raise ValueError(f'p_bubble must be None, or positive and finite, got {self.p_bubble}')
 
         object.__setattr__(self, '_api', api_from_density(self.rho_o))
         object.__setattr__(self, '_sg_gas', sg_from_gas_density(self.rho_g))
