@@ -1,7 +1,8 @@
 """
 Tests of the PVT table (specs/model/pvt/table.md, feature 018): PVTTable and PVTTableSet, FluidModel with a table,
-the example tables of tests/data/pvt/, and wells solved with a table. The vectors of PVT-TAB-2 to PVT-TAB-5 are in
-tests/test_spec_vectors.py.
+the example tables of tests/data/pvt/, and wells solved with a table on both backends. The vectors of PVT-TAB-2 to
+PVT-TAB-5 are in tests/test_spec_vectors.py, for both backends, and tests/test_backend_comparison.py compares their
+rows with a table.
 """
 
 import dataclasses
@@ -21,6 +22,7 @@ from manywells.pvt.table import COLUMNS, OPTIONAL_COLUMNS, PVTTable, PVTTableSet
 from manywells.sampling.conditions import nominal_conditions
 from manywells.sampling.wells import sample_well, well_properties
 from manywells.simulator import BoundaryConditions, SSDFSimulator, WellProperties
+from manywells.solvers.rust import core_well
 from manywells.units import CF_BAR, CF_RS
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -439,9 +441,10 @@ def vertical_well(pvt, gor=100.0, L=1000.0, n_cells=5):
 
 class TestSimulator:
 
+    @pytest.mark.parametrize('backend', ['casadi', 'rust'])
     @pytest.mark.parametrize('p_r, T_r', [(350.0, 360.0), (250.0, 420.0), (250.0, 290.0)])
-    def test_the_reservoir_must_lie_on_the_grid(self, p_r, T_r):
-        sim = SSDFSimulator(vertical_well(small()))
+    def test_the_reservoir_must_lie_on_the_grid(self, p_r, T_r, backend):
+        sim = SSDFSimulator(vertical_well(small()), backend=backend)
         with pytest.raises(ValueError, match='does not cover the reservoir'):
             sim.simulate(BoundaryConditions(p_r=p_r, T_r=T_r))
 
@@ -449,9 +452,21 @@ class TestSimulator:
         fl = FluidModel(pvt=small(T=(350.0,)), gor=100.0)
         assert fl.covers(250.0, 420.0) and fl.covers(250.0, 290.0) and not fl.covers(350.0, 350.0)
 
-    def test_the_rust_core_refuses_a_table(self):
-        with pytest.raises(ValueError, match='pvt is PVTTable'):
-            SSDFSimulator(vertical_well(small()), backend='rust')
+    @pytest.mark.parametrize('pvt', [
+        pytest.param(lambda: small(), id='small'), pytest.param(lambda: small(T=(350.0,), optional=False), id='one T'),
+        pytest.param(lambda: TestGorAxis.AXIS, id='a GOR axis between its GORs'),
+    ])
+    def test_the_core_reads_the_table_as_casadi_does(self, pvt):
+        """
+        The core's columns (rust/src/pvt/table.rs) are CasADi's interpolant's to the bit, on the grid and off it, with
+        the GOR axis read in Python.
+        """
+        fl = FluidModel(pvt=pvt(), gor=100.0)
+        table, core = fl.pvt.at_gor(fl.gor), core_well(vertical_well(pvt(), gor=100.0))
+        rng = np.random.default_rng(18)
+        for p, T in zip(rng.uniform(-20.0, 450.0, 300), rng.uniform(250.0, 450.0, 300)):
+            want = [num(table.interpolate(c, p, T)) for c in table.columns]
+            assert core._component('table_columns', [p, T]) == want
 
     def test_off_table(self):
         fl, fl1 = FluidModel(pvt=small(), gor=100.0), FluidModel(pvt=small(T=(350.0,)), gor=100.0)
@@ -465,14 +480,16 @@ class TestSimulator:
         assert not FluidModel(pvt=BlackOil(), gor=100.0).off_table(X)
 
     @pytest.mark.slow
-    def test_a_root_flags_points_off_the_table(self, caplog):
+    @pytest.mark.parametrize('backend', ['casadi', 'rust'])
+    def test_a_root_flags_points_off_the_table(self, caplog, backend):
         """A wellhead below the grid's pressures: the root carries the flag, and simulate warns."""
         pvt, gor = MAKE.VB, MAKE.VB_GOR
         T = np.arange(270.0, 400.0 + 1e-9, 10.0)
         bc = BoundaryConditions(p_r=200.0, p_s=20.0, T_r=370.0, u=0.8)
         for p_min, off in ((1.0, False), (60.0, True)):
             p = np.unique(np.r_[p_min, np.arange(60.0, 400.0 + 1e-9, 10.0)])
-            sim = SSDFSimulator(vertical_well(tabulate(pvt, p, T, gor), gor=gor, L=2000.0, n_cells=10))
+            sim = SSDFSimulator(vertical_well(tabulate(pvt, p, T, gor), gor=gor, L=2000.0, n_cells=10),
+                                backend=backend)
             caplog.clear()
             with caplog.at_level(logging.WARNING, logger='manywells'):
                 op = sim.simulate(bc)
@@ -486,8 +503,9 @@ class TestSimulator:
 # ---------------------------------------------------------------------------
 
 @pytest.mark.slow
+@pytest.mark.parametrize('backend', ['casadi', 'rust'])
 @pytest.mark.parametrize('well', [5, 8, 11])
-def test_a_table_of_the_wells_black_oil_gives_its_operating_point(well):
+def test_a_table_of_the_wells_black_oil_gives_its_operating_point(well, backend):
     """
     A sampled well (seed 2026, develop's configuration), with its own black oil tabulated on a 10 bar by 10 K grid
     over its pressures and temperatures: the operating point within 0.05 bar at the bottomhole and the wellhead
@@ -498,8 +516,9 @@ def test_a_table_of_the_wells_black_oil_gives_its_operating_point(well):
     p = np.unique(np.r_[1.0, np.arange(10.0, np.ceil(bc.p_r / 10) * 10 + 1e-9, 10.0)])
     T = np.arange(270.0, np.ceil(bc.T_r / 10) * 10 + 1e-9, 10.0)
     table = tabulate(wp.fluid.pvt, p, T, wp.fluid.gor)
-    base = SSDFSimulator(wp).simulate(bc)
-    op = SSDFSimulator(dataclasses.replace(wp, fluid=dataclasses.replace(wp.fluid, pvt=table))).simulate(bc)
+    base = SSDFSimulator(wp, backend=backend).simulate(bc)
+    op = SSDFSimulator(dataclasses.replace(wp, fluid=dataclasses.replace(wp.fluid, pvt=table)),
+                       backend=backend).simulate(bc)
     assert abs(op.state[0, 0] - base.state[0, 0]) < 0.05
     assert abs(op.state[-1, 0] - base.state[-1, 0]) < 0.05
     assert not op.off_table
@@ -507,9 +526,15 @@ def test_a_table_of_the_wells_black_oil_gives_its_operating_point(well):
 
 @pytest.mark.slow
 def test_the_equation_of_state_table_solves():
-    """synthetic_eos_oil.csv, with its negative R_so and its own viscosities and surface tension, in a vertical well."""
+    """
+    synthetic_eos_oil.csv, with its negative R_so and its own viscosities and surface tension, in a vertical well:
+    the same operating point on both backends.
+    """
     pvt = PVTTable.read_csv(DATA / 'synthetic_eos_oil.csv')
-    sim = SSDFSimulator(vertical_well(pvt, gor=pvt.gor, L=2000.0, n_cells=20))
-    op = sim.simulate(BoundaryConditions(p_r=250.0, p_s=20.0, T_r=360.0, u=0.8))
-    assert op.label == 'stable' and not op.off_table
-    assert 20.0 < op.state[-1, 0] < op.state[0, 0] < 250.0
+    bc = BoundaryConditions(p_r=250.0, p_s=20.0, T_r=360.0, u=0.8)
+    ops = [SSDFSimulator(vertical_well(pvt, gor=pvt.gor, L=2000.0, n_cells=20), backend=b).simulate(bc)
+           for b in ('casadi', 'rust')]
+    for op in ops:
+        assert op.label == 'stable' and not op.off_table
+        assert 20.0 < op.state[-1, 0] < op.state[0, 0] < 250.0
+    np.testing.assert_allclose(ops[1].state, ops[0].state, rtol=1e-8)

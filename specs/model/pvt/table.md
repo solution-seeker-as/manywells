@@ -15,7 +15,7 @@ The hydrocarbon PVT of a fluid from a table (feature 018, `specs/features/018-pv
 | the table from a flash's phase split | the separation, and $X$, $\rho_L$, $\rho_V$ at the nodes | the table | no |
 | the table at the fluid's GOR | the tables at several GORs, $R_{go}$ | the table | no |
 
-In code, `PVTTable` (`pvt/table.py`) is a `PVTModel` whose `gas_law` is `'table'`; `PVTTableSet` holds the tables of one stream at several GORs. `PVTTable.read_csv` reads either from a file, and `write_csv` writes one: `# key: value` lines (`rho_o` and `rho_g`, and the free-text `name`, `source`, `separation` and `gor`), then the columns `[gor,] p, T, R_so, B_o, Z[, mu_o, mu_g, sigma]`, one row per node, in Sm³/Sm³, bar, K and SI units.
+In code, `PVTTable` (`pvt/table.py`) is a `PVTModel` whose `gas_law` is `'table'`; `PVTTableSet` holds the tables of one stream at several GORs. In the Rust core, the fluid's `Pvt::Table` (`rust/src/pvt/fluid.rs`, `table.rs`) holds the table at the fluid's GOR, which `solvers/rust.py` passes it; the core never sees a GOR axis. `PVTTable.read_csv` reads either from a file, and `write_csv` writes one: `# key: value` lines (`rho_o` and `rho_g`, and the free-text `name`, `source`, `separation` and `gor`), then the columns `[gor,] p, T, R_so, B_o, Z[, mu_o, mu_g, sigma]`, one row per node, in Sm³/Sm³, bar, K and SI units.
 
 ## Equations
 
@@ -37,7 +37,7 @@ and with $n = 1$, linear in $\tilde p$ and independent of $T$. With $p_j \le \ti
 
 $$\hat y = (1 - a)\big((1 - b)\thinspace y_{j,k} + b\thinspace y_{j,k+1}\big) + a\big((1 - b)\thinspace y_{j+1,k} + b\thinspace y_{j+1,k+1}\big).$$
 
-It is exact at the nodes and continuous, and its derivatives jump at grid lines. The CasADi backend evaluates it with `casadi.interpolant(..., 'linear', ...)` on the clamped inputs, which agrees with the formula to rounding.
+It is exact at the nodes and continuous, and its derivatives jump at grid lines. The CasADi backend evaluates it with `casadi.interpolant(..., 'linear', ...)` on the clamped inputs, which agrees with the formula to rounding. The Rust core (`rust/src/pvt/table.rs`) does the interpolant's arithmetic, corner by corner in its order, so that the two backends agree to the bit (`tests/test_pvt_table.py`).
 
 ### PVT-TAB-3 · Oil
 
@@ -77,7 +77,7 @@ a table whose GOR is $R_{go}$, exact at the axis's GORs. A column only one of th
 
 | Option | IDs | Used by |
 |---|---|---|
-| PVT table | PVT-TAB-1 to PVT-TAB-5 | `develop` with `pvt=PVTTable(...)`; neither configuration |
+| PVT table | PVT-TAB-1 to PVT-TAB-5 | `develop` with `pvt=PVTTable(...)`, on both backends; neither configuration |
 | A table from a flash | PVT-TAB-6 | `PVTTable.from_phase_split` |
 | A GOR axis | PVT-TAB-7 | `pvt=PVTTableSet(...)` |
 

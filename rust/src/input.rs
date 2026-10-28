@@ -84,7 +84,9 @@ pub mod test_wells {
     use crate::choke::{ChokeModel, Profile};
     use crate::geometry::tests::{survey, vertical};
     use crate::pvt::fluid::{FluidInputs, SurfaceTensionModel, ZFactorModel};
+    use crate::pvt::table::Table;
     use crate::units::{P_REF, T_REF};
+    use std::sync::Arc;
 
     /// A fluid in the v1.0.0 configuration from v1.0.0's parameters, as configurations.v1_fluid: dead oil of the
     /// liquid's density and heat capacity, and the gas-oil ratio that gives the gas mass fraction f_g
@@ -93,7 +95,7 @@ pub mod test_wells {
         let gor = f_g * rho_l / ((1.0 - f_g) * rho_g);
         Fluid::new(FluidInputs { rho_o: rho_l, rho_g, rho_w: 999.1, gor, wlr: 0.0, cp_g, cp_o: cp_l, cp_w: 4184.0,
                                  ideal_gas: true, z_factor: ZFactorModel::Papay, black_oil: false, p_sep: P_REF / 1e5, t_sep: T_REF, p_bubble: None,
-                                 surface_tension: SurfaceTensionModel::Liquid })
+                                 surface_tension: SurfaceTensionModel::Liquid, table: None })
     }
 
     pub fn w1(n_cells: usize) -> (WellSpec, OperatingPoint) {
@@ -147,7 +149,7 @@ pub mod test_wells {
     /// W1 deviated with the energy terms, and a real gas (006)
     pub fn w1_real_gas(n_cells: usize) -> (WellSpec, OperatingPoint) {
         let (mut spec, op) = w1_deviated(n_cells);
-        spec.fluid = Fluid::new(FluidInputs { ideal_gas: false, ..spec.fluid.inputs });
+        spec.fluid = Fluid::new(FluidInputs { ideal_gas: false, ..spec.fluid.inputs.clone() });
         (spec, op)
     }
 
@@ -156,7 +158,7 @@ pub mod test_wells {
     pub fn w1_black_oil(n_cells: usize) -> (WellSpec, OperatingPoint) {
         let (mut spec, op) = w1_real_gas(n_cells);
         spec.fluid = Fluid::new(FluidInputs { black_oil: true, wlr: 0.3, surface_tension: SurfaceTensionModel::Oil,
-                                              ..spec.fluid.inputs });
+                                              ..spec.fluid.inputs.clone() });
         (spec, op)
     }
 
@@ -164,7 +166,8 @@ pub mod test_wells {
     pub fn w2_bubble_point(n_cells: usize) -> (WellSpec, OperatingPoint) {
         let (mut spec, op) = w2_l_shaped(n_cells);
         let rho_o = 141.5 * 999.1 / (35.0 + 131.5);
-        spec.fluid = Fluid::new(FluidInputs { black_oil: true, rho_o, p_bubble: Some(80.0), ..spec.fluid.inputs });
+        spec.fluid = Fluid::new(FluidInputs { black_oil: true, rho_o, p_bubble: Some(80.0),
+                                              ..spec.fluid.inputs.clone() });
         (spec, op)
     }
 
@@ -201,7 +204,7 @@ pub mod test_wells {
     /// W1 with develop's model, the DAK gas law and Joule-Thomson cooling (016)
     pub fn w1_joule_thomson(n_cells: usize) -> (WellSpec, OperatingPoint) {
         let (mut spec, op) = w1_develop(n_cells);
-        spec.fluid = Fluid::new(FluidInputs { z_factor: ZFactorModel::Dak, ..spec.fluid.inputs });
+        spec.fluid = Fluid::new(FluidInputs { z_factor: ZFactorModel::Dak, ..spec.fluid.inputs.clone() });
         spec.thermal.joule_thomson = true;
         (spec, op)
     }
@@ -210,9 +213,50 @@ pub mod test_wells {
     /// Joule-Thomson cooling: a gas mass fraction of 0.4 (016)
     pub fn w2_joule_thomson(n_cells: usize) -> (WellSpec, OperatingPoint) {
         let (mut spec, op) = w2_haaland(n_cells);
-        spec.fluid = Fluid::new(FluidInputs { ideal_gas: false, z_factor: ZFactorModel::Dak, ..spec.fluid.inputs });
+        spec.fluid = Fluid::new(FluidInputs { ideal_gas: false, z_factor: ZFactorModel::Dak,
+                                              ..spec.fluid.inputs.clone() });
         spec.thermal = Thermal { h: 15.0, frictional_heating: true, gravity_term: true, lift_gas_mixing: false,
                                  joule_thomson: true };
+        (spec, op)
+    }
+
+    /// A table of a fluid's own R_so, B_o and Z at the nodes of a grid, pressures (bar) and temperatures (K), and
+    /// optionally its oil and gas viscosities
+    pub fn tabulate(fluid: &Fluid, p: &[f64], t: &[f64], viscosities: bool) -> Table {
+        let column = |f: &dyn Fn(f64, f64) -> f64| -> Vec<f64> {
+            t.iter().flat_map(|&t| p.iter().map(move |&p| f(p, t))).collect()
+        };
+        let (mu_o, mu_g) = if viscosities {
+            (Some(column(&|p, t| fluid.oil_viscosity(p, t))),
+             Some(column(&|p, t| fluid.gas_viscosity(p, t, fluid.gas_density(p, t)))))
+        } else {
+            (None, None)
+        };
+        Table::new(p.to_vec(), t.to_vec(), column(&|p, t| fluid.rs(p, t)), column(&|p, t| fluid.bo(p, t)),
+                   column(&|p, t| fluid.z_factor(p, t)), mu_o, mu_g, None).unwrap()
+    }
+
+    /// The fluid with a table in place of its oil model and gas law
+    fn with_table(fluid: &Fluid, table: Table) -> Fluid {
+        Fluid::new(FluidInputs { table: Some(Arc::new(table)), ..fluid.inputs.clone() })
+    }
+
+    /// W1 with develop's model and Joule-Thomson cooling, its black oil and DAK gas as a table on 1 to 300 bar by
+    /// 10 and 270 to 410 K by 10 (018)
+    pub fn w1_table(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let (mut spec, op) = w1_joule_thomson(n_cells);
+        let p: Vec<f64> = std::iter::once(1.0).chain((1..=30).map(|k| 10.0 * k as f64)).collect();
+        let t: Vec<f64> = (0..=14).map(|k| 270.0 + 10.0 * k as f64).collect();
+        spec.fluid = with_table(&spec.fluid, tabulate(&spec.fluid, &p, &t, false));
+        (spec, op)
+    }
+
+    /// W2 L-shaped at its bubble point with Haaland friction, its black oil and ideal gas as a table at its
+    /// reservoir temperature alone, with the oil's and the gas's viscosities, on 1 to 160 bar by 5 (018)
+    pub fn w2_table_one_temperature(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let (mut spec, op) = w2_haaland(n_cells);
+        let p: Vec<f64> = std::iter::once(1.0).chain((1..=32).map(|k| 5.0 * k as f64)).collect();
+        spec.fluid = with_table(&spec.fluid, tabulate(&spec.fluid, &p, &[op.t_r], true));
         (spec, op)
     }
 
@@ -225,7 +269,8 @@ pub mod test_wells {
              named("w2_bubble_point", w2_bubble_point(n_cells)), named("w1_develop", w1_develop(n_cells)),
              named("w2_haaland", w2_haaland(n_cells)), named("w1_cold_lift_gas", w1_cold_lift_gas(n_cells)),
              named("w2_fixed_rate", w2_fixed_rate(n_cells)), named("w1_joule_thomson", w1_joule_thomson(n_cells)),
-             named("w2_joule_thomson", w2_joule_thomson(n_cells))]
+             named("w2_joule_thomson", w2_joule_thomson(n_cells)), named("w1_table", w1_table(n_cells)),
+             named("w2_table_one_temperature", w2_table_one_temperature(n_cells))]
     }
 }
 

@@ -10,7 +10,7 @@
 //! Derivations of the terms: docs/thermal_energy_modeling.md.
 
 use crate::discretization::State;
-use crate::pvt::fluid::{Fluid, GasLaw};
+use crate::pvt::fluid::Fluid;
 use crate::units::STD_GRAVITY;
 
 #[derive(Clone, Copy, Debug)]
@@ -59,7 +59,7 @@ impl Thermal {
     /// alone, where the phase rates fix the heat flux capacity (no mass transfer). The Joule-Thomson term is zero
     /// for an ideal gas.
     pub fn is_linear(&self, fluid: &Fluid) -> bool {
-        let joule_thomson = self.joule_thomson && fluid.gas_law != GasLaw::Ideal;
+        let joule_thomson = self.joule_thomson && fluid.real_gas();
         !self.frictional_heating && !self.gravity_term && !joule_thomson && !fluid.has_mass_transfer()
     }
 
@@ -137,7 +137,7 @@ mod tests {
     #[test]
     fn the_joule_thomson_term_cools_a_real_gas_by_mu_jt_times_its_pressure_gradient() {
         let ideal = v1_fluid(820.0, 420.0, 2225.0, 3000.0, 0.1);
-        let real = Fluid::new(FluidInputs { ideal_gas: false, z_factor: ZFactorModel::Dak, ..ideal.inputs });
+        let real = Fluid::new(FluidInputs { ideal_gas: false, z_factor: ZFactorModel::Dak, ..ideal.inputs.clone() });
         let th = Thermal { h: 0.0, frictional_heating: false, gravity_term: false, lift_gas_mixing: false,
                            joule_thomson: true };
         let (f, cos_incl) = (300.0, 0.8);

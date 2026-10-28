@@ -195,11 +195,12 @@ mod tests {
             let search = root_set(&spec, &op).unwrap();
             assert!(!search.roots.is_empty(), "{name}");
             for root in &search.roots {
-                // The choke row is as small as p_0's resolution allows, times dR/dp_0, steep at a trickle root:
-                // at W2's, 4e-7 of the rate
+                // The choke row is as small as p_0's resolution allows, 8 ulp of p_r (as backend_cases.ROOT_P0_ULPS),
+                // times dR/dp_0, steep at a trickle root: at W2's, 4e-7 of the rate; or 1e-6 of the rate
                 let (w_g, w_l) = State::of(&root.x[root.x.len() - DIM_X..]).rates(spec.a());
+                let resolution = 8.0 * f64::EPSILON * op.p_r * root.slope.abs();
                 for (id, v) in discretization::rows(&spec, &op, &root.x) {
-                    let bound = if id == "CHK-1" { 1e-6 * (w_g + w_l) } else { 1e-8 };
+                    let bound = if id == "CHK-1" { (1e-6 * (w_g + w_l)).max(resolution) } else { 1e-8 };
                     assert!(v.abs() < bound, "{name} {id}: {v}");
                 }
             }

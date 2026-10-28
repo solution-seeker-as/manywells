@@ -10,4 +10,5 @@ pub mod fluid;
 pub mod gas;
 pub mod mixture;
 pub mod oil;
+pub mod table;
 pub mod water;
