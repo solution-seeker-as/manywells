@@ -13,6 +13,7 @@ v2.0.0 may break any part of the API; every break is listed here with an old→n
 - The Vazquez–Beggs separator gas-gravity correction takes $\log_{10}$ of $p_\text{sep}/114.7$, as the source does, not the natural log. `develop`'s black-oil $R_{so}$ at standard separator conditions rises by about 16% (`specs/features/007-black-oil.md`).
 - A Rust core (`rust/`, built as `manywells._core`) solves the same model as the CasADi backend, with every option: `SSDFSimulator(wp, backend='rust')`. In the `v1.0.0` configuration it returns every reference root of the verifier's case set with its label (`specs/features/014-rust-solver.md`); with `develop`'s options it finds every root the CasADi backend finds, with the same label, except roots on another branch of a point's rows (`specs/features/015-rust-develop-model.md`). It is about 10 to 30 times faster per case than the CasADi backend (median and total, on one process). A well with a component class the core does not have, such as a user's subclass of `InflowModel`, raises `ValueError`; use the CasADi backend for it. The port it comes from (`rust_implementation`) is replaced: it used the exact solution of the energy ODE instead of v1.0.0's rows, and returned at most two unlabelled roots.
 - A state with a supersonic cell is not a root (SOL-8): each cell's momentum row must rise with its pressure along the point's other rows, on the subsonic side of its sonic point. The CasADi search rejects such states, as the Rust core's cell solve never reaches them; none of the verifier's reference roots has one (`specs/features/015-rust-develop-model.md`, Finding 1).
+- A fluid's PVT may come from a table: `FluidModel(pvt=PVTTable.read_csv('fluid.csv'), gor=...)`, with $R_{so}$, $B_o$ and $Z$ (and optionally $\mu_o$, $\mu_g$, $\sigma_{go}$) on a $(p, T)$ grid, interpolated bilinearly (`specs/model/pvt/table.md`). A fluid from an equation of state enters as a table, made from its flash's phase split by `PVTTable.from_phase_split`; tables of one stream at several GORs (`PVTTableSet`) are read at the fluid's GOR. The simulator refuses a reservoir off the table's grid, and a `Root` flags points off it (`off_table`). Both backends, which interpolate to the same bits (`specs/features/018-pvt-tables.md`).
 - Installing from source needs a Rust toolchain: the package is built by maturin instead of setuptools.
 
 ### Calibration
@@ -76,7 +77,7 @@ FluidModel(p_bubble=250e5, p_sep=100 * CF_PSI)
 FluidModel(pvt=BlackOil(p_bubble=250.0, p_sep=100 * CF_PSI / CF_BAR))
 ```
 
-**PVT component.** The hydrocarbon PVT is a component of `FluidModel`, `pvt`, with one class per option: `DeadOil` (`manywells.pvt.dead_oil`) or `BlackOil` (`manywells.pvt.black_oil`), behind the abstract `PVTModel` (`manywells.pvt.model`). `rho_o`, `rho_g`, `oil_model`, `ideal_gas`, `z_factor_model`, `p_sep`, `T_sep` and `p_bubble` move into the classes; `ideal_gas` and `z_factor_model` become one field, `gas_law` (`'ideal'`, `'dak'` or `'papay'`). `fluid.rho_o`, `fluid.rho_g` and every method keep working, and give the same values to the bit. `FluidModel.gas_viscosity` takes the pressure too (`specs/features/018-pvt-tables.md`).
+**PVT component.** The hydrocarbon PVT is a component of `FluidModel`, `pvt`, with one class per option: `DeadOil` (`manywells.pvt.dead_oil`), `BlackOil` (`manywells.pvt.black_oil`) or `PVTTable` (`manywells.pvt.table`), behind the abstract `PVTModel` (`manywells.pvt.model`). `rho_o`, `rho_g`, `oil_model`, `ideal_gas`, `z_factor_model`, `p_sep`, `T_sep` and `p_bubble` move into the classes; `ideal_gas` and `z_factor_model` become one field, `gas_law` (`'ideal'`, `'dak'` or `'papay'`). `fluid.rho_o`, `fluid.rho_g` and every method keep working, and give the same values to the bit. `FluidModel.gas_viscosity` takes the pressure too (`specs/features/018-pvt-tables.md`).
 
 ```python
 # old
@@ -88,6 +89,7 @@ fluid.gas_viscosity(T, rho_g)
 # new
 FluidModel(pvt=BlackOil(rho_o=850, rho_g=0.8, p_bubble=180, gas_law='papay'), gor=150, wlr=0.2)
 FluidModel(pvt=DeadOil(rho_o=850, rho_g=0.8, gas_law='ideal'), gor=150)
+FluidModel(pvt=PVTTable.read_csv('fluid.csv'), gor=150, wlr=0.2)  # new: a PVT table
 replace(fluid, pvt=replace(fluid.pvt, gas_law='ideal'))
 fluid.gas_viscosity(p, T, rho_g)
 ```

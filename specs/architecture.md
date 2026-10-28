@@ -34,7 +34,7 @@ Dependency rules, checked in review:
 | `simulator.py` | `SSDFSimulator`, `WellProperties`, `BoundaryConditions`, `SimError`, `NoOperatingPoint`; backend choice | this file | exists; its assembly moves to `discretization`, `thermal` and `solvers` |
 | `configurations.py` | named configurations (`v1.0.0`, `develop`); the map from v1.0.0's parameters to `develop`'s inputs; the check that a well is in a configuration | `model/README.md`, `sampling.md` SMP-40 | new (Step 7) |
 | `geometry.py` | trajectory, grid, cross-section | `model/geometry.md` | exists |
-| `pvt/` | `FluidModel`: phase densities, viscosities, surface tension, heat capacities, the reservoir gas–liquid split, phase mass rates (mass transfer); its component `pvt`, a `PVTModel` (`model.py`): the hydrocarbon PVT, `DeadOil` or `BlackOil` (feature 018) | `model/pvt/*.md` | exists; the split and the phase rates move in from `simulator.py` |
+| `pvt/` | `FluidModel`: phase densities, viscosities, surface tension, heat capacities, the reservoir gas–liquid split, phase mass rates (mass transfer); its component `pvt`, a `PVTModel` (`model.py`): the hydrocarbon PVT, `DeadOil`, `BlackOil` or `PVTTable` (feature 018) | `model/pvt/*.md` | exists; the split and the phase rates move in from `simulator.py` |
 | `slip.py` | drift-flux law, rise velocities, flow-regime classifier | `model/slip.md` | exists |
 | `friction.py` | viscous pressure gradient, friction-factor options | `model/friction.md` | exists; becomes a component in `WellProperties` |
 | `thermal.py` | heat loss, ambient profile, frictional heating, gravity term, inflow and lift-gas temperature | `model/thermal.md` | new; the terms move out of `simulator.py` |
@@ -222,6 +222,7 @@ Every planned v2 feature, from `specs/goals.md` and the plan's "After this plan"
 | Feature | Module |
 |---|---|
 | Black-oil PVT | `pvt/` (`black_oil.py`) |
+| PVT tables | `pvt/` (`table.py`) |
 | Gas dissolving into oil | `pvt/` (`fluid.py`, `phase_rates`) |
 | Real-gas z-factor | `pvt/` (`gas.py`) |
 | Surface tension from the fluid model, live-oil correction | `pvt/` (`fluid.py`) |

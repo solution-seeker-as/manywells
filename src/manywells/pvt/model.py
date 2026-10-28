@@ -43,6 +43,14 @@ class PVTModel(ABC):
         object.__setattr__(self, '_sg_gas', sg_from_gas_density(self.rho_g))
         object.__setattr__(self, '_pseudo_critical', sutton_pseudo_critical(self._sg_gas))  # (Pa, K)
 
+    def at_gor(self, gor) -> 'PVTModel':
+        """The PVT model a fluid of gas-oil ratio gor (Sm3/Sm3) uses: itself, but for a table's GOR axis (PVT-TAB-7)."""
+        return self
+
+    def covers(self, p, T) -> bool:
+        """Whether (p, T), floats, lies where the model is defined: everywhere, but for a table's grid."""
+        return True
+
     # ------------------------------------------------------------------
     # The oil and the gas at standard conditions
     # ------------------------------------------------------------------

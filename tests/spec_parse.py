@@ -30,7 +30,8 @@ BLOCK = re.compile(r'^<!-- vectors:begin( develop|) -->$(.*?)^<!-- vectors:end\1
 NAMESPACES = {
     'BAL': 'model/balances.md', 'DISC': 'model/discretization.md', 'SOL': 'model/solution.md',
     'GEO': 'model/geometry.md', 'PVT-GAS': 'model/pvt/gas.md', 'PVT-OIL': 'model/pvt/oil.md',
-    'PVT-WAT': 'model/pvt/water.md', 'PVT-MIX': 'model/pvt/mixture.md', 'SLIP': 'model/slip.md',
+    'PVT-WAT': 'model/pvt/water.md', 'PVT-MIX': 'model/pvt/mixture.md', 'PVT-TAB': 'model/pvt/table.md',
+    'SLIP': 'model/slip.md',
     'FRIC': 'model/friction.md', 'THM': 'model/thermal.md', 'INF': 'model/inflow.md',
     'CHK': 'model/choke.md', 'SMO': 'model/smoothing.md', 'SMP': 'sampling.md', 'CAL': 'calibration.md',
 }

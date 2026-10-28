@@ -18,6 +18,7 @@ One file per model part, mirroring `src/manywells/`:
 | `solution.md` | Root set, stability label, operating point |
 | `geometry.md` | Well trajectory and cross-section |
 | `pvt/gas.md`, `pvt/oil.md`, `pvt/water.md`, `pvt/mixture.md` | Phase properties, liquid mixing, surface tension |
+| `pvt/table.md` | The oil's and the gas's properties from a PVT table |
 | `slip.md` | Drift-flux slip law, flow-regime classifier, rise velocities |
 | `friction.md` | Viscous pressure gradient and friction factor |
 | `thermal.md` | Heat loss, ambient temperature, inflow temperature |

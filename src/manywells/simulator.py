@@ -178,11 +178,16 @@ class SSDFSimulator:
         :param bc: Boundary conditions
         :param x_guess: An extra start for the search, such as the root of a nearby operating point
         :return: The root set
-        :raises ValueError: unless p_r > p_s, so that an admissible state (SOL-1) has a pressure range to lie in
+        :raises ValueError: unless p_r > p_s, so that an admissible state (SOL-1) has a pressure range to lie in; and
+            where the fluid's PVT table does not cover p_r and T_r (specs/model/pvt/table.md)
         """
         # Checked here rather than in BoundaryConditions: a generator's decayed p_r below p_s, say, is a failed solve
         if not bc.p_r > bc.p_s:
             raise ValueError(f'the reservoir pressure ({bc.p_r}) must exceed the separator pressure ({bc.p_s})')
+        fluid = self.wp.fluid
+        if not fluid.covers(bc.p_r, bc.T_r):
+            raise ValueError(f'the fluid\'s PVT table, {fluid.table_range}, does not cover the reservoir: '
+                             f'p_r = {bc.p_r} bar, T_r = {bc.T_r} K')
         rs = self._roots.find(bc, x_guess=x_guess)
         failed = [a for a in rs.search if not a.outcome.startswith('root')]
         if failed:
@@ -210,6 +215,9 @@ class SSDFSimulator:
         rs = self.root_set(bc, x_guess=x_guess)
         if rs.operating_point is None:
             raise NoOperatingPoint(rs)
+        if rs.operating_point.off_table:
+            log.warning('the operating point has points off the fluid\'s PVT table, %s, where its properties are '
+                        'clamped to the grid\'s edge', self.wp.fluid.table_range)
         if rs.several_stable:
             log.info('%d stable roots; the operating point is the one with the lowest p_0 (SOL-6)',
                      sum(r.label == 'stable' for r in rs.roots))

@@ -120,8 +120,9 @@ or the given $p_b$ if there is one. Not used by the simulator.
 |---|---|---|
 | Dead oil | PVT-OIL-1 | `v1.0.0`; `develop` with `pvt=DeadOil(...)` |
 | Black oil: Vazquez–Beggs $R_{so}$ and $B_o$, live-oil density, dissolved gas | PVT-OIL-4 to PVT-OIL-9, PVT-OIL-13 | `develop` default (`pvt=BlackOil()`) |
-| Oil viscosity, for friction | PVT-OIL-10, and PVT-OIL-11 with black oil | `develop`'s `RoughnessFriction` |
-| Live-oil surface tension | PVT-OIL-12 | `develop` default (PVT-MIX-7) |
+| PVT table: $R_{so}$ and $B_o$ from a table, live-oil density, dissolved gas | PVT-TAB-3 (`table.md`), PVT-OIL-9, PVT-OIL-13 | `develop` with `pvt=PVTTable(...)` |
+| Oil viscosity, for friction | PVT-OIL-10, and PVT-OIL-11 with black oil or a table without $\mu_o$ (PVT-TAB-5) | `develop`'s `RoughnessFriction` |
+| Live-oil surface tension | PVT-OIL-12 | `develop` default (PVT-MIX-7), and a table without $\sigma_{go}$ (PVT-TAB-5) |
 
 ## Safeguards
 

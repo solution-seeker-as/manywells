@@ -30,7 +30,7 @@ The layout is `src/`-based. Scripts under `scripts/` import both `manywells.*` a
 The modules follow `specs/architecture.md`. `src/manywells/simulator.py` holds `SSDFSimulator`, its inputs `WellProperties` (one component object per model part) and `BoundaryConditions` (the operating point), `SimError` and `NoOperatingPoint`. The components are frozen dataclasses or ABCs whose methods work on CasADi symbols as well as floats, and import only `units`, `ca_functions` and, within `pvt/`, each other:
 
 - `geometry.py`: the trajectory and grid (MD/TVD, inclination, TVD fraction).
-- `pvt/`: fluid properties. `fluid.py` (`FluidModel`) is the one interface the rest calls, including the phase rates with dissolved gas. It holds the stream (water, the ratios, the heat capacities) and mixes oil and water; its component `pvt`, a `PVTModel` (`model.py`), gives the hydrocarbon properties: `DeadOil` (`dead_oil.py`) or `BlackOil` (`black_oil.py`), each with a gas law. The other modules hold phase correlations.
+- `pvt/`: fluid properties. `fluid.py` (`FluidModel`) is the one interface the rest calls, including the phase rates with dissolved gas. It holds the stream (water, the ratios, the heat capacities) and mixes oil and water; its component `pvt`, a `PVTModel` (`model.py`), gives the hydrocarbon properties: `DeadOil` (`dead_oil.py`) or `BlackOil` (`black_oil.py`), each with a gas law, or `PVTTable` (`table.py`), a table on a $(p, T)$ grid, and `PVTTableSet`, tables at several GORs. The other modules hold phase correlations.
 - `slip.py`: drift-flux closure and flow-regime classification.
 - `friction.py`, `thermal.py`: the friction model (fixed `f_D` or from roughness) and the thermal model (heat loss, frictional heating, gravity term, Joule–Thomson cooling, inflow temperature).
 - `inflow.py`, `choke.py`: the bottom and top boundary models.
@@ -107,6 +107,8 @@ All reference data is built from v1.0.0, which is frozen. A rebuild reproduces t
 | `verification/data/distribution_reference.json` | `verification/build/distribution_reference.py --data-dir <dir>` | develop | its docstring; needs the published dataset rows |
 | test vectors in `specs/model/` and `specs/model/vectors/v1_rows.json` | `specs/tools/make_v1_vectors.py` | v1.0.0 | `specs/model/README.md`, Test vectors |
 | `verification/tests/data/fixtures.npz` | `verification/build/make_test_fixtures.py` | v1.0.0 | `verification/build/README.md` |
+| `tests/data/pvt/vazquez_beggs.csv`, `synthetic_eos_oil_360K.csv` | `specs/tools/make_pvt_tables.py` | develop | `tests/data/pvt/README.md` |
+| `tests/data/pvt/synthetic_eos_oil.csv`, `synthetic_eos_oil_gor.csv` | `plans/evidence/pvt_table_eos.py` | NeqSim 3.4.0 and Java | its docstring |
 
 The v1.0.0 environment is a git worktree of the tag in `.worktrees/v1.0.0`, set up as `verification/build/README.md` describes. The Rust environment is a worktree of the old port, `rust_implementation` at `0e9e98b`, in `.worktrees/rust`: the reference's second search uses that port, never the Rust core in `rust/`, so that the reference stays independent of the core it checks. Run its scripts from the project root with `.worktrees/v1.0.0/.venv/bin/python`, never with `uv run`, because `develop`'s package has the same name.
 

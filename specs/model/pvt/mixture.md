@@ -93,7 +93,7 @@ per unit volume of stock-tank oil, with $0 \le \alpha_{w,l} < 1$. The `v1.0.0` c
 | Option | IDs | Used by |
 |---|---|---|
 | Constant liquid density | PVT-MIX-1 | `v1.0.0`; `develop` with dead oil |
-| Liquid density with black oil, oil and water mixed by in-situ volume | PVT-MIX-6 | `develop` default |
+| Liquid density with black oil or a PVT table, oil and water mixed by in-situ volume | PVT-MIX-6 | `develop` default, and with `pvt=PVTTable(...)` |
 | Mixing of oil and water | PVT-MIX-2 to PVT-MIX-4 | the `v1.0.0` sampler; `develop`'s fluid model, by the water–liquid ratio at standard conditions (PVT-MIX-10) |
 | Surface tension from the liquid density | PVT-MIX-5 | `v1.0.0`; `develop` with `surface_tension_model='liquid'` |
 | Surface tension from the oil density, with a live-oil correction | PVT-MIX-7 | `develop` default |

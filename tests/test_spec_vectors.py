@@ -48,16 +48,17 @@ from manywells.units import CF_BAR
 from .spec_parse import ROOT, row_vectors, vector_tables
 
 
-def _develop_tables():
-    """The adapters of the develop vectors: the generator's own calls (specs/tools/make_develop_vectors.py)."""
+def _develop_vectors():
+    """specs/tools/make_develop_vectors.py, whose tables' calls are the adapters of the develop vectors."""
     import importlib.util
     spec = importlib.util.spec_from_file_location('make_develop_vectors', ROOT / 'specs' / 'tools' / 'make_develop_vectors.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return {t.heading: t.fn for t in module.TABLES}
+    return module
 
 
-DEVELOP_ADAPTERS = _develop_tables()
+DEVELOP = _develop_vectors()
+DEVELOP_ADAPTERS = {t.heading: t.fn for t in DEVELOP.TABLES}
 
 REL, ABS = 1e-12, 1e-15      # component vectors: the same arithmetic, so agreement to rounding
 ROW_REL = 1e-10              # row vectors: relative to the row's size, which is far from zero
@@ -214,6 +215,19 @@ def dead_fluid(rho_o=DeadOil.rho_o, rho_g=DeadOil.rho_g, gas_law='ideal', **kw):
                       **{'surface_tension_model': 'liquid', **kw})
 
 
+def table_fluid(table=None, **kw):
+    """A fluid with the PVT table of the develop vectors (make_develop_vectors.TAB, or another) and the oil surface
+    tension, as their adapters have it."""
+    return FluidModel(pvt=table or DEVELOP.TAB, **kw)
+
+
+def table_properties(table, p, T, rho_g):
+    """PVT-TAB-5 in the core: the oil's and the gas's viscosity and the surface tension, which ignores rho_l."""
+    fl = table_fluid(table)
+    return (rust('oil_viscosity', p, T, fluid=fl), rust('fluid_gas_viscosity', p, T, rho_g, fluid=fl),
+            rust('surface_tension', p, T, 0.0, fluid=fl))
+
+
 def papay_fluid(**kw):
     """dead_fluid with a real gas by Papay's z-factor."""
     return dead_fluid(gas_law='papay', **kw)
@@ -317,6 +331,15 @@ RUST_ADAPTERS = {
     'PVT-OIL-13': lambda api, sg_gas, gor, wlr, p, T, w_res, w_lg:
         rust('phase_rates', p, T, w_res, w_lg, fluid=oil(api, sg_gas, gor, wlr)),
     'PVT-WAT-3': lambda T: rust('water_viscosity', T),
+    'PVT-TAB-2': lambda p, T: rust('table_columns', p, T, fluid=table_fluid()),
+    'PVT-TAB-2 (one temperature)': lambda p, T: rust('table_columns', p, T, fluid=table_fluid(DEVELOP.TAB_350)),
+    'PVT-TAB-3': lambda gor, wlr, p, T, w_res, w_lg: (
+        *rust('phase_rates', p, T, w_res, w_lg, fluid=table_fluid(gor=gor, wlr=wlr)),
+        rust('liquid_density', p, T, fluid=table_fluid(gor=gor, wlr=wlr))),
+    'PVT-TAB-4': lambda p, T, rho_g: (rust('z_factor', p, T, fluid=table_fluid()),
+                                      rust('gas_law_row', p, T, rho_g, fluid=table_fluid())),
+    'PVT-TAB-5': lambda p, T, rho_g: table_properties(DEVELOP.TAB, p, T, rho_g),
+    'PVT-TAB-5 (correlations)': lambda p, T, rho_g: table_properties(DEVELOP.TAB_350, p, T, rho_g),
     'PVT-MIX-6': lambda api, sg_gas, gor, wlr, p, T: rust('liquid_density', p, T, fluid=oil(api, sg_gas, gor, wlr)),
     'PVT-MIX-7': lambda api, sg_gas, p, T, rho_l:
         rust('surface_tension', p, T, rho_l, fluid=oil(api, sg_gas, surface_tension_model='oil')),

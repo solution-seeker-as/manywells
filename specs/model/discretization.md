@@ -114,7 +114,7 @@ The unknowns and the order of the points are those of DISC-6. At each point, in 
 | $0 < i < N$ | DISC-7, DISC-8, DISC-9, DISC-10, then the closures | 7 |
 | $i = N$ | DISC-7, DISC-8, DISC-9, DISC-10, CHK-1, then the closures | 8 |
 
-The closures, in order, are SLIP-1, the gas law (PVT-GAS-1, PVT-GAS-3 or PVT-GAS-11) and the liquid density (PVT-MIX-1 or PVT-MIX-6). The closures at point $i > 0$ use the inclination of cell $i$, below the point; those at point 0 use cell 1's. The reservoir liquid rate $w_\text{res}$ is the inflow model's at $p_0$ (INF-1, INF-2 or INF-8), a function of the state that enters every point's mass rows; it is not hidden state.
+The closures, in order, are SLIP-1, the gas law (PVT-GAS-1, PVT-GAS-3, PVT-GAS-11 or PVT-TAB-4) and the liquid density (PVT-MIX-1 or PVT-MIX-6). The closures at point $i > 0$ use the inclination of cell $i$, below the point; those at point 0 use cell 1's. The reservoir liquid rate $w_\text{res}$ is the inflow model's at $p_0$ (INF-1, INF-2 or INF-8), a function of the state that enters every point's mass rows; it is not hidden state.
 
 In the `v1.0.0` configuration the rows are those of DISC-6, row for row: DISC-7 to DISC-10 are DISC-2 to DISC-5, the inflow temperature row is THM-3, and the closures are SLIP-1, PVT-GAS-1 and PVT-MIX-1. Canonical forms of the rows defined in other files, besides those of DISC-6:
 

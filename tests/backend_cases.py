@@ -39,6 +39,7 @@ from manywells.inflow import FixedFlowRate, ProductivityIndex, Vogel
 from manywells.pvt import api_from_density, density_from_api
 from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.dead_oil import DeadOil
+from manywells.pvt.table import PVTTable, PVTTableSet
 from manywells.sampling.conditions import sample_conditions
 from manywells.sampling.wells import rng_for, sample_well, well_properties
 from manywells.simulator import BoundaryConditions, SSDFSimulator, WellProperties
@@ -50,7 +51,8 @@ ROOT_ROW = 1e-8       # a core-only root zeroes every CasADi row but the choke r
 ROOT_CHOKE_REL = 1e-6  # and the choke row to this fraction of the wellhead rate, or to what p_0's resolution allows,
 ROOT_P0_ULPS = 8       # this many ulp of p_r times |dR/dp_0|, if more (steep at the trickle roots next to p_r)
 SEED = 20261002       # the comparison set's seed (SMP-31)
-FEATURES = ('001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011', '016', '019')
+FEATURES = ('001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011', '016', '018',
+            '019')
 
 
 def features(wp) -> frozenset:
@@ -82,6 +84,8 @@ def features(wp) -> frozenset:
         out.add('011')
     if fluid.pvt.gas_law != 'ideal' and (fluid.pvt.gas_law == 'dak' or thermal.joule_thomson):
         out.add('016')
+    if type(fluid.pvt) in (PVTTable, PVTTableSet):
+        out.add('018')
     return frozenset(out)
 
 
@@ -151,6 +155,22 @@ def bubble_point(wp, bc):
     """Black oil whose solution gas-oil ratio is capped at a bubble point halfway between p_s and p_r."""
     wp, bc = black_oil(wp, bc)
     return with_pvt(wp, replace(wp.fluid.pvt, p_bubble=bc.p_s + 0.5 * (bc.p_r - bc.p_s))), bc
+
+
+def pvt_table(one_temperature=False):
+    """
+    The fluid's own PVT as a table (018): its R_so, B_o and Z at the nodes of a grid from 1 bar to p_r by 10 and from
+    260 K to T_r by 10, or at T_r alone.
+    """
+    def overlay(wp, bc):
+        fl = wp.fluid
+        p = np.unique(np.r_[1.0, np.arange(10.0, bc.p_r + 10.0, 10.0)])
+        T = np.array([bc.T_r]) if one_temperature else np.arange(260.0, bc.T_r + 10.0, 10.0)
+        P, TT = np.meshgrid(p, T, indexing='ij')
+        columns = {c: np.vectorize(lambda a, b, f=f: float(f(a, b)))(P, TT)
+                   for c, f in (('R_so', fl.rs), ('B_o', fl.bo), ('Z', fl.z_factor))}
+        return with_pvt(wp, PVTTable(p=p, T=T, rho_o=fl.rho_o, rho_g=fl.rho_g, gor=fl.gor, **columns)), bc
+    return overlay
 
 
 def thermal(**kw):
@@ -229,6 +249,8 @@ OVERLAYS = {
     'no lift-gas mixing': thermal(lift_gas_mixing=False),
     'no joule-thomson': thermal(joule_thomson=False),
     'fitted': lambda wp, bc: (replace(wp, slip=SlipModel(regime_model='fitted')), bc),
+    'pvt table': pvt_table(),
+    'pvt table, one temperature': pvt_table(one_temperature=True),
 }
 
 
@@ -260,7 +282,8 @@ V1_OVERLAYS = ('non-uniform grid', 'deviated', 'L-shaped', 'slip constants', 'wa
 DEVELOP_OVERLAYS = ('dead oil', 'ideal gas', 'liquid surface tension', 'fixed f_D', 'haaland', 'no frictional heating',
                     'no gravity term', 'no lift-gas mixing', 'no joule-thomson', 'fitted', 'papay', 'deviated',
                     'L-shaped', 'non-uniform grid',
-                    'slip constants', 'water', 'bubble point', 'lift-gas temperature', 'fixed rate', 'vogel', 'simpson')
+                    'slip constants', 'water', 'bubble point', 'lift-gas temperature', 'fixed rate', 'vogel', 'simpson',
+                    'pvt table', 'pvt table, one temperature')
 
 
 @dataclass(frozen=True)
@@ -353,7 +376,7 @@ COMPARISON = {
          'fixed rate', 'five regimes'),
     DEVELOP: ('', 'dead oil', 'ideal gas', 'papay', 'liquid surface tension', 'haaland', 'fixed f_D',
               'no frictional heating', 'no gravity term', 'no joule-thomson', 'lift-gas temperature', 'fixed rate',
-              'productivity index', 'bernoulli', 'bubble point', 'fitted'),
+              'productivity index', 'bernoulli', 'bubble point', 'fitted', 'pvt table', 'pvt table, one temperature'),
 }
 
 

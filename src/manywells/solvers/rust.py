@@ -31,6 +31,7 @@ from manywells.inflow import FixedFlowRate, ProductivityIndex, Vogel
 from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.dead_oil import DeadOil
 from manywells.pvt.fluid import FluidModel
+from manywells.pvt.table import PVTTable, PVTTableSet
 from manywells.slip import SlipModel
 from manywells.solution import Root, RootSet
 from manywells.solvers.roots import Attempt, admissible, label_of, normalized_slope
@@ -40,7 +41,7 @@ from manywells.thermal import ThermalModel
 CORE_CLASSES = {'geometry': (WellGeometry,), 'fluid': (FluidModel,), 'friction': (FixedFrictionFactor, RoughnessFriction),
                 'thermal': (ThermalModel,), 'slip': (SlipModel,), 'inflow': (Vogel, ProductivityIndex, FixedFlowRate),
                 'choke': (SimpsonChokeModel, BernoulliChokeModel)}
-PVT_CLASSES = (DeadOil, BlackOil)  # The fluid's PVT models that the core implements, exactly
+PVT_CLASSES = (DeadOil, BlackOil, PVTTable, PVTTableSet)  # The fluid's PVT models that the core implements, exactly
 
 
 def not_in_core(wp) -> list:
@@ -70,7 +71,7 @@ def core_well(wp) -> '_core.Well':
     return _core.Well(md=list(geo.md), tvd=list(geo.tvd), D=geo.D,
                       rho_o=fluid.rho_o, rho_g=fluid.rho_g, rho_w=fluid.rho_w, gor=fluid.gor, wlr=fluid.wlr,
                       cp_g=fluid.cp_g, cp_o=fluid.cp_o, cp_w=fluid.cp_w,
-                      surface_tension_model=fluid.surface_tension_model, **_pvt(fluid.pvt),
+                      surface_tension_model=fluid.surface_tension_model, **_pvt(fluid),
                       **_friction(wp.friction),
                       h=thermal.h, frictional_heating=thermal.frictional_heating, gravity_term=thermal.gravity_term,
                       lift_gas_mixing=thermal.lift_gas_mixing, joule_thomson=thermal.joule_thomson,
@@ -82,9 +83,15 @@ def core_well(wp) -> '_core.Well':
                       profile=choke.chk_profile)
 
 
-def _pvt(pvt) -> dict:
-    """The core's fluid options for a PVT model: its oil model and gas law, and the black oil's separator and bubble
-    point (the dead oil's are not used)."""
+def _pvt(fluid) -> dict:
+    """The core's fluid options for the fluid's PVT model: its oil model and gas law, and the black oil's separator and
+    bubble point (the dead oil's are not used); or its table at the fluid's GOR (PVT-TAB-7), which replaces them."""
+    pvt = fluid._hc  # The PVT model at the fluid's GOR, which FluidModel reads once
+    if type(pvt) is PVTTable:
+        table = {'p': list(pvt.p), 'T': list(pvt.T),
+                 **{c: np.array(getattr(pvt, c)).ravel(order='F').tolist() for c in pvt.columns}}
+        return dict(oil_model='table', ideal_gas=False, z_factor_model='dak', p_sep=BlackOil.p_sep,
+                    T_sep=BlackOil.T_sep, p_bubble=None, table=table)
     black_oil = type(pvt) is BlackOil
     return dict(oil_model='black_oil' if black_oil else 'dead_oil', ideal_gas=pvt.gas_law == 'ideal',
                 z_factor_model='papay' if pvt.gas_law == 'papay' else 'dak',
@@ -133,7 +140,7 @@ class RustRootFinder:
             slope = normalized_slope(r.slope, x, bc.p_r, bc.p_s, self.wp.geometry.A)
             label = label_of(slope) if np.isfinite(slope) else 'indeterminate'
             roots.append(Root(x=x, label=label, slope=slope, choked=r.choked, flow_regime=tuple(r.flow_regime),
-                              w_res=r.w_res, w_g_res=r.w_g_res))
+                              w_res=r.w_res, w_g_res=r.w_g_res, off_table=self.wp.fluid.off_table(x)))
         unresolved = counts['rejected']
         outcome = (f'{len(roots)} roots' + (f', {rejected} not admissible' if rejected else '')
                    + (f', {unresolved} sign changes of R not accepted' if unresolved else ''))

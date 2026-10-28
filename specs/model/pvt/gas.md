@@ -115,8 +115,9 @@ with $Z$ and $\rho_r$ of PVT-GAS-9 and $p$ in bar. $Z$ is explicit in the state'
 | Ideal gas | PVT-GAS-1 | `v1.0.0`; `develop` with `gas_law='ideal'` |
 | Real gas, Dranchuk–Abou-Kassem equation of state (Sutton pseudo-critical properties) | PVT-GAS-5, PVT-GAS-9, PVT-GAS-11 | `develop` default (`gas_law='dak'`) |
 | Real gas with Papay's z-factor (Sutton pseudo-critical properties) | PVT-GAS-3 to PVT-GAS-5 | `develop` with `gas_law='papay'` |
+| Real gas with a table's z-factor | PVT-TAB-4 (`table.md`) | `develop` with `pvt=PVTTable(...)` (`gas_law` is `'table'`) |
 
-PVT-GAS-2 and PVT-GAS-6 apply to every option, PVT-GAS-7 to the friction of `develop` (FRIC-3), and PVT-GAS-10 to the Joule–Thomson term of the energy balance (THM-8).
+PVT-GAS-2 and PVT-GAS-6 apply to every option, PVT-GAS-7 to the friction of `develop` (FRIC-3) unless a table gives $\mu_g$ (PVT-TAB-5), and PVT-GAS-10 to the Joule–Thomson term of the energy balance (THM-8), with a table too.
 
 The heat capacity $c_{pg}$ is a constant parameter (THM-1). The lift gas is the same gas as the produced gas (paper §2.3).
 

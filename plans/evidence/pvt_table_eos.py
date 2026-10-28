@@ -36,7 +36,8 @@ stock-tank densities), and each recombined stream's table is compared, at the no
 It then measures a GOR axis: at each GOR but the outermost, the columns interpolated linearly in GOR between the two
 neighbouring GORs' tables, against that GOR's own table. With the argument gor_table, it writes
 tests/data/pvt/synthetic_eos_oil_gor.csv: the stream at 0.6, 0.8, 1, 1.25 and 1.5 times its GOR, every 20 K, each
-GOR on its own grid (its own bubble points), without the viscosities and the surface tension.
+GOR on its own grid (its own bubble points), with every column: R_so is negative at low pressure and high temperature,
+so the table needs its own viscosities and surface tension (PVT-TAB-1).
 
 NeqSim needs Java and is not a ManyWells dependency. From the repository root:
 
@@ -186,7 +187,7 @@ def main(out):
     f = Fluid()
     df, s = tabulate(f, f.z)
     header = [
-        '# ManyWells PVT table (specs/features/018-pvt-tables.md, draft)',
+        '# ManyWells PVT table (specs/model/pvt/table.md)',
         '# name: synthetic_eos_oil',
         '# source: plans/evidence/pvt_table_eos.py; NeqSim 3.4.0, Peng-Robinson with Peneloux volume correction; '
         'a synthetic composition, not a real fluid',
@@ -278,11 +279,11 @@ def gor_table(out):
     frames, gors = [], []
     for factor in GOR_FACTORS:
         df, s = tabulate(f, f.z if factor == 1.0 else recombined(f, factor), np.arange(280.0, 400.0 + 1e-9, 20.0))
-        frames.append(df[['p', 'T', 'R_so', 'B_o', 'Z']].assign(gor=round(s['gor'], 4)))
+        frames.append(df.assign(gor=round(s['gor'], 4)))
         gors.append(s)
     s0 = gors[GOR_FACTORS.index(1.0)]
     header = [
-        '# ManyWells PVT table (specs/features/018-pvt-tables.md, draft)',
+        '# ManyWells PVT table (specs/model/pvt/table.md)',
         '# name: synthetic_eos_oil_gor',
         '# source: plans/evidence/pvt_table_eos.py gor_table; synthetic_eos_oil.csv\'s stream recombined from its own '
         'separator gas and stock-tank oil at 0.6, 0.8, 1, 1.25 and 1.5 times its GOR, each GOR with its own grid',
@@ -291,9 +292,10 @@ def gor_table(out):
         f'# rho_g: {s0["rho_g"]:.6f}',
         '# p_bubble at 360 K: ' + ', '.join(f'{s["gor"]:.1f}={s["p_b"][360.0][0]:.3f}' for s in gors)
         + '  (GOR in Sm3/Sm3 = p in bar)',
-        '# columns: gor (Sm3/Sm3), p (bar), T (K), R_so (Sm3/Sm3), B_o (-), Z (-, with R_s at standard conditions)',
+        '# columns: gor (Sm3/Sm3), p (bar), T (K), R_so (Sm3/Sm3), B_o (-), Z (-, with R_s at standard conditions), '
+        'mu_o and mu_g (Pa s), sigma (N/m)',
     ]
-    df = pd.concat(frames)[['gor', 'p', 'T', 'R_so', 'B_o', 'Z']]
+    df = pd.concat(frames)[['gor', 'p', 'T', 'R_so', 'B_o', 'Z', 'mu_o', 'mu_g', 'sigma']]
     with open(out, 'w') as fh:
         fh.write('\n'.join(header) + '\n')
         df.to_csv(fh, index=False, float_format='%.10g')

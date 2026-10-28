@@ -45,7 +45,8 @@ mod _core {
     use crate::discretization::State;
     use crate::input::{OperatingPoint, WellSpec};
     use crate::march::Marcher;
-    use crate::pvt::fluid::{Fluid, FluidInputs, SurfaceTensionModel, ZFactorModel};
+    use crate::pvt::fluid::{Fluid, FluidInputs, Pvt, SurfaceTensionModel, ZFactorModel};
+    use crate::pvt::table::Table;
     use crate::pvt::{gas, mixture, oil, water};
     use crate::shoot;
     use crate::slip::{self, RegimeModel, Slip};
@@ -83,13 +84,15 @@ mod _core {
     #[pymethods]
     impl Well {
         /// A well from the fields of WellProperties' components (src/manywells/solvers/rust.py, core_well), each
-        /// option by its name, as in the Python classes
+        /// option by its name, as in the Python classes. With oil_model 'table', the PVT table replaces the oil model
+        /// and the gas law: its grid and columns by name, p, T, R_so, B_o, Z and optionally mu_o, mu_g and sigma, each
+        /// column with one value per node, the pressure varying fastest
         #[new]
         #[pyo3(signature = (
             *,
             md, tvd, D,
             rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, z_factor_model, oil_model, surface_tension_model,
-            p_sep, T_sep, p_bubble=None,
+            p_sep, T_sep, p_bubble=None, table=None,
             friction, f_D=None, roughness=None, correlation=None,
             h, frictional_heating, gravity_term, lift_gas_mixing, joule_thomson,
             regime_model, C_0_annular, C_0_slug, C_0_bubbly, v_inf_annular, f_ms, transition_width, lambda_floor,
@@ -100,17 +103,19 @@ mod _core {
         fn new(md: Vec<f64>, tvd: Vec<f64>, D: f64,
                rho_o: f64, rho_g: f64, rho_w: f64, gor: f64, wlr: f64, cp_g: f64, cp_o: f64, cp_w: f64, ideal_gas: bool,
                z_factor_model: &str, oil_model: &str, surface_tension_model: &str, p_sep: f64, T_sep: f64,
-               p_bubble: Option<f64>,
+               p_bubble: Option<f64>, table: Option<HashMap<String, Vec<f64>>>,
                friction: &str, f_D: Option<f64>, roughness: Option<f64>, correlation: Option<&str>,
                h: f64, frictional_heating: bool, gravity_term: bool, lift_gas_mixing: bool, joule_thomson: bool,
                regime_model: &str, C_0_annular: f64, C_0_slug: f64, C_0_bubbly: f64, v_inf_annular: f64, f_ms: f64,
                transition_width: f64, lambda_floor: f64,
                inflow: &str, inflow_coefficient: f64,
                choke: &str, K_c: f64, profile: &str) -> PyResult<Self> {
-            let black_oil = match oil_model {
-                "dead_oil" => false,
-                "black_oil" => true,
-                m => return Err(PyValueError::new_err(format!("oil model {m:?} is not 'dead_oil' or 'black_oil'"))),
+            let (black_oil, table) = match (oil_model, table) {
+                ("dead_oil", None) => (false, None),
+                ("black_oil", None) => (true, None),
+                ("table", Some(columns)) => (false, Some(std::sync::Arc::new(pvt_table(columns)?))),
+                (m, _) => return Err(PyValueError::new_err(format!(
+                    "oil model {m:?} is not 'dead_oil' or 'black_oil' without a table, or 'table' with one"))),
             };
             let z_factor = match z_factor_model {
                 "dak" => ZFactorModel::Dak,
@@ -154,7 +159,7 @@ mod _core {
                 geometry: Geometry::from_grid(&md, &tvd, D).map_err(PyValueError::new_err)?,
                 fluid: Fluid::new(FluidInputs {
                     rho_o, rho_g, rho_w, gor, wlr, cp_g, cp_o, cp_w, ideal_gas, z_factor, black_oil, p_sep,
-                    t_sep: T_sep, p_bubble, surface_tension,
+                    t_sep: T_sep, p_bubble, surface_tension, table,
                 }),
                 friction,
                 thermal: Thermal { h, frictional_heating, gravity_term, lift_gas_mixing, joule_thomson },
@@ -232,6 +237,18 @@ mod _core {
             }
             Ok(())
         }
+    }
+
+    /// A PVT table from its grid and columns by name
+    fn pvt_table(mut columns: HashMap<String, Vec<f64>>) -> PyResult<Table> {
+        let mut take = |name: &str| columns.remove(name);
+        let mut need = |name: &str| take(name).ok_or_else(|| PyValueError::new_err(format!("the table has no {name}")));
+        let (p, t, r_so, b_o, z) = (need("p")?, need("T")?, need("R_so")?, need("B_o")?, need("Z")?);
+        let (mu_o, mu_g, sigma) = (take("mu_o"), take("mu_g"), take("sigma"));
+        if let Some(name) = columns.keys().next() {
+            return Err(PyValueError::new_err(format!("the table has an unknown column {name:?}")));
+        }
+        Table::new(p, t, r_so, b_o, z, mu_o, mu_g, sigma).map_err(PyValueError::new_err)
     }
 
     fn take<const N: usize>(name: &str, a: &[f64]) -> Result<[f64; N], String> {
@@ -361,6 +378,19 @@ mod _core {
             "live_oil_viscosity" => { let [mu, rs_scf] = take(name, a)?; vec![oil::live_oil_viscosity(mu, rs_scf)] }
             "water_viscosity" => { let [t] = take(name, a)?; vec![water::water_viscosity(t)] }
             "liquid_viscosity" => { let [p, t] = take(name, a)?; vec![spec.fluid.liquid_viscosity(p, t)] }
+            "oil_viscosity" => { let [p, t] = take(name, a)?; vec![spec.fluid.oil_viscosity(p, t)] }
+            "fluid_gas_viscosity" => {
+                let [p, t, rho_g] = take(name, a)?;
+                vec![spec.fluid.gas_viscosity(p, t, rho_g)]
+            }
+            "gas_law_row" => { let [p, t, rho_g] = take(name, a)?; vec![spec.fluid.gas_law_row(p, t, rho_g)] }
+            "table_columns" => {
+                let [p, t] = take(name, a)?;
+                let Pvt::Table { table, .. } = &spec.fluid.pvt else {
+                    return Err("the well's fluid has no PVT table".into());
+                };
+                table.columns(p, t)
+            }
             "mixture_viscosity" => {
                 let [mu_l, mu_g, alpha, rho_l, rho_g] = take(name, a)?;
                 vec![mixture::mixture_viscosity(mu_l, mu_g, alpha, rho_l, rho_g)]
