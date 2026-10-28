@@ -1,6 +1,6 @@
 # 019 · Five flow regimes after Hasan, Kabir and Sayarpour (2010)
 
-*Feature spec, 2026-10-28. Status: approved by Bjarne on 2026-10-28 (Approval, at the end); not implemented. Bjarne made the decisions below while it was drafted.*
+*Feature spec, 2026-10-28. Status: approved by Bjarne on 2026-10-28 (Approval, at the end); implemented on the branch `five-flow-regimes` (Implementation); the implemented feature awaits sign-off (Sign-off). Bjarne made the decisions below while it was drafted.*
 
 ## Decisions (Bjarne, 2026-10-28)
 
@@ -158,16 +158,51 @@ The scripts are in `plans/evidence/` (`README.md` there): `slip_models.py` compa
 - **Against the fitted classifier**, in the 38 wells both solve: PBH changes by −0.73 bar at the median, 1.6 bar on average in size and up to 14.0 bar, and falls in 34 of them; the reservoir liquid rate rises by 2.6% at the median and by up to 19.8%. The change is larger than 5 bar in 3 wells.
 - **Regimes.** Along this model's operating points (3838 points), 69.2% are annular, 14.0% churn, 6.5% dispersed bubbly, 6.1% slug and 4.2% bubbly. At 22.0% of the points the label differs from the fitted classifier's at the same point of its own operating point, with slug and churn merged and dispersed bubbly counted as bubbly.
 
+**The implemented feature** (`five_regime_default.py`): the 263 cases of `dak_jt_default.py` (88 wells of `develop`'s sampler, seed 2026, at their nominal operating point and two sampled ones), with the fitted classifier (`develop`'s default before this feature) and the five regimes, on the Rust core; the CasADi backend solves the 90 cases of the first 30 wells. One process; a case's variants run one after another.
+
+| | Rust core, fitted | Rust core, five regimes | CasADi, fitted | CasADi, five regimes |
+|---|---|---|---|---|
+| Operating points | 260 of 263 | 257 of 263 | 89 of 90 | 88 of 90 |
+| Cases with 0 / 1 / 2 roots | 3 / 199 / 61 | 6 / 199 / 57, and one with 4 | 1 / 75 / 14 | 2 / 72 / 16 |
+| Time, median (total) | 0.31 s (121 s) | 0.20 s (78 s) | 3.86 s (463 s) | 3.62 s (415 s) |
+
+- **The lost operating points are the model's, not the solver's.** The five regimes have no operating point in 4 of the 263 cases where the fitted classifier had one, cases (11, 2), (75, 0), (75, 1) and (75, 2) as (well, operating point); they gain one in case (82, 2). In each lost case both backends find no root, and the core's residual $R(p_0)$ stays positive on 4000 samples from $p_s$ to $10^{-6}$ bar below $p_r$, down to the no-flow limit at $p_r$. Wells 11 and 75 carry little gas ($f_g$ 0.04 to 0.09) and are deviated at about 55°; under the fitted classifier each of these cases has a stable and an unstable root, the stable one 9 to 20 bar below $p_r$.
+- **Against the fitted classifier**, in the 256 cases both solve on the core: PBH changes by −0.56 bar at the median, from −14.6 to +4.0 bar, and falls in 225 of them; it changes by more than 5 bar in 22. PWH changes by +0.66 bar at the median, from −23.0 to +30.6 bar; TWH by +0.25 K, from −6.7 to +5.3 K; the reservoir liquid rate by +1.2%, from −26% to +75%.
+- **Regimes** along the core's operating points: 67.2% annular, 13.8% slug, 8.8% churn, 6.3% dispersed bubbly and 3.8% bubbly, against the fitted classifier's 51.8% annular, 28.8% slug/churn and 19.4% bubbly.
+- **The backends agree better.** With the five regimes, the two backends' operating points agree within $9 \cdot 10^{-9}$ bar in the 88 cases both solve, and their root counts differ in one case, (9, 1), where the CasADi search misses an unstable root 0.003 bar below $p_r$. With the fitted classifier the operating points differ by up to 0.059 bar, and the root counts in 6 cases. At case (32, 1), an L-shaped well, the core finds 4 roots with the five regimes: the operating point at 224.35 bar, and within 0.7 bar of $p_r$ an unstable, a stable and an unstable root, of which the CasADi search misses the stable one; the operating point is the same.
+
+**The backends** (`scripts/verification/compare_backends.py`, 20 sampled wells for each group this feature touches, 12 processes): all 60 cases pass Step 9's rule.
+
+| Group | Cases | CasADi roots | Core roots | Missed | Several $\alpha$ | Largest row difference |
+|---|---|---|---|---|---|---|
+| `v1.0.0+five regimes` | 20 | 28 | 28 | 0 | 0 | $1.3 \cdot 10^{-13}$ |
+| `develop` (the five regimes) | 20 | 22 | 22 | 0 | 0 | $4.9 \cdot 10^{-12}$ |
+| `develop+fitted` | 20 | 24 | 22 | 2 | 1 | $4.9 \cdot 10^{-12}$ |
+
+The core is 28× faster than the CasADi backend at the median and in total.
+
+## Implementation (2026-10-28)
+
+On the branch `five-flow-regimes`, as the Delta's code table, with these differences:
+
+- **Labels.** `SlipModel.label(probs)` calls SLIP-8's `regime_label` or SLIP-16's `hasan_regime_label`, in place of `regime_label(probs, regimes)`; the discretization takes the labels from it. The Rust core has `Slip::label`, `Slip::regimes` and `Slip::fitted()`.
+- **Defaults.** The Rust core's `Slip::default()` is the five regimes, as `SlipModel()` is. Its test wells W1 and W2, and those built from them, pin the fitted classifier; `w1_five_regimes` and `w2_five_regimes`, W1 with Joule–Thomson cooling and W2 L-shaped with it, switch the five regimes on. The components `hasan_rule_quantities` and `hasan_probabilities` serve the vectors. $\delta$ is the constant `SQRT_GUARD`.
+- **Tests that assumed the old default** pin `regime_model='fitted'`: the v1.0.0 vector adapters, the tables of SLIP-10 and SLIP-11, the `slip constants` overlay, the gas wells of 016 in `tests/test_rust_backend.py`, issue #7's default well in `tests/test_march.py`, issue #10's all-liquid well in `tests/test_roots.py`, and the calibration twin `slip C_0 10% low` (`scripts/calibration/twins.py`), whose $C_0$ are the fitted classifier's.
+- **A finding.** With the five regimes, point 0 of issue #10's well (well 87 with `gor = 40`) solves from the bottom guess's $\alpha = 0.5$, without the march's retry from the no-slip void fraction (`solvers/march.py`); the retry's test pins the fitted classifier.
+- **No solver machinery** beyond the floor $\epsilon_\lambda$ and the guard $\delta$ of the approved spec. The core's void-fraction solve is unchanged.
+
 ## Acceptance
 
-1. **The `v1.0.0` configuration** is unchanged: the row vectors, and both verifier reports (PASS, a stable-root rate of 100%, no expected failures).
-2. **Component vectors.** Develop vectors for SLIP-12 to SLIP-16 from `specs/tools/make_develop_vectors.py`, with states in each of the five regimes at $\cos\theta$ = 1, 0.5 and 0, checked in both backends by `tests/test_spec_vectors.py`. The tables of SLIP-10 and SLIP-11 pin `regime_model='fitted'`; their values do not change.
-3. **`tests/test_slip.py`** and the core's `slip.rs`: the probabilities lie in $[0, 1]$ and sum to 1; where every margin exceeds $5w$ in size, the label is SLIP-17's; $1 \le C_0 \le 1.2$ and $v_\infty \ge 0$; at fixed $v_{gs}$ and $v_{ls}$, $C_0$ and $v_\infty$ do not depend on $\alpha$; in a horizontal cell with $\alpha_b > 5w$ there is no bubbly flow; dispersed bubbly flow has $\alpha < 0.52$.
+Done on the branch, 2026-10-28:
+
+1. **The `v1.0.0` configuration** is unchanged: the row vectors pass, and both verifier candidates report PASS with 0 failures, 0 expected failures, 141 cases and a stable-root rate of 100%; the Rust candidate's one finding is the known second root at `fold-1503`.
+2. **Component vectors.** Develop vectors for SLIP-12 (18 rows), SLIP-13 with SLIP-14 (18) and SLIP-15 with SLIP-16 (24), with states in each of the five regimes at $\cos\theta$ = 1, 0.5 and 0 (there is no bubbly flow at 0), checked in both backends by `tests/test_spec_vectors.py`. The tables of SLIP-10 and SLIP-11 pin `regime_model='fitted'`; no value changed.
+3. **`tests/test_slip.py`** and the core's `slip.rs`: on 4000 random states across the sampler's range, the probabilities lie in $[0, 1]$ and sum to 1; where every margin exceeds $5w$ in size, the label is SLIP-17's, in each of the five regimes; $1 \le C_0 \le 1.2$ and $v_\infty \ge 0$; at fixed $v_{gs}$ and $v_{ls}$, $C_0$ and $v_\infty$ do not depend on $\alpha$; in a horizontal cell with $\alpha_b > 5w$ bubbly flow has at most $1/(1 + e^5)$ and is never the label; dispersed bubbly flow has $\alpha < 0.52$. `SlipModel` validates its new fields.
 4. **`tests/test_model_properties.py`**, whose wells get the new default: every check passes on both backends.
-5. **Backend comparison** (`tests/backend_cases.py`): feature `019`; overlays `fitted` and `hasan`; the rows agree at the same states in every configuration of the matrix; comparison-set groups `develop` and `develop+fitted`.
-6. **The Rust core.** `cargo test --no-default-features` passes, with the assumption checks on test wells with each option.
-7. **Sampled wells.** The option's effect, on and off, on wells of `develop`'s sampler with each backend: a fall in the number of operating points is a solver finding. Both verifier candidates as in item 1.
-8. **The suites.** The full test suite passes.
+5. **Backend comparison** (`tests/backend_cases.py`): feature `019`; overlays `five regimes` and `fitted`; the matrix's new entries `W1+deviated+five regimes` and `W2+L-shaped+five regimes`, and `develop` and `develop+fitted`; comparison-set groups `v1.0.0+five regimes` and `develop+fitted`. The rows agree in every configuration of the matrix, and the comparison set passes (Measurements).
+6. **The Rust core.** `cargo test --no-default-features` passes (44 tests), with the march's assumption checks on the two new test wells.
+7. **Sampled wells.** The option's effect on both backends (Measurements): 3 fewer operating points of 263 on the core and 1 fewer of 90 on the CasADi backend, each a case where the model has no root; no solver finding.
+8. **The suites.** The full test suite passes: 820 passed and 1 skipped. Its one warning, a root only the core finds in `v1.0.0+L-shaped#0` at 433.06 bar, is 016's (`plans/improvements.md` §2.9).
 
 ## Out of scope
 
@@ -187,6 +222,13 @@ The scripts are in `plans/evidence/` (`README.md` there): `slip_models.py` compa
 - **The five labels** in the v2 datasets' `FRBH` and `FRWH` (`docs/datasets.md`). Signed off.
 
 The implemented feature's measurements (Acceptance, item 7), and any solver machinery the implementation finds it needs, come back for sign-off, as in 016.
+
+## Sign-off
+
+For Bjarne, on the implemented feature:
+
+- **The changed results of `develop`** on sampled wells (Measurements, the implemented feature), including the 4 cases of 263 that lose their operating point, where the model has no root, and the 1 that gains one.
+- **The implementation's differences from the Delta** (Implementation): `SlipModel.label` in place of `regime_label(probs, regimes)`, and the tests and the calibration twin that now pin the fitted classifier.
 
 ## Sources
 
