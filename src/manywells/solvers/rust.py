@@ -49,6 +49,9 @@ def not_in_core(wp) -> list:
     slip = wp.slip
     if type(slip) is SlipModel and (min(slip.C_0_annular, slip.C_0_slug, slip.C_0_bubbly) < 1 or slip.v_inf_annular < 0):
         out.append(f'slip: the core needs every C_0 >= 1 and v_inf_annular >= 0 ({slip})')
+    # The core takes the gas mass fraction of the reservoir inflow in (0, 1), as INF-4 defines it
+    if type(wp.fluid) is FluidModel and not wp.fluid.f_g > 0:
+        out.append(f'fluid: the core needs gas in the reservoir inflow, f_g > 0 (gor = {wp.fluid.gor})')
     return out
 
 
