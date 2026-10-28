@@ -51,6 +51,16 @@ def test_files_round_trip(data_dir, fixtures):
     assert 'sol1-977-past-fold' not in reference         # a case with no root has no rows
 
 
+def test_a_null_label_reads_as_no_label(tmp_path):
+    """A port that writes null rather than '' for an empty label, as pyarrow does; pandas reads it back as NaN."""
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    pq.write_table(pa.table({'case_id': ['a', 'a'], 'root': [0, 1], 'x': [[1.0, 2.0], [3.0, 4.0]],
+                             'label': pa.array([None, 'stable'], pa.string()), 'operating_point': [False, True],
+                             'choked': pa.array([None, None], pa.bool_())}), tmp_path / 'candidate.parquet')
+    assert [r.label for r in read_roots(tmp_path / 'candidate.parquet')['a']] == [None, 'stable']
+
+
 def test_report_counts_and_rate(fixtures):
     report = verify({c.case_id: c for c, _ in fixtures.values()}, v1_like(fixtures),
                     {cid: roots for cid, (_, roots) in fixtures.items()}, name='v1-like')

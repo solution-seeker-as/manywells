@@ -120,9 +120,9 @@ def read_roots(path: Path) -> dict[str, list[Root]]:
     extra = [k for k in df.columns if k not in ROOT_COLUMNS]
     roots = {}
     for row in df.to_dict('records'):
-        choked = row.get('choked')
+        choked, label = row.get('choked'), row['label']
         roots.setdefault(row['case_id'], []).append(Root(
-            x=np.asarray(row['x'], dtype=float), label=row['label'] or None,
+            x=np.asarray(row['x'], dtype=float), label=None if pd.isna(label) or label == '' else label,  # null or ''
             operating_point=bool(row['operating_point']),
             choked=None if choked is None or pd.isna(choked) else bool(choked),
             info={k: row[k] for k in extra}))
