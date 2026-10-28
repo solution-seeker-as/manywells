@@ -9,7 +9,7 @@ v1.0.0 uses one Darcy friction factor for the whole well, drawn per well (paper 
 ## Delta
 
 - `friction.md`: FRIC-3 (Reynolds number of the mixture), FRIC-4 (Chen), FRIC-5 (Haaland), FRIC-6 (laminar–turbulent blend by a sigmoid at Re = 3000, with smooth-max guards). Friction is a component of the well: `FrictionModel.pressure_gradient(s, fluid, D)`, with `FixedFrictionFactor(f_D)` (FRIC-2) and `RoughnessFriction(roughness, correlation)`; Haaland can now be chosen.
-- Viscosities: PVT-MIX-8 (liquid, by volume), PVT-MIX-9 (mixture, mass-weighted), PVT-OIL-10 and PVT-OIL-11 (Beggs–Robinson, dead and live), PVT-WAT-3 (water), PVT-GAS-7 (Lee–Gonzalez–Eakin). The fluid model supplies them (`FluidModel.mixture_viscosity`), so friction imports nothing from `pvt/`.
+- Viscosities: PVT-MIX-8 (liquid, by in-situ volume), PVT-MIX-9 (mixture, mass-weighted), PVT-OIL-10 and PVT-OIL-11 (Beggs–Robinson, dead and live), PVT-WAT-3 (water), PVT-GAS-7 (Lee–Gonzalez–Eakin). The fluid model supplies them (`FluidModel.mixture_viscosity`), so friction imports nothing from `pvt/`.
 - `smoothing.md`: SMO-4, the sigmoid.
 - Code: `friction.py`, `pvt/`.
 
