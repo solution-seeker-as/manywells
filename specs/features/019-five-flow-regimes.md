@@ -202,7 +202,7 @@ Done on the branch, 2026-10-28:
 5. **Backend comparison** (`tests/backend_cases.py`): feature `019`; overlays `five regimes` and `fitted`; the matrix's new entries `W1+deviated+five regimes` and `W2+L-shaped+five regimes`, and `develop` and `develop+fitted`; comparison-set groups `v1.0.0+five regimes` and `develop+fitted`. The rows agree in every configuration of the matrix, and the comparison set passes (Measurements).
 6. **The Rust core.** `cargo test --no-default-features` passes (44 tests), with the march's assumption checks on the two new test wells.
 7. **Sampled wells.** The option's effect on both backends (Measurements): 3 fewer operating points of 263 on the core and 1 fewer of 90 on the CasADi backend, each a case where the model has no root; no solver finding.
-8. **The suites.** The full test suite passes: 820 passed and 1 skipped. Its one warning, a root only the core finds in `v1.0.0+L-shaped#0` at 433.06 bar, is 016's (`plans/improvements.md` §2.9).
+8. **The suites.** The full test suite passes: 822 passed and 1 skipped, after merging `develop` with feature 018's phase A; both verifier candidates as in item 1 after the merge too. Its one warning, a root only the core finds in `v1.0.0+L-shaped#0` at 433.06 bar, is 016's (`plans/improvements.md` §2.9).
 
 ## Out of scope
 
