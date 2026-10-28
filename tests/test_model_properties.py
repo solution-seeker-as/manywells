@@ -205,8 +205,9 @@ def test_two_root_well_stability(backend):
     versions"), here on develop's full model in a deviated well."""
     fl = FluidModel(rho_o=density_from_api(25.0), rho_g=gas_density_from_sg(0.7), gor=60.0, wlr=0.6)
     wp = WellProperties(geometry=deviated(60, tvd=2200.0), fluid=fl)
-    bc = BoundaryConditions(p_r=225.0, p_s=25.0, T_r=360.0, T_s=280.0, u=0.6)
-    assert bc.p_r - bc.p_s < fl.rho_l * 9.80665 * 2200.0 / 1e5  # the static column cannot reach the separator (SOL-7)
+    bc = BoundaryConditions(p_r=225.0, p_s=29.0, T_r=360.0, T_s=280.0, u=0.6)
+    rho_static = float(fl.liquid_density(bc.p_r, bc.T_r) + fl.liquid_density(bc.p_s, bc.T_s)) / 2  # in situ (PVT-MIX-6)
+    assert bc.p_r - bc.p_s < rho_static * 9.80665 * 2200.0 / 1e5  # the static column cannot reach the separator (SOL-7)
     rs = SSDFSimulator(wp, backend=backend).root_set(bc)
     assert [r.label for r in rs.roots] == ['stable', 'unstable'], [(r.p_0, r.label) for r in rs.roots]
     assert rs.operating_point is rs.roots[0]

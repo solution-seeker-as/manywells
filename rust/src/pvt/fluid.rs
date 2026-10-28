@@ -180,12 +180,18 @@ impl Fluid {
         }
     }
 
-    /// Liquid density (kg/m³) at p (bar) and T (K): the live oil's, with the dissolved gas and its formation volume
-    /// factor, mixed with water. A dead oil's is the liquid's density at standard conditions, exactly.
+    /// Liquid formation volume factor: the volume (m³) at p (bar) and T (K) of one Sm³ of stock-tank liquid, the oil
+    /// swollen by its formation volume factor and the water incompressible (B_w = 1). 1 for a dead oil, exactly.
+    pub fn liquid_fvf(&self, p: f64, t: f64) -> f64 {  // spec: PVT-MIX-6
+        let wlr = self.inputs.wlr;
+        (1.0 - wlr) * self.bo(p, t) + wlr
+    }
+
+    /// Liquid density (kg/m³) at p (bar) and T (K): the mass of one Sm³ of stock-tank liquid with the gas dissolved in
+    /// its oil, over its volume there. A dead oil's is the liquid's density at standard conditions, exactly.
     pub fn liquid_density(&self, p: f64, t: f64) -> f64 {  // spec: PVT-MIX-1, PVT-MIX-6, PVT-OIL-9
         let FluidInputs { rho_o, rho_g, rho_w, wlr, .. } = self.inputs;
-        let rho_live_oil = (rho_o + self.rs(p, t) * rho_g) / self.bo(p, t);
-        wlr * rho_w + (1.0 - wlr) * rho_live_oil
+        ((1.0 - wlr) * (rho_o + self.rs(p, t) * rho_g) + wlr * rho_w) / self.liquid_fvf(p, t)
     }
 
     /// The liquid-density row (kg/m³)
@@ -194,14 +200,14 @@ impl Fluid {
     }
 
     /// Liquid viscosity (Pa s) at p (bar) and T (K): the dead oil's, corrected for the dissolved gas in black oil,
-    /// mixed with water's by the water-liquid ratio
+    /// mixed with water's by the water's volume fraction there
     pub fn liquid_viscosity(&self, p: f64, t: f64) -> f64 {  // spec: PVT-MIX-8
         let mut mu_o = oil::dead_oil_viscosity(self.api, t);
         if let OilModel::BlackOil(_) = self.oil {
             mu_o = oil::live_oil_viscosity(mu_o, self.rs(p, t) / CF_RS);
         }
-        let wlr = self.inputs.wlr;
-        wlr * water::water_viscosity(t) + (1.0 - wlr) * mu_o
+        let lambda_w = self.inputs.wlr / self.liquid_fvf(p, t); // In-situ water fraction of the liquid (PVT-MIX-6)
+        lambda_w * water::water_viscosity(t) + (1.0 - lambda_w) * mu_o
     }
 
     /// Gas viscosity (Pa s) at T (K) and density rho_g (kg/m³)

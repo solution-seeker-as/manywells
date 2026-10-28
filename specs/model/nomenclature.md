@@ -73,6 +73,7 @@ Parameters and quantities of `develop`'s options, in addition (the dataclass fie
 | $\gamma_g$, $M_g$ | `sg_gas`, `M_g` | –, kg/kmol | gas specific gravity (air = 1) and molecular weight |
 | $Z$ | `z_factor` | – | gas compressibility factor |
 | $R_{so}$, $B_o$ | `rs`, `bo` | Sm³/Sm³, – | solution gas–oil ratio and oil formation volume factor |
+| $B_l$, $\lambda_w$ | `liquid_fvf`, `lambda_w` | –, – | liquid formation volume factor (the volume at $(p, T)$ of one Sm³ of stock-tank liquid) and in-situ water fraction of the liquid (PVT-MIX-6) |
 | $p_\text{sep}$, $T_\text{sep}$, $p_b$ | `p_sep`, `T_sep`, `p_bubble` | bar, K, bar | separator conditions and bubble-point pressure |
 | $\mu_g$, $\mu_o$, $\mu_w$, $\mu_l$, $\mu_m$ | `gas_viscosity`, …, `mixture_viscosity` | Pa s | viscosities |
 | $\varepsilon$, Re | `roughness`, `Re` | m, – | pipe wall roughness and Reynolds number |
