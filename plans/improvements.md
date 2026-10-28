@@ -1,508 +1,237 @@
 # Improvements and corrections
 
-A review of the project as of June 2026 (branch `develop`). Items are ordered by
-priority within each section, with file/line references to the current code.
-Verified findings (reproduced locally) are marked **[verified]**.
+The backlog of code-level findings on `develop`, from a review in June 2026 and
+items found since. `manywells-v2-plan.md` decides scope and order. Specs, tests
+and the plan cite items here by section number, so the numbers stay fixed, and a
+done item keeps a short record of where it was handled.
 
-**Relation to the v2 plan** (added 2026-09-30). `manywells-v2-plan.md` decides
-scope and order; this file is the backlog of code-level findings it draws on.
-Each item is tagged with where the plan handles it: **[plan: Step N]**,
-**[after the plan]** (work for v2.0.0 that the foundation plan leaves out),
-**[out of v2]**, or **[any time]** for small fixes that need no plan step.
-Principle 7 of the plan (transparent before marginally faster) applies to every
-performance item in section 4.
+Each open item is tagged **[after the plan]** (work for v2.0.0 that the
+foundation plan leaves out) or **[any time]** (a small fix that needs no plan
+step). Principle 7 of the plan (transparent before marginally faster) applies to
+every performance item in section 4. Open items were checked against the code on
+2026-10-28; line numbers are from that date.
 
 ## 1. Bugs and corrections
 
-### 1.1 Gas-lift simulation crashes: `FluidModel.gas_mass_flow_rate` no longer exists **[verified]**
+### 1.1 Gas-lift simulation crashed
 
-**[fixed 2026-09-30 in `8b05b18`]** with the one-liner below, the `inflow.py`
-docstring updated, and two tests: the lift-gas mixing temperature, and a full
-solve with gas lift that checks the lift gas ends up in the gas phase.
+**[done 2026-09-30 in `8b05b18`]** `FluidModel.gas_mass_flow_rate` had been
+removed, so every simulation with `w_lg > 0` raised `AttributeError`. Fixed, with
+tests of the lift-gas mixing temperature and of a full solve with gas lift.
 
-`src/manywells/simulator.py:218` calls `fl.gas_mass_flow_rate(w_l_inflow)` inside
-`_left_boundary_eqs`, but this method was removed from `FluidModel` in the recent
-refactor ("Remove flow rate computation from fluid model interface"). Any
-simulation with `w_lg > 0` fails:
+### 1.2 `water_fvf` had the wrong sign
 
-```
-AttributeError: 'FluidModel' object has no attribute 'gas_mass_flow_rate'
-```
+**[done 2026-10-01 in Step 7]** `Bw = 1 - c_w (p - p_ref)` (PVT-WAT-2, decided by
+Bjarne on 2026-10-01), with the tests updated. The simulator does not use it.
 
-This breaks the lift-gas mixing-temperature calculation and the
-`scripts/sim_examples/gl_temp.py` example. The fix is a one-liner using the
-existing gas-fraction property:
+### 1.3 Data-generation scripts were broken against the current API
 
-```python
-w_g_res = (fl.f_g / (1 - fl.f_g)) * w_l_inflow
-```
-
-(the same expression already used in `_gas_and_liquid_flow_rate`,
-`simulator.py:162`).
-
-Related cleanups:
-- `src/manywells/inflow.py:24` — docstring still references
-  `FluidModel.gas_mass_flow_rate`.
-- **Test gap:** no test exercises `w_lg > 0` (the only reference in
-  `tests/test_simulator.py` is a negative-value validation check), which is why
-  this slipped through. Add a gas-lift regression test, e.g. simulate with
-  `w_lg=1.0` and assert the produced gas rate exceeds the no-lift case.
-
-### 1.2 `water_fvf` has the wrong sign **[verified]**
-
-**[done 2026-10-01 in Step 7]** `Bw = 1 - c_w (p - p_ref)` (PVT-WAT-2), with the
-test updated; the form is a draft for Bjarne's sign-off.
-
-**[plan: Step 7]** Fix it before its option is written into
-`specs/model/pvt/water.md`, so the spec does not record the wrong sign.
-
-`src/manywells/pvt/water.py:16`:
-
-```python
-Bw = 1 + c_w * (p - p_ref)
-```
-
-Compressibility means water *shrinks* with pressure, so Bw should *decrease*
-with pressure: `Bw = 1 - c_w * (p - p_ref)` (or the more standard
-`Bw = 1 / (1 + c_w (p - p_ref))`). The current tests codify the wrong sign
-(`tests/test_black_oil.py:243-246`, "Water at 200 bar: Bw barely above 1.0") and
-must be updated together with the fix. The function is currently unused by the
-simulator, so the fix is safe.
-
-### 1.3 Data-generation scripts are broken against the current API **[verified]**
-
-**[done 2026-10-01 in Step 7]** `manywells.sampling` and `manywells.datasets`
-port the procedure (`specs/sampling.md`), the generators are thin callers, and the
-frozen dataclasses make a misspelt assignment raise.
-
-**[plan: Step 7, item 7]** The sampler port. `scripts/data_generation_v2/` was
-an untracked early draft and was deleted on 2026-09-30.
-
-`scripts/data_generation_v2/well.py` (and `scripts/data_generation/well.py`)
-still target the pre-refactor `WellProperties`:
-
-- `Vogel(w_l_max, f_g)` → `TypeError` (Vogel now takes only `w_l_max`;
-  the gas split moved to `FluidModel`).
-- `wp.L`, `wp.D`, `wp.A` — geometry now lives in `wp.geometry`; setting these on
-  the dataclass silently creates dead attributes (the well is simulated with the
-  *default* 2000 m geometry, no error raised).
-- `wp.rho_l`, `wp.cp_l`, `wp.R_s`, `wp.cp_g` — fluid properties now live in
-  `wp.fluid` (`FluidModel`); these assignments are silently ignored too.
-- `Well` still carries `pvt.GasProperties` / `pvt.LiquidProperties` objects that
-  duplicate what `FluidModel` represents.
-
-Since these scripts generated the published datasets, either (a) port them to
-the new `FluidModel`/`WellGeometry` API, or (b) state clearly in their README /
-module docstrings that they require the v1.0.0 tag. Option (a) is preferable for
-an open-source project — the scripts are the reference implementation of the
-dataset methodology. A cheap guard against future drift: add a smoke test that
-constructs one sampled well and simulates a single point (marked `slow`).
-
-The silent-attribute failure mode also suggests using `@dataclass(slots=True)`
-(or `__slots__`) on `WellProperties`, `BoundaryConditions` and `FluidModel`, so
-assigning to a nonexistent field raises immediately.
+**[done 2026-10-01 in Step 7]** `manywells.sampling` and `manywells.datasets` port
+the procedure (`specs/sampling.md`), and the generators are thin callers. Frozen
+dataclasses make an assignment to a misspelt field raise, where it used to create
+a dead attribute and simulate the default well.
 
 ### 1.4 User-supplied `cpr` is silently overwritten
 
-**[any time]**
+**[any time]** `ChokeModel` has `cpr` as a constructor field, but `__post_init__`
+always sets it from CHK-4 (`choke.py:51,59`), so `ChokeModel(cpr=0.6)` gets 0.544
+without a warning. The field's comment now says so, and `specs/discrepancies.md`
+(D-21) rules to fix it on `develop` any time. Taking `cpr` out of the constructor
+changes nothing else: the `v1.0.0` configuration and the Rust core both take the
+ratio from CHK-4. The class docstring calls the same ratio `cpm`.
 
-`src/manywells/choke.py:49,58` — `ChokeModel` exposes `cpr` as a constructor
-field, but `__post_init__` unconditionally does
-`self.cpr = self.critical_pressure_ratio()`. A user passing
-`ChokeModel(cpr=0.6)` gets 0.544 without warning. Either respect the given
-value (`if self.cpr is None: ...`) or remove `cpr` from the constructor.
+### 1.5 Choke docstring did not match the implementation
 
-### 1.5 Choke docstring does not match the implementation
+**[done 2026-09-30 in `1811ae2`]** The docstring has $\Phi$ inside the square root,
+as the code does (D-13).
 
-**[any time]**, or with `specs/model/choke.md` in Step 4, whichever comes first.
+### 1.6 Smaller documentation and comment corrections
 
-`src/manywells/choke.py:28` documents
-`w = (K_c * sigma(u) / Phi) * sqrt(2 * rho * dp)` but the implementation
-(`choke.py:112`) computes `K_c * chk * sqrt(2 * rho * dp / Phi)` — i.e. the
-correction is `1/sqrt(Phi)`, not `1/Phi`. The implementation is the standard
-form (Phi multiplies the *pressure-drop* term); fix the class docstring.
-
-### 1.6 Smaller documentation/comment corrections
-
-**[any time]**
-
-- ~~`AGENTS.md` documents `uv run python scripts/sim_examples/<name>.py`, but that
-  fails for examples that import `scripts.*`, such as `gl_temp.py`
-  (`ModuleNotFoundError: No module named 'scripts'`), because running a file
-  puts its own directory on `sys.path`, not the project root. `uv run python -m
-  scripts.sim_examples.gl_temp` works. Either document `-m`, or drop the
-  `scripts.*` import from the examples. *(Found 2026-09-30.)*~~ **[done
-  2026-09-30 in Step 5]** `AGENTS.md` documents `-m`, and
-  `tests/test_examples.py` runs the examples that way.
-- `src/manywells/units.py:8` — module docstring claims "All public interfaces in
-  the manywells package use SI units (Pa, ...)", but the simulator, choke,
-  inflow and `FluidModel` methods all take **bar**. Meanwhile
-  `FluidModel.p_sep`/`p_bubble` are in **Pa** (`fluid.py:55-57`) while every
-  method argument on the same class is in bar — an easy footgun. At minimum fix
-  the units.py docstring and call out the Pa fields prominently in `FluidModel`;
-  better, accept `p_sep`/`p_bubble` in bar for consistency.
-- `src/manywells/pvt/gas.py:64` — `gas_fvf` return doc says
-  "(Sm3 at standard / m3 at reservoir conditions)" but the formula computes
-  V_reservoir / V_standard (the first line of the docstring is correct).
-- `NOTES.md` — the listed to-do is resolved: `_compute_left_boundary_state` now
-  uses `fl.gas_density` (`simulator.py:354`) and `FluidModel` offers
-  `gas_density`. Remove the note (or convert remaining ideas to GitHub issues).
-- `src/manywells/geometry.py:97` — typo "nubmer".
-- `src/manywells/simulator.py:250` and `cl_simulator.py:187` — stale internal
-  comment "Used to generate dataset v6".
-- `src/manywells/friction.py:6` — "Created 27 February 2026" with a 2024
-  copyright line (check intent).
-- `README.md` project tree is outdated: missing `src/manywells/pvt` and the
-  root-level scripts.
+- **[any time]** `units.py:8` says that all public interfaces use SI units
+  (Pa, ...), but the simulator and the components take bar (AGENTS.md,
+  Contracts). Fix the module docstring.
+- Done: `AGENTS.md` documents `uv run python -m scripts.<folder>.<name>` for the
+  examples (Step 5, 2026-09-30); `FluidModel.p_sep` and `p_bubble` are in bar
+  (Step 7, feature 005); the `gas_fvf` return doc, the "nubmer" typo and the
+  "Used to generate dataset v6" comment went in `d8f015f`; the README's project
+  tree is current (`661e36d`). `NOTES.md` is no longer in the repo.
+- Dropped: `friction.py`'s 2024 copyright line is the header every file carries.
 
 ## 2. Robustness and API quality
 
 ### 2.1 Replace `assert` validation with exceptions
 
-**[done 2026-10-01 in Step 7]** for the inputs: `WellProperties`, `BoundaryConditions`,
-the inflow, choke, friction and thermal models and `FluidModel` raise `ValueError`.
-`liquid_mix` and `ca_double_sigmoid` still assert.
+**[done 2026-10-01 in Step 7]** for the inputs: `WellProperties`,
+`BoundaryConditions`, the component models and `FluidModel` raise `ValueError` in
+`__post_init__`.
 
-**[any time]**
+**[any time]** Two asserts remain, in helpers rather than inputs: `liquid_mix`
+(`pvt/__init__.py:77`) and `ca_double_sigmoid` (`ca_functions.py:93`).
 
-`WellProperties`, `BoundaryConditions`, `ProductivityIndex`, `Vogel`,
-`FixedFlowRate` and `ChokeModel` validate inputs with `assert`, which silently
-disappears under `python -O`. `WellGeometry` and `BlackOilPVT` already raise
-`ValueError` — make that the pattern everywhere.
+### 2.2 Use `logging` and exception payloads instead of `print`
 
-### 2.2 Use `logging`/exception payloads instead of `print`
+**[done]** The simulator never prints: failed starts go to
+`logging.getLogger('manywells')`, and `NoOperatingPoint` carries the root set
+(Step 7, 2026-10-01). Calibration's prints went with its old functions (§2.8).
 
-**[done 2026-10-01 in Step 7]** for the simulator: it never prints; failed starts go to
-`logging.getLogger('manywells')`, and `NoOperatingPoint` carries the root set. The
-calibration functions still print (§2.8).
+### 2.3 `isinstance`-based choke dispatch blocked extension
 
-**[any time]** The plan's evidence scripts and root-set search (Step 7, item 6)
-currently have to capture stdout to silence failed starts.
-
-`simulator.py:561-563` prints "Simulation failed" and the full solver stats to
-stdout before raising `SimError`. For a library this should be a logger call
-(or the stats attached to the exception: `raise SimError(..., stats=...)`),
-so downstream users — e.g. the data-generation loop that *expects* failures —
-can run quietly.
-
-### 2.3 `isinstance`-based choke dispatch blocks extension
-
-**[done 2026-10-01 in Step 7]** `ChokeModel.mass_flow_rate(u, p_s, s, A)`, with each
-model's `density_and_multiplier`. Closed loop kept its own dispatch, on its frozen base, until it was retired (2026-10-01).
-
-**[plan: Step 6]** Interface contracts. Settled in `specs/architecture.md`:
-`ChokeModel.mass_flow_rate(u, p_s, s, A)` takes the wellhead state. Step 7
-implements it.
-
-`_right_boundary_eqs` (`simulator.py:248-255`) and
-`cl_simulator.py:185-197` branch on `isinstance(wp.choke, ...)` and raise for
-anything else, so a user cannot plug in their own `ChokeModel` subclass despite
-the ABC inviting exactly that. Unify the interface — e.g.
-
-```python
-class ChokeModel(abc.ABC):
-    @abc.abstractmethod
-    def mass_flow_rate(self, u, p_in, p_out, alpha, rho_g, rho_l, x_g): ...
-```
-
-(or pass a small `ChokeState` value object) — and let each model pick what it
-needs. The simulator then calls it polymorphically with no `isinstance`.
+**[done 2026-10-01 in Step 7]** `ChokeModel.mass_flow_rate(u, p_s, s, A)`, with
+each model's `density_and_multiplier`, as settled in Step 6
+(`specs/architecture.md`).
 
 ### 2.4 Hidden state `self._w_l_inflow`
 
 **[done 2026-10-01 in Step 7]** `discretization.py` passes $w_\text{res}$ to every
 point's rows.
 
-**[plan: Step 6]** Interface contracts. Settled in `specs/architecture.md`: the
-reservoir liquid rate is an explicit argument of every point's rows. Step 7
-implements it.
+### 2.5 The simulator mutated the user's objects
 
-`_differential_equations` depends on `self._w_l_inflow` being set as a side
-effect of `_left_boundary_eqs` / `_compute_left_boundary_state`
-(`simulator.py:210,360,329`). This call-order dependency is fragile (it is also
-the kind of thing that breaks when methods are overridden, as in
-`ClosedLoopWellSimulator`). Pass `w_l_inflow` explicitly, or compute it where
-needed from `x_0` — the expression is cheap and symbolic anyway.
-
-### 2.5 The simulator mutates the user's objects
-
-**[done 2026-10-01 in Step 7]** for `SSDFSimulator`: frozen inputs, the default choke in
-`WellProperties.__post_init__`, the operating point as parameters.
-
-**[plan: Step 6]** The `SSDFSimulator` part, settled in `specs/architecture.md`:
-frozen inputs, and the default choke set in `WellProperties.__post_init__`.
-Step 7 implements it. The `ClosedLoopWellSimulator` part is **[out of v2]**, and lapsed with closed loop's retirement (2026-10-01).
-
-- `SSDFSimulator.__init__` writes the default choke back into the *caller's*
-  `WellProperties` (`simulator.py:126-127`).
-- `ClosedLoopWellSimulator.simulate` overwrites `bc.u` and `bc.w_lg` with CasADi
-  expressions (`cl_simulator.py:93-95,240-241`), bypassing
-  `BoundaryConditions.__post_init__` validation and leaving the user's object
-  holding symbolic values afterwards.
-
-Keep defaults and decision variables internal to the simulator (e.g.
-`self.choke = wp.choke or BernoulliChokeModel(...)`), and treat the input
-dataclasses as immutable (consider `frozen=True` like `WellGeometry`).
+**[done 2026-10-01 in Step 7]** Frozen inputs, the default choke set in
+`WellProperties.__post_init__`, and the operating point as parameters of the
+system. The closed-loop half lapsed when `closed_loop/` was retired (2026-10-01).
 
 ### 2.6 `ClosedLoopWellSimulator` cleanups
 
-**[out of v2]** Closed loop is out of scope for v2 (plan, Scope decisions), and `closed_loop/` was retired on 2026-10-01 (Bjarne), so these cleanups lapse.
+**[out of v2]** Lapsed: `closed_loop/` was retired on 2026-10-01 (Bjarne). It
+remains in v1.0.0.
 
-- `import matplotlib.pyplot as plt` at module level (`cl_simulator.py:20`)
-  drags a GUI dependency into library code and breaks headless use; it is only
-  needed by the `__main__` demo.
-- `_initial_guess` perturbs the guess with unseeded `np.random.normal()`
-  (`cl_simulator.py:75`) — simulations are not reproducible. Accept an optional
-  `numpy.random.Generator`/seed.
-- Magic numbers: the combined control variable `t` packs choke (0–1) and gas
-  lift (1–6) into one scalar with hardcoded bounds (`ubu[0] = 6.0`). Two named
-  decision variables with explicit bounds would be far easier to follow.
-- `simulate()` duplicates ~80 lines of the parent's NLP assembly. Extracting
-  the shared "build variables + constraints" step in `SSDFSimulator` (e.g. a
-  `_build_system()` returning `x, g`) would shrink the subclass to its actual
-  delta: the objective, the extra decision variable, and the bounds.
-- The feedback branch reads terminal-cell variables by negative indices
-  (`x[-4]`, `x[-7]`, ...), which silently breaks if the state ordering or
-  `dim_x` changes. Index via `self.dim_x` and the variable name list instead.
+### 2.7 `SlipModel` parameters were not configurable
 
-### 2.7 `SlipModel` parameters are not configurable
-
-**[done 2026-10-01 in Step 7]** `SlipModel(C_0_slug=1.2)` works.
-
-**[plan: Step 7]** Making them fields is part of specifying `slip.md`'s
-interface. The calibration use case is **[after the plan]**.
-
-`C_0_annular`, `C_0_slug`, `C_0_bubbly`, `v_inf_annular`
-(`slip.py:122-127`) are class attributes without annotations, so the
-`@dataclass` decorator ignores them — `SlipModel(C_0_slug=1.2)` raises.
-Annotate them as fields so users can tune slip parameters per well (useful for
-calibration, one of the stated use cases).
+**[done 2026-10-01 in Step 7]** The four regime constants are fields, as in
+`SlipModel(C_0_slug=1.2)`, with v1.0.0's values as defaults
+(`specs/model/slip.md`).
 
 ### 2.8 Calibration module consistency
 
-**[after the plan]** Calibration is deferred (plan, Scope decisions).
-
-**[done 2026-10-02, `plans/calibration-plan.md`]** The functions below are retired; `calibrate` raises `CalibrationError` (a `SimError`) and logs (`specs/calibration.md`).
-
-`calibrate_inflow_model` / `calibrate_*_choke_model` raise bare `Exception`
-on failure and `print` solver stats; align with `SimError`/logging (see 2.2).
-They also rebuild a fresh Ipopt instance per call — fine for now, but if 3.x
-becomes parametric (see 4.1), the calibration loops get the same benefit for
-free by reusing a parameterized objective.
+**[done 2026-10-02 in `e96053b`, feature 017]** The old calibration functions,
+which raised a bare `Exception` and printed, are retired. `calibrate` raises
+`CalibrationError` (a `SimError`) and logs (`specs/calibration.md`).
 
 ### 2.9 The CasADi root search misses roots the Rust core finds
 
-**[after the plan]** *Found in Step 8, 2026-10-01* (`specs/features/014-rust-solver.md`, Findings 3). Both backends are kept (`specs/goals.md`), so the CasADi backend's search stays in use, and its completeness matters.
+**[after the plan]** *Found in Step 8, 2026-10-01*
+(`specs/features/014-rust-solver.md`, Findings 3). Both backends are kept
+(`specs/goals.md`), so the CasADi backend's search stays in use, and its
+completeness matters.
 
-- In Step 8's regenerated `sol-1` samples (first 200 wells, 1,000 samples), the Rust core has an operating point in 3 samples where the multi-start search has none: IDs 16, 70 and 130. Each is a genuine root: every CasADi row is about 1e-13 there, and Ipopt started there stays.
+- In Step 8's regenerated `sol-1` samples (first 200 wells, 1,000 samples), the
+  Rust core has an operating point in 3 samples where the multi-start search has
+  none: IDs 16, 70 and 130. Each is a genuine root: every CasADi row is about
+  1e-13 there, and Ipopt started there stays.
 - At ID 67, k = 0, the core also finds an unstable root the CasADi search misses.
 - The case set does not show this: both backends pass it at 100%.
-- *Step 9, 2026-10-02* (`specs/features/015-rust-develop-model.md`): on the comparison set at 20 wells per configuration (520 cases, every option of `develop`'s model switched on and off), the core finds 21 roots the CasADi search misses, 20 of which zero every CasADi row; 17 of them are in cases where the slip law has one void fraction, mostly low-rate roots near $p_r$ (develop's well 15 in every develop configuration, L-shaped v1.0.0 wells). The 21st is the core's jump root at `v1.0.0+deviated#17` (015, Findings).
-- An option, in the `v1.0.0` configuration and later in every configuration the core covers: use the core's roots as extra starts for Ipopt, and record which roots only one backend finds. That is a comparison between the backends, not an independent search, so the verifier's reference stays as it is.
+- *Step 9, 2026-10-02* (`specs/features/015-rust-develop-model.md`): on the
+  comparison set at 20 wells per configuration (520 cases, every option of
+  `develop`'s model switched on and off), the core finds 21 roots the CasADi
+  search misses, 20 of which zero every CasADi row. 17 of them are in cases where
+  the slip law has one void fraction, mostly low-rate roots near $p_r$ (develop's
+  well 15 in every develop configuration, L-shaped v1.0.0 wells). The 21st is the
+  core's jump root at `v1.0.0+deviated#17` (015, Findings).
+- *Feature 016* (`specs/features/016-joule-thomson.md`): the root only the core
+  finds at `develop#15` zeroes the CasADi rows. The full suite's one warning is a
+  core-only unstable root in `v1.0.0+L-shaped#0` at 433.06 bar.
+- *Feature 017, 2026-10-02* (`specs/features/017-calibration.md`): the CasADi
+  backend cannot calibrate well 1 (L-shaped), where its search finds no root at
+  two of the four rows and the core finds a stable one. The core is calibration's
+  backend.
+- An option, in the `v1.0.0` configuration and later in every configuration the
+  core covers: use the core's roots as extra starts for Ipopt, and record which
+  roots only one backend finds. That is a comparison between the backends, not an
+  independent search, so the verifier's reference stays as it is.
 
 ## 3. Testing
 
-- ~~**Add a gas-lift test** (see 1.1) — the highest-value missing test.~~
-  **[done 2026-09-30 in `8b05b18`]**
-- ~~**[plan: Step 5]** **Smoke-test the examples**: a `slow`-marked test that runs each
-  `scripts/sim_examples/*.py` headless (`matplotlib.use("Agg")`) would have
-  caught both 1.1 and 1.3. The examples are the de-facto tutorial; broken
-  examples are costly for an open-source project.~~ **[done 2026-09-30 in
-  Step 5]** `tests/test_examples.py` runs each example in its own process with
-  `MPLBACKEND=Agg`, in a temporary directory (`gl_temp.py` saves a figure to
-  the working directory).
-- **Fix the water FVF tests** along with 1.2.
-- **[done 2026-10-01 in Step 7]** The develop vectors of THM-4 to THM-7 in
-  `specs/model/thermal.md`, and `tests/test_thermal.py`.
-  **[plan: Step 7]** **Energy-equation regression test** (as test vectors in
-  `specs/model/thermal.md`): the thermal model
-  (`docs/thermal_energy_modeling.md`) has heat loss, friction heating and
-  adiabatic cooling terms; a test pinning wellhead temperature for a reference
-  well would guard against sign/unit regressions in `_differential_equations`.
-- Consider `pytest --doctest-modules` or a docs-examples check so docstring
-  snippets (e.g. in `FluidModel`) stay valid.
+- Done: a gas-lift test (§1.1, `8b05b18`); `tests/test_examples.py` runs each
+  example headless (Step 5, 2026-09-30); the water FVF tests (§1.2); test vectors
+  for the energy balance, THM-4 to THM-7 in `specs/model/thermal.md` (Step 7).
+- Dropped: `pytest --doctest-modules`. No docstring in `src/` has a `>>>` example.
 
 ## 4. Performance and architecture
 
-### 4.1 Build the NLP once, parameterize the boundary conditions (largest win)
+### 4.1 Build the NLP once, parameterize the boundary conditions
 
 **[done 2026-10-01 in Step 7]** `build_system`, `IpoptSolver` and the march's
-rootfinders are built once per well; the gain on the case set is in the plan's
-Step 7 status.
+rootfinders are built once per well. On the case set a warm solve went from
+0.507 s to 3.5 ms and a cold solve from 0.719 s to 24.7 ms, at the median (plan,
+Step 7 status; `plans/evidence/build_once.py`).
 
-**[plan: Step 6]** A structural change with an expected order-of-magnitude
-gain, so it can pass principle 7; the gain is to be measured on the case set.
-Settled in `specs/architecture.md` (`build_system` and `IpoptSolver` once per
-well). Measured on two wells on 2026-09-30, the build is 97% of a warm
-re-solve, a bound of about 40x; Step 7 implements it and repeats the
-measurement on the case set.
+### 4.2 Further solver-level options
 
-`SSDFSimulator.simulate()` reconstructs the full symbolic system and a fresh
-Ipopt instance on every call. For the package's main use cases — data
-generation (thousands of solves per well with only `u`, `w_lg`, `p_r`, `p_s`,
-`T_s` changing) and calibration (repeated solves in an outer loop) — almost all
-of that work is identical between calls.
-
-CasADi supports exactly this pattern: declare the boundary conditions as
-parameters `p` of the NLP (`nlp = {'x': x, 'p': p, 'f': 0, 'g': g}`) and pass
-values at solve time (`solver(x0=..., p=[u, w_lg, ...])`). Construction and
-`nlpsol` instantiation then happen once per well instead of once per data
-point. The same applies to `_simulate_cellwise`, which currently builds
-`n_cells` separate `ca.Function` + `rootfinder` objects per call — one
-parametric per-cell rootfinder (cell geometry `delta_md`, `cos_incl`,
-`tvd_frac` as parameters) can be built once and reused, or rolled into a
-`ca.Function.mapaccum` over cells.
-
-Sketch of the resulting API:
-
-```python
-sim = SSDFSimulator(wp)              # builds parametric NLP once
-x1 = sim.simulate(bc1)               # fast re-solve
-x2 = sim.simulate(bc2, x_guess=x1)   # warm-started re-solve
-```
-
-This is a backwards-compatible refactor (keep the current constructor
-signature working) and should give an order-of-magnitude speedup on dataset
-generation, where construction time currently dominates.
-
-### 4.2 Further solver-level options (after 4.1)
-
-**[after the plan]** Each option adds machinery (a JIT flag, dual warm starts, a
-Newton-then-Ipopt fallback), so under principle 7 each needs a large, measured
-gain of its own.
+**[after the plan]** Each option adds machinery, so under principle 7 each needs
+a large, measured gain of its own. A new adapter goes in `solvers/` with the same
+`solve` contract (`specs/architecture.md`).
 
 - **JIT compilation**: `ca.nlpsol(..., {'jit': True, 'compiler': 'shell'})`
-  compiles the constraint/Jacobian callbacks to C; worthwhile when one solver
-  instance is reused many times (exactly the post-4.1 situation). Make it an
-  opt-in flag since it needs a C compiler.
-- **Warm starts**: with a parametric solver, pass the previous solution's
-  primal *and dual* values (`lam_g0`, `lam_x0`) and set
-  `ipopt.warm_start_init_point: 'yes'` when sweeping operating points (the
-  data-generation scripts already reuse `x_guess`; duals are the missing half).
-- **Pure rootfinding mode**: the problem is square (a feasibility NLP). When
-  the variable bounds are not expected to be active, `ca.rootfinder` with
-  `'newton'`/`'kinsol'` on the full system is much faster than Ipopt. Offering
-  `method='newton'|'ipopt'` — try Newton first, fall back to Ipopt — would
-  speed up the easy majority of solves while keeping robustness.
-- The system Jacobian is block-tridiagonal; CasADi/Ipopt already exploit
-  sparsity via MUMPS, so no action needed there, but it is worth a line in the
-  docs since users may fear O(n³) scaling.
+  compiles the callbacks to C, which pays where one solver instance is reused
+  many times, as it is since §4.1. Opt-in, since it needs a C compiler.
+- **Dual warm starts**: pass the previous solution's duals (`lam_g0`, `lam_x0`)
+  with `ipopt.warm_start_init_point: 'yes'` when sweeping operating points.
+- **Newton on the full system**: the problem is square, so `ca.rootfinder` with
+  `'newton'` or `'kinsol'` on the whole system, falling back to Ipopt, could
+  speed up the easy solves. The march (`solvers/march.py`) already solves each
+  point by Newton, so measure against it.
 
 ### 4.3 Library-level batch API
 
-**[after the plan]** With the v2 dataset generation.
-
-Dataset generation re-implements multiprocessing in scripts. A small
-`manywells.batch` helper (simulate a list of `(WellProperties,
-BoundaryConditions)` over a process pool, returning DataFrames and structured
-failures) would make the published-dataset methodology reproducible from the
-library itself and reduce script drift (see 1.3).
+**[after the plan]** With the v2 dataset generation. Dataset generation has its
+process pool in the library now (`manywells.sampling.generate.generate`). A batch
+API for users is still missing: `specs/architecture.md` (Rust core, design
+point 7) designs it as the core's `root_sets(well, operating_points)`, which
+solves many operating points of one well in threads with the GIL released. It is
+not built.
 
 ### 4.4 Vectorize `solution_as_df` regime classification
 
 **[done 2026-10-01 in Step 7]** One classifier function mapped over the points
 (`System.regime_probabilities`).
 
-**[any time]**
+### 4.5 Make the fluid's fractions parameters of the CasADi system
 
-`solution_as_df` (`simulator.py:594-601`) evaluates `flow_regime` per row in a
-Python loop, building CasADi expressions each iteration. Build one
-`ca.Function` for `classify_flow_regime` and `.map(n)` it over the grid. Minor,
-but it is called after every simulation in the data-generation loop.
+**[after the plan]** It changes the contract of `System.params` in
+`specs/architecture.md`, whose parameters are the operating point, so it needs
+Bjarne's sign-off.
 
-### 4.5 Make the fluid's fractions parameters of the system (dataset generation)
+The fluid is a constant of a well's system. Each dataset sample redraws the
+inflow's mass fractions (SMP-22, SMP-24), and calibration solves each row and
+parameter value on its own fluid, so on the CasADi backend each builds a new
+system and runs the full root search. Measured in Step 7 on 8 verifier wells at
+N = 100, that is 0.87 s per sample (build 0.31 s, search 0.56 s, median), against
+3 ms for a warm solve once a well is built.
 
-**[after the plan]** With the v2 dataset generation (§4.3), and only if datasets
-are generated on the CasADi backend before the Rust core covers `develop`'s
-model. It changes the contract of `System.params` in `specs/architecture.md`,
-whose parameters are the operating point, so it needs Bjarne's sign-off.
+The Rust core makes this unnecessary for dataset generation: the sampler runs on
+it (`Settings(backend='rust')`, `2b0a50b`), and a core well costs almost nothing
+to build. It matters only if datasets are generated, or wells calibrated, on the
+CasADi backend (feature 017).
 
-*Found in Step 7, 2026-10-01.* The build-once speed-up of §4.1 does not reach
-dataset generation. Every sample redraws the inflow's mass fractions (SMP-22 for
-`sol-1`, the random walk of SMP-24 for `nsol-1`). The fractions set the fluid:
-$f_g$, and the liquid's density and heat capacity; in `develop`'s fluid model,
-the gas–oil and water–liquid ratios. The fluid is a constant of a well's system,
-so `sampling.generate.solve` builds a new system for every sample and runs the
-full root search on it.
-
-Measured on 8 verifier wells at N = 100, single runs, all versions in the same
-CasADi and Ipopt:
-
-| Per sample | Time |
-|---|--:|
-| `develop` today: build 0.31 s + search 0.56 s (median; mean 1.28 s) | 0.87 s |
-| `develop`, regenerating `sol-1` at the stable root (12,000 solves in 1,025 s on 24 processes) | about 2 s per core |
-| v1.0.0 (`main`): warm start from the well's root, rebuilt on every call | 0.26 s |
-| `develop` once a well is built: warm solve / cold solve (march + Ipopt) | 3 ms / 17 ms |
-| `rust_implementation`: `simulate()`, every root | 3.6 ms |
-
-Proposal: add the quantities that the fractions set to the system's parameters,
-next to the operating point. In the `v1.0.0` configuration these are $f_g$,
-$\rho_l$ and $c_{pl}$ (INF-4, PVT-MIX-1, THM-1). In `develop`'s fluid model they
-are the gas–oil and water–liquid ratios, from which $f_g$, $x_o$, $\rho_{l,\text{sc}}$
-and $c_{pl}$ follow (PVT-MIX-10). The oil and gas themselves (API gravity, gas
-gravity, the black-oil coefficients) stay constants of the well. A well's system
-is then built once for all its samples, and a sample costs the search on a
-built system. With the previous sample as `x_guess` and an early exit in the
-search, it would be about a warm solve and a stability label: tens of
-milliseconds instead of seconds. The early exit is solver policy and needs its
-own measurement, because SOL-6 picks the lowest-$p_0$ stable root of several.
-
-Cost: `FluidModel`'s derived quantities (`f_g`, `rho_l`, `cp_l`,
-`f_o_in_liquid`) must accept CasADi symbols, the fluid's validation stays on
-the well's base values, and the sampler passes the sample's fractions as
-parameters instead of building a `WellProperties` per sample. In the Rust core
-a well's build is cheap (the port's whole `simulate()` is 3.6 ms), so the change
-matters only on the CasADi backend.
+If it is needed: add the quantities that the fractions set to the system's
+parameters, next to the operating point. These are $f_g$, $\rho_l$ and $c_{pl}$ in
+the `v1.0.0` configuration (INF-4, PVT-MIX-1, THM-1), and the gas–oil and
+water–liquid ratios in `develop`'s fluid model (PVT-MIX-10). `FluidModel`'s
+derived quantities must then accept CasADi symbols, and its validation stays on
+the well's base values. An early exit in the search, so that a sample costs about
+a warm solve, is solver policy with its own measurement, because SOL-6 picks the
+lowest-$p_0$ stable root of several.
 
 ## 5. Open-source friendliness
 
-- ~~**CI**: there is no `.github/workflows`. A minimal GitHub Actions job —
-  `uv sync` + `uv run pytest -m "not slow"` on PRs, full suite (including
-  `slow`) nightly or on release — protects contributors and would have flagged
-  1.1/1.3 at the offending commit.~~ **[done 2026-09-22]**
-  `.github/workflows/tests.yml` runs `uv sync --locked` and the full suite
-  (it takes seconds, so no slow/nightly split) on Python 3.11–3.14 for pushes
-  to `main`/`develop` and all pull requests.
-- **Lint/format**: no ruff/black/mypy configuration. Adopting `ruff`
-  (format + lint) with a pre-commit hook keeps external contributions uniform
-  at near-zero maintenance cost.
-- ~~**Loosen dependency pins**: `pyproject.toml` requires `numpy==1.24.3`,
-  `pandas==1.5.3`, `python==3.11.*`. Exact pins belong in `uv.lock`;
-  the package metadata should declare *compatible ranges* (e.g.
-  `numpy>=1.24`, `python>=3.11`) so users can install manywells next to a
-  modern stack. numpy 1.24/pandas 1.5 are EOL; testing against numpy 2.x and
-  Python 3.12/3.13 is mostly a CI-matrix exercise once CI exists. Also consider
-  moving `dev` from `[project.optional-dependencies]` to PEP 735
-  `[dependency-groups]` so `uv sync` installs pytest by default.~~ **[done
-  2026-09-22]** Ranges declared, `requires-python >= 3.11`, `dev` moved to
-  `[dependency-groups]`, `uv.lock` upgraded (numpy 2.4/2.5, pandas 3.0, casadi
-  3.8); full suite passes on Python 3.11 and 3.14.
-- **[after the plan]** The plan makes v2.0.0 the major release with new
-  datasets, so the API changes since v1.0.0 are released with it rather than as
-  a separate tag. **Versioning/changelog**: the public API changed substantially since v1.0.0
-  (`FluidModel`, `WellGeometry`, `Vogel` signature). Tag a v2.0.0 with a short
-  CHANGELOG and a migration note (old → new construction snippets). This also
-  cleanly resolves 1.3: "datasets were generated with v1.x; scripts in `main`
-  target v2.x".
-- **Docs**: `docs/` already contains good material (`simulate.md`,
-  `thermal_energy_modeling.md`, `calibration.md`, ...) that the README never
-  links to. Add a "Documentation" section to the README, and consider
-  mkdocs-material + mkdocstrings on GitHub Pages to render both the guides and
-  the (already thorough) docstrings. **[README section done 2026-10-02]** The
-  README has a Documentation section, and the empty `docs/calibration.md` was
-  removed; mkdocs remains open.
-- **Examples hygiene**: move the `__main__` demo blocks in `slip.py` and
-  `cl_simulator.py` into `scripts/`/tests; library modules with executable
-  tails confuse new readers and evade testing.
-- **[after the plan]** One of the plan's decisions for v2.0.0.
-  **License clarity**: CC-BY-NC 4.0 is an unusual choice for *code* (Creative
-  Commons itself recommends against CC licenses for software, mainly because
-  they do not address source/binary distinction or patents). Keeping CC-BY-NC
-  for the datasets but adopting a software noncommercial license (e.g.
-  PolyForm-Noncommercial) for the code would express the same intent with less
-  legal ambiguity for users. Entirely optional — but worth a conscious
-  decision.
-- **Type-checking support**: the code is well annotated in places; adding a
-  `py.typed` marker (and filling the gaps) lets users' type checkers see the
-  annotations.
+- Done: CI (`.github/workflows/tests.yml`, 2026-09-22); dependency ranges,
+  `requires-python >= 3.11` and `dev` as a dependency group (2026-09-22);
+  `CHANGELOG.md`, with an old→new snippet for every API break (the v2.0.0 tag is
+  release work); a Documentation section in the README (2026-10-02).
+- **[any time]** **Lint and format**: there is no ruff, black or mypy
+  configuration. `ruff` (format and lint) with a pre-commit hook keeps
+  contributions uniform at little cost.
+- **[after the plan]** **Docs site**: mkdocs-material with mkdocstrings on GitHub
+  Pages would render the guides in `docs/` and the docstrings.
+- **[any time]** **Examples hygiene**: `slip.py` still ends with a `__main__` demo
+  (line 247). Move it to `scripts/` or a test; library modules with executable
+  tails evade testing.
+- **[after the plan]** **License**: one of the decisions for v2.0.0
+  (`specs/goals.md`). CC BY-NC 4.0 is unusual for code: Creative Commons
+  recommends against CC licenses for software, mainly because they do not address
+  source and binary distribution or patents. CC BY-NC for the datasets and a
+  noncommercial software license (e.g. PolyForm Noncommercial) for the code would
+  express the same intent with less ambiguity.
+- **[any time]** **Type checking**: a `py.typed` marker, and filling the gaps in
+  the annotations, lets users' type checkers see them.
