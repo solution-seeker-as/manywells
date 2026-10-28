@@ -133,3 +133,59 @@ def test_the_energy_slope_with_heat_loss_alone():
     p, v_g, v_l, alpha, rho_g, rho_l, T = X[0]
     C = wp.fluid.cp_g * alpha * rho_g * v_g + wp.fluid.cp_l * (1 - alpha) * rho_l * v_l
     assert tau == pytest.approx(1 + geo.delta_md[0] * 4 * wp.thermal.h / (geo.D * C), rel=1e-10)
+
+
+def _all_liquid_well(n_cells):
+    """Well 87 of develop's sampler (seed 2026) at its nominal point, with gor = 40: R_so at (p_r, T_r) is 141 Sm³/Sm³,
+    so all the gas is dissolved at the bottomhole (issue #10)."""
+    from dataclasses import replace
+    from manywells.configurations import DEVELOP
+    from manywells.sampling.conditions import nominal_conditions
+    from manywells.sampling.wells import sample_well, well_properties
+    draw = sample_well(2026, 87)
+    wp = well_properties(draw, draw.fractions, DEVELOP, n_cells=n_cells)
+    return wp, replace(wp, fluid=replace(wp.fluid, gor=40.0)), nominal_conditions(draw)
+
+
+def test_no_slip_guess():
+    """Point 0's retry: the no-slip void fraction of the guess's volume rates, at most the guess's own, with the
+    velocities that carry the same rates; None where it would be the guess itself, or nothing flows (issue #10)."""
+    from manywells.solvers.march import ALPHA_MIN, no_slip_guess
+    guess = np.array([300.0, 0.004, 4.0, 0.5, 200.0, 700.0, 380.0])   # q_g = 0.002, q_l = 2 (m/s)
+    retry = no_slip_guess(guess)
+    assert retry[3] == pytest.approx(0.002 / 2.002, rel=1e-12)
+    assert retry[3] * retry[1] == pytest.approx(0.002, rel=1e-12)
+    assert (1 - retry[3]) * retry[2] == pytest.approx(2.0, rel=1e-12)
+    assert np.array_equal(np.delete(retry, [1, 2, 3]), np.delete(guess, [1, 2, 3]))
+    assert no_slip_guess(np.array([300.0, 0.0, 4.0, 0.5, 200.0, 700.0, 380.0]))[3] == ALPHA_MIN
+    assert no_slip_guess(np.array([300.0, 4.0, 4.0, 0.5, 200.0, 700.0, 380.0])) is None   # no-slip 0.5: no retry
+    assert no_slip_guess(np.array([300.0, 0.0, 0.0, 0.5, 200.0, 700.0, 380.0])) is None   # no flow
+
+
+def test_the_march_retries_point_0_where_the_bottomhole_is_all_liquid():
+    """Point 0 fails from the bottom guess's void fraction of 0.5 where all the gas is dissolved at the bottomhole,
+    and the march retries it from the no-slip void fraction (issue #10)."""
+    from manywells.discretization import build_system
+    from manywells.solvers.march import Marcher, MarchFailed, no_slip_guess
+    _, wp, bc = _all_liquid_well(n_cells=10)
+    system = build_system(wp)
+    params, p_0 = system.params(bc), 322.0
+    march = Marcher(system)
+    guess = np.asarray(system.bottom_guess(p_0, params), dtype=float).ravel()
+    with pytest.raises(MarchFailed):
+        march._bottom(guess[1:], np.concatenate([[p_0], params]))
+    assert no_slip_guess(guess)[3] < 1e-2
+    x = march(params, p_0)
+    assert x[3] < 1e-2  # all liquid at the bottomhole, but for the smoothed phase rates' gas
+
+
+@pytest.mark.slow
+def test_the_search_finds_an_operating_point_with_an_all_liquid_bottomhole():
+    """With all the gas dissolved at the bottomhole, the CasADi search finds the Rust core's operating point; without
+    the march's retry of point 0 it found none (issue #10)."""
+    from manywells.simulator import SSDFSimulator
+    _, wp, bc = _all_liquid_well(n_cells=100)
+    core = SSDFSimulator(wp, backend='rust').simulate(bc)
+    op = SSDFSimulator(wp).simulate(bc)
+    assert op.state[0, 3] < 1e-2  # all liquid at the bottomhole, but for the smoothed phase rates' gas
+    assert op.state[0, 0] == pytest.approx(core.state[0, 0], abs=1e-6)
