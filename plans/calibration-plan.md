@@ -1,10 +1,10 @@
 # ManyWells calibration — plan
 
-*Draft 2026-10-02. Owner: Bjarne Grimstad. Status: Steps C1 to C7 implemented on the branch `calibration` on 2026-10-02, at Bjarne's request, and signed off by him the same day (`specs/features/017-calibration.md`, Sign-off). Step C8 waits for `plans/validation-plan.md`. Bjarne made the scope decisions below on 2026-10-02.*
+*Draft 2026-10-02, revised 2026-10-28 (Step C8 dropped). Owner: Bjarne Grimstad. Status: Steps C1 to C7 implemented on the branch `calibration` on 2026-10-02, at Bjarne's request, and signed off by him the same day (`specs/features/017-calibration.md`, Sign-off). Bjarne made the scope decisions below on 2026-10-02.*
 
 This plan makes it easy to calibrate ManyWells to a well's production data: rates from well tests or multiphase flow meters (MPFMs), and pressures and temperatures from whatever sensors the well has. Rows may have missing values, and instrumentation differs between wells; not every well has a downhole gauge. The first version calibrates four parameters per well (choke, inflow, friction, heat transfer), each with a physics-based prior, and returns the posterior mode (MAP). It works with both backends, the Rust core by default.
 
-The foundation plan (`plans/manywells-v2-plan.md`) defers calibration until after its Step 10 and lists it under After this plan. v2.0.0 needs it, checked privately against real-well data (`specs/goals.md`).
+The foundation plan (`plans/manywells-v2-plan.md`) defers calibration until after its Step 10 and lists it under After this plan. v2.0.0 needs it (`specs/goals.md`).
 
 ## Starting point
 
@@ -28,19 +28,8 @@ The foundation plan (`plans/manywells-v2-plan.md`) defers calibration until afte
   - The choke rate is linear in `K_c σ(u)` at a fixed wellhead state (CHK-2), so only the product is identifiable. `K_c` is in m²: the discharge coefficient times the throat area.
   - `h` and the heat capacities enter THM-1 only as `h/C`, so they cannot be calibrated together.
   - TBH is set by `T_r` (THM-3) and lift-gas mixing (THM-5). None of the first version's parameters affects it.
-- **v1.0.0's calibration** (paper §6.1).
-  - Method: friction factor, heat capacity and choke parameters fitted by nonlinear least squares on part of one real well's data. Then 100 points were simulated, with the measured PDC, choke position and gas fraction as boundary conditions.
-  - Errors (paper Table 4), the baseline of the private accuracy check:
-
-    | Output | RMSE | MAPE |
-    |---|---|---|
-    | PBH | 2.69 bar | 1.31% |
-    | PWH | 1.63 bar | 2.57% |
-    | TWH | 1.71 K | 0.38% |
-    | Liquid rate | 1.58 kg/s | 5.64% |
-    | Gas rate | 0.24 kg/s | 5.64% |
-- **Real-well data is confidential.** Agents never access it (`specs/constitution.md`). Everything the tests and twin experiments need is synthetic, drawn with `manywells.sampling`. Bjarne runs the real-well check, and only aggregates are published.
-- **The validation plan.** `plans/validation-plan.md` (draft, 2026-10-02) plans the private field checks: a reader, a mapping and metrics for the private datasets in a `validation/` workspace member, and a private runner (its V4). Its V6 adds calibrated checks once calibration exists. Step C8 below builds on it rather than on a separate script.
+- **v1.0.0's calibration** (paper §6.1) fitted the friction factor, the heat capacity and the choke parameters by nonlinear least squares.
+- **Synthetic data.** Everything the tests and twin experiments need is synthetic, drawn with `manywells.sampling`.
 
 ## The problem
 
@@ -354,31 +343,14 @@ src/manywells/calibration/
 - **Done when.** The full suite passes, the example included.
 - **Status.** Done 2026-10-02. The full suite passes: one test, the backend comparison, needs multiprocessing, which runs outside the agent's sandbox. `README.md` and `docs/testing.md` point to the new files, and `AGENTS.md` lists `specs/calibration.md` among the specs that need sign-off. At Bjarne's request, his untracked `scripts/wellbore_cal.py` was deleted from the main checkout on 2026-10-02.
 
-### Step C8 — Calibrated real-well checks (private)
-
-- **Work.** The agent connects `calibrate` to the private checks:
-  - the v2 plan's real-well accuracy check (paper §6.1);
-  - the calibrated variants of `plans/validation-plan.md`, V6.
-
-  Each one:
-  - reuses the validation plan's reader, mapping, metrics and private runner (its V4);
-  - calibrates on a training part only and evaluates on the held-out part, since nothing is fitted to the validation targets (validation plan, principle 6);
-  - reports aggregates only: RMSE and MAPE for PBH, PWH, TWH and the liquid and gas rates, next to v1.0.0's Table 4.
-
-  The pipeline is tested on synthetic files in the private datasets' format. Bjarne runs it.
-  - If the validation plan is not approved, the same check is a script under `scripts/calibration/` that reads a local directory, which is never committed.
-- **Done when.** The aggregate results are recorded, and Bjarne has set the acceptance bound relative to v1.0.0's errors (`specs/goals.md`, Decided elsewhere).
-- **Who.** Agent writes; Bjarne runs it and decides.
-- **Status.** Not started: it waits for Bjarne's decision on `plans/validation-plan.md` and for its V4.
-
 ## Sequencing
 
 ```
-C1 ─┬─▶ C2 ─┬─▶ C4 ─▶ C5 ─▶ C6 ─┬─▶ C7
-    └─▶ C3 ─┘                   └─▶ C8
+C1 ─┬─▶ C2 ─┬─▶ C4 ─▶ C5 ─▶ C6 ─▶ C7
+    └─▶ C3 ─┘
 ```
 
-C2 to C7 touch `calibration/`, the feature function in `datasets/rows.py`, tests, scripts and docs, but not the model or the solvers. So they do not conflict with model work that runs at the same time (Step 10). The foundation plan defers calibration until after Step 10; whether C1 starts earlier is Bjarne's call. C8 also waits for the validation plan's V4.
+C2 to C7 touch `calibration/`, the feature function in `datasets/rows.py`, tests, scripts and docs, but not the model or the solvers. So they do not conflict with model work that runs at the same time (Step 10). The foundation plan defers calibration until after Step 10; whether C1 starts earlier is Bjarne's call.
 
 ## After this plan
 
@@ -407,8 +379,6 @@ Signed off on 2026-10-02 (`specs/features/017-calibration.md`, Sign-off):
 
 Step C4 added no solver machinery: the core's search is used as it is.
 
-Still open: the accuracy bound of the private check (Step C8).
-
 ## Open decisions
 
 - ~~Whether C1 starts before Step 10 is done.~~ Settled: Step 10 (016) was merged into `develop` before the branch `calibration` was made, and Bjarne asked for the plan to be executed on 2026-10-02.
@@ -417,7 +387,6 @@ Still open: the accuracy bound of the private check (Step C8).
 
 ## References
 
-In `manywells-papers/papers/`:
 - Kennedy and O'Hagan (2001), with the discussion.
 - Seman et al. (2020).
 - Ausen et al. (2017).
@@ -436,8 +405,6 @@ In `manywells-papers/papers/`:
 - Moody (1944).
 - Guo et al. (2008).
 - Ahmed (2006).
-
-Not in the folder yet:
 - Brynjarsdóttir and O'Hagan (2014), "Learning about physical parameters: the importance of model discrepancy", *Inverse Problems* 30, 114007.
 - Higdon, Kennedy, Cavendish, Cafeo and Ryne (2004), "Combining field data and computer simulations for calibration and prediction", *SIAM J. Sci. Comput.* 26(2), 448–466.
 - Liu, Bayarri and Berger (2009), "Modularization in Bayesian analysis, with emphasis on analysis of computer models", *Bayesian Analysis* 4(1), 119–150.
