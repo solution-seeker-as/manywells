@@ -1,6 +1,10 @@
 """
+Copyright (C) 2024 Solution Seeker AS - All Rights Reserved
+You may use, distribute and modify this code under the
+terms of the CC BY-NC 4.0 International Public License.
+
 Created 13 December 2024
-Bjarne Grimstad, bjarne.grimstad@solutionseeker.no 
+Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 """
 
 import numpy as np
@@ -108,8 +112,8 @@ x_cols = list(feature_dict.keys())
 y_cols = list(class_dict.keys())
 class_col = list(class_dict_v2.keys())
 
-# lr = LogisticRegression(multi_class='multinomial', penalty='l1', C=1., solver='saga', fit_intercept=False)
-lr = LogisticRegression(multi_class='multinomial', penalty='l2', C=0.01, solver='lbfgs', fit_intercept=True, max_iter=200)
+# lr = LogisticRegression(penalty='l1', C=1., solver='saga', fit_intercept=False)
+lr = LogisticRegression(penalty='l2', C=0.01, solver='lbfgs', fit_intercept=True, max_iter=200)  # multinomial
 lr.fit(df[x_cols], df[class_col].to_numpy().ravel())
 pred = lr.predict(df[x_cols])
 print(pred)
