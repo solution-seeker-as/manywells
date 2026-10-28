@@ -1,6 +1,6 @@
 # Evidence for the v2 plan
 
-Scripts and results behind the numbers in `../manywells-v2-plan.md`: the "Known v1 defect" bullet, the "Multiple roots and stability" section, and Step 2.4. Feature specs 016 and 017 have their own sections below. The v2 plan's scripts were run on 2026-09-30 against v1.0.0 (Python 3.11.13, casadi 3.6.4, numpy 1.24.3, pandas 1.5.3), using the published `manywells-sol-1` data and configs.
+Scripts and results behind the numbers in `../manywells-v2-plan.md`: the "Known v1 defect" bullet, the "Multiple roots and stability" section, and Step 2.4. Feature specs 016, 017 and 019 have their own sections below. The v2 plan's scripts were run on 2026-09-30 against v1.0.0 (Python 3.11.13, casadi 3.6.4, numpy 1.24.3, pandas 1.5.3), using the published `manywells-sol-1` data and configs.
 
 ## Setup
 
@@ -88,3 +88,13 @@ Measurements behind the retry of point 0 in `../../specs/features/012-root-searc
 | `cases 88 OUT.csv` | The 263 cases of `jt_wells.py` at their GOR and at half and a quarter of it (789), every variant | Without the retry the search misses 15 of the 116 operating points with an all-liquid bottomhole; with it, none, and none lost. 9 misses with gas-rich bottomholes in every variant |
 | `attempts 20 OUT.csv` | The 60 cases of the first 20 wells at their GOR, one process: each start's outcome and Ipopt iterations | The retry changes 4 of 420 starts, each from a failed march to a root, and no other: 0.16% more iterations. The `guess` variant changes the paths of others: 11% more (20% in a first measurement whose starts differed by rounding) |
 | `scripts.verification.develop_candidate`, with and without the retry, twice each | The verifier's case set | PASS, 100% for both; the same 200 roots to the bit; 1.66 and 1.68 s per case against 1.68 and 1.64 s |
+
+## Feature 019: five flow regimes
+
+Scripts behind `../../specs/features/019-five-flow-regimes.md`, run on 2026-10-28 against `develop` at b313b9d. `five_regime_slip.py` is the prototype, a subclass of `SlipModel`, so it runs on the CasADi backend only; `five_regime_wells.py` imports it.
+
+| Script | What it shows | Result |
+|---|---|---|
+| `slip_models.py` | `develop`'s slip closure against Hasan et al. (2010) and Shi et al. (2005), point by point, at two fluid states and four inclinations, and on a 40 × 40 grid of superficial velocities | See the feature spec's Motivation. About a minute. |
+| `five_regime_slip.py` | The prototype's closure on a 60 × 60 grid, with $w$ = 0.01, 0.02 and 0.05, against the crisp hierarchy, Hasan et al.'s model and `develop`'s fitted classifier; `ranges [CSV]`, the sampler's gas–liquid ratios and the solved rates against Hasan et al.'s Table 2 | With $w = 0.02$, 99.9% of the labels are the crisp hierarchy's, and $\alpha$ is 0.005 to 0.007 from Hasan et al.'s at the mean, against 0.016 to 0.035 for the fitted classifier. 38% of 2000 sampled wells have a GLR above Table 2's range. A few minutes. |
+| `five_regime_wells.py 40 OUT.csv` | 39 wells of `develop`'s sampler (seed 2026), one sampled operating point each, in five variants: the fitted classifier, the proposal, and the proposal without the floor on $\lambda_g$, without the guard $\delta$, and with the cell's $f_D$ | The proposal finds an operating point in all 39 wells, the fitted classifier in 38. Against the fitted classifier PBH changes by −0.73 bar at the median and up to 14.0 bar, the rate by +2.6% and up to 19.8%. Without the floor the search takes 690 s in total against 157 s, without the guard 1107 s, with the same operating points; the cell's $f_D$ moves PBH by at most 0.013 bar. About 40 minutes on one process, on a loaded machine. |
