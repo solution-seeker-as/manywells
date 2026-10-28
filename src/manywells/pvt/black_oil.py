@@ -3,19 +3,23 @@ Copyright (C) 2024 Solution Seeker AS - All Rights Reserved
 You may use, distribute and modify this code under the
 terms of the CC BY-NC 4.0 International Public License.
 
-Black oil PVT model using Vazquez-Beggs correlations (CasADi-compatible, SI units).
+Black oil PVT model using Vazquez-Beggs correlations (CasADi-compatible, SI units), and the black-oil PVT model of a
+fluid, BlackOil.
 
 Reference: Vasquez, M. and Beggs, H.D., "Correlations for Fluid Physical
 Property Prediction", J Pet Technol 32 (1980): 968-970.
 """
 
+import math
 from dataclasses import dataclass
 from math import log10
 
 import casadi as ca
 
-from manywells.pvt import P_REF, T_REF, R_UNIVERSAL, api_from_density, density_from_api
-from manywells.units import CF_PSI, CF_RS, CF_CP, M_AIR, kelvin_to_fahrenheit
+from manywells.pvt import P_REF, T_REF, R_UNIVERSAL, api_from_density, density_from_api, gas_density_from_sg
+from manywells.pvt.dead_oil import dead_oil_surface_tension, dead_oil_viscosity
+from manywells.pvt.model import CorrelationPVT
+from manywells.units import CF_BAR, CF_PSI, CF_RS, CF_CP, M_AIR, kelvin_to_fahrenheit
 from manywells.ca_functions import ca_min_approx, ca_max_approx, ca_sigmoid
 
 
@@ -215,3 +219,75 @@ def live_oil_surface_tension(sigma_dead, Rs_scf):  # spec: PVT-OIL-12
 
     blend = ca_sigmoid(Rs_vol, 50.0, 0.5)
     return (1 - blend) * sigma_low + blend * sigma_high
+
+
+@dataclass(frozen=True)
+class BlackOil(CorrelationPVT):
+    """
+    Black oil (PVT-OIL-4): gas dissolves into the oil up to the Vazquez-Beggs solution gas-oil ratio, capped at the
+    bubble point if one is given, and the oil swells by the Vazquez-Beggs formation volume factor; the live oil's
+    viscosity and surface tension are corrected for the dissolved gas. The gas law is one of the correlations'
+    (CorrelationPVT). All pressures are in bar.
+
+    :param rho_o: Stock-tank oil density (kg/m3), API gravity 10 to 40
+    :param rho_g: Gas density at standard conditions (kg/m3)
+    :param gas_law: 'ideal', 'dak' or 'papay'
+    :param p_sep: Separator pressure (bar)
+    :param T_sep: Separator temperature (K)
+    :param p_bubble: Bubble point pressure (bar), or None for no cap
+    """
+    rho_o: float = 850.0
+    rho_g: float = gas_density_from_sg(0.554)
+    gas_law: str = 'dak'
+    p_sep: float = P_REF / CF_BAR
+    T_sep: float = T_REF
+    p_bubble: float = None
+
+    def __post_init__(self):
+        self._validate()
+        for name in ('p_sep', 'T_sep'):
+            if not (math.isfinite(getattr(self, name)) and getattr(self, name) > 0):
+                raise ValueError(f'{name} must be positive and finite, got {getattr(self, name)}')
+        if self.p_bubble is not None and not (math.isfinite(self.p_bubble) and self.p_bubble > 0):
+            raise ValueError(f'p_bubble must be None, or positive and finite, got {self.p_bubble}')
+        self._derive()
+        object.__setattr__(self, '_black_oil', BlackOilPVT(
+            api=self._api,
+            sg_gas=self._sg_gas,
+            p_sep=self.p_sep * CF_BAR,
+            T_sep=self.T_sep,
+            p_bubble=None if self.p_bubble is None else self.p_bubble * CF_BAR,
+        ))
+
+    def rs(self, p, T):  # spec: PVT-OIL-4
+        """
+        Solution gas-oil ratio at (p, T), Vazquez-Beggs.
+
+        :param p: Pressure (bar), may be CasADi symbolic
+        :param T: Temperature (K), may be CasADi symbolic
+        :return: Rs (Sm3 gas / Sm3 oil at standard conditions)
+        """
+        return self._black_oil.rs(p * CF_BAR, T)
+
+    def bo(self, p, T):  # spec: PVT-OIL-4
+        """
+        Oil formation volume factor at (p, T), Vazquez-Beggs.
+
+        :param p: Pressure (bar), may be CasADi symbolic
+        :param T: Temperature (K), may be CasADi symbolic
+        :return: Bo (dimensionless)
+        """
+        return self._black_oil.bo(p * CF_BAR, T)
+
+    def oil_viscosity(self, p, T):  # spec: PVT-OIL-10, PVT-OIL-11
+        """Beggs-Robinson's dead-oil viscosity at T, corrected for the gas dissolved at (p, T) (Pa s)."""
+        mu_o = dead_oil_viscosity(self._api, T)
+        Rs_scf = self.rs(p, T) / CF_RS
+        return live_oil_viscosity(mu_o, Rs_scf)
+
+    def oil_surface_tension(self, p, T):  # spec: PVT-OIL-3, PVT-OIL-12
+        """The dead-oil surface tension at the stock-tank oil's density and T, corrected for the gas dissolved at
+        (p, T) (J/m2)."""
+        sigma = dead_oil_surface_tension(self.rho_o, T)
+        Rs_scf = self.rs(p, T) / CF_RS
+        return live_oil_surface_tension(sigma, Rs_scf)

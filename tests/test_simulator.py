@@ -16,6 +16,8 @@ from manywells.simulator import (
 from manywells.choke import BernoulliChokeModel
 from manywells.discretization import DIM_X
 from manywells.pvt import density_from_api, gas_density_from_sg
+from manywells.pvt.black_oil import BlackOil
+from manywells.pvt.dead_oil import DeadOil
 from manywells.pvt.fluid import FluidModel
 from manywells.slip import SlipModel
 from manywells.solution import Root, RootSet
@@ -129,7 +131,7 @@ def test_row_order():
 def test_deprecated_two_argument_constructor():
     """SSDFSimulator(wp, bc) with simulate() still works, with a warning, and returns the state as a flat list."""
     geo = WellGeometry.vertical(2000, 10)
-    wp = WellProperties(geometry=geo, fluid=FluidModel(rho_o=density_from_api(35.0), oil_model='dead_oil'))
+    wp = WellProperties(geometry=geo, fluid=FluidModel(pvt=DeadOil(rho_o=density_from_api(35.0))))
     bc = BoundaryConditions(p_r=200, p_s=20, u=0.8)
     with pytest.warns(DeprecationWarning):
         sim = SSDFSimulator(wp, bc)
@@ -146,7 +148,7 @@ def test_deprecated_two_argument_constructor():
 def test_simulator_solve_small():
     """Simulator solve runs with minimal grid."""
     geo = WellGeometry.vertical(500, 2, D=0.1)
-    wp = WellProperties(geometry=geo, fluid=FluidModel(rho_o=density_from_api(45.0), oil_model='dead_oil'))
+    wp = WellProperties(geometry=geo, fluid=FluidModel(pvt=DeadOil(rho_o=density_from_api(45.0))))
     op = SSDFSimulator(wp).simulate(BoundaryConditions(p_r=120, p_s=30, u=0.8))
     assert isinstance(op, Root)
     assert op.label == 'stable'
@@ -156,12 +158,7 @@ def test_simulator_solve_small():
 @pytest.mark.slow
 def test_mass_conservation():
     """Total mass flux (gas + liquid) is constant across all cells with black oil, where gas dissolves."""
-    fl = FluidModel(
-        rho_o=density_from_api(35),
-        rho_g=gas_density_from_sg(0.65),
-        wlr=0.0,
-        p_bubble=250.0,
-    )
+    fl = FluidModel(pvt=BlackOil(rho_o=density_from_api(35), rho_g=gas_density_from_sg(0.65), p_bubble=250.0), wlr=0.0)
     geo = WellGeometry.vertical(2000, 5, D=0.1554)
     wp = WellProperties(geometry=geo, fluid=fl)
     X = SSDFSimulator(wp).simulate(BoundaryConditions(p_r=200, p_s=30, u=0.8)).state
@@ -185,7 +182,7 @@ def test_simulator_solve_l_shaped():
     tvd_survey.append(tvd_survey[-1])
 
     geo = WellGeometry.from_survey(md_survey=md_survey, tvd_survey=tvd_survey, n_cells=50)
-    wp = WellProperties(geometry=geo, fluid=FluidModel(rho_o=density_from_api(35.0), oil_model='dead_oil'))
+    wp = WellProperties(geometry=geo, fluid=FluidModel(pvt=DeadOil(rho_o=density_from_api(35.0))))
     sim = SSDFSimulator(wp)
     op = sim.simulate(BoundaryConditions(p_r=200, p_s=20, u=0.8))
     df = sim.solution_as_df(op)
@@ -198,7 +195,7 @@ def test_simulator_solve_l_shaped():
 def test_simulator_solve_with_gas_lift():
     """The lift gas is carried in the gas phase: w_g = f_g / (1 - f_g) * w_l + w_lg for dead oil."""
     geo = WellGeometry.vertical(2000, 20, D=0.1554)
-    fl = FluidModel(rho_o=density_from_api(35.0), oil_model='dead_oil')
+    fl = FluidModel(pvt=DeadOil(rho_o=density_from_api(35.0)))
     wp = WellProperties(geometry=geo, fluid=fl)
     w_lg = 1.0
     op = SSDFSimulator(wp).simulate(BoundaryConditions(p_r=200, p_s=20, u=0.8, w_lg=w_lg, T_lg=300.0))
@@ -215,7 +212,7 @@ def test_simulator_solve_with_gas_lift():
 def test_root_set_of_a_two_root_well():
     """A well whose static liquid column cannot reach the separator has a stable and an unstable root (SOL-7)."""
     geo = WellGeometry.vertical(2000, 50)
-    fl = FluidModel(rho_o=900.0, gor=50.0, oil_model='dead_oil')
+    fl = FluidModel(pvt=DeadOil(rho_o=900.0), gor=50.0)
     wp = WellProperties(geometry=geo, fluid=fl)
     bc = BoundaryConditions(p_r=170, p_s=20, u=0.8)
     assert bc.p_r - bc.p_s < fl.rho_l * 9.80665 * geo.L / 1e5
@@ -230,7 +227,7 @@ def test_root_set_of_a_two_root_well():
 def test_no_operating_point():
     """Below the fold the well cannot flow: simulate raises NoOperatingPoint, a SimError, with the root set."""
     geo = WellGeometry.vertical(2000, 20)
-    wp = WellProperties(geometry=geo, fluid=FluidModel(rho_o=900.0, gor=50.0, oil_model='dead_oil'))
+    wp = WellProperties(geometry=geo, fluid=FluidModel(pvt=DeadOil(rho_o=900.0), gor=50.0))
     bc = BoundaryConditions(p_r=60, p_s=20, u=0.8)
     with pytest.raises(NoOperatingPoint) as e:
         SSDFSimulator(wp).simulate(bc)

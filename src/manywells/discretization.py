@@ -152,9 +152,9 @@ def row_ids(wp) -> tuple:
     fluid, N = wp.fluid, wp.geometry.n_cells
     bottom = ('INF-6', 'INF-7', 'THM-5' if wp.thermal.lift_gas_mixing else 'THM-3')
     cell = ('DISC-7', 'DISC-8', 'DISC-9', 'DISC-10')
-    gas_law = 'PVT-GAS-1' if fluid.ideal_gas else 'PVT-GAS-11' if fluid.z_factor_model == 'dak' else 'PVT-GAS-3'
+    gas_law = {'ideal': 'PVT-GAS-1', 'dak': 'PVT-GAS-11', 'papay': 'PVT-GAS-3'}[fluid.pvt.gas_law]
     closures = ('SLIP-1', gas_law,
-                'PVT-MIX-1' if fluid.oil_model == 'dead_oil' else 'PVT-MIX-6')
+                'PVT-MIX-6' if fluid.pvt.dissolves_gas else 'PVT-MIX-1')
     ids = bottom + closures
     for i in range(1, N + 1):
         ids += cell + (('CHK-1',) if i == N else ()) + closures
@@ -251,7 +251,7 @@ class System:
         range, below which the Joule-Thomson factor has a pole (PVT-GAS-10; specs/features/016-joule-thomson.md).
         """
         T_low = bc.T_s if bc.T_lg is None else min(bc.T_s, bc.T_lg)
-        if self.wp.thermal.joule_thomson and not self.wp.fluid.ideal_gas:
+        if self.wp.thermal.joule_thomson and self.wp.fluid.pvt.gas_law != 'ideal':
             T_low = min(T_low, JT_T_PR_MIN * self.wp.fluid.pseudo_critical[1])
         lb = np.array([bc.p_s, 0, 0, 0, 0, 0, T_low], dtype=float)
         ub = np.array([bc.p_r, np.inf, np.inf, 1, np.inf, np.inf, bc.T_r + 1], dtype=float)

@@ -53,12 +53,13 @@ from manywells.friction import RoughnessFriction
 from manywells.geometry import WellGeometry
 from manywells.inflow import Vogel
 from manywells.pvt import density_from_api, gas_density_from_sg
+from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.fluid import FluidModel
 from manywells.simulator import BoundaryConditions, WellProperties
 from manywells.thermal import ThermalModel
 
 geometry = WellGeometry.from_survey([0, 800, 3100], [0, 800, 2600], n_cells=50, D=0.1)  # MD and TVD survey (m)
-fluid = FluidModel(rho_o=density_from_api(32), rho_g=gas_density_from_sg(0.7), gor=150.0, wlr=0.2)
+fluid = FluidModel(pvt=BlackOil(rho_o=density_from_api(32), rho_g=gas_density_from_sg(0.7)), gor=150.0, wlr=0.2)
 wp = WellProperties(geometry=geometry, fluid=fluid,
                     inflow=Vogel(w_l_max=40.0),                   # your estimate: it is the prior's median
                     choke=SimpsonChokeModel(K_c=0.12 * geometry.A, chk_profile='linear'),

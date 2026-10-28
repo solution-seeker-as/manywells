@@ -27,6 +27,8 @@ import pytest
 from manywells.discretization import DIM_X, PointState
 from manywells.geometry import WellGeometry
 from manywells.pvt import density_from_api, gas_density_from_sg
+from manywells.pvt.black_oil import BlackOil
+from manywells.pvt.dead_oil import DeadOil
 from manywells.pvt.fluid import FluidModel
 from manywells.simulator import BoundaryConditions, SSDFSimulator, WellProperties
 from manywells.thermal import ThermalModel
@@ -58,7 +60,7 @@ def l_shaped(n_cells, tvd=2200.0, horizontal=800.0, radius=300.0):
     return WellGeometry.from_survey(md, z, n_cells=n_cells)
 
 
-BLACK_OIL = FluidModel(rho_o=density_from_api(35.0), rho_g=gas_density_from_sg(0.7), gor=120.0, wlr=0.3)
+BLACK_OIL = FluidModel(pvt=BlackOil(rho_o=density_from_api(35.0), rho_g=gas_density_from_sg(0.7)), gor=120.0, wlr=0.3)
 WELLS = {
     'deviated black oil': (lambda n: WellProperties(geometry=deviated(n), fluid=BLACK_OIL),
                            BoundaryConditions(p_r=260.0, p_s=25.0, T_r=370.0, T_s=280.0, u=0.6)),
@@ -68,7 +70,7 @@ WELLS = {
                                     BLACK_OIL, gor=40.0, wlr=0.5)),
                                 BoundaryConditions(p_r=200.0, p_s=20.0, T_r=360.0, T_s=280.0, u=0.8, w_lg=2.0, T_lg=300.0)),
     'vertical dead oil, real gas': (lambda n: WellProperties(geometry=WellGeometry.vertical(2000.0, n),
-                                                             fluid=FluidModel(rho_o=880.0, gor=60.0, oil_model='dead_oil')),
+                                                             fluid=FluidModel(pvt=DeadOil(rho_o=880.0), gor=60.0)),
                                     BoundaryConditions(p_r=210.0, p_s=20.0, T_r=360.0, T_s=280.0, u=0.5)),
 }
 
@@ -167,7 +169,8 @@ def test_heat_flows_from_the_fluid_to_the_surroundings(solved, name, backend):
 
 GAS_RICH = (lambda n, joule_thomson: WellProperties(
                 geometry=WellGeometry.vertical(3000.0, n),
-                fluid=FluidModel(rho_o=density_from_api(40.0), rho_g=gas_density_from_sg(0.65), gor=800.0, wlr=0.1),
+                fluid=FluidModel(pvt=BlackOil(rho_o=density_from_api(40.0), rho_g=gas_density_from_sg(0.65)),
+                                 gor=800.0, wlr=0.1),
                 thermal=ThermalModel(joule_thomson=joule_thomson)),
             BoundaryConditions(p_r=300.0, p_s=20.0, T_r=380.0, T_s=280.0, u=0.5))
 
@@ -203,7 +206,7 @@ def test_gas_comes_out_of_solution_up_the_well(solved, backend):
 def test_two_root_well_stability(backend):
     """A two-root well has one stable and one unstable root, the unstable one at higher p_0 (plan, "New model
     versions"), here on develop's full model in a deviated well."""
-    fl = FluidModel(rho_o=density_from_api(25.0), rho_g=gas_density_from_sg(0.7), gor=60.0, wlr=0.6)
+    fl = FluidModel(pvt=BlackOil(rho_o=density_from_api(25.0), rho_g=gas_density_from_sg(0.7)), gor=60.0, wlr=0.6)
     wp = WellProperties(geometry=deviated(60, tvd=2200.0), fluid=fl)
     bc = BoundaryConditions(p_r=225.0, p_s=29.0, T_r=360.0, T_s=280.0, u=0.6)
     rho_static = float(fl.liquid_density(bc.p_r, bc.T_r) + fl.liquid_density(bc.p_s, bc.T_s)) / 2  # in situ (PVT-MIX-6)

@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 
 from manywells.pvt import density_from_api, gas_density_from_sg
+from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.fluid import FluidModel
 from manywells.pvt.gas import gas_fvf, gas_density, sutton_pseudo_critical
 from manywells.units import CF_BAR
@@ -47,13 +48,9 @@ FLUID_PARAMS = [
 
 def _make_fluid(params):
     return FluidModel(
-        rho_o=density_from_api(params["api"]),
-        rho_g=gas_density_from_sg(params["sg_gas"]),
-        gor=params["gor"],
-        wlr=0.0,
-        oil_model="black_oil",
-        ideal_gas=False,
-        p_bubble=params["p_bubble"],
+        pvt=BlackOil(rho_o=density_from_api(params["api"]), rho_g=gas_density_from_sg(params["sg_gas"]),
+                     p_bubble=params["p_bubble"]),
+        gor=params["gor"], wlr=0.0,
     )
 
 
@@ -101,7 +98,7 @@ def test_gas_viscosity_less_than_oil_viscosity(params):
             p_pa = p_bar * CF_BAR
             Z = float(fl.z_factor(p_bar, T))
             rho_g = float(gas_density(fl.R_s, p_pa, T, Z))
-            mu_g = float(fl.gas_viscosity(T, rho_g))
+            mu_g = float(fl.gas_viscosity(p_bar, T, rho_g))
             mu_o = float(fl.liquid_viscosity(p_bar, T))
             assert mu_g < mu_o, (
                 f"mu_g ({mu_g:.3e}) >= mu_o ({mu_o:.3e}) "

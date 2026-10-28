@@ -10,7 +10,8 @@ from manywells.pvt import (
 import dataclasses
 
 from manywells.units import M_AIR, CF_PSI, CF_BAR
-from manywells.pvt.dead_oil import dead_oil_surface_tension
+from manywells.pvt.dead_oil import DeadOil, dead_oil_surface_tension
+from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.fluid import FluidModel
 from manywells.pvt.water import water_viscosity
 
@@ -41,48 +42,53 @@ class TestFluidModelConstruction:
         assert fl.rho_o == 850.0
         assert fl.gor == 200.0
         assert fl.wlr == 0.0
-        assert fl.oil_model == 'black_oil'
-        assert fl.ideal_gas is False
-        assert fl.z_factor_model == 'dak'
+        assert fl.pvt == BlackOil()
+        assert fl.pvt.gas_law == 'dak'
 
     def test_dead_oil_construction(self):
-        fl = FluidModel(oil_model='dead_oil')
-        assert fl._black_oil is None
+        fl = FluidModel(pvt=DeadOil())
+        assert not fl.pvt.dissolves_gas
+        assert fl.rs(200.0, 350.0) == 0 and fl.bo(200.0, 350.0) == 1.0
 
     def test_black_oil_construction(self):
-        fl = FluidModel(oil_model='black_oil')
-        assert fl._black_oil is not None
+        fl = FluidModel()
+        assert fl.pvt.dissolves_gas
+        assert float(fl.rs(200.0, 350.0)) > 0
 
-    def test_invalid_oil_model(self):
-        with pytest.raises(ValueError, match="Unknown oil_model"):
-            FluidModel(oil_model='invalid')
+    def test_pvt_must_be_a_pvt_model(self):
+        with pytest.raises(ValueError, match="pvt must be a PVTModel"):
+            FluidModel(pvt='black_oil')
+
+    def test_densities_come_from_the_pvt_model(self):
+        fl = FluidModel(pvt=DeadOil(rho_o=880.0, rho_g=0.9))
+        assert (fl.rho_o, fl.rho_g) == (880.0, 0.9)
 
 
 class TestFluidModelDerivedProperties:
 
     def test_api_from_rho_o(self):
-        fl = FluidModel(rho_o=850.0)
+        fl = FluidModel(pvt=BlackOil(rho_o=850.0))
         assert fl.api == pytest.approx(api_from_density(850.0))
 
     def test_sg_gas_from_rho_g(self):
         rho_g = gas_density_from_sg(0.65)
-        fl = FluidModel(rho_g=rho_g)
+        fl = FluidModel(pvt=BlackOil(rho_g=rho_g))
         assert fl.sg_gas == pytest.approx(0.65)
 
     def test_R_s_from_rho_g(self):
-        fl = FluidModel(rho_g=gas_density_from_sg(0.65))
+        fl = FluidModel(pvt=BlackOil(rho_g=gas_density_from_sg(0.65)))
         assert fl.R_s == pytest.approx(R_UNIVERSAL / (M_AIR * 0.65))
 
     def test_M_g_from_rho_g(self):
-        fl = FluidModel(rho_g=gas_density_from_sg(0.65))
+        fl = FluidModel(pvt=BlackOil(rho_g=gas_density_from_sg(0.65)))
         assert fl.M_g == pytest.approx(M_AIR * 0.65)
 
     def test_pure_oil_rho_l_equals_rho_o(self):
-        fl = FluidModel(wlr=0.0, rho_o=850.0)
+        fl = FluidModel(pvt=BlackOil(rho_o=850.0), wlr=0.0)
         assert fl.rho_l == pytest.approx(850.0)
 
     def test_half_wlr_rho_l(self):
-        fl = FluidModel(wlr=0.5, rho_o=850.0)
+        fl = FluidModel(pvt=BlackOil(rho_o=850.0), wlr=0.5)
         expected = 0.5 * fl.rho_w + 0.5 * 850.0
         assert fl.rho_l == pytest.approx(expected)
 
@@ -103,12 +109,12 @@ class TestFluidModelDerivedProperties:
 class TestFluidModelFg:
 
     def test_f_g_manual_formula_no_water(self):
-        fl = FluidModel(rho_o=850.0, rho_g=gas_density_from_sg(0.65), gor=200.0, wlr=0.0)
+        fl = FluidModel(pvt=BlackOil(rho_o=850.0, rho_g=gas_density_from_sg(0.65)), gor=200.0, wlr=0.0)
         expected = (fl.rho_g * 200.0) / (fl.rho_g * 200.0 + fl.rho_o)
         assert fl.f_g == pytest.approx(expected)
 
     def test_f_g_manual_formula_with_water(self):
-        fl = FluidModel(rho_o=850.0, rho_g=gas_density_from_sg(0.65), gor=200.0, wlr=0.3)
+        fl = FluidModel(pvt=BlackOil(rho_o=850.0, rho_g=gas_density_from_sg(0.65)), gor=200.0, wlr=0.3)
         expected = (fl.rho_g * 200.0) / (fl.rho_g * 200.0 + fl.rho_o + fl.rho_w * 0.3 / 0.7)
         assert fl.f_g == pytest.approx(expected)
 
@@ -139,37 +145,37 @@ class TestFluidModelFoInLiquid:
 class TestDeadOilUnifiedInterface:
 
     def test_rs_returns_zero(self):
-        fl = FluidModel(oil_model='dead_oil')
+        fl = FluidModel(pvt=DeadOil())
         assert fl.rs(100.0, 350.0) == 0
 
     def test_bo_returns_one(self):
-        fl = FluidModel(oil_model='dead_oil')
+        fl = FluidModel(pvt=DeadOil())
         assert fl.bo(100.0, 350.0) == 1.0
 
     def test_liquid_density_constant(self):
-        fl = FluidModel(oil_model='dead_oil', rho_o=850.0, wlr=0.0)
+        fl = FluidModel(pvt=DeadOil(rho_o=850.0), wlr=0.0)
         rho = fl.liquid_density(100.0, 350.0)
         assert rho == pytest.approx(850.0)
 
     def test_liquid_viscosity_positive(self):
-        fl = FluidModel(oil_model='dead_oil')
+        fl = FluidModel(pvt=DeadOil())
         mu = float(fl.liquid_viscosity(100.0, 273.15 + 60))
         assert mu > 0
 
     def test_liquid_viscosity_ignores_pressure(self):
-        fl = FluidModel(oil_model='dead_oil')
+        fl = FluidModel(pvt=DeadOil())
         T = 273.15 + 80
         mu_low_p = float(fl.liquid_viscosity(50.0, T))
         mu_high_p = float(fl.liquid_viscosity(300.0, T))
         assert mu_low_p == pytest.approx(mu_high_p)
 
     def test_surface_tension_positive(self):
-        fl = FluidModel(oil_model='dead_oil')
+        fl = FluidModel(pvt=DeadOil())
         sigma = float(fl.surface_tension(100.0, 273.15 + 60, RHO_L))
         assert sigma > 0
 
     def test_surface_tension_ignores_pressure(self):
-        fl = FluidModel(oil_model='dead_oil')
+        fl = FluidModel(pvt=DeadOil())
         T = 273.15 + 60
         s1 = float(fl.surface_tension(50.0, T, RHO_L))
         s2 = float(fl.surface_tension(300.0, T, RHO_L))
@@ -181,10 +187,9 @@ class TestBlackOilUnifiedInterface:
     @staticmethod
     def _make():
         return FluidModel(
-            rho_o=density_from_api(30),
-            rho_g=gas_density_from_sg(0.65),
+            pvt=BlackOil(rho_o=density_from_api(30), rho_g=gas_density_from_sg(0.65),
+                         p_sep=200 * CF_PSI / CF_BAR, T_sep=333.15),  # bar
             gor=150.0, wlr=0.0,
-            p_sep=200 * CF_PSI / CF_BAR, T_sep=333.15,  # bar
         )
 
     def test_rs_positive_at_pressure(self):
@@ -198,12 +203,8 @@ class TestBlackOilUnifiedInterface:
         assert bo > 1.0
 
     def test_viscosity_less_than_dead(self):
-        fl_dead = FluidModel(
-            rho_o=density_from_api(30),
-            rho_g=gas_density_from_sg(0.65),
-            gor=150.0, wlr=0.0,
-            oil_model='dead_oil',
-        )
+        fl_dead = FluidModel(pvt=DeadOil(rho_o=density_from_api(30), rho_g=gas_density_from_sg(0.65)),
+                             gor=150.0, wlr=0.0)
         fl_live = self._make()
         p, T = 150.0, 273.15 + 80
         mu_dead = float(fl_dead.liquid_viscosity(p, T))
@@ -216,12 +217,8 @@ class TestBlackOilUnifiedInterface:
         assert mu > 0
 
     def test_surface_tension_less_than_dead(self):
-        fl_dead = FluidModel(
-            rho_o=density_from_api(30),
-            rho_g=gas_density_from_sg(0.65),
-            gor=150.0, wlr=0.0,
-            oil_model='dead_oil',
-        )
+        fl_dead = FluidModel(pvt=DeadOil(rho_o=density_from_api(30), rho_g=gas_density_from_sg(0.65)),
+                             gor=150.0, wlr=0.0)
         fl_live = self._make()
         p, T = 150.0, 273.15 + 80
         sigma_dead = float(fl_dead.surface_tension(p, T, RHO_L))
@@ -244,21 +241,21 @@ class TestBlackOilUnifiedInterface:
 class TestIdealGasZFactor:
 
     def test_ideal_gas_returns_one(self):
-        fl = FluidModel(ideal_gas=True)
+        fl = FluidModel(pvt=BlackOil(gas_law='ideal'))
         assert fl.z_factor(200.0, 350.0) == 1.0
 
     def test_real_gas_near_one_at_low_pressure(self):
-        fl = FluidModel(rho_g=gas_density_from_sg(0.65), ideal_gas=False)
+        fl = FluidModel(pvt=BlackOil(rho_g=gas_density_from_sg(0.65)))
         Z = float(fl.z_factor(1.01325, 288.15))
         assert Z == pytest.approx(1.0, abs=0.05)
 
     def test_real_gas_below_one_at_high_pressure(self):
-        fl = FluidModel(rho_g=gas_density_from_sg(0.65), ideal_gas=False)
+        fl = FluidModel(pvt=BlackOil(rho_g=gas_density_from_sg(0.65)))
         Z = float(fl.z_factor(200.0, 350.0))
         assert Z < 0.95
 
     def test_z_factor_positive(self):
-        fl = FluidModel(rho_g=gas_density_from_sg(0.65))
+        fl = FluidModel(pvt=BlackOil(rho_g=gas_density_from_sg(0.65)))
         for p_bar in [10, 100, 250]:
             Z = float(fl.z_factor(p_bar, 350.0))
             assert Z > 0
@@ -268,7 +265,7 @@ class TestGasViscosity:
 
     def test_positive(self):
         fl = FluidModel()
-        mu = float(fl.gas_viscosity(273.15 + 60, 50.0))
+        mu = float(fl.gas_viscosity(100.0, 273.15 + 60, 50.0))
         assert mu > 0
 
 
@@ -281,9 +278,9 @@ class TestFrozenAndValidated:
         with pytest.raises(dataclasses.FrozenInstanceError):
             fl.rho_l_typo = 900.0  # an assignment to a field that does not exist fails too
 
-    def test_invalid_z_factor_model(self):
-        with pytest.raises(ValueError, match="z_factor_model"):
-            FluidModel(z_factor_model='standing-katz')
+    def test_invalid_gas_law(self):
+        with pytest.raises(ValueError, match="gas_law"):
+            FluidModel(pvt=BlackOil(gas_law='standing-katz'))
 
     def test_invalid_surface_tension_model(self):
         with pytest.raises(ValueError, match="surface_tension_model"):
@@ -293,33 +290,34 @@ class TestFrozenAndValidated:
         with pytest.raises(ValueError, match="Water-liquid ratio"):
             FluidModel(wlr=1.0)
 
-    @pytest.mark.parametrize('field, kw', [
-        ('p_bubble', dict(p_bubble=-10.0)),                     # gave NaN rows
-        ('gor', dict(gor=-50.0)),                               # gave a negative gas rate
-        ('rho_o', dict(rho_o=-800.0, oil_model='dead_oil')),    # gave a negative liquid density
-        ('rho_g', dict(rho_g=-0.8, oil_model='dead_oil')),
-        ('rho_w', dict(rho_w=0.0, wlr=0.5)),
-        ('cp_g', dict(cp_g=-1.0)),
-        ('p_sep', dict(p_sep=0.0)),                             # gave a bare 'math domain error'
-        ('T_sep', dict(T_sep=float('inf'))),
-        ('gor', dict(gor=float('nan'))),
+    @pytest.mark.parametrize('field, make', [
+        ('p_bubble', lambda: BlackOil(p_bubble=-10.0)),          # gave NaN rows
+        ('gor', lambda: FluidModel(gor=-50.0)),                  # gave a negative gas rate
+        ('rho_o', lambda: DeadOil(rho_o=-800.0)),                # gave a negative liquid density
+        ('rho_g', lambda: DeadOil(rho_g=-0.8)),
+        ('rho_o', lambda: BlackOil(rho_o=float('nan'))),
+        ('rho_w', lambda: FluidModel(rho_w=0.0, wlr=0.5)),
+        ('cp_g', lambda: FluidModel(cp_g=-1.0)),
+        ('p_sep', lambda: BlackOil(p_sep=0.0)),                  # gave a bare 'math domain error'
+        ('T_sep', lambda: BlackOil(T_sep=float('inf'))),
+        ('gor', lambda: FluidModel(gor=float('nan'))),
     ])
-    def test_non_physical_inputs(self, field, kw):
+    def test_non_physical_inputs(self, field, make):
         with pytest.raises(ValueError, match=field):
-            FluidModel(**kw)
+            make()
 
 
 class TestSurfaceTensionModels:
 
     def test_liquid_model_uses_the_local_liquid_density(self):
         """'liquid' is v1.0.0's: the dead-oil correlation at the state's rho_l (PVT-MIX-5)."""
-        fl = FluidModel(oil_model='dead_oil', surface_tension_model='liquid')
+        fl = FluidModel(pvt=DeadOil(), surface_tension_model='liquid')
         T = 330.0
         for rho_l in (750.0, 850.0, 950.0):
             assert float(fl.surface_tension(100.0, T, rho_l)) == float(dead_oil_surface_tension(rho_l, T))
 
     def test_oil_model_ignores_the_local_liquid_density(self):
-        fl = FluidModel(oil_model='dead_oil')
+        fl = FluidModel(pvt=DeadOil())
         T = 330.0
         assert float(fl.surface_tension(100.0, T, 750.0)) == float(dead_oil_surface_tension(fl.rho_o, T))
         assert float(fl.surface_tension(100.0, T, 950.0)) == float(dead_oil_surface_tension(fl.rho_o, T))
@@ -333,7 +331,7 @@ class TestPhaseRates:
 
     def test_dead_oil_rates_are_exact_and_independent_of_p_and_T(self):
         """Dead oil has no mass transfer (BAL-3): the rates are the reservoir's plus the lift gas, exactly."""
-        fl = FluidModel(oil_model='dead_oil')
+        fl = FluidModel(pvt=DeadOil())
         w_res, w_lg = 12.0, 0.7
         for p, T in ((20.0, 290.0), (300.0, 400.0)):
             w_g, w_l = fl.phase_rates(p, T, w_res, w_lg)
@@ -357,8 +355,8 @@ class TestLiquidVolume:
     POINTS = ((100.0, 350.0), (250.0, 380.0), (180.0, 400.0))  # (p, T) where R_so is below the gas-oil ratio
 
     @staticmethod
-    def _fluid(wlr, **kw):
-        return FluidModel(rho_o=density_from_api(35.0), rho_g=gas_density_from_sg(0.65), gor=150.0, wlr=wlr, **kw)
+    def _fluid(wlr, pvt=BlackOil):
+        return FluidModel(pvt=pvt(rho_o=density_from_api(35.0), rho_g=gas_density_from_sg(0.65)), gor=150.0, wlr=wlr)
 
     @pytest.mark.parametrize('wlr', (0.0, 0.2, 0.5, 0.8))
     def test_liquid_volume_rate_is_the_in_situ_volume_rate(self, wlr):
@@ -376,7 +374,7 @@ class TestLiquidVolume:
     @pytest.mark.parametrize('wlr', (0.1, 0.4, 0.8))
     def test_dead_oil_is_the_constant_exactly(self, wlr):
         """With dead oil B_l = 1, and the density is the liquid's at standard conditions, bit for bit (PVT-MIX-1)."""
-        fl = self._fluid(wlr, oil_model='dead_oil')
+        fl = self._fluid(wlr, DeadOil)
         for p, T in self.POINTS:
             assert fl.liquid_fvf(p, T) == 1.0
             assert fl.liquid_density(p, T) == fl.rho_l
@@ -399,19 +397,19 @@ class TestLiquidVolume:
             lambda_w = wlr / float(fl.liquid_fvf(p, T))
             assert lambda_w < wlr
             assert float(fl.liquid_viscosity(p, T)) == pytest.approx(lambda_w * mu_w + (1 - lambda_w) * mu_o, rel=1e-12)
-        mu_od = float(self._fluid(0.0, oil_model='dead_oil').liquid_viscosity(p, T))
-        mu_l = float(self._fluid(0.5, oil_model='dead_oil').liquid_viscosity(p, T))
+        mu_od = float(self._fluid(0.0, DeadOil).liquid_viscosity(p, T))
+        mu_l = float(self._fluid(0.5, DeadOil).liquid_viscosity(p, T))
         assert mu_l == pytest.approx(0.5 * mu_w + 0.5 * mu_od, rel=1e-12)  # dead oil: by the water-liquid ratio
 
 
 class TestPressuresInBar:
 
     def test_bubble_point_in_bar_caps_rs(self):
-        fl = FluidModel(p_bubble=150.0)
+        fl = FluidModel(pvt=BlackOil(p_bubble=150.0))
         T = 360.0
         assert float(fl.rs(250.0, T)) == pytest.approx(float(fl.rs(150.0, T)), rel=1e-3)
         assert float(fl.rs(100.0, T)) < float(fl.rs(150.0, T))
 
     def test_default_separator_pressure_is_standard_pressure(self):
-        assert FluidModel().p_sep == pytest.approx(P_REF / CF_BAR)
+        assert FluidModel().pvt.p_sep == pytest.approx(P_REF / CF_BAR)
 

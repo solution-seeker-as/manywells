@@ -83,9 +83,10 @@ Parameters and quantities of `develop`'s options, in addition (the dataclass fie
 | $\Phi_f$, $\Phi_g$, $\Phi_{JT}$ | – | K/m | frictional heating, gravity and Joule–Thomson terms of the temperature gradient |
 | $J$ | `jt_factor` | – | the gas's Joule–Thomson factor $T(\partial \ln Z/\partial T)_ p$; $\mu_{JT} = J/(\rho_g c_{pg})$ (PVT-GAS-10) |
 | $\rho_r$ | `reduced_density` | – | the gas's reduced density of the Dranchuk–Abou-Kassem equation of state (PVT-GAS-9) |
-| – | `z_factor_model` | – | the real gas's z-factor: `'dak'` (PVT-GAS-11) or `'papay'` (PVT-GAS-3, PVT-GAS-4) |
+| – | `pvt` | – | the fluid's hydrocarbon PVT model, a `PVTModel`: `DeadOil` (PVT-OIL-1) or `BlackOil` (PVT-OIL-4) |
+| – | `gas_law` | – | the PVT model's gas law: `'ideal'` (PVT-GAS-1), `'dak'` (PVT-GAS-11) or `'papay'` (PVT-GAS-3, PVT-GAS-4) |
 | – | `regime_model`, `regimes` | – | the slip law's classifier: `'hasan'`, five regimes (SLIP-12 to SLIP-16), or `'fitted'`, v1.0.0's three (SLIP-2 to SLIP-8); and its regime labels, `('annular', 'churn', 'dispersed-bubbly', 'slug', 'bubbly')` or `('annular', 'slug-churn', 'bubbly')` |
-| $\lambda_g$, $lpha_b$, $lpha_t$ | – | – | no-slip gas fraction (floored), void fraction with bubbly flow's parameters, and the bubbly–slug threshold (SLIP-12) |
+| $\lambda_g$, $\alpha_b$, $\alpha_t$ | – | – | no-slip gas fraction (floored), void fraction with bubbly flow's parameters, and the bubbly–slug threshold (SLIP-12) |
 | $v_{gc}$, $v_{ms}$ | – | m/s | gas velocity for annular flow and mixture velocity of dispersed bubbly flow (SLIP-12) |
 | $f_{ms}$, $w$, $\epsilon_\lambda$ | `f_ms`, `transition_width`, `lambda_floor` | – | the five regimes' friction factor in (A-17), logistic width of their rules, and floor of $\lambda_g$ (SLIP-12, SLIP-13) |
 

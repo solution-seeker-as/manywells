@@ -23,7 +23,7 @@ df = sim.solution_as_df(op)                      # one row per grid point, from 
 | Field | Class | Default |
 |---|---|---|
 | `geometry` | `WellGeometry` (`geometry.py`): `WellGeometry.vertical(length, n_cells)` or `WellGeometry.from_survey(...)` for a deviated well | vertical, 2000 m, 100 cells |
-| `fluid` | `FluidModel` (`pvt/fluid.py`) | black oil, real gas, no water |
+| `fluid` | `FluidModel` (`pvt/fluid.py`), with its PVT model `pvt` | black oil (`BlackOil()`, DAK's real gas), no water |
 | `friction` | `RoughnessFriction` or `FixedFrictionFactor` (`friction.py`) | pipe roughness, Chen's correlation |
 | `thermal` | `ThermalModel` (`thermal.py`) | heat loss, frictional heating, gravity term, lift-gas mixing |
 | `slip` | `SlipModel` (`slip.py`) | drift-flux closure per flow regime |

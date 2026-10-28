@@ -4,7 +4,7 @@ import pytest
 import numpy as np
 
 from manywells.pvt import P_REF, T_REF, WATER, density_from_api, api_from_density, gas_density_from_sg
-from manywells.pvt.black_oil import BlackOilPVT
+from manywells.pvt.black_oil import BlackOil, BlackOilPVT
 from manywells.units import CF_PSI, CF_RS, M_AIR, CF_BAR
 from manywells.pvt.gas import gas_fvf, gas_density_std
 from manywells.pvt.water import water_fvf
@@ -262,11 +262,10 @@ class TestFluidModelMixing:
     @staticmethod
     def _make_bo_fluid():
         return FluidModel(
-            rho_o=850.0,
-            rho_g=gas_density_from_sg(0.65),
+            pvt=BlackOil(rho_o=850.0, rho_g=gas_density_from_sg(0.65),
+                         p_sep=100 * CF_PSI / CF_BAR,  # bar
+                         T_sep=273.15 + 21.1),
             gor=200.0, wlr=0.0,
-            p_sep=100 * CF_PSI / CF_BAR,  # bar
-            T_sep=273.15 + 21.1,
         )
 
     def test_liquid_density_no_water(self):
@@ -300,6 +299,7 @@ class TestFluidModelMixing:
 # =========================================================================
 
 from manywells.geometry import WellGeometry
+from manywells.pvt.dead_oil import DeadOil
 from manywells.pvt.fluid import FluidModel
 from manywells.simulator import WellProperties, BoundaryConditions, SSDFSimulator, SimError
 
@@ -312,7 +312,7 @@ class TestDeadOilRegression:
         geo = WellGeometry.vertical(500, 2, D=0.1)
         wp = WellProperties(
             geometry=geo,
-            fluid=FluidModel(rho_o=density_from_api(45.0), oil_model='dead_oil'),
+            fluid=FluidModel(pvt=DeadOil(rho_o=density_from_api(45.0))),
         )
         bc = BoundaryConditions(p_r=120, p_s=30, u=0.8)
         sim = SSDFSimulator(wp)
@@ -328,12 +328,11 @@ class TestBlackOilSimulator:
     def bo_sim(self):
         """Set up a simulator with the black oil model enabled."""
         fl = FluidModel(
-            rho_o=density_from_api(35),
-            rho_g=gas_density_from_sg(0.65),
+            pvt=BlackOil(rho_o=density_from_api(35), rho_g=gas_density_from_sg(0.65),
+                         p_sep=100 * CF_PSI / CF_BAR,  # bar
+                         T_sep=273.15 + 21.1,
+                         p_bubble=250.0),  # bar
             wlr=0.0,
-            p_sep=100 * CF_PSI / CF_BAR,  # bar
-            T_sep=273.15 + 21.1,
-            p_bubble=250.0,  # bar
         )
         geo = WellGeometry.vertical(2000, 5, D=0.1554)
         wp = WellProperties(geometry=geo, fluid=fl)
@@ -412,5 +411,5 @@ class TestSeparatorGasGravity:
     def test_standard_separator(self):
         """At standard conditions (14.7 psia, 59 F) and API 35 the correction is 0.891, about 11% (ln gave 0.75)."""
         from manywells.pvt.fluid import FluidModel
-        fl = FluidModel(rho_o=density_from_api(35), rho_g=gas_density_from_sg(0.65))
-        assert fl._black_oil.sg_gas_corr / 0.65 == pytest.approx(0.8911, abs=2e-4)
+        fl = FluidModel(pvt=BlackOil(rho_o=density_from_api(35), rho_g=gas_density_from_sg(0.65)))
+        assert fl.pvt._black_oil.sg_gas_corr / 0.65 == pytest.approx(0.8911, abs=2e-4)

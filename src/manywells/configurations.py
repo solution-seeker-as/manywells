@@ -26,6 +26,8 @@ from manywells.choke import BernoulliChokeModel, SimpsonChokeModel
 from manywells.friction import FixedFrictionFactor, RoughnessFriction
 from manywells.geometry import WellGeometry
 from manywells.inflow import ProductivityIndex, Vogel
+from manywells.pvt.black_oil import BlackOil
+from manywells.pvt.dead_oil import DeadOil
 from manywells.pvt.fluid import FluidModel
 from manywells.simulator import WellProperties
 from manywells.slip import SlipModel
@@ -51,7 +53,7 @@ def v1_fluid(rho_l, R_s, cp_g, cp_l, f_g) -> FluidModel:  # spec: SMP-40
     """
     rho_g_sc = P_REF / (R_s * T_REF)  # Gas density at standard conditions (PVT-GAS-2)
     gor = f_g * rho_l / ((1 - f_g) * rho_g_sc)
-    return FluidModel(rho_o=rho_l, rho_g=rho_g_sc, wlr=0.0, gor=gor, oil_model='dead_oil', ideal_gas=True,
+    return FluidModel(pvt=DeadOil(rho_o=rho_l, rho_g=rho_g_sc, gas_law='ideal'), wlr=0.0, gor=gor,
                       surface_tension_model='liquid', cp_g=cp_g, cp_o=cp_l)
 
 
@@ -86,6 +88,19 @@ def _thermal_options(thermal) -> dict:
     return {f.name: getattr(thermal, f.name) for f in fields(ThermalModel) if f.type in (bool, 'bool')}
 
 
+def _fluid_options(fluid, pvt_class, gas_law, surface_tension_model) -> list:
+    """The fluid's options that differ from a configuration's: its PVT model's class and gas law, and its surface
+    tension model."""
+    out = []
+    if type(fluid.pvt) is not pvt_class:
+        out.append(f'fluid: pvt is {type(fluid.pvt).__name__}, not {pvt_class.__name__}')
+    if getattr(fluid.pvt, 'gas_law', None) != gas_law:
+        out.append(f'fluid: gas_law is {getattr(fluid.pvt, "gas_law", None)!r}, not {gas_law!r}')
+    if fluid.surface_tension_model != surface_tension_model:
+        out.append(f'fluid: surface_tension_model is {fluid.surface_tension_model!r}, not {surface_tension_model!r}')
+    return out
+
+
 def differences(wp: WellProperties, configuration: str) -> list:
     """Every option of wp that differs from the configuration, as readable strings (empty if wp is in it)."""
     if configuration not in CONFIGURATIONS:
@@ -97,8 +112,7 @@ def differences(wp: WellProperties, configuration: str) -> list:
             out.append('geometry: not vertical (GEO-1)')
         if not np.allclose(geo.delta_md, geo.L / geo.n_cells, rtol=1e-9, atol=0):
             out.append('geometry: grid not uniform (DISC-1)')
-        expected = {'oil_model': 'dead_oil', 'ideal_gas': True, 'surface_tension_model': 'liquid'}
-        out += [f'fluid: {k} is {getattr(fluid, k)!r}, not {v!r}' for k, v in expected.items() if getattr(fluid, k) != v]
+        out += _fluid_options(fluid, DeadOil, 'ideal', 'liquid')
         if not isinstance(wp.friction, FixedFrictionFactor):
             out.append(f'friction: {type(wp.friction).__name__}, not FixedFrictionFactor (FRIC-2)')
         out += [f'thermal: {k} is on' for k, v in thermal.items() if v]
@@ -110,9 +124,7 @@ def differences(wp: WellProperties, configuration: str) -> list:
             out.append(f'choke: {type(wp.choke).__name__}, not SimpsonChokeModel or BernoulliChokeModel')
     else:
         default = FluidModel()
-        out += [f'fluid: {k} is {getattr(fluid, k)!r}, not {getattr(default, k)!r}'
-                for k in ('oil_model', 'ideal_gas', 'z_factor_model', 'surface_tension_model')
-                if getattr(fluid, k) != getattr(default, k)]
+        out += _fluid_options(fluid, type(default.pvt), default.pvt.gas_law, default.surface_tension_model)
         if not isinstance(wp.friction, RoughnessFriction) or wp.friction.correlation != RoughnessFriction().correlation:
             out.append(f'friction: {wp.friction}, not RoughnessFriction with the default correlation')
         out += [f'thermal: {k} is off' for k, v in thermal.items() if not v]
