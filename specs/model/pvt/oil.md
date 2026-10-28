@@ -14,7 +14,7 @@ Oil properties: the dead-oil model of `v1.0.0`, API gravity, and the dead-oil su
 | oil viscosity | $T$ (K); $R_{so}$ for live oil | $\mu_o$ (Pa s) | yes |
 | phase rates | $p$ (bar), $T$ (K), $w_\text{res}$, $w_{lg}$ (kg/s) | $(w_g, w_l)$ (kg/s) | yes |
 
-The black-oil correlations are in field units: $p$ in psia, $T$ in °F, $R_{so}$ in scf/STB ($1\ \text{scf/STB} = 0.178108$ Sm³/Sm³), viscosities in cP. In `develop`, `FluidModel(oil_model='black_oil')` evaluates them through `BlackOilPVT`, whose methods take Pa; the oil is given by its density at standard conditions $\rho_o$ (API by PVT-OIL-2, between 10 and 40), the gas by $\rho_{g,\text{sc}}$ (gravity $\gamma_g$ by PVT-GAS-6), and the separator by $p_\text{sep}$ and $T_\text{sep}$ (bar and K; standard conditions by default).
+The black-oil correlations are in field units: $p$ in psia, $T$ in °F, $R_{so}$ in scf/STB ($1\ \text{scf/STB} = 0.178108$ Sm³/Sm³), viscosities in cP. In `develop`, the PVT model `BlackOil` (`FluidModel(pvt=BlackOil(...))`) evaluates them through `BlackOilPVT`, whose methods take Pa; the oil is given by its density at standard conditions $\rho_o$ (API by PVT-OIL-2, between 10 and 40), the gas by $\rho_{g,\text{sc}}$ (gravity $\gamma_g$ by PVT-GAS-6), and the separator by $p_\text{sep}$ and $T_\text{sep}$ (bar and K; standard conditions by default).
 
 ## Equations
 
@@ -118,8 +118,8 @@ or the given $p_b$ if there is one. Not used by the simulator.
 
 | Option | IDs | Used by |
 |---|---|---|
-| Dead oil | PVT-OIL-1 | `v1.0.0`; `develop` with `oil_model='dead_oil'` |
-| Black oil: Vazquez–Beggs $R_{so}$ and $B_o$, live-oil density, dissolved gas | PVT-OIL-4 to PVT-OIL-9, PVT-OIL-13 | `develop` default |
+| Dead oil | PVT-OIL-1 | `v1.0.0`; `develop` with `pvt=DeadOil(...)` |
+| Black oil: Vazquez–Beggs $R_{so}$ and $B_o$, live-oil density, dissolved gas | PVT-OIL-4 to PVT-OIL-9, PVT-OIL-13 | `develop` default (`pvt=BlackOil()`) |
 | Oil viscosity, for friction | PVT-OIL-10, and PVT-OIL-11 with black oil | `develop`'s `RoughnessFriction` |
 | Live-oil surface tension | PVT-OIL-12 | `develop` default (PVT-MIX-7) |
 

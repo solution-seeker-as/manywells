@@ -1,6 +1,6 @@
 # 018 · PVT tables, and one interface for every PVT model
 
-*Feature spec, 2026-10-28. Status: approved by Bjarne on 2026-10-28, with each decision as recommended (Rulings); not yet implemented. The prototype is in `plans/evidence/` (Measurements) and the example tables in `tests/data/pvt/`. The bug the prototype found is issue #10, fixed by PR #23.*
+*Feature spec, 2026-10-28. Status: approved by Bjarne on 2026-10-28, with each decision as recommended (Rulings). Phase A, the interface (ruling 1), is implemented: `FluidModel(pvt=...)` with `DeadOil` and `BlackOil`, each method's value unchanged to the bit. The tables follow, in the CasADi backend and then the Rust core. The prototype is in `plans/evidence/` (Measurements) and the example tables in `tests/data/pvt/`. The bug the prototype found is issue #10, fixed by PR #23.*
 
 ## Rulings (Bjarne, 2026-10-28)
 
@@ -96,8 +96,8 @@ At the GOR $R_{go}$, PVT-TAB-3 and PVT-TAB-4 then give the flash's phase mass ra
 
 | Where | Python | Rust |
 |---|---|---|
-| interface | `pvt/model.py`: `PVTModel`; `pvt/fluid.py`: `FluidModel(pvt=...)` | `pvt/fluid.rs`: `Pvt` enum, `Fluid` not `Copy` |
-| options | `pvt/black_oil.py`: `DeadOil`, `BlackOil` (wrapping `BlackOilPVT`); `pvt/table.py`: `PVTTable`, `read_csv`, `write_csv`, `from_phase_split`, `at_gor` (PVT-TAB-7, called by `FluidModel.__post_init__`) | `pvt/table.rs`: the table, PVT-TAB-2 to PVT-TAB-5 |
+| interface | `pvt/model.py`: `PVTModel`, and `CorrelationPVT`, the correlations' gas law; `pvt/fluid.py`: `FluidModel(pvt=...)` | `pvt/fluid.rs`: `Pvt` enum, `Fluid` not `Copy` |
+| options | `pvt/dead_oil.py`: `DeadOil`; `pvt/black_oil.py`: `BlackOil` (wrapping `BlackOilPVT`); `pvt/table.py`: `PVTTable`, `read_csv`, `write_csv`, `from_phase_split`, `at_gor` (PVT-TAB-7, called by `FluidModel.__post_init__`) | `pvt/table.rs`: the table, PVT-TAB-2 to PVT-TAB-5 |
 | harness | `configurations.py` (`v1_fluid`, `check` by class and `gas_law`), `discretization.row_ids`, the simulator's range check and `Root.off_table` (decision 3; a new field of `Root`, in both backends' roots), `solvers/rust.py`, `sampling/wells.py`, the 80 `FluidModel(` calls in `src/`, `tests/` and `scripts/` | `lib.rs`: `Well::new`'s fluid arguments, the table components for the vectors; a test well with a table in `input.rs`'s `all()` |
 
 ## Design choices

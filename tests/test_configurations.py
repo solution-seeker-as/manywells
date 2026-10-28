@@ -17,6 +17,7 @@ from manywells.choke import SimpsonChokeModel
 from manywells.configurations import V1, DEVELOP, check, differences, v1_fluid, v1_well
 from manywells.geometry import WellGeometry
 from manywells.inflow import FixedFlowRate, Vogel
+from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.dead_oil import dead_oil_surface_tension
 from manywells.simulator import WellProperties
 from manywells.thermal import ThermalModel
@@ -62,9 +63,12 @@ def test_check_lists_every_difference():
 
 
 def test_check_rejects_fluid_options():
-    wp = dataclasses.replace(v1(), fluid=dataclasses.replace(v1().fluid, surface_tension_model='oil', ideal_gas=False))
-    diff = differences(wp, V1)
-    assert any('surface_tension_model' in d for d in diff) and any('ideal_gas' in d for d in diff)
+    fluid = v1().fluid
+    fluid = dataclasses.replace(fluid, surface_tension_model='oil', pvt=dataclasses.replace(fluid.pvt, gas_law='dak'))
+    diff = differences(dataclasses.replace(v1(), fluid=fluid), V1)
+    assert any('surface_tension_model' in d for d in diff) and any('gas_law' in d for d in diff)
+    diff = differences(dataclasses.replace(v1(), fluid=dataclasses.replace(fluid, pvt=BlackOil())), V1)
+    assert any('pvt is BlackOil, not DeadOil' in d for d in diff)
 
 
 def test_unknown_configuration():

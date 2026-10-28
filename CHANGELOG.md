@@ -66,14 +66,30 @@ bc = replace(bc, u=0.5)
 WellProperties().choke                             # BernoulliChokeModel(K_c=0.1 A)
 ```
 
-**Pressures in bar.** `FluidModel.p_sep` and `p_bubble` are in bar, like every other interface.
+**Pressures in bar.** The black oil's `p_sep` and `p_bubble` are in bar, like every other interface.
 
 ```python
 # old
 FluidModel(p_bubble=250e5, p_sep=100 * CF_PSI)
 
 # new
-FluidModel(p_bubble=250.0, p_sep=100 * CF_PSI / CF_BAR)
+FluidModel(pvt=BlackOil(p_bubble=250.0, p_sep=100 * CF_PSI / CF_BAR))
+```
+
+**PVT component.** The hydrocarbon PVT is a component of `FluidModel`, `pvt`, with one class per option: `DeadOil` (`manywells.pvt.dead_oil`) or `BlackOil` (`manywells.pvt.black_oil`), behind the abstract `PVTModel` (`manywells.pvt.model`). `rho_o`, `rho_g`, `oil_model`, `ideal_gas`, `z_factor_model`, `p_sep`, `T_sep` and `p_bubble` move into the classes; `ideal_gas` and `z_factor_model` become one field, `gas_law` (`'ideal'`, `'dak'` or `'papay'`). `fluid.rho_o`, `fluid.rho_g` and every method keep working, and give the same values to the bit. `FluidModel.gas_viscosity` takes the pressure too (`specs/features/018-pvt-tables.md`).
+
+```python
+# old
+FluidModel(rho_o=850, rho_g=0.8, gor=150, wlr=0.2, p_bubble=180, z_factor_model='papay')
+FluidModel(rho_o=850, rho_g=0.8, gor=150, oil_model='dead_oil', ideal_gas=True)
+replace(fluid, ideal_gas=True)
+fluid.gas_viscosity(T, rho_g)
+
+# new
+FluidModel(pvt=BlackOil(rho_o=850, rho_g=0.8, p_bubble=180, gas_law='papay'), gor=150, wlr=0.2)
+FluidModel(pvt=DeadOil(rho_o=850, rho_g=0.8, gas_law='ideal'), gor=150)
+replace(fluid, pvt=replace(fluid.pvt, gas_law='ideal'))
+fluid.gas_viscosity(p, T, rho_g)
 ```
 
 **Choke rate.** `ChokeModel.mass_flow_rate` takes the wellhead state and the pipe area; each model chooses its density and multiplier. `choke_equation(u, p_in, p_out, rho, multiplier)` is unchanged.

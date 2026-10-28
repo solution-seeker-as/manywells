@@ -13,6 +13,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from manywells.pvt import density_from_api, gas_density_from_sg
+from manywells.pvt.black_oil import BlackOil
+from manywells.pvt.dead_oil import DeadOil
 from manywells.pvt.fluid import FluidModel
 
 
@@ -21,16 +23,14 @@ from manywells.pvt.fluid import FluidModel
 # A typical North Sea oil: API 35, gas gravity 0.65, bubble point at 250 bar.
 
 fl = FluidModel(
-    rho_o=density_from_api(35),
-    rho_g=gas_density_from_sg(0.65),
+    pvt=BlackOil(rho_o=density_from_api(35), rho_g=gas_density_from_sg(0.65), p_bubble=250.0),  # bar
     gor=200.0,
     wlr=0.0,
-    p_bubble=250.0,  # bar
 )
 
 print(f"Oil density (std):  {fl.rho_o:.1f} kg/m3  (API {fl.api:.1f})")
 print(f"Gas density (std):  {fl.rho_g:.3f} kg/m3  (sg_gas {fl.sg_gas:.3f})")
-print(f"Bubble point:       {fl.p_bubble:.0f} bar")
+print(f"Bubble point:       {fl.pvt.p_bubble:.0f} bar")
 print()
 
 
@@ -48,7 +48,7 @@ rs_vals = np.array([float(fl.rs(p, T_fixed)) for p in p_bar])
 bo_vals = np.array([float(fl.bo(p, T_fixed)) for p in p_bar])
 rho_l_vals = np.array([float(fl.liquid_density(p, T_fixed)) for p in p_bar])
 
-p_bubble_bar = fl.p_bubble
+p_bubble_bar = fl.pvt.p_bubble
 
 fig, axes = plt.subplots(3, 1, figsize=(8, 10), sharex=True)
 
@@ -134,13 +134,7 @@ ax2.legend(title='Temperature')
 # The dead oil model assumes Rs = 0, Bo = 1 everywhere.
 # The black oil model captures the pressure-dependent phase behavior.
 
-fl_dead = FluidModel(
-    rho_o=density_from_api(35),
-    rho_g=gas_density_from_sg(0.65),
-    gor=200.0,
-    wlr=0.0,
-    oil_model='dead_oil',
-)
+fl_dead = FluidModel(pvt=DeadOil(rho_o=density_from_api(35), rho_g=gas_density_from_sg(0.65)), gor=200.0, wlr=0.0)
 
 fig3, (ax3a, ax3b) = plt.subplots(1, 2, figsize=(12, 5.5))
 

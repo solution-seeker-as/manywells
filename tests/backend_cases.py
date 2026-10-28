@@ -37,6 +37,8 @@ from manywells.friction import FixedFrictionFactor, RoughnessFriction
 from manywells.geometry import WellGeometry
 from manywells.inflow import FixedFlowRate, ProductivityIndex, Vogel
 from manywells.pvt import api_from_density, density_from_api
+from manywells.pvt.black_oil import BlackOil
+from manywells.pvt.dead_oil import DeadOil
 from manywells.sampling.conditions import sample_conditions
 from manywells.sampling.wells import rng_for, sample_well, well_properties
 from manywells.simulator import BoundaryConditions, SSDFSimulator, WellProperties
@@ -64,9 +66,9 @@ def features(wp) -> frozenset:
         out.add('003')
     if type(wp.friction) is RoughnessFriction:
         out.add('004')
-    if not fluid.ideal_gas:
+    if fluid.pvt.gas_law != 'ideal':
         out.add('006')
-    if fluid.oil_model == 'black_oil':
+    if fluid.pvt.dissolves_gas:
         out |= {'007', '008'}
     if thermal.frictional_heating or thermal.gravity_term:
         out.add('009')
@@ -74,7 +76,7 @@ def features(wp) -> frozenset:
         out.add('010')
     if type(wp.inflow) is FixedFlowRate:
         out.add('011')
-    if not fluid.ideal_gas and (fluid.z_factor_model == 'dak' or thermal.joule_thomson):
+    if fluid.pvt.gas_law != 'ideal' and (fluid.pvt.gas_law == 'dak' or thermal.joule_thomson):
         out.add('016')
     return frozenset(out)
 
@@ -113,16 +115,38 @@ def fluid(**kw):
     return lambda wp, bc: (replace(wp, fluid=replace(wp.fluid, **kw)), bc)
 
 
+def with_pvt(wp, pvt):
+    return replace(wp, fluid=replace(wp.fluid, pvt=pvt))
+
+
+def gas_law(name):
+    """The fluid's PVT model with another gas law; 'real' makes an ideal gas DAK's and leaves a real one as it is."""
+    def overlay(wp, bc):
+        law = wp.fluid.pvt.gas_law
+        return with_pvt(wp, replace(wp.fluid.pvt, gas_law=('dak' if law == 'ideal' else law) if name == 'real'
+                                    else name)), bc
+    return overlay
+
+
 def black_oil(wp, bc):
     """Black oil with dissolved gas; an oil outside the correlations' API range of 10 to 40 becomes API 30."""
-    rho_o = wp.fluid.rho_o if 10 <= api_from_density(wp.fluid.rho_o) <= 40 else density_from_api(30.0)
-    return replace(wp, fluid=replace(wp.fluid, oil_model='black_oil', rho_o=rho_o)), bc
+    pvt = wp.fluid.pvt
+    rho_o = pvt.rho_o if 10 <= api_from_density(pvt.rho_o) <= 40 else density_from_api(30.0)
+    if type(pvt) is BlackOil:
+        return with_pvt(wp, replace(pvt, rho_o=rho_o)), bc
+    return with_pvt(wp, BlackOil(rho_o=rho_o, rho_g=pvt.rho_g, gas_law=pvt.gas_law)), bc
+
+
+def dead_oil(wp, bc):
+    """Dead oil, with the fluid's densities and gas law."""
+    pvt = wp.fluid.pvt
+    return with_pvt(wp, DeadOil(rho_o=pvt.rho_o, rho_g=pvt.rho_g, gas_law=pvt.gas_law)), bc
 
 
 def bubble_point(wp, bc):
     """Black oil whose solution gas-oil ratio is capped at a bubble point halfway between p_s and p_r."""
     wp, bc = black_oil(wp, bc)
-    return replace(wp, fluid=replace(wp.fluid, p_bubble=bc.p_s + 0.5 * (bc.p_r - bc.p_s))), bc
+    return with_pvt(wp, replace(wp.fluid.pvt, p_bubble=bc.p_s + 0.5 * (bc.p_r - bc.p_s))), bc
 
 
 def thermal(**kw):
@@ -131,7 +155,8 @@ def thermal(**kw):
 
 def joule_thomson(wp, bc):
     """The Joule-Thomson term on, with a real gas: with an ideal gas the term is zero."""
-    return replace(wp, fluid=replace(wp.fluid, ideal_gas=False), thermal=replace(wp.thermal, joule_thomson=True)), bc
+    wp, bc = gas_law('real')(wp, bc)
+    return replace(wp, thermal=replace(wp.thermal, joule_thomson=True)), bc
 
 
 def lift_gas_temperature(wp, bc):
@@ -175,8 +200,8 @@ OVERLAYS = {
     'frictional heating': thermal(frictional_heating=True),
     'gravity term': thermal(gravity_term=True),
     'energy terms': thermal(frictional_heating=True, gravity_term=True),
-    'real gas': fluid(ideal_gas=False),
-    'papay': fluid(ideal_gas=False, z_factor_model='papay'),
+    'real gas': gas_law('real'),
+    'papay': gas_law('papay'),
     'joule-thomson': joule_thomson,
     'black oil': black_oil,
     'bubble point': bubble_point,
@@ -190,8 +215,8 @@ OVERLAYS = {
     'bernoulli': choke(BernoulliChokeModel),
     'simpson': choke(SimpsonChokeModel),
     # develop's options switched off one at a time
-    'dead oil': fluid(oil_model='dead_oil', p_bubble=None),
-    'ideal gas': fluid(ideal_gas=True),
+    'dead oil': dead_oil,
+    'ideal gas': gas_law('ideal'),
     'liquid surface tension': fluid(surface_tension_model='liquid'),
     'fixed f_D': lambda wp, bc: (replace(wp, friction=FixedFrictionFactor(f_D=0.03)), bc),
     'no frictional heating': thermal(frictional_heating=False),

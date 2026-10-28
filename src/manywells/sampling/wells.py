@@ -21,6 +21,7 @@ from manywells.friction import RoughnessFriction
 from manywells.geometry import WellGeometry
 from manywells.inflow import Vogel
 from manywells.pvt import LiquidProperties, liquid_mix
+from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.fluid import FluidModel
 from manywells.simulator import WellProperties
 from manywells.thermal import ThermalModel
@@ -188,8 +189,9 @@ def well_properties(draw: WellDraw, fractions=None, configuration: str = V1,
         # spec: SMP-43. Black oil and real gas from the v1 draws: API from rho_o, gas gravity from R_s
         rho_g = P_REF / (draw.R_s * T_REF)                                               # PVT-GAS-2
         wlr = (f_w / draw.rho_w) / (f_w / draw.rho_w + f_o / draw.rho_o)                 # PVT-MIX-2
-        fluid = FluidModel(rho_o=draw.rho_o, rho_g=rho_g, rho_w=draw.rho_w, gor=(f_g / rho_g) / (f_o / draw.rho_o),
-                           wlr=wlr, cp_g=draw.cp_g, cp_o=draw.cp_o, cp_w=draw.cp_w)
+        fluid = FluidModel(pvt=BlackOil(rho_o=draw.rho_o, rho_g=rho_g), rho_w=draw.rho_w,
+                           gor=(f_g / rho_g) / (f_o / draw.rho_o), wlr=wlr, cp_g=draw.cp_g, cp_o=draw.cp_o,
+                           cp_w=draw.cp_w)
         return WellProperties(geometry=geometry(draw, n_cells), fluid=fluid,
                               friction=RoughnessFriction(roughness=draw.roughness), thermal=ThermalModel(h=draw.h),
                               inflow=inflow, choke=choke)
