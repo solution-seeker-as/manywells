@@ -1,13 +1,22 @@
 """Tests for manywells.slip."""
 
+import dataclasses
+
 import pytest
 import casadi as ca
+import numpy as np
 
 from manywells.slip import (
+    FITTED_REGIMES,
+    HASAN_REGIMES,
     classify_flow_regime,
+    hasan_probabilities,
+    hasan_rule_quantities,
     SlipModel,
 )
 from manywells.pvt.dead_oil import dead_oil_surface_tension
+
+FITTED = SlipModel(regime_model='fitted')
 
 
 def _sigma(rho_l, T):
@@ -80,14 +89,15 @@ def test_slip_equation_residual():
     assert abs(val) < 100.0
 
 
-def test_flow_regime_string():
-    """flow_regime returns one of annular, slug-churn, bubbly."""
-    model = SlipModel()
+@pytest.mark.parametrize('model', [FITTED, SlipModel()], ids=['fitted', 'hasan'])
+def test_flow_regime_string(model):
+    """flow_regime returns one of the model's regimes: annular, slug-churn, bubbly, or the five."""
     v_g, v_l, alpha = 20.0, 2.0, 0.8
     rho_g, rho_l = 1.0, 900.0
     sigma = _sigma(rho_l, 293.15)
-    regime = model.flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl=1.0)
-    assert regime in ("annular", "slug-churn", "bubbly")
+    regime = model.flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, D=0.1, cos_incl=1.0)
+    assert regime in model.regimes
+    assert model.regimes == (FITTED_REGIMES if model.regime_model == 'fitted' else HASAN_REGIMES)
 
 
 # ---------------------------------------------------------------------------
@@ -97,7 +107,7 @@ def test_flow_regime_string():
 def _params(cos_incl, **state):
     s = dict(v_g=6.0, v_l=2.0, alpha=0.4, rho_g=80.0, rho_l=800.0) | state
     sigma = _sigma(s['rho_l'], 330.0)
-    C_0, v_inf = SlipModel().identify_parameters(**s, sigma=sigma, D=0.15, cos_incl=cos_incl)
+    C_0, v_inf = FITTED.identify_parameters(**s, sigma=sigma, D=0.15, cos_incl=cos_incl)
     return float(C_0), float(v_inf)
 
 
@@ -130,10 +140,117 @@ def test_inclined_cell_moves_bubbly_flow_to_slug_flow():
 
 
 def test_slip_parameters_are_fields():
-    """plans/improvements.md 2.7: the regime constants are fields, with v1.0.0's values as defaults."""
-    import dataclasses
+    """plans/improvements.md 2.7: the regime constants are fields, with v1.0.0's values as defaults; the five
+    regimes' constants too (SLIP-12, SLIP-13)."""
     model = SlipModel(C_0_slug=1.2)
     assert model.C_0_slug == 1.2 and SlipModel().C_0_slug == 1.175
-    assert [f.name for f in dataclasses.fields(SlipModel)] == ['C_0_annular', 'C_0_slug', 'C_0_bubbly', 'v_inf_annular']
+    assert [f.name for f in dataclasses.fields(SlipModel)] == [
+        'regime_model', 'C_0_annular', 'C_0_slug', 'C_0_bubbly', 'v_inf_annular', 'f_ms', 'transition_width',
+        'lambda_floor']
+    assert (SlipModel().regime_model, SlipModel().f_ms, SlipModel().transition_width, SlipModel().lambda_floor) == \
+        ('hasan', 0.02, 0.02, 0.1)
     with pytest.raises(dataclasses.FrozenInstanceError):
         model.C_0_bubbly = 1.0
+
+
+@pytest.mark.parametrize('kw', [dict(regime_model='four'), dict(f_ms=0.0), dict(transition_width=0.0),
+                                dict(lambda_floor=-0.1)])
+def test_slip_model_validates_its_fields(kw):
+    with pytest.raises(ValueError):
+        SlipModel(**kw)
+
+
+# ---------------------------------------------------------------------------
+# The five regimes (SLIP-12 to SLIP-17)
+# ---------------------------------------------------------------------------
+
+def _states(n=4000, seed=20261028):
+    """Random points across the sampler's range: superficial velocities, densities, surface tension, D, inclination."""
+    rng = np.random.default_rng(seed)
+    v_gs, v_ls = 10 ** rng.uniform(-2.5, 1.5, n), 10 ** rng.uniform(-2, 0.8, n)
+    rho_l = rng.uniform(600, 1050, n)
+    rho_g = rho_l * 10 ** rng.uniform(-3.5, -0.4, n)
+    sigma, D = rng.uniform(0.003, 0.075, n), rng.uniform(0.0762, 0.1651, n)
+    cos_incl = np.concatenate([[0.0, 1.0], rng.uniform(0, 1, n - 2)])
+    return v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl
+
+
+def _hasan(states, model=SlipModel()):
+    """(P, C_0, v_inf, Q) of the five regimes at the states: P with one row per regime, Q the rule quantities of
+    SLIP-12 (lambda_g, alpha_b, alpha_t, v_gc, v_ms), one row each."""
+    x = ca.SX.sym('x', 7)
+    v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl = (x[k] for k in range(7))
+    P = hasan_probabilities(v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl, model.f_ms, model.transition_width,
+                            model.lambda_floor)
+    Q = ca.vertcat(*hasan_rule_quantities(v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl, model.f_ms,
+                                          model.lambda_floor))
+    alpha = 0.5  # any void fraction: C_0 and v_inf depend on the state through v_gs and v_ls only
+    C_0, v_inf = model.identify_parameters(v_gs / alpha, v_ls / (1 - alpha), alpha, rho_g, rho_l, sigma, D, cos_incl)
+    P, C_0, v_inf, Q = (np.asarray(o) for o in ca.Function('f', [x], [P, C_0, v_inf, Q]).map(len(states[0]))(
+        np.vstack(states)))
+    return P, C_0.ravel(), v_inf.ravel(), Q
+
+
+def _crisp(states, Q, model=SlipModel()):
+    """SLIP-17's regime at each state, and the smallest margin of its rules in units of w."""
+    v_gs, v_ls = states[0], states[1]
+    lam, a_b, a_t, v_gc, v_ms = Q
+    z = np.vstack([v_gs / v_gc - 1, lam - 0.7, (v_gs + v_ls) / v_ms - 1, lam - 1.08 / 2.08, a_b - a_t])
+    A1, A2, M, G, S = z > 0
+    regime = np.where(A1 & A2, 'annular', np.where(M & G, 'churn', np.where(M, 'dispersed-bubbly',
+                                                                             np.where(S, 'slug', 'bubbly'))))
+    return regime, np.min(np.abs(z), axis=0) / model.transition_width
+
+
+def test_five_regime_probabilities_lie_in_the_unit_interval_and_sum_to_one():  # SLIP-14
+    P, _, _, _ = _hasan(_states())
+    assert np.all(P >= 0) and np.all(P <= 1)
+    assert np.allclose(P.sum(axis=0), 1.0, rtol=0, atol=1e-12)
+
+
+def test_five_regime_labels_follow_the_hierarchy_away_from_its_boundaries():  # SLIP-13, SLIP-14, SLIP-16, SLIP-17
+    states = _states()
+    P, _, _, Q = _hasan(states)
+    labels = np.array([SlipModel().label(P[:, k]) for k in range(P.shape[1])])
+    crisp, margin = _crisp(states, Q)
+    far = margin > 5
+    assert far.sum() > len(far) / 2
+    assert np.all(labels[far] == crisp[far])
+    assert set(crisp[far]) == set(HASAN_REGIMES)
+
+
+def test_five_regime_parameters_are_table_1_blends():  # SLIP-15
+    _, C_0, v_inf, _ = _hasan(_states())
+    assert np.all(C_0 >= 1.0 - 1e-12) and np.all(C_0 <= 1.2 + 1e-12)
+    assert np.all(v_inf >= 0)
+
+
+def test_five_regime_parameters_do_not_depend_on_the_void_fraction():  # SLIP-15: one void fraction
+    """At fixed superficial velocities C_0 and v_inf do not depend on alpha, so the slip law has one root in alpha."""
+    model = SlipModel()
+    for v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl in [(0.6, 0.5, 80.0, 780.0, 0.018, 0.127, 1.0),
+                                                        (2.45, 1.0, 80.0, 780.0, 0.018, 0.127, 0.5),
+                                                        (4.0, 3.0, 15.0, 820.0, 0.025, 0.1, 0.0)]:
+        values = [tuple(float(v) for v in model.identify_parameters(v_gs / a, v_ls / (1 - a), a, rho_g, rho_l, sigma,
+                                                                    D, cos_incl)) for a in (0.05, 0.3, 0.6, 0.95)]
+        assert np.allclose(values, values[0], rtol=1e-12, atol=0)
+
+
+def test_no_bubbly_flow_in_a_horizontal_cell():  # SLIP-14
+    """At cos(theta) = 0 the bubbly-slug threshold alpha_t is 0 (A-14): wherever alpha_b exceeds 5 w, the flow is not
+    bubbly, and the Taylor bubble does not drift (SLIP-10)."""
+    v_gs, v_ls, rho_g, rho_l, sigma, D, _ = _states()
+    P, _, _, Q = _hasan((v_gs, v_ls, rho_g, rho_l, sigma, D, np.zeros_like(v_gs)))
+    past = Q[1] > 5 * SlipModel().transition_width  # alpha_b
+    assert past.sum() > len(past) / 2
+    assert np.all(P[4][past] <= 1 / (1 + np.exp(5)))  # the soft truth of S is at least sigma(5) there
+    assert not np.any(np.argmax(P[:, past], axis=0) == HASAN_REGIMES.index('bubbly'))
+
+
+def test_dispersed_bubbly_flow_holds_less_gas_than_its_limit():  # SLIP-14: Hasan and Kabir (2018), at most 0.52
+    states = _states()
+    P, C_0, v_inf, _ = _hasan(states)
+    v_gs, v_ls = states[0], states[1]
+    alpha = v_gs / (C_0 * (v_gs + v_ls) + v_inf)
+    dispersed = np.argmax(P, axis=0) == HASAN_REGIMES.index('dispersed-bubbly')
+    assert dispersed.any() and np.all(alpha[dispersed] < 0.52)

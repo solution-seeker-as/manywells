@@ -40,7 +40,7 @@ from manywells.pvt.dead_oil import dead_oil_surface_tension
 from manywells.pvt.fluid import FluidModel
 from manywells.pvt.gas import gas_density
 from manywells.simulator import BoundaryConditions
-from manywells.slip import SlipModel, classify_flow_regime
+from manywells.slip import HASAN_REGIMES, SlipModel, classify_flow_regime
 from manywells.thermal import ThermalModel
 from manywells.units import CF_BAR
 
@@ -107,13 +107,13 @@ ADAPTERS = {
     'INF-2': lambda k_l, p, p_r: ProductivityIndex(k_l).liquid_mass_flow_rate(p, p_r),
     'INF-4': lambda f_g, w_l: v1_fluid(rho_l=850.0, R_s=420.0, cp_g=2225.0, cp_l=2000.0, f_g=f_g).reservoir_gas_rate(w_l),
     'SLIP-2, SLIP-3': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, D, **_:
-        SlipModel().identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl=1.0),
+        SlipModel(regime_model='fitted').identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl=1.0),
     'SLIP-4': lambda rho_g, rho_l, sigma, **_: SlipModel.harmathy_rise_velocity(rho_g, rho_l, sigma),
     'SLIP-5': SlipModel.taylor_rise_velocity,
     'SLIP-6, SLIP-7': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, **_:
         vec(classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl=1.0)),
-    'SLIP-8': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, **_:
-        SlipModel().flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl=1.0),
+    'SLIP-8': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, **_:  # the fitted classifier does not use D
+        SlipModel(regime_model='fitted').flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, D=0.1, cos_incl=1.0),
     'PVT-GAS-1': lambda p, T, R_s: gas_density(R_s, p * 1e5, T),
     'PVT-GAS-2': lambda R_s: gas_density(R_s),
     'PVT-OIL-2': api_from_density,
@@ -278,6 +278,14 @@ RUST_ADAPTERS = {
         rust('slip_parameters', v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl),
     'SLIP-11 (classifier)': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl:
         rust('regime_probabilities', v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl),
+    'SLIP-12': lambda v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl:
+        rust('hasan_rule_quantities', v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl, slip=SlipModel()),
+    'SLIP-13, SLIP-14': lambda v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl:
+        rust('hasan_probabilities', v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl, slip=SlipModel()),
+    'SLIP-15, SLIP-16': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl:
+        rust('slip_parameters', v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl, slip=SlipModel())
+        + (HASAN_REGIMES[int(rust('regime', v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl, slip=SlipModel(),
+                                  geometry=WellGeometry.vertical(length=1000.0, n_cells=10, D=D)))],),
     'FRIC-3': lambda p, T, alpha, v_g, v_l, rho_g, rho_l, D, roughness:
         rust('friction', p, v_g, v_l, alpha, rho_g, rho_l, T, fluid=replace(FluidModel(), ideal_gas=True,
                                                                              surface_tension_model='liquid'),

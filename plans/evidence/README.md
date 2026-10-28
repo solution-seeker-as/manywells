@@ -75,7 +75,7 @@ Measurements behind the retry of point 0 in `../../specs/features/012-root-searc
 
 ## Feature 019: five flow regimes
 
-Scripts behind `../../specs/features/019-five-flow-regimes.md`, run on 2026-10-28 against `develop` at b313b9d. `five_regime_slip.py` is the prototype, a subclass of `SlipModel`, so it runs on the CasADi backend only; `five_regime_wells.py` imports it.
+Scripts behind `../../specs/features/019-five-flow-regimes.md`, run on 2026-10-28 against `develop` at b313b9d. `five_regime_slip.py` is the prototype, a subclass of `SlipModel`, so it runs on the CasADi backend only; `five_regime_wells.py` imports it. Both need `develop` before the feature was implemented (b313b9d): the prototype's `classify` has the old signature, and `five_regime_wells.py`'s `current` variant is the default model of that time. `slip_models.py` runs on either, as it pins the fitted classifier.
 
 | Script | What it shows | Result |
 |---|---|---|

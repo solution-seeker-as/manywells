@@ -137,13 +137,15 @@ def test_the_energy_slope_with_heat_loss_alone():
 
 def _all_liquid_well(n_cells):
     """Well 87 of develop's sampler (seed 2026) at its nominal point, with gor = 40: R_so at (p_r, T_r) is 141 Sm³/Sm³,
-    so all the gas is dissolved at the bottomhole (issue #10)."""
+    so all the gas is dissolved at the bottomhole (issue #10). With the fitted classifier, develop's default when the
+    issue was found: with the five regimes (019) point 0 solves from the bottom guess without the retry."""
     from dataclasses import replace
     from manywells.configurations import DEVELOP
     from manywells.sampling.conditions import nominal_conditions
     from manywells.sampling.wells import sample_well, well_properties
     draw = sample_well(2026, 87)
-    wp = well_properties(draw, draw.fractions, DEVELOP, n_cells=n_cells)
+    from manywells.slip import SlipModel
+    wp = replace(well_properties(draw, draw.fractions, DEVELOP, n_cells=n_cells), slip=SlipModel(regime_model='fitted'))
     return wp, replace(wp, fluid=replace(wp.fluid, gor=40.0)), nominal_conditions(draw)
 
 

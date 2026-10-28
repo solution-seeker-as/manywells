@@ -258,9 +258,10 @@ impl<'a> Marcher<'a> {
 
     /// The void fraction that zeroes the slip row (SLIP-1) at a point where the phase rates fix the superficial
     /// velocities j_g and j_l (m/s): Brent on h(α) = α (C_0 j_m + v_inf) - j_g, which is -α times the slip row with
-    /// v_g = j_g / α. The classifier sees α only through its features c_2 and c_4, and C_0 >= 1 and v_inf >= 0 for
-    /// every mix of the regimes, so h(0) = -j_g < 0 and h(1) >= j_l + v_inf > 0: the bracket [0, 1] always holds a
-    /// root. None where the rise velocities are not real (rho_g >= rho_l).
+    /// v_g = j_g / α. The fitted classifier sees α only through its features c_2 and c_4, the five regimes not at all
+    /// (h is then linear in α, with one root), and C_0 >= 1 and v_inf >= 0 for every mix of the regimes, so
+    /// h(0) = -j_g < 0 and h(1) >= j_l + v_inf > 0: the bracket [0, 1] always holds a root. None where the rise
+    /// velocities are not real (rho_g >= rho_l).
     fn void_fraction(&self, j_g: f64, j_l: f64, rho_g: f64, rho_l: f64, sigma: f64, cos_incl: f64) -> Option<f64> {
         if !(rho_g > 0.0 && rho_g < rho_l) {
             return None;

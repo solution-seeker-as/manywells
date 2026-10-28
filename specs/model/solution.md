@@ -112,7 +112,7 @@ Not part of the model; recorded so that a reader can follow `rust/src/shoot.rs` 
 
 ## Informative: roots on several void-fraction branches
 
-Where SLIP-1 has several roots in $\alpha$ (`slip.md`, Open question), the root set holds roots on different branches at some points. A march follows one root per point, so the Rust core and the CasADi backend's starts each find some of them, and neither finds them all. SOL-6's choice of the lowest stable root then depends on which roots were found: at `sol-1` wells 91 and 95 (k = 2) of Step 8's regenerated samples, the two backends' stable roots differ by 0.20 and 0.29 bar, and each is a root of every row. Open, with `slip.md`.
+Where SLIP-1 has several roots in $\alpha$ (`slip.md`, Open question), which it can have with the fitted classifier only, the root set holds roots on different branches at some points. A march follows one root per point, so the Rust core and the CasADi backend's starts each find some of them, and neither finds them all. SOL-6's choice of the lowest stable root then depends on which roots were found: at `sol-1` wells 91 and 95 (k = 2) of Step 8's regenerated samples, the two backends' stable roots differ by 0.20 and 0.29 bar, and each is a root of every row. Open for the fitted classifier, with `slip.md`; with the five regimes, `develop`'s default, SLIP-1 has one root in $\alpha$ at a point.
 
 ## Coverage
 

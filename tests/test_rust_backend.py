@@ -123,21 +123,22 @@ def test_the_rust_backend_refuses_what_it_does_not_cover():
     with pytest.raises(ValueError, match='inflow: LinearInflow is not one of the core'):
         SSDFSimulator(replace(wp, inflow=LinearInflow()), backend='rust')
     with pytest.raises(ValueError, match='C_0 >= 1'):
-        SSDFSimulator(replace(wp, slip=SlipModel(C_0_annular=0.9)), backend='rust')
+        SSDFSimulator(replace(wp, slip=SlipModel(regime_model='fitted', C_0_annular=0.9)), backend='rust')
     with pytest.raises(ValueError, match='f_g > 0'):  # a well whose only gas is lift gas
         SSDFSimulator(replace(wp, fluid=replace(wp.fluid, gor=0.0)), backend='rust')
     with pytest.raises(ValueError, match='backend'):
         SSDFSimulator(wp, backend='fortran')
 
 
-def test_the_slip_law_brackets_the_void_fraction():
+@pytest.mark.parametrize('regime_model', ['fitted', 'hasan'])
+def test_the_slip_law_brackets_the_void_fraction(regime_model):
     """
     The core solves the slip law for α by Brent on [0, 1]: h(α) = α (C_0 j_m + v_inf) - j_g needs h(0) < 0 < h(1),
     which holds because C_0 >= 1 and v_inf >= 0 for every mix of the regimes and every inclination in [0, 1]. Checked
-    on random states, with the slip constants the core accepts.
+    on random states, with the slip constants the core accepts, for both classifiers.
     """
     rng = np.random.default_rng(20261002)
-    h = void_fraction_residual(SlipModel())
+    h = void_fraction_residual(SlipModel(regime_model=regime_model))
     n = 10_000
     j_g, j_l = 10 ** rng.uniform(-3, 1.5, n), 10 ** rng.uniform(-3, 1, n)
     rho_l = rng.uniform(600, 1050, n)
@@ -192,9 +193,9 @@ def test_the_slope_has_the_sign_of_the_bracket_on_the_case_set():
     assert n >= 200
 
 
-def void_fraction_residual(slip=SlipModel()):
+def void_fraction_residual(slip=SlipModel(regime_model='fitted')):
     """h(α) = α (C_0 j_m + v_inf) - j_g, the slip row times -α at fixed superficial velocities, as a CasADi function
-    of (α, j_g, j_l, rho_g, rho_l, sigma, D, cos_incl) on develop's slip model."""
+    of (α, j_g, j_l, rho_g, rho_l, sigma, D, cos_incl) on a slip model, by default the v1.0.0 configuration's."""
     alpha, j_g, j_l, rho_g, rho_l, sigma, D, cos_incl = (ca.SX.sym(n) for n in ('alpha', 'j_g', 'j_l', 'rho_g',
                                                                                 'rho_l', 'sigma', 'D', 'cos_incl'))
     C_0, v_inf = slip.identify_parameters(j_g / alpha, j_l / (1 - alpha), alpha, rho_g, rho_l, sigma, D, cos_incl)
@@ -227,7 +228,8 @@ def test_the_slip_row_has_one_root_in_alpha_at_every_reference_point():
 
 
 # Gas wells of develop's sampler where Joule-Thomson cooling (THM-8) breaks the core's assumptions, and the CasADi
-# backend's operating point (specs/features/016-joule-thomson.md, design choice 5): (well, sample, p_0 in bar), with
+# backend's operating point (specs/features/016-joule-thomson.md, design choice 5), with the fitted classifier:
+# (well, sample, p_0 in bar), with
 # the seed and the samples of plans/evidence/dak_jt_default.py, re-solved when PVT-MIX-6 came to mix oil and water by
 # in-situ volume (issue #8). At 44 the state at p_s cannot be computed and R is finite only just below the root; at 22
 # the energy row is U-shaped in T near the choked wellhead.
@@ -243,7 +245,8 @@ def _gas_well(well, sample):
     bc, fractions = nominal_conditions(draw), draw.fractions
     for _ in range(sample):
         bc, fractions = sample_conditions(draw, rng)
-    return well_properties(draw, fractions, DEVELOP), bc
+    # The operating points were found with the fitted classifier, develop's default before feature 019
+    return replace(well_properties(draw, fractions, DEVELOP), slip=SlipModel(regime_model='fitted')), bc
 
 
 @pytest.mark.parametrize('well, sample, p_0', GAS_WELLS)

@@ -60,7 +60,7 @@ The `v1.0.0` configuration reproduces ManyWells v1.0.0, which generated the publ
 | Liquid density | PVT-MIX-1 (constant) | PVT-MIX-6 (black oil and water) |
 | Fluid parameters | $\rho_l$, $R_s$, $c_{pg}$, $c_{pl}$, $f_g$ | PVT-MIX-10 ($\rho_o$, $\rho_{g,\text{sc}}$, $\rho_w$, gas–oil and water–liquid ratios), PVT-GAS-6 |
 | Surface tension | PVT-MIX-5 with PVT-OIL-3 | PVT-MIX-7 with PVT-OIL-3 and PVT-OIL-12 |
-| Slip | SLIP-1 to SLIP-8 | SLIP-1 to SLIP-8 with SLIP-10, SLIP-11 (inclination) |
+| Slip | SLIP-1 to SLIP-8 | SLIP-1, SLIP-4, SLIP-5, SLIP-10, SLIP-12 to SLIP-16 (five regimes after Hasan et al.); the fitted classifier, SLIP-1 to SLIP-8 with SLIP-10, SLIP-11, as an option |
 | Friction | FRIC-1 with FRIC-2 (fixed $f_D$) | FRIC-1, FRIC-3, FRIC-4, FRIC-6 (roughness, Chen), with PVT-MIX-8, PVT-MIX-9 |
 | Energy | BAL-5 with THM-1, THM-2; THM-3 at the bottom | BAL-13 with THM-1, THM-4, THM-6, THM-7, THM-8 (with PVT-GAS-10); THM-5 at the bottom |
 | Momentum | BAL-4, BAL-6 | BAL-11, BAL-6 |

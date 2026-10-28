@@ -15,6 +15,7 @@ import pytest
 
 from manywells.discretization import DIM_X, build_system
 from manywells.simulator import BoundaryConditions, WellProperties
+from manywells.slip import SlipModel
 from manywells.solvers.march import MarchFailed, Marcher, _PointSolver
 
 
@@ -39,7 +40,8 @@ def test_a_point_with_nan_rows_and_no_root_fails():
 
 @pytest.fixture(scope='module')
 def default_well():
-    system = build_system(WellProperties())
+    # The default well with the fitted classifier, develop's default when issue #7 was found
+    system = build_system(WellProperties(slip=SlipModel(regime_model='fitted')))
     bc = BoundaryConditions(u=0.5)
     return Marcher(system), system.params(bc), bc
 
