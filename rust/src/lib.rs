@@ -48,7 +48,7 @@ mod _core {
     use crate::pvt::fluid::{Fluid, FluidInputs, SurfaceTensionModel, ZFactorModel};
     use crate::pvt::{gas, mixture, oil, water};
     use crate::shoot;
-    use crate::slip::{self, Slip};
+    use crate::slip::{self, RegimeModel, Slip};
     use crate::smoothing;
 
     /// The operating point as (p_r, p_s, T_r, T_s, T_lg, u, w_lg), in bar, K and kg/s: the parameters of the Python
@@ -92,7 +92,7 @@ mod _core {
             p_sep, T_sep, p_bubble=None,
             friction, f_D=None, roughness=None, correlation=None,
             h, frictional_heating, gravity_term, lift_gas_mixing, joule_thomson,
-            C_0_annular, C_0_slug, C_0_bubbly, v_inf_annular,
+            regime_model, C_0_annular, C_0_slug, C_0_bubbly, v_inf_annular, f_ms, transition_width, lambda_floor,
             inflow, inflow_coefficient,
             choke, K_c, profile
         ))]
@@ -103,7 +103,8 @@ mod _core {
                p_bubble: Option<f64>,
                friction: &str, f_D: Option<f64>, roughness: Option<f64>, correlation: Option<&str>,
                h: f64, frictional_heating: bool, gravity_term: bool, lift_gas_mixing: bool, joule_thomson: bool,
-               C_0_annular: f64, C_0_slug: f64, C_0_bubbly: f64, v_inf_annular: f64,
+               regime_model: &str, C_0_annular: f64, C_0_slug: f64, C_0_bubbly: f64, v_inf_annular: f64, f_ms: f64,
+               transition_width: f64, lambda_floor: f64,
                inflow: &str, inflow_coefficient: f64,
                choke: &str, K_c: f64, profile: &str) -> PyResult<Self> {
             let black_oil = match oil_model {
@@ -132,6 +133,11 @@ mod _core {
                 _ => return Err(PyValueError::new_err(
                     "friction is 'fixed' with f_D, or 'roughness' with roughness and correlation 'chen' or 'haaland'")),
             };
+            let regime_model = match regime_model {
+                "fitted" => RegimeModel::Fitted,
+                "hasan" => RegimeModel::Hasan,
+                m => return Err(PyValueError::new_err(format!("regime model {m:?} is not 'hasan' or 'fitted'"))),
+            };
             let inflow = match inflow {
                 "vogel" => Inflow::Vogel { w_l_max: inflow_coefficient },
                 "pi" => Inflow::ProductivityIndex { k_l: inflow_coefficient },
@@ -152,7 +158,8 @@ mod _core {
                 }),
                 friction,
                 thermal: Thermal { h, frictional_heating, gravity_term, lift_gas_mixing, joule_thomson },
-                slip: Slip { c_0_annular: C_0_annular, c_0_slug: C_0_slug, c_0_bubbly: C_0_bubbly, v_inf_annular },
+                slip: Slip { regime_model, c_0_annular: C_0_annular, c_0_slug: C_0_slug, c_0_bubbly: C_0_bubbly,
+                             v_inf_annular, f_ms, transition_width, lambda_floor },
                 inflow,
                 choke: Choke::new(model, K_c, profile),
             };
@@ -233,7 +240,7 @@ mod _core {
 
     /// The core's component functions by name, for the vector tests
     fn component(spec: &WellSpec, name: &str, a: &[f64]) -> Result<Vec<f64>, String> {
-        let regime_index = |label| ["annular", "slug-churn", "bubbly"].iter().position(|&r| r == label).unwrap() as f64;
+        let regime_index = |label| spec.slip.regimes().iter().position(|&r| r == label).unwrap() as f64;
         Ok(match name {
             "max_approx" => { let [x, y, eps] = take(name, a)?; vec![smoothing::max_approx(x, y, eps)] }
             "min_approx" => { let [x, y, eps] = take(name, a)?; vec![smoothing::min_approx(x, y, eps)] }
@@ -267,12 +274,20 @@ mod _core {
             }
             "regime_probabilities" => {
                 let [v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl] = take(name, a)?;
-                spec.slip.classify(v_g, v_l, alpha, rho_g, rho_l, sigma, spec.geometry.d, cos_incl).to_vec()
+                spec.slip.classify(v_g, v_l, alpha, rho_g, rho_l, sigma, spec.geometry.d, cos_incl)
             }
             "regime" => {
                 let [v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl] = take(name, a)?;
                 let probs = spec.slip.classify(v_g, v_l, alpha, rho_g, rho_l, sigma, spec.geometry.d, cos_incl);
-                vec![regime_index(slip::regime_label(probs))]
+                vec![regime_index(spec.slip.label(&probs))]
+            }
+            "hasan_rule_quantities" => {
+                let [v_gs, v_ls, rho_g, rho_l, sigma, d, cos_incl] = take(name, a)?;
+                slip::hasan_rule_quantities(v_gs, v_ls, rho_g, rho_l, sigma, d, cos_incl, &spec.slip).to_vec()
+            }
+            "hasan_probabilities" => {
+                let [v_gs, v_ls, rho_g, rho_l, sigma, d, cos_incl] = take(name, a)?;
+                slip::hasan_probabilities(v_gs, v_ls, rho_g, rho_l, sigma, d, cos_incl, &spec.slip).to_vec()
             }
             "harmathy_rise_velocity" => {
                 let [rho_g, rho_l, sigma] = take(name, a)?;

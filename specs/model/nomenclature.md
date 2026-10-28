@@ -59,7 +59,7 @@ Well and fluid parameters of the `v1.0.0` configuration (v1.0.0's `WellPropertie
 
 Here $R_s$ is the specific gas constant, as in the paper. The black-oil correlations also use a solution gas–oil ratio; its symbol is $R_{so}$ (`rs` in the code) to avoid the clash.
 
-Parameters and quantities of `develop`'s options, in addition (the dataclass fields of `FluidModel`, `WellGeometry`, `RoughnessFriction`, `ThermalModel` and `BoundaryConditions`):
+Parameters and quantities of `develop`'s options, in addition (the dataclass fields of `FluidModel`, `WellGeometry`, `RoughnessFriction`, `ThermalModel`, `SlipModel` and `BoundaryConditions`):
 
 | Symbol | Code | Unit | Meaning |
 |---|---|---|---|
@@ -85,6 +85,10 @@ Parameters and quantities of `develop`'s options, in addition (the dataclass fie
 | $\rho_r$ | `reduced_density` | – | the gas's reduced density of the Dranchuk–Abou-Kassem equation of state (PVT-GAS-9) |
 | – | `pvt` | – | the fluid's hydrocarbon PVT model, a `PVTModel`: `DeadOil` (PVT-OIL-1) or `BlackOil` (PVT-OIL-4) |
 | – | `gas_law` | – | the PVT model's gas law: `'ideal'` (PVT-GAS-1), `'dak'` (PVT-GAS-11) or `'papay'` (PVT-GAS-3, PVT-GAS-4) |
+| – | `regime_model`, `regimes` | – | the slip law's classifier: `'hasan'`, five regimes (SLIP-12 to SLIP-16), or `'fitted'`, v1.0.0's three (SLIP-2 to SLIP-8); and its regime labels, `('annular', 'churn', 'dispersed-bubbly', 'slug', 'bubbly')` or `('annular', 'slug-churn', 'bubbly')` |
+| $\lambda_g$, $\alpha_b$, $\alpha_t$ | – | – | no-slip gas fraction (floored), void fraction with bubbly flow's parameters, and the bubbly–slug threshold (SLIP-12) |
+| $v_{gc}$, $v_{ms}$ | – | m/s | gas velocity for annular flow and mixture velocity of dispersed bubbly flow (SLIP-12) |
+| $f_{ms}$, $w$, $\epsilon_\lambda$ | `f_ms`, `transition_width`, `lambda_floor` | – | the five regimes' friction factor in (A-17), logistic width of their rules, and floor of $\lambda_g$ (SLIP-12, SLIP-13) |
 
 Boundary conditions and controls (v1.0.0's `BoundaryConditions`):
 
@@ -109,6 +113,7 @@ Input validation belongs in the dataclasses' `__post_init__`, not in the solver.
 | $\rho_{w,\text{ref}}$ | `WATER.rho` | 999.1 kg/m³ | water density, the reference for specific gravity (PVT-OIL-2) |
 | $\gamma$ | `gamma` | 1.307 | heat capacity ratio of the gas in the choke (CHK-4) |
 | $\epsilon$ | `eps` | $10^{-6}$ | smoothing constant (SMO-1, SMO-2); its unit is the square of its arguments' unit |
+| $\delta$ | `SQRT_GUARD` | $10^{-6}$ | guard of $\sqrt{\lambda_g}$ in (A-17) (SLIP-12) |
 | $R_u$ | `R_UNIVERSAL` | 8314.46 J/(kmol K) | universal gas constant (PVT-GAS-6) |
 | $M_\text{air}$ | `M_AIR` | 28.97 kg/kmol | molecular weight of air (PVT-GAS-6) |
 | – | `CF_PSI`, `CF_RS`, `CF_CP`, `CF_UP` | 6894.76 Pa/psi, 0.178108 (Sm³/Sm³)/(scf/STB), $10^{-3}$ Pa s/cP, $10^{-7}$ Pa s/µP | field-unit conversions of the correlations in `pvt/` |

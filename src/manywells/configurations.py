@@ -79,7 +79,7 @@ def v1_well(*, L, D, rho_l, R_s, cp_g, cp_l, f_D, h, f_g, inflow, choke, n_cells
                         friction=FixedFrictionFactor(f_D=f_D),
                         thermal=ThermalModel(h=h, frictional_heating=False, gravity_term=False, lift_gas_mixing=False,
                                              joule_thomson=False),
-                        slip=SlipModel(), inflow=inflow, choke=choke)
+                        slip=SlipModel(regime_model='fitted'), inflow=inflow, choke=choke)
     check(wp, V1)
     return wp
 
@@ -116,8 +116,8 @@ def differences(wp: WellProperties, configuration: str) -> list:
         if not isinstance(wp.friction, FixedFrictionFactor):
             out.append(f'friction: {type(wp.friction).__name__}, not FixedFrictionFactor (FRIC-2)')
         out += [f'thermal: {k} is on' for k, v in thermal.items() if v]
-        if wp.slip != SlipModel():
-            out.append(f'slip: parameters differ from v1.0.0 ({wp.slip})')
+        if wp.slip != SlipModel(regime_model='fitted'):
+            out.append(f'slip: not v1.0.0\'s fitted classifier with its parameters ({wp.slip})')
         if not isinstance(wp.inflow, (Vogel, ProductivityIndex)):
             out.append(f'inflow: {type(wp.inflow).__name__}, not Vogel or ProductivityIndex (INF-1, INF-2)')
         if not isinstance(wp.choke, (SimpsonChokeModel, BernoulliChokeModel)):
@@ -128,6 +128,8 @@ def differences(wp: WellProperties, configuration: str) -> list:
         if not isinstance(wp.friction, RoughnessFriction) or wp.friction.correlation != RoughnessFriction().correlation:
             out.append(f'friction: {wp.friction}, not RoughnessFriction with the default correlation')
         out += [f'thermal: {k} is off' for k, v in thermal.items() if not v]
+        if wp.slip.regime_model != SlipModel().regime_model:
+            out.append(f'slip: regime_model is {wp.slip.regime_model!r}, not {SlipModel().regime_model!r}')
     return out
 
 

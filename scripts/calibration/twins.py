@@ -87,9 +87,11 @@ def misspecified_variants(wp):
          replace(wp, choke=BernoulliChokeModel(K_c=wp.choke.K_c, chk_profile=wp.choke.chk_profile)), FREE),
         (f'choke profile {profile} for {wp.choke.chk_profile}', wp,
          replace(wp, choke=replace(wp.choke, chk_profile=profile)), FREE),
-        ('slip C_0 10% low', replace(wp, slip=SlipModel(C_0_annular=1.1 * slip.C_0_annular,
+        # The fitted classifier's C_0 (the five regimes' are Table 1's constants, SLIP-15), in both twins
+        ('slip C_0 10% low', replace(wp, slip=SlipModel(regime_model='fitted', C_0_annular=1.1 * slip.C_0_annular,
                                                         C_0_slug=1.1 * slip.C_0_slug,
-                                                        C_0_bubbly=1.1 * slip.C_0_bubbly)), wp, FREE),
+                                                        C_0_bubbly=1.1 * slip.C_0_bubbly)),
+         replace(wp, slip=SlipModel(regime_model='fitted')), FREE),
         ('energy terms left out', wp,
          replace(wp, thermal=replace(wp.thermal, frictional_heating=False, gravity_term=False, joule_thomson=False)),
          FREE),

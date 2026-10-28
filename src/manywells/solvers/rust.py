@@ -48,9 +48,10 @@ def not_in_core(wp) -> list:
     out = [f'{name}: {type(getattr(wp, name)).__name__} is not one of the core\'s classes'
            for name, classes in CORE_CLASSES.items() if type(getattr(wp, name)) not in classes]
     # The core's void-fraction solve brackets the slip law on [0, 1], which needs C_0 >= 1 and v_inf >= 0 in every
-    # regime (manywells._core, march.rs)
+    # regime (manywells._core, march.rs); the five regimes' values are fixed (SLIP-15), the fitted classifier's fields
     slip = wp.slip
-    if type(slip) is SlipModel and (min(slip.C_0_annular, slip.C_0_slug, slip.C_0_bubbly) < 1 or slip.v_inf_annular < 0):
+    if type(slip) is SlipModel and slip.regime_model == 'fitted' and (
+            min(slip.C_0_annular, slip.C_0_slug, slip.C_0_bubbly) < 1 or slip.v_inf_annular < 0):
         out.append(f'slip: the core needs every C_0 >= 1 and v_inf_annular >= 0 ({slip})')
     if type(wp.fluid) is FluidModel and type(wp.fluid.pvt) not in PVT_CLASSES:
         out.append(f'fluid: pvt is {type(wp.fluid.pvt).__name__}, not one of the core\'s classes')
@@ -73,8 +74,9 @@ def core_well(wp) -> '_core.Well':
                       **_friction(wp.friction),
                       h=thermal.h, frictional_heating=thermal.frictional_heating, gravity_term=thermal.gravity_term,
                       lift_gas_mixing=thermal.lift_gas_mixing, joule_thomson=thermal.joule_thomson,
-                      C_0_annular=slip.C_0_annular, C_0_slug=slip.C_0_slug, C_0_bubbly=slip.C_0_bubbly,
-                      v_inf_annular=slip.v_inf_annular,
+                      regime_model=slip.regime_model, C_0_annular=slip.C_0_annular, C_0_slug=slip.C_0_slug,
+                      C_0_bubbly=slip.C_0_bubbly, v_inf_annular=slip.v_inf_annular, f_ms=slip.f_ms,
+                      transition_width=slip.transition_width, lambda_floor=slip.lambda_floor,
                       **_inflow(wp.inflow),
                       choke='simpson' if type(choke) is SimpsonChokeModel else 'bernoulli', K_c=choke.K_c,
                       profile=choke.chk_profile)

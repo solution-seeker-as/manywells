@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The drift-flux slip law that sets the gas velocity relative to the mixture, with parameters that depend on the flow regime. A smooth classifier gives the probability of each of three regimes (bubbly, slug/churn, annular), and the slip parameters are the probability-weighted averages of each regime's values (paper §2.2 and Appendix A, after Hasan, Kabir and Sayarpour, 2010).
+The drift-flux slip law that sets the gas velocity relative to the mixture, with parameters that depend on the flow regime. A smooth classifier gives the probability of each regime, and the slip parameters are the probability-weighted averages of each regime's values, after Hasan, Kabir and Sayarpour (2010). There are two classifiers: v1.0.0's, fitted to a hierarchy of three regimes (bubbly, slug/churn, annular; paper §2.2 and Appendix A; SLIP-2 to SLIP-11), and `develop`'s default, five regimes (bubbly, dispersed bubbly, slug, churn, annular) from the rules of Hasan et al.'s hierarchy (SLIP-12 to SLIP-17; `specs/features/019-five-flow-regimes.md`).
 
 ## Interface
 
@@ -10,12 +10,12 @@ The drift-flux slip law that sets the gas velocity relative to the mixture, with
 |---|---|---|---|
 | slip row | $v_g, v_l, \alpha, \rho_g, \rho_l$ (state), $\sigma$, $D$ | row (m/s) | yes |
 | slip parameters | $v_g, v_l, \alpha, \rho_g, \rho_l, \sigma, D$ | $C_0$ (–), $v_\infty$ (m/s) | yes |
-| classifier | $v_g, v_l, \alpha, \rho_g, \rho_l, \sigma$ | $(p_a, p_s, p_b)$ (–) | yes |
-| regime label | the classifier's inputs, as floats | `annular`, `slug-churn` or `bubbly` | no |
+| classifier | $v_g, v_l, \alpha, \rho_g, \rho_l, \sigma$, $D$ | the probabilities of `SlipModel.regimes` (–) | yes |
+| regime label | the classifier's inputs, as floats | one of `SlipModel.regimes` | no |
 
-$p_a$, $p_s$ and $p_b$ are the probabilities of annular, slug/churn and bubbly flow. $\sigma$ comes from PVT-MIX-5 (or PVT-MIX-7 in `develop`'s default) and is evaluated at the same point. v1.0.0's functions take $T$ and compute $\sigma$ themselves; `develop`'s take $\sigma$ and the inclination $\cos\theta$ of the point's cell (DISC-11). The vectors below give $\sigma$.
+With the fitted classifier, `regime_model='fitted'`, the regimes are `('annular', 'slug-churn', 'bubbly')`, and $p_a$, $p_s$ and $p_b$ are their probabilities; it does not use $D$. With the five regimes, `regime_model='hasan'`, they are `('annular', 'churn', 'dispersed-bubbly', 'slug', 'bubbly')`, with the probabilities $p_a$, $p_c$, $p_d$, $p_s$ and $p_b$. $\sigma$ comes from PVT-MIX-5 (or PVT-MIX-7 in `develop`'s default) and is evaluated at the same point. v1.0.0's functions take $T$ and compute $\sigma$ themselves; `develop`'s take $\sigma$ and the inclination $\cos\theta$ of the point's cell (DISC-11). The vectors below give $\sigma$.
 
-In `develop` the four regime constants of SLIP-2 and SLIP-3 (1.0, 1.175 and 1.2 for $C_0$, and 0 for the annular drift velocity) are parameters of the slip model, fields of `SlipModel` with these values as defaults (`plans/improvements.md` §2.7). The `v1.0.0` configuration uses the defaults.
+In `develop` the four regime constants of SLIP-2 and SLIP-3 (1.0, 1.175 and 1.2 for $C_0$, and 0 for the annular drift velocity) are parameters of the fitted classifier, fields of `SlipModel` with these values as defaults (`plans/improvements.md` §2.7). The `v1.0.0` configuration uses the fitted classifier with the defaults. The five regimes' constants $f_{ms}$, $w$ and $\epsilon_\lambda$ of SLIP-12 and SLIP-13 are fields too (`f_ms`, `transition_width`, `lambda_floor`); Table 1's values in SLIP-15 are constants.
 
 ## Equations
 
@@ -96,19 +96,78 @@ $$c_4 = \tanh\big(2(\alpha - 0.25\cos\theta)\big),$$
 
 so the transition from bubbly to slug flow comes at a lower void fraction in an inclined cell. The weights of SLIP-7 are unchanged, and were fitted for the vertical threshold. At $\cos\theta = 1$ it is SLIP-6's $c_4$.
 
+### SLIP-12 · Rule quantities of the five regimes
+
+At a point, with $v_{gs} = \alpha v_g$, $v_{ls} = (1 - \alpha) v_l$ and $v_m = v_{gs} + v_{ls}$ (BAL-8):
+
+$$
+\lambda_g = \frac{v_{gs}}{v_m + \epsilon_\lambda v_{\infty b}}, \qquad
+\alpha_b = \frac{v_{gs}}{1.2 v_m + v_{\infty b}}, \qquad
+\alpha_t = \frac{\cos\theta}{2.8 + 1.2\cos\theta},
+$$
+
+$$
+v_{gc} = 3.1\left(\frac{g\sigma\thinspace(\rho_l - \rho_g)}{\rho_g^2}\right)^{1/4}, \qquad
+v_{ms} = \left(\frac{0.725 + 4.15\sqrt{\lambda_g + \delta}}{2\thinspace(f_{ms}/2D)^{0.4}(\rho_l/\sigma)^{0.6}\sqrt{0.4\sigma/\big(g\thinspace(\rho_l - \rho_g)\big)}}\right)^{1/1.2},
+$$
+
+with $v_{\infty b}$ from SLIP-4, $\epsilon_\lambda = 0.1$, $\delta = 10^{-6}$ and $f_{ms} = 0.02$. $\lambda_g$ is the no-slip gas fraction, floored so that it is smooth where the flow stops. $\alpha_b$ is the void fraction SLIP-1 gives with bubbly flow's parameters, and $\alpha_b > \alpha_t$ is Hasan et al.'s (A-14), $v_{gs} > v_{gb} = (1.2 v_{ls} + v_{\infty b})\cos\theta/2.8$; in a vertical cell, $\alpha_b > 0.25$. $v_{gc}$ is (A-19), the gas velocity for annular flow, as in SLIP-6's $c_1$. $v_{ms}$ is (A-17) solved for the mixture velocity above which the flow is dispersed, with $\sqrt{v_{gs}/v_m}$ as $\sqrt{\lambda_g + \delta}$ and $f_{ms}$ for the flow's friction factor.
+
+### SLIP-13 · Rules of the five regimes
+
+Each rule has a margin $z$ that is positive where it holds, and the soft truth $s = \tfrac{1}{2}\big(1 + \tanh(z/2w)\big)$, with $w = 0.02$:
+
+| Rule | Hasan et al. | Margin |
+|---|---|---|
+| $A_1$: the gas is fast enough for annular flow | $v_{gs} > v_{gc}$ (A-19) | $z_{A1} = v_{gs}/v_{gc} - 1$ |
+| $A_2$: there is enough gas for a core | $\alpha > 0.7$ with annular flow's parameters | $z_{A2} = \lambda_g - 0.7$ |
+| $M$: the mixture is fast enough to disperse the bubbles | $v_m > v_{ms}$ (A-17) | $z_M = v_m/v_{ms} - 1$ |
+| $G$: the gas dominates | $v_{gs} > 1.08 v_{ls}$ (A-18) | $z_G = \lambda_g - 1.08/2.08$ |
+| $S$: past the bubbly–slug transition | $v_{gs} > v_{gb}$ (A-14) | $z_S = \alpha_b - \alpha_t$ |
+
+### SLIP-14 · Probabilities of the five regimes
+
+Hasan et al.'s hierarchy as a decision tree, with $a = s_{A1}s_{A2}$:
+
+$$
+\begin{aligned}
+p_a &= a, & p_c &= (1 - a) s_M s_G, & p_d &= (1 - a) s_M (1 - s_G),\\
+p_s &= (1 - a)(1 - s_M) s_S, & p_b &= (1 - a)(1 - s_M)(1 - s_S),
+\end{aligned}
+$$
+
+the probabilities of annular, churn, dispersed bubbly, slug and bubbly flow. They lie in $[0, 1]$ and sum to 1, and as $w$ and $\epsilon_\lambda$ go to 0 they become SLIP-17's regimes. No weight is fitted.
+
+### SLIP-15 · Profile parameter and drift velocity of the five regimes
+
+Each regime takes its value for upward cocurrent flow from Table 1 of Hasan et al.:
+
+$$C_0 = 1.0 p_a + 1.15 p_c + 1.2 (p_d + p_s + p_b), \qquad v_\infty = v_{\infty b} (p_b + p_d) + v_{\infty T} (p_s + p_c),$$
+
+with $v_{\infty T}$ from SLIP-5 times SLIP-10's deviation factor. So $1 \le C_0 \le 1.2$ and $v_\infty \ge 0$. Bubbly and dispersed bubbly flow have the same values; they differ in the rules that lead to them. Hasan et al.'s blends within a regime, (A-13) and (A-20) to (A-22), are left out.
+
+### SLIP-16 · Regime label of the five regimes
+
+The regime with the highest probability: `annular`, `churn`, `dispersed-bubbly`, `slug` or `bubbly`. A tie goes to the regime later in that order, as SLIP-8's ties go to bubbly. It is computed after the solve, from the root, and is the `FRBH` and `FRWH` feature of a dataset made with the five regimes.
+
+### SLIP-17 · Reference hierarchy of the five regimes
+
+The limit of SLIP-13 and SLIP-14 as $w$ and $\epsilon_\lambda$ go to 0: Hasan et al.'s pattern-transition criteria at a point. The flow is annular if $v_{gs} > v_{gc}$ and $v_{gs}/v_m > 0.7$; else churn if $v_m > v_{ms}$ and $v_{gs} > 1.08 v_{ls}$; else dispersed bubbly if $v_m > v_{ms}$; else slug if $v_{gs} > v_{gb}$; else bubbly. The model never evaluates it. It is the reference of the tests, as SLIP-9 is the target of SLIP-7's fit.
+
 ## Options
 
 | Option | IDs | Used by |
 |---|---|---|
-| Three regimes, vertical pipe | SLIP-1 to SLIP-8 | `v1.0.0` |
-| Inclination: bubbly–slug threshold $0.25\cos\theta$, deviation factor on $v_{\infty T}$ | SLIP-10, SLIP-11, with SLIP-1 to SLIP-8 | `develop`; on a vertical grid it is the `v1.0.0` option exactly |
-| Four regimes (bubbly, slug, churn, annular) | after the plan | — |
+| Three regimes, fitted, vertical pipe: `regime_model='fitted'` | SLIP-1 to SLIP-8 | `v1.0.0` |
+| Three regimes, fitted, with inclination: bubbly–slug threshold $0.25\cos\theta$, deviation factor on $v_{\infty T}$ | SLIP-10, SLIP-11, with SLIP-1 to SLIP-8 | `regime_model='fitted'` on any grid; on a vertical grid it is the `v1.0.0` option exactly |
+| Five regimes from Hasan et al.'s hierarchy: `regime_model='hasan'` | SLIP-1, SLIP-4, SLIP-5, SLIP-10, SLIP-12 to SLIP-16 | `develop`'s default |
 
 ## Safeguards
 
 - None in the equations: no clipping, and nothing guards the fourth roots and the square root against negative arguments, which occur only if $\rho_g > \rho_l$.
 - The factor 2 in $c_2$ and $c_4$ steepens the transitions in $\alpha$ ("to increase sensitivity", v1.0.0's comment).
 - The softmax is evaluated without shifting the logits. $|c_k| \le 1$ bounds the logits to $|y| < 22$, so it cannot overflow.
+- With the five regimes: the floor $\epsilon_\lambda v_{\infty b}$ keeps $\lambda_g$ smooth where $v_m \to 0$, and the guard $\delta$ bounds the derivative of $\sqrt{\lambda_g}$ where there is almost no free gas (PVT-OIL-13 floors the free gas rate smoothly at 0). Without them the CasADi search's starts near zero drawdown run Ipopt to its iteration limit (`specs/features/019-five-flow-regimes.md`, design choice 6). As in SLIP-6, nothing guards the fourth roots against $\rho_g > \rho_l$; $v_{gc}$ grows without bound as $\rho_g \to 0$, where $z_{A1} \to -1$.
 
 ## Open question: several void fractions
 
@@ -117,13 +176,17 @@ At fixed superficial velocities $j_g = \alpha v_g$ and $j_l = (1 - \alpha) v_l$,
 - **Consequence for the root set.** SOL-2 then holds roots that differ only in the branch at some points, and which branch is physical is not specified (`solution.md`, informative section).
 - **The case set.** At every point of every reference root, the root is unique (`tests/test_rust_backend.py`).
 - **Consequence for the Rust core.** Where the void fraction a march takes switches branch between neighbouring $p_0$, $R(p_0)$ jumps across zero, and the core can accept the jump as a root: at `v1.0.0+deviated#17` of Step 9's comparison set, its choke row is $-7.5 \cdot 10^{-4}$ kg/s, under the acceptance bound of $10^{-3} w_m$. A known finding, not changed (Bjarne, 2026-10-02, `specs/features/015-rust-develop-model.md`, Finding 3).
-- **Status.** Open (Bjarne, 2026-10-01). It is to be ruled after the plan, with the new flow-regime model of `specs/goals.md`, which replaces this classifier.
+- **The five regimes.** With `regime_model='hasan'` the probabilities, $C_0$ and $v_\infty$ (SLIP-12 to SLIP-15) depend on the state only through $j_g$, $j_l$ and the fluid's properties, which the mass rows fix at a point. $h$ is then linear in $\alpha$, with the one root $\alpha = j_g/(C_0 j_m + v_\infty)$.
+- **Status.** Settled for `develop`'s default, the five regimes (`specs/features/019-five-flow-regimes.md`); open for the fitted classifier (Bjarne, 2026-10-01), which the `v1.0.0` configuration keeps.
 
 ## Sources
 
 - Paper (8), Appendix A.1–A.2, Table A.6, and `docs/corrigendum.md` for (A.10).
 - Hasan, Kabir and Sayarpour (2010), "Simplified two-phase flow modeling in wellbores", *Journal of Petroleum Science and Engineering* 72, 42–49: Eqs. (A-18) and (A-19) for the transitions, (A-10) for SLIP-10.
-- Feature spec `specs/features/002-slip-inclination.md`.
+- Hasan, Kabir and Sayarpour (2010): Table 1, Eqs. (A-8) to (A-10), (A-14) and (A-17) to (A-19), for SLIP-12 to SLIP-17.
+- Hasan and Kabir (2018), *Fluid flow and heat transfer in wellbores*, 2nd ed., Society of Petroleum Engineers, Ch. 3: dispersed bubbly flow, its limit of $\alpha = 0.52$ (which SLIP-14 meets without a rule, as dispersed flow has $\lambda_g < 0.519$), and the criterion (A-17) as Eq. 3.10.
+- Taitel, Barnea and Dukler (1980), "Modelling flow pattern transitions for steady upward gas–liquid flow in vertical tubes", *AIChE Journal* 26, 345–354: the source of (A-17) to (A-19). Not consulted.
+- Feature specs `specs/features/002-slip-inclination.md` and `specs/features/019-five-flow-regimes.md`.
 - Harmathy (1960), "Velocity of large drops and bubbles in media of infinite or restricted extent", *AIChE Journal* 6, 281–288.
 
 ## Test vectors
@@ -216,6 +279,81 @@ Generated by `specs/tools/make_develop_vectors.py` from develop (casadi 3.8.1): 
 | 25.0 | 3.0 | 0.85 | 40.0 | 820.0 | 0.018 | 0.2 | 0.9624440813144379 | 0.037543700499933524 | 1.2218185628515325e-05 |
 | 3.0 | 1.5 | 0.27 | 100.0 | 750.0 | 0.025 | 0.7 | 8.208132685382527e-08 | 0.0037340005489674205 | 0.9962659173697057 |
 | 3.0 | 1.5 | 0.27 | 100.0 | 750.0 | 0.025 | 0.2 | 8.803572550226391e-07 | 0.03926885649938972 | 0.9607302631433552 |
+
+### SLIP-12
+
+| v_gs | v_ls | rho_g | rho_l | sigma | D | cos_incl | → lambda_g | → alpha_b | → alpha_t | → v_gc | → v_ms |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 0.05 | 1.0 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 0.046804870886254735 | 0.03465846876679883 | 0.25 | 1.1555520317835992 | 2.919200259736721 |
+| 0.05 | 1.0 | 80.0 | 780.0 | 0.018 | 0.127 | 0.5 | 0.046804870886254735 | 0.03465846876679883 | 0.14705882352941177 | 1.1555520317835992 | 2.919200259736721 |
+| 0.05 | 1.0 | 80.0 | 780.0 | 0.018 | 0.127 | 0.0 | 0.046804870886254735 | 0.03465846876679883 | 0.0 | 1.1555520317835992 | 2.919200259736721 |
+| 0.6 | 0.5 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 0.5365455074349632 | 0.39929488599940255 | 0.25 | 1.1555520317835992 | 5.886049833528683 |
+| 0.6 | 0.5 | 80.0 | 780.0 | 0.018 | 0.127 | 0.5 | 0.5365455074349632 | 0.39929488599940255 | 0.14705882352941177 | 1.1555520317835992 | 5.886049833528683 |
+| 0.6 | 0.5 | 80.0 | 780.0 | 0.018 | 0.127 | 0.0 | 0.5365455074349632 | 0.39929488599940255 | 0.0 | 1.1555520317835992 | 5.886049833528683 |
+| 1.0 | 4.0 | 15.0 | 820.0 | 0.025 | 0.1 | 1.0 | 0.19920214741350614 | 0.16128350589230608 | 0.25 | 3.000061830165984 | 4.2109659409943 |
+| 1.0 | 4.0 | 15.0 | 820.0 | 0.025 | 0.1 | 0.5 | 0.19920214741350614 | 0.16128350589230608 | 0.14705882352941177 | 3.000061830165984 | 4.2109659409943 |
+| 1.0 | 4.0 | 15.0 | 820.0 | 0.025 | 0.1 | 0.0 | 0.19920214741350614 | 0.16128350589230608 | 0.0 | 3.000061830165984 | 4.2109659409943 |
+| 4.0 | 3.0 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 0.5699414407581949 | 0.46605658362315494 | 0.25 | 1.1555520317835992 | 6.007196043596891 |
+| 4.0 | 3.0 | 80.0 | 780.0 | 0.018 | 0.127 | 0.5 | 0.5699414407581949 | 0.46605658362315494 | 0.14705882352941177 | 1.1555520317835992 | 6.007196043596891 |
+| 4.0 | 3.0 | 80.0 | 780.0 | 0.018 | 0.127 | 0.0 | 0.5699414407581949 | 0.46605658362315494 | 0.0 | 1.1555520317835992 | 6.007196043596891 |
+| 10.0 | 0.3 | 40.0 | 820.0 | 0.02 | 0.15 | 1.0 | 0.9691057964673919 | 0.7969455792418021 | 0.25 | 1.7238243721388375 | 7.855060827319523 |
+| 10.0 | 0.3 | 40.0 | 820.0 | 0.02 | 0.15 | 0.5 | 0.9691057964673919 | 0.7969455792418021 | 0.14705882352941177 | 1.7238243721388375 | 7.855060827319523 |
+| 10.0 | 0.3 | 40.0 | 820.0 | 0.02 | 0.15 | 0.0 | 0.9691057964673919 | 0.7969455792418021 | 0.0 | 1.7238243721388375 | 7.855060827319523 |
+| 2.45 | 1.0 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 0.7064050992237105 | 0.5667821020866667 | 0.25 | 1.1555520317835992 | 6.464374907964801 |
+| 2.45 | 1.0 | 80.0 | 780.0 | 0.018 | 0.127 | 0.5 | 0.7064050992237105 | 0.5667821020866667 | 0.14705882352941177 | 1.1555520317835992 | 6.464374907964801 |
+| 2.45 | 1.0 | 80.0 | 780.0 | 0.018 | 0.127 | 0.0 | 0.7064050992237105 | 0.5667821020866667 | 0.0 | 1.1555520317835992 | 6.464374907964801 |
+
+### SLIP-13, SLIP-14
+
+| v_gs | v_ls | rho_g | rho_l | sigma | D | cos_incl | → p_annular | → p_churn | → p_dispersed | → p_slug | → p_bubbly |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 0.05 | 1.0 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 0.0 | 6.8859653009302565e-25 | 1.2490009026344414e-14 | 2.108185913873824e-05 | 0.9999789181408488 |
+| 0.05 | 1.0 | 80.0 | 780.0 | 0.018 | 0.127 | 0.5 | 0.0 | 6.8859653009302565e-25 | 1.2490009026344414e-14 | 0.0036114867042020375 | 0.9963885132957855 |
+| 0.05 | 1.0 | 80.0 | 780.0 | 0.018 | 0.127 | 0.0 | 0.0 | 6.8859653009302565e-25 | 1.2490009026344414e-14 | 0.8497859782102325 | 0.1502140217897551 |
+| 0.6 | 0.5 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.0251126022540714e-14 | 0.0 | 0.0 | 0.9994273965083569 | 0.0005726034916329001 |
+| 0.6 | 0.5 | 80.0 | 780.0 | 0.018 | 0.127 | 0.5 | 1.0251126022540714e-14 | 0.0 | 0.0 | 0.9999966675622105 | 3.332437779279795e-06 |
+| 0.6 | 0.5 | 80.0 | 780.0 | 0.018 | 0.127 | 0.0 | 1.0251126022540714e-14 | 0.0 | 0.0 | 0.9999999978648726 | 2.1351171941574657e-09 |
+| 1.0 | 4.0 | 15.0 | 820.0 | 0.025 | 0.1 | 1.0 | 4.444719673927172e-26 | 1.1236463936817087e-07 | 0.999914549282979 | 9.990240555628451e-07 | 8.433932832610691e-05 |
+| 1.0 | 4.0 | 15.0 | 820.0 | 0.025 | 0.1 | 0.5 | 4.444719673927172e-26 | 1.1236463936817087e-07 | 0.999914549282979 | 5.7234196858776535e-05 | 2.8104155522893223e-05 |
+| 1.0 | 4.0 | 15.0 | 820.0 | 0.025 | 0.1 | 0.0 | 4.444719673927172e-26 | 1.1236463936817087e-07 | 0.999914549282979 | 8.531151248681982e-05 | 2.683989484992962e-08 |
+| 4.0 | 3.0 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 0.0014967998499312296 | 0.9249702610102476 | 0.0732756245817744 | 0.00025730932389370136 | 5.234153095637069e-09 |
+| 4.0 | 3.0 | 80.0 | 780.0 | 0.018 | 0.127 | 0.5 | 0.0014967998499312296 | 0.9249702610102476 | 0.0732756245817744 | 0.0002573145276017984 | 3.044499863110672e-11 |
+| 4.0 | 3.0 | 80.0 | 780.0 | 0.018 | 0.127 | 0.0 | 0.0014967998499312296 | 0.9249702610102476 | 0.0732756245817744 | 0.00025731455802729074 | 1.9506280299889485e-14 |
+| 10.0 | 0.3 | 40.0 | 820.0 | 0.02 | 0.15 | 1.0 | 0.9999985663562205 | 1.4336435294260745e-06 | 2.440781812875244e-16 | 2.497991542287602e-13 | 3.3174546253271742e-25 |
+| 10.0 | 0.3 | 40.0 | 820.0 | 0.02 | 0.15 | 0.5 | 0.9999985663562205 | 1.4336435294260745e-06 | 2.440781812875244e-16 | 2.4979915422909005e-13 | 1.941329407899199e-27 |
+| 10.0 | 0.3 | 40.0 | 820.0 | 0.02 | 0.15 | 0.0 | 0.9999985663562205 | 1.4336435294260745e-06 | 2.440781812875244e-16 | 2.4979915422909197e-13 | 0.0 |
+| 2.45 | 1.0 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 0.5793863868864486 | 3.148806585333301e-11 | 2.714607543071048e-15 | 0.42061355748557727 | 5.559648334635926e-08 |
+| 2.45 | 1.0 | 80.0 | 780.0 | 0.018 | 0.127 | 0.5 | 0.5793863868864486 | 3.148806585333301e-11 | 2.714607543071048e-15 | 0.42061361275868436 | 3.2337625462546083e-10 |
+| 2.45 | 1.0 | 80.0 | 780.0 | 0.018 | 0.127 | 0.0 | 0.5793863868864486 | 3.148806585333301e-11 | 2.714607543071048e-15 | 0.4206136130818534 | 2.0719677098991507e-13 |
+
+### SLIP-15, SLIP-16
+
+| v_g | v_l | alpha | rho_g | rho_l | sigma | D | cos_incl | → C_0 | → v_inf | → regime |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0.25 | 1.25 | 0.2 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.2 | 0.18265279710346274 | bubbly |
+| 0.25 | 1.25 | 0.2 | 80.0 | 780.0 | 0.018 | 0.127 | 0.0 | 1.2 | 0.027436417860562515 | slug |
+| 0.1 | 2.0 | 0.5 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.2 | 0.18265279710346274 | bubbly |
+| 0.1 | 2.0 | 0.5 | 80.0 | 780.0 | 0.018 | 0.127 | 0.0 | 1.2 | 0.027436417860562515 | slug |
+| 2.9999999999999996 | 0.625 | 0.2 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.199999999999998 | 0.3699184690097599 | slug |
+| 2.9999999999999996 | 0.625 | 0.2 | 80.0 | 780.0 | 0.018 | 0.127 | 0.0 | 1.199999999999998 | 3.899766934019099e-10 | slug |
+| 1.2 | 1.0 | 0.5 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.199999999999998 | 0.3699184690097599 | slug |
+| 1.2 | 1.0 | 0.5 | 80.0 | 780.0 | 0.018 | 0.127 | 0.0 | 1.199999999999998 | 3.899766934019099e-10 | slug |
+| 5.0 | 5.0 | 0.2 | 15.0 | 820.0 | 0.025 | 0.1 | 1.0 | 1.1999999943817679 | 0.2002622036733616 | dispersed-bubbly |
+| 5.0 | 5.0 | 0.2 | 15.0 | 820.0 | 0.025 | 0.1 | 0.0 | 1.1999999943817679 | 0.20024493741437754 | dispersed-bubbly |
+| 2.0 | 8.0 | 0.5 | 15.0 | 820.0 | 0.025 | 0.1 | 1.0 | 1.1999999943817679 | 0.2002622036733616 | dispersed-bubbly |
+| 2.0 | 8.0 | 0.5 | 15.0 | 820.0 | 0.025 | 0.1 | 0.0 | 1.1999999943817679 | 0.20024493741437754 | dispersed-bubbly |
+| 20.0 | 3.75 | 0.2 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.153452126979501 | 0.35574174573333633 | churn |
+| 20.0 | 3.75 | 0.2 | 80.0 | 780.0 | 0.018 | 0.127 | 0.0 | 1.153452126979501 | 0.013383708332058998 | churn |
+| 8.0 | 6.0 | 0.5 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.153452126979501 | 0.35574174573333633 | churn |
+| 8.0 | 6.0 | 0.5 | 80.0 | 780.0 | 0.018 | 0.127 | 0.0 | 1.153452126979501 | 0.013383708332058998 | churn |
+| 50.0 | 0.37499999999999994 | 0.2 | 40.0 | 820.0 | 0.02 | 0.15 | 1.0 | 1.0000002150465794 | 5.935477205094346e-07 | annular |
+| 50.0 | 0.37499999999999994 | 0.2 | 40.0 | 820.0 | 0.02 | 0.15 | 0.0 | 1.0000002150465794 | 4.586430128444612e-17 | annular |
+| 20.0 | 0.6 | 0.5 | 40.0 | 820.0 | 0.02 | 0.15 | 1.0 | 1.0000002150465794 | 5.935477205094346e-07 | annular |
+| 20.0 | 0.6 | 0.5 | 40.0 | 820.0 | 0.02 | 0.15 | 0.0 | 1.0000002150465794 | 4.586430128444612e-17 | annular |
+| 12.25 | 1.25 | 0.2 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.0841227226211358 | 0.15563786215011302 | annular |
+| 12.25 | 1.25 | 0.2 | 80.0 | 780.0 | 0.018 | 0.127 | 0.0 | 1.0841227226211358 | 3.834007122968883e-14 | annular |
+| 4.9 | 2.0 | 0.5 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.0841227226211358 | 0.15563786215011302 | annular |
+| 4.9 | 2.0 | 0.5 | 80.0 | 780.0 | 0.018 | 0.127 | 0.0 | 1.0841227226211358 | 3.834007122968883e-14 | annular |
 <!-- vectors:end develop -->
 
 ## Coverage
@@ -233,3 +371,9 @@ Generated by `specs/tools/make_develop_vectors.py` from develop (casadi 3.8.1): 
 | SLIP-9 | (A.3)–(A.6) | `slip.py` `classify_flow_regime` (docstring) | spec-only: the fitting target of SLIP-7's weights, which the model never evaluates |
 | SLIP-10 | — | — | vectors; property: tests/test_slip.py |
 | SLIP-11 | — | — | vectors; property: tests/test_slip.py |
+| SLIP-12 | — | — | vectors |
+| SLIP-13 | — | — | vectors; property: tests/test_slip.py |
+| SLIP-14 | — | — | vectors; property: tests/test_slip.py |
+| SLIP-15 | — | — | vectors; property: tests/test_slip.py |
+| SLIP-16 | — | — | vectors |
+| SLIP-17 | — | — | spec-only: the crisp limit of SLIP-13 and SLIP-14, which the tests compare the labels with and the model never evaluates |

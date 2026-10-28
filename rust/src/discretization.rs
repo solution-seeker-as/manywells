@@ -15,7 +15,6 @@
 use crate::geometry::Cell;
 use crate::input::{OperatingPoint, WellSpec};
 use crate::pvt::fluid::GasLaw;
-use crate::slip;
 use crate::thermal;
 use crate::units::{CF_BAR, STD_GRAVITY};
 
@@ -188,12 +187,12 @@ pub fn rows(spec: &WellSpec, op: &OperatingPoint, x: &[f64]) -> Vec<(&'static st
     row_ids(spec).into_iter().zip(values).collect()
 }
 
-/// The regime label at each point (SLIP-8)
+/// The regime label at each point (SLIP-8, or SLIP-16 with the five regimes)
 pub fn flow_regimes(spec: &WellSpec, x: &[f64]) -> Vec<&'static str> {
     x.chunks_exact(DIM_X).map(State::of).enumerate().map(|(i, s)| {
         let sigma = spec.fluid.surface_tension(s.p, s.t, s.rho_l);
         let cos_incl = spec.geometry.point_cos(i);
         let probs = spec.slip.classify(s.v_g, s.v_l, s.alpha, s.rho_g, s.rho_l, sigma, spec.geometry.d, cos_incl);
-        slip::regime_label(probs)
+        spec.slip.label(&probs)
     }).collect()
 }

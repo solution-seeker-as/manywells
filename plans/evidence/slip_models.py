@@ -141,7 +141,7 @@ def main():
     # 0. check the numpy copy against the package
     from manywells.slip import SlipModel
     rng = np.random.default_rng(0)
-    sm = SlipModel()
+    sm = SlipModel(regime_model='fitted')  # develop's closure before feature 019, now an option
     err = 0.0
     for _ in range(200):
         a = rng.uniform(0.01, 0.99); vg = rng.uniform(0.1, 30); vl = rng.uniform(0.01, 5)
