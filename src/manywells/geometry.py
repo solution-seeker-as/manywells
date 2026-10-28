@@ -157,6 +157,11 @@ class WellGeometry:
         tvd_arr = np.asarray(tvd_survey, dtype=float)
         md_uniform = np.linspace(0.0, md_arr[-1], n_cells + 1)
         tvd_uniform = np.interp(md_uniform, md_arr, tvd_arr)
+        # On a vertical section below the surface, rounding can put a cell's TVD step an ulp above its MD step, and
+        # cos_incl above 1. Lower the cell's lower end until it is not: this changes no grid that is accepted already.
+        for i in range(n_cells):
+            while tvd_uniform[i + 1] - tvd_uniform[i] > md_uniform[i + 1] - md_uniform[i]:
+                tvd_uniform[i + 1] = np.nextafter(tvd_uniform[i + 1], -np.inf)
         return cls(md_survey=md_uniform, tvd_survey=tvd_uniform, D=D)
 
     @classmethod

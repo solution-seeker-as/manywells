@@ -18,6 +18,31 @@ def test_well_geometry_cos_incl_validation():
         WellGeometry(md_survey=[0, 100, 200], tvd_survey=[0, 100, 80])
 
 
+def test_from_survey_accepts_vertical_sections_below_the_surface():
+    """
+    On a vertical section that does not start at the surface, np.interp can put a cell's TVD step an ulp above its MD
+    step; from_survey keeps cos_incl in [0, 1], so that both backends accept the grid. Without that, 306 of these
+    1000 surveys were rejected.
+    """
+    from manywells.simulator import WellProperties
+    from manywells.solvers.rust import core_well
+
+    s = [0, 82.677, 1227.597, 1269.979, 1648.781, 2483.108]
+    geo = WellGeometry.from_survey(s, s, n_cells=100)
+    assert min(geo.cos_incl) > 1 - 1e-12 and max(geo.cos_incl) == 1.0
+    assert geo.tvd[0] == pytest.approx(s[-1], abs=1e-9)
+    core_well(WellProperties(geometry=geo))  # the core recomputes cos_incl from md and tvd, and checks it too
+
+    rng = np.random.default_rng(0)
+    for _ in range(1000):
+        md = np.concatenate([[0.0], np.sort(rng.uniform(1, 3000, rng.integers(2, 8)))])
+        WellGeometry.from_survey(md, md, n_cells=100)
+    # A vertical section after a deviated one: kick off at 500 m, 300 m at 30°, then 1500 m vertical
+    c = np.cos(np.radians(30))
+    WellGeometry.from_survey([0.0, 500.0, 800.0, 2300.0], [0.0, 500.0, 500.0 + 300.0 * c, 2000.0 + 300.0 * c],
+                             n_cells=100)
+
+
 class TestWellGeometry:
     """Tests for the WellGeometry dataclass."""
 
