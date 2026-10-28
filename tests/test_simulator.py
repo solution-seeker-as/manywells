@@ -84,6 +84,25 @@ def test_boundary_conditions_negative_lift_gas():
         BoundaryConditions(w_lg=-1.0)
 
 
+def test_boundary_conditions_must_be_finite():
+    """BoundaryConditions rejects infinite values: p_r = inf gave the Rust core's scan an infinite step."""
+    for name in ('p_r', 'p_s', 'T_r', 'T_s', 'T_lg', 'u', 'w_lg'):
+        with pytest.raises(ValueError, match="finite"):
+            BoundaryConditions(**{name: np.inf})
+
+
+@pytest.mark.parametrize('backend', ['casadi', 'rust'])
+def test_the_reservoir_pressure_must_exceed_the_separator_pressure(backend):
+    """
+    Both backends raise ValueError, which the generators and the calibration take as a failed solve. The CasADi
+    backend raised Ipopt's RuntimeError on the crossed pressure bounds once it had a start, such as a guess.
+    """
+    sim = SSDFSimulator(WellProperties(geometry=WellGeometry.vertical(2000, 20)), backend=backend)
+    for p_r in (15.0, 20.0):
+        with pytest.raises(ValueError, match="must exceed the separator pressure"):
+            sim.simulate(BoundaryConditions(p_r=p_r, p_s=20.0), x_guess=np.ones(DIM_X * 21))
+
+
 def test_simulator_construction():
     """SSDFSimulator builds the well's system once: 7 unknowns and 7 rows per grid point."""
     geo = WellGeometry.vertical(100, 5, D=0.1)

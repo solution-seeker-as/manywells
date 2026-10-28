@@ -65,6 +65,9 @@ pub struct OperatingPoint {
 
 impl OperatingPoint {
     pub fn check(&self) -> Result<(), String> {
+        if ![self.p_r, self.p_s, self.t_r, self.t_s, self.t_lg, self.u, self.w_lg].iter().all(|v| v.is_finite()) {
+            return Err(format!("the operating point must be finite: {self:?}"));
+        }
         if !(self.p_s > 0.0 && self.p_r > self.p_s) {
             return Err(format!("the reservoir pressure ({}) must exceed the separator pressure ({}) > 0", self.p_r,
                                self.p_s));
@@ -228,14 +231,22 @@ pub mod test_wells {
 
 #[cfg(test)]
 mod tests {
-    use super::test_wells::v1_fluid;
-    use super::WellSpec;
+    use super::test_wells::{v1_fluid, w1};
+    use super::{OperatingPoint, WellSpec};
 
     fn assert_send_sync<T: Send + Sync>() {}
 
     #[test]
     fn a_well_can_be_shared_between_threads() {
         assert_send_sync::<WellSpec>();  // The bindings lend it to the search with the GIL released
+    }
+
+    #[test]
+    fn an_operating_point_must_be_finite() {
+        let (_, op) = w1(10);
+        assert!(op.check().is_ok());
+        assert!(OperatingPoint { p_r: f64::INFINITY, ..op }.check().is_err());  // the scan's step would be infinite
+        assert!(OperatingPoint { w_lg: f64::NAN, ..op }.check().is_err());
     }
 
     #[test]

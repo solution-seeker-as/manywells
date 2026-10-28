@@ -100,7 +100,9 @@ class BoundaryConditions:
     w_lg: float = 0.          # Lift gas mass flow rate (kg/s). Default value is 0. Assumed injected at z=0.
 
     def __post_init__(self):
+        values = (self.p_r, self.p_s, self.T_r, self.T_s, self.u, self.w_lg) + (() if self.T_lg is None else (self.T_lg,))
         checks = [
+            (all(np.isfinite(v) for v in values), f'Boundary conditions must be finite: {self}'),
             (self.p_r > 0, 'Reservoir pressure must be positive'),
             (self.p_s > 0, 'Separator pressure must be positive'),
             (self.T_r > 0, 'Reservoir temperature must be positive'),
@@ -176,7 +178,11 @@ class SSDFSimulator:
         :param bc: Boundary conditions
         :param x_guess: An extra start for the search, such as the root of a nearby operating point
         :return: The root set
+        :raises ValueError: unless p_r > p_s, so that an admissible state (SOL-1) has a pressure range to lie in
         """
+        # Checked here rather than in BoundaryConditions: a generator's decayed p_r below p_s, say, is a failed solve
+        if not bc.p_r > bc.p_s:
+            raise ValueError(f'the reservoir pressure ({bc.p_r}) must exceed the separator pressure ({bc.p_s})')
         rs = self._roots.find(bc, x_guess=x_guess)
         failed = [a for a in rs.search if not a.outcome.startswith('root')]
         if failed:
@@ -194,6 +200,7 @@ class SSDFSimulator:
         :return: The operating point (Root); a flat list of its state in the deprecated form
         :raises NoOperatingPoint: if there is no stable root. A closed choke (u = 0) has none: its only steady state
             is the zero flow of a shut-in well, which is not an admissible state (SOL-1)
+        :raises ValueError: unless p_r > p_s, as root_set
         """
         legacy = bc is None
         if legacy:
