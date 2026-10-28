@@ -28,6 +28,22 @@ uv sync --frozen    # --locked re-resolves, and fails, if a global uv exclude-ne
 
 The same batch was first run with casadi 3.8.1, the environment on `rust_implementation`. The roots agree with the v1.0.0 run to within 1e-7 K in TWH. The one difference is well 1847, where v1's default solve failed under 3.8.1 and converges to the stable root under 3.6.4. That is why Step 2 pins the CasADi version along with `manywells==1.0.0`.
 
+## Feature 018: PVT tables
+
+Scripts behind the measurements in `../../specs/features/018-pvt-tables.md`, run on 2026-10-28 on `develop` at `8b4f1e6` (Python 3.11, casadi 3.8.1), with 24 CPUs shared with other work, before issue #8's in-situ mixing of oil and water. `pvt_tables.py` is the prototype: it adds a table by a subclass of `FluidModel` as it was before the spec's interface, so it runs on the CasADi backend only, and on `develop` up to `162eb47`. The bug it found, issue #10, has its own section below. `pvt_table_eos.py` writes the synthetic equation-of-state tables of `tests/data/pvt/` and measures the GOR axis; it needs NeqSim 3.4.0 and Java, not ManyWells.
+
+| Script | What it shows | Result |
+|---|---|---|
+| `pvt_tables.py points` | The error of tables of develop's black oil, on four grids and at one temperature, against the black oil at random points of 40 sampled fluids; and interpolating $\rho_g$ in place of $Z$ | 10 bar by 10 K: $R_{so}$ within 0.45 Sm³/Sm³, $\rho_l$ within 0.03%, $\rho_g$ within 0.21% (2.1% interpolating $\rho_g$). Refining a coarse table by monotone cubics rounds off the bubble point's kink |
+| `pvt_tables.py wells 88 OUT.csv` | The same tables on the 263 cases of `jt_wells.py`: operating points found, PBH, PWH and TWH against the black oil, and the time | See the feature spec's Measurements |
+| `pvt_tables.py interp 12 OUT.csv` | Bilinear interpolation against CasADi's cubic B-spline on the 10 bar by 10 K grid | See the feature spec's design choice 1 |
+| `pvt_tables.py write DIR` | Writes `vazquez_beggs.csv` and `synthetic_eos_oil_360K.csv` | |
+| `pvt_tables.py eos 88 TABLE OUT.csv` | The synthetic fluid's table against develop's black oil at the same stock-tank densities and GOR, on the sampled cases whose $p_r$ and $T_r$ the table covers | See the feature spec's Measurements |
+| `pvt_tables.py scan TABLE EOS.csv` | The cases `eos` lost against the capped black oil: the shooting residual after a march from 80 values of $p_0$, and the table with 0.01 kg/s of lift gas | 16 of 17 have an all-liquid bottomhole with the table; 12 solve with the lift gas (the feature spec's Findings 1) |
+| `pvt_table_eos.py OUT.csv` | Writes `synthetic_eos_oil.csv` (PVT-TAB-6 from NeqSim's flash) | A rerun reproduces the file byte for byte |
+| `pvt_table_eos.py gor` | One table read at 0.6 to 2 times its GOR by the black-oil rule, and a GOR axis, against the recombined stream's own tables | Within 10% of the GOR: no-slip density within 1.2–1.7% at the median, 4.7% at most; a GOR axis: 0.01–0.3%, 2.2% at most |
+| `pvt_table_eos.py gor_table OUT.csv` | Writes `synthetic_eos_oil_gor.csv` | |
+
 ## Feature 017: calibration
 
 Scripts behind the measurements in `../../specs/features/017-calibration.md` that the twin study (`scripts/calibration/twins.py`) does not make, run on 2026-10-02 on the branch `calibration`, with 24 CPUs. Run from the project root as `uv run python plans/evidence/calibration_measurements.py <part>`.
