@@ -261,21 +261,29 @@ class FluidModel:
             return 0.0
         return dak_jt_factor(self.reduced_density(rho_g), T / self._pseudo_critical[1])
 
+    def liquid_fvf(self, p, T):  # spec: PVT-MIX-6
+        """
+        Liquid formation volume factor at (p, T): the volume (m3) there of one Sm3 of stock-tank liquid, the oil
+        swollen by Bo and the water incompressible (B_w = 1). Exactly 1 for dead oil.
+
+        :param p: Pressure (bar), may be CasADi symbolic
+        :param T: Temperature (K), may be CasADi symbolic
+        :return: B_l (dimensionless)
+        """
+        return (1 - self.wlr) * self.bo(p, T) + self.wlr
+
     def liquid_density(self, p, T):  # spec: PVT-MIX-1, PVT-MIX-6, PVT-OIL-9
         """
-        Liquid density at (p, T).
-
-        Uses the live-oil density correlation blended with water.
-        For dead oil (Rs=0, Bo=1) this reduces to the constant ``rho_l``.
+        Liquid density at (p, T): the mass of one Sm3 of stock-tank liquid with the gas dissolved in its oil, over
+        its volume at (p, T), so that oil and water mix by their in-situ volumes.
+        For dead oil (Rs=0, Bo=1) this reduces to the constant ``rho_l``, exactly.
 
         :param p: Pressure (bar), may be CasADi symbolic
         :param T: Temperature (K), may be CasADi symbolic
         :return: Liquid density (kg/m3)
         """
         Rs_i = self.rs(p, T)
-        Bo_i = self.bo(p, T)
-        rho_live_oil = (self.rho_o + Rs_i * self.rho_g) / Bo_i
-        return self.wlr * self.rho_w + (1 - self.wlr) * rho_live_oil
+        return ((1 - self.wlr) * (self.rho_o + Rs_i * self.rho_g) + self.wlr * self.rho_w) / self.liquid_fvf(p, T)
 
     def liquid_viscosity(self, p, T):  # spec: PVT-MIX-8
         """
@@ -283,7 +291,8 @@ class FluidModel:
 
         For dead oil, viscosity depends only on temperature.
         For black oil, the Beggs-Robinson live oil correction reduces
-        viscosity to account for dissolved gas.
+        viscosity to account for dissolved gas.  Oil and water are weighted
+        by their volume fractions at (p, T), as in the liquid density.
 
         :param p: Pressure (bar), may be CasADi symbolic
         :param T: Temperature (K), may be CasADi symbolic
@@ -294,7 +303,8 @@ class FluidModel:
             Rs_scf = self.rs(p, T) / CF_RS
             mu_o = live_oil_viscosity(mu_o, Rs_scf)
         mu_w = water_viscosity(T)
-        return self.wlr * mu_w + (1 - self.wlr) * mu_o
+        lambda_w = self.wlr / self.liquid_fvf(p, T)  # In-situ water fraction of the liquid (PVT-MIX-6)
+        return lambda_w * mu_w + (1 - lambda_w) * mu_o
 
     def gas_viscosity(self, T, rho_g):
         """Gas viscosity at (T, rho_g) (CasADi-compatible)."""

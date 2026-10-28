@@ -12,6 +12,7 @@ import dataclasses
 from manywells.units import M_AIR, CF_PSI, CF_BAR
 from manywells.pvt.dead_oil import dead_oil_surface_tension
 from manywells.pvt.fluid import FluidModel
+from manywells.pvt.water import water_viscosity
 
 RHO_L = 800.0  # Liquid density at the point (kg/m3); the 'oil' surface tension model does not use it
 
@@ -333,6 +334,59 @@ class TestPhaseRates:
         assert w_g_lo + w_l_lo == pytest.approx(total, rel=1e-6)
         assert w_g_hi + w_l_hi == pytest.approx(total, rel=1e-6)
         assert w_l_hi > w_l_lo > w_res  # more gas dissolves at higher pressure
+
+
+class TestLiquidVolume:
+    """PVT-MIX-6 and PVT-MIX-8: oil and water mixed by their volumes at (p, T), with the water incompressible."""
+
+    POINTS = ((100.0, 350.0), (250.0, 380.0), (180.0, 400.0))  # (p, T) where R_so is below the gas-oil ratio
+
+    @staticmethod
+    def _fluid(wlr, **kw):
+        return FluidModel(rho_o=density_from_api(35.0), rho_g=gas_density_from_sg(0.65), gor=150.0, wlr=wlr, **kw)
+
+    @pytest.mark.parametrize('wlr', (0.0, 0.2, 0.5, 0.8))
+    def test_liquid_volume_rate_is_the_in_situ_volume_rate(self, wlr):
+        """w_l / rho_l is the oil and water's volume rate at (p, T), Q_l,sc ((1 - wlr) B_o + wlr B_w) with B_w = 1,
+        where PVT-OIL-13 dissolves R_so in full, up to its smoothing."""
+        fl = self._fluid(wlr)
+        w_res = 20.0
+        for p, T in self.POINTS:
+            assert float(fl.rs(p, T)) < 0.8 * fl.gor
+            _, w_l = fl.phase_rates(p, T, w_res, 0.0)
+            q_sc = w_res / fl.rho_l  # Stock-tank liquid volume rate (Sm3/s)
+            in_situ = q_sc * ((1 - wlr) * float(fl.bo(p, T)) + wlr)
+            assert float(w_l) / float(fl.liquid_density(p, T)) == pytest.approx(in_situ, rel=1e-6)
+
+    @pytest.mark.parametrize('wlr', (0.1, 0.4, 0.8))
+    def test_dead_oil_is_the_constant_exactly(self, wlr):
+        """With dead oil B_l = 1, and the density is the liquid's at standard conditions, bit for bit (PVT-MIX-1)."""
+        fl = self._fluid(wlr, oil_model='dead_oil')
+        for p, T in self.POINTS:
+            assert fl.liquid_fvf(p, T) == 1.0
+            assert fl.liquid_density(p, T) == fl.rho_l
+
+    @pytest.mark.parametrize('wlr', (0.2, 0.5, 0.8))
+    def test_density_lies_between_live_oil_and_water(self, wlr):
+        """The in-situ mix is lighter than the mix by the water fraction at standard conditions, as the oil swells."""
+        fl, oil = self._fluid(wlr), self._fluid(0.0)
+        for p, T in self.POINTS:
+            rho_lo, rho_l = float(oil.liquid_density(p, T)), float(fl.liquid_density(p, T))
+            assert rho_lo < rho_l < fl.rho_w
+            assert rho_l < wlr * fl.rho_w + (1 - wlr) * rho_lo
+
+    def test_viscosity_weights_water_by_its_in_situ_fraction(self):
+        p, T = 250.0, 380.0
+        mu_w = float(water_viscosity(T))
+        mu_o = float(self._fluid(0.0).liquid_viscosity(p, T))
+        for wlr in (0.2, 0.5, 0.8):
+            fl = self._fluid(wlr)
+            lambda_w = wlr / float(fl.liquid_fvf(p, T))
+            assert lambda_w < wlr
+            assert float(fl.liquid_viscosity(p, T)) == pytest.approx(lambda_w * mu_w + (1 - lambda_w) * mu_o, rel=1e-12)
+        mu_od = float(self._fluid(0.0, oil_model='dead_oil').liquid_viscosity(p, T))
+        mu_l = float(self._fluid(0.5, oil_model='dead_oil').liquid_viscosity(p, T))
+        assert mu_l == pytest.approx(0.5 * mu_w + 0.5 * mu_od, rel=1e-12)  # dead oil: by the water-liquid ratio
 
 
 class TestPressuresInBar:
