@@ -153,7 +153,7 @@ def row_ids(wp) -> tuple:
     fluid, N = wp.fluid, wp.geometry.n_cells
     bottom = ('INF-6', 'INF-7', 'THM-5' if wp.thermal.lift_gas_mixing else 'THM-3')
     cell = ('DISC-7', 'DISC-8', 'DISC-9', 'DISC-10')
-    gas_law = {'ideal': 'PVT-GAS-1', 'dak': 'PVT-GAS-11', 'papay': 'PVT-GAS-3'}[fluid.pvt.gas_law]
+    gas_law = {'ideal': 'PVT-GAS-1', 'dak': 'PVT-GAS-11', 'papay': 'PVT-GAS-3', 'table': 'PVT-TAB-4'}[fluid.pvt.gas_law]
     closures = ('SLIP-1', gas_law,
                 'PVT-MIX-6' if fluid.pvt.dissolves_gas else 'PVT-MIX-1')
     ids = bottom + closures

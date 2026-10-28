@@ -1,6 +1,6 @@
 # 018 · PVT tables, and one interface for every PVT model
 
-*Feature spec, 2026-10-28. Status: approved by Bjarne on 2026-10-28, with each decision as recommended (Rulings). Phase A, the interface (ruling 1), is implemented: `FluidModel(pvt=...)` with `DeadOil` and `BlackOil`, each method's value unchanged to the bit. The tables follow, in the CasADi backend and then the Rust core. The prototype is in `plans/evidence/` (Measurements) and the example tables in `tests/data/pvt/`. The bug the prototype found is issue #10, fixed by PR #23.*
+*Feature spec, 2026-10-28. Status: approved by Bjarne on 2026-10-28, with each decision as recommended (Rulings). Phase A, the interface (ruling 1), is implemented: `FluidModel(pvt=...)` with `DeadOil` and `BlackOil`, each method's value unchanged to the bit. Phase B, the tables in Python and the CasADi backend (`specs/model/pvt/table.md`, PVT-TAB-1 to PVT-TAB-7), is implemented. The Rust core follows (phase C), then the measurements on both backends (acceptance 9). The prototype is in `plans/evidence/` (Measurements) and the example tables in `tests/data/pvt/`. The bug the prototype found is issue #10, fixed by PR #23.*
 
 ## Rulings (Bjarne, 2026-10-28)
 
@@ -185,9 +185,9 @@ Operating points: 139 with the uncapped black oil, 146 capped, 130 with the tabl
 | `vazquez_beggs.csv` | develop's black oil, API 35, gas gravity 0.75, GOR 120, capped at its bubble point (235.7 bar, where $R_{so}$ is the GOR at 360 K) | 1–400 bar by 10, with $p_b$; 280–400 K by 10 | $R_{so}$, $B_o$, $Z$ | that a fresh tabulation of develop's black oil reproduces the file; that the table's properties and a solved well agree with the black oil within the bounds measured above |
 | `synthetic_eos_oil.csv` | a synthetic oil (Peng–Robinson with Peneloux, NeqSim 3.4.0): stock-tank oil 866.4 kg/m³, gas gravity 0.845, GOR 108.7, bubble point 109 to 201 bar from 280 to 400 K | 1–400 bar by 10 with each temperature's $p_b$; 280–400 K by 10 | all six | a table with negative $R_{so}$ (at low pressure and high temperature) and its own viscosities and surface tension; both backends on a sampled well |
 | `synthetic_eos_oil_360K.csv` | the same fluid at 360 K only, on 15 pressures at a laboratory report's spacing | 10–400 bar, with $p_b$ | $R_{so}$, $B_o$, $Z$ | a one-temperature table; the correlations where columns are missing |
-| `synthetic_eos_oil_gor.csv` | the same stream recombined at 0.6, 0.8, 1, 1.25 and 1.5 times its GOR (65.2 to 163.1 Sm³/Sm³) | per GOR: 1–400 bar by 10 with its own $p_b$; 280–400 K by 20 | $R_{so}$, $B_o$, $Z$ | a GOR axis (PVT-TAB-7): exact at its GORs, between them within the bounds measured above, and refused outside them |
+| `synthetic_eos_oil_gor.csv` | the same stream recombined at 0.6, 0.8, 1, 1.25 and 1.5 times its GOR (65.2 to 163.1 Sm³/Sm³) | per GOR: 1–400 bar by 10 with its own $p_b$; 280–400 K by 20 | all six, since its $R_{so}$ falls below 0 (PVT-TAB-1) | a GOR axis (PVT-TAB-7): exact at its GORs, between them within the bounds measured above, and refused outside them |
 
-`plans/evidence/pvt_tables.py write` and `plans/evidence/pvt_table_eos.py` write them; the second needs NeqSim (Java), which is not a ManyWells dependency, so the file is committed and its generator is run by hand, as the v1 vectors are. On implementation the generators move to `specs/tools/` and the table of reference data in `AGENTS.md` gets a row.
+`specs/tools/make_pvt_tables.py` writes the first and the third from ManyWells. `plans/evidence/pvt_table_eos.py` writes the other two; it needs NeqSim (Java), which is not a ManyWells dependency, so the files are committed and it is run by hand, as the v1 vectors' generator is. It stays in `plans/evidence/` with the measurements of the same fluid. The table of reference data in `AGENTS.md` has a row for each generator.
 
 ## Acceptance
 

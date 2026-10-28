@@ -9,6 +9,8 @@ Unified fluid model for wellbore simulations.
 import math
 from dataclasses import dataclass
 
+import numpy as np
+
 from manywells.ca_functions import ca_min_approx, ca_max_approx
 from manywells.pvt import mixture_viscosity
 from manywells.pvt.black_oil import BlackOil
@@ -26,7 +28,8 @@ class FluidModel:
     Unified fluid model for three-phase wellbore flow (gas, oil, water).
 
     The hydrocarbon PVT is the component pvt, a PVTModel: DeadOil (no gas dissolves) or BlackOil (Vazquez-Beggs,
-    with gas dissolving into the oil), each with its gas law ('ideal', 'dak' or 'papay'). FluidModel holds the
+    with gas dissolving into the oil), each with its gas law ('ideal', 'dak' or 'papay'), or PVTTable (a table on a
+    (p, T) grid; a PVTTableSet's tables at several GORs are read at gor). FluidModel holds the
     stream: the water, the gas-oil and water-liquid ratios at standard conditions and the heat capacities, and
     mixes oil and water into one liquid. The surface tension model chooses the density the dead-oil correlation is
     evaluated at: the oil's at standard conditions with a live-oil correction ('oil'), or the local liquid density
@@ -68,6 +71,7 @@ class FluidModel:
                 raise ValueError(f'{name} must be positive and finite, got {getattr(self, name)}')
         if not (math.isfinite(self.gor) and self.gor >= 0):
             raise ValueError(f'gor must be non-negative and finite, got {self.gor}')
+        object.__setattr__(self, '_hc', self.pvt.at_gor(self.gor))  # The PVT model at this GOR (PVT-TAB-7)
 
     # ------------------------------------------------------------------
     # Derived properties
@@ -76,38 +80,38 @@ class FluidModel:
     @property
     def rho_o(self) -> float:
         """Stock-tank oil density (kg/m3), the PVT model's."""
-        return self.pvt.rho_o
+        return self._hc.rho_o
 
     @property
     def rho_g(self) -> float:
         """Gas density at standard conditions (kg/m3), the PVT model's."""
-        return self.pvt.rho_g
+        return self._hc.rho_g
 
     @property
     def api(self) -> float:
         """Oil API gravity (degrees)."""
-        return self.pvt.api
+        return self._hc.api
 
     @property
     def sg_gas(self) -> float:
         """Gas specific gravity relative to air (dimensionless)."""
-        return self.pvt.sg_gas
+        return self._hc.sg_gas
 
     @property
     def pseudo_critical(self) -> tuple:
         """Pseudo-critical pressure (Pa) and temperature (K) of the gas (PVT-GAS-5)."""
-        return self.pvt.pseudo_critical
+        return self._hc.pseudo_critical
 
     @property
     def R_s(self) -> float:
         """Specific gas constant of the gas phase (J/(kg K)) (PVT-GAS-6). NOTE: Easily confused with the solution
         gas-oil ratio (Rs)"""
-        return self.pvt.R_s
+        return self._hc.R_s
 
     @property
     def M_g(self) -> float:
         """Gas molecular weight (g/mol = kg/kmol) (PVT-GAS-6)."""
-        return self.pvt.M_g
+        return self._hc.M_g
 
     @property
     def rho_l(self) -> float:  # spec: PVT-MIX-10
@@ -143,31 +147,49 @@ class FluidModel:
 
     def rs(self, p, T):
         """Solution gas-oil ratio at (p, T) (Sm3 gas / Sm3 oil at standard conditions): 0 for dead oil."""
-        return self.pvt.rs(p, T)
+        return self._hc.rs(p, T)
 
     def bo(self, p, T):
         """Oil formation volume factor at (p, T) (dimensionless): 1 for dead oil."""
-        return self.pvt.bo(p, T)
+        return self._hc.bo(p, T)
 
     def reduced_density(self, rho_g):
         """DAK's reduced gas density at gas density rho_g (kg/m3) (PVT-GAS-9)."""
-        return self.pvt.reduced_density(rho_g)
+        return self._hc.reduced_density(rho_g)
 
     def z_factor(self, p, T):
         """Gas compressibility factor at (p, T) (dimensionless)."""
-        return self.pvt.z_factor(p, T)
+        return self._hc.z_factor(p, T)
 
     def gas_density(self, p, T):
         """Gas density at (p, T) (kg/m3)."""
-        return self.pvt.gas_density(p, T)
+        return self._hc.gas_density(p, T)
 
     def gas_law_row(self, p, T, rho_g):
         """The gas law as a row of the discretized system (bar), zero where rho_g is the gas density at (p, T)."""
-        return self.pvt.gas_law_row(p, T, rho_g)
+        return self._hc.gas_law_row(p, T, rho_g)
+
+    def covers(self, p, T) -> bool:
+        """Whether (p, T), floats, lies on the PVT model's table: always, without a table."""
+        return self._hc.covers(p, T)
+
+    @property
+    def table_range(self) -> str:
+        """The range of the PVT model's table, for messages; empty without a table."""
+        return getattr(self._hc, 'grid_range', '')
+
+    def off_table(self, X) -> bool:
+        """
+        Whether any point of a state lies off the PVT model's table (specs/features/018-pvt-tables.md, ruling 3).
+
+        :param X: The state, one row per point in state-vector order (bar, ..., K)
+        """
+        X = np.reshape(X, (-1, 7))
+        return any(not self.covers(float(p), float(T)) for p, T in zip(X[:, 0], X[:, 6]))
 
     def jt_factor(self, T, rho_g):
         """The gas's Joule-Thomson factor J = T (d ln Z / dT)_p at T (K) and gas density rho_g (kg/m3) (PVT-GAS-10)."""
-        return self.pvt.jt_factor(T, rho_g)
+        return self._hc.jt_factor(T, rho_g)
 
     def liquid_fvf(self, p, T):  # spec: PVT-MIX-6
         """
@@ -206,14 +228,14 @@ class FluidModel:
         :param T: Temperature (K), may be CasADi symbolic
         :return: Liquid mixture viscosity (Pa-s)
         """
-        mu_o = self.pvt.oil_viscosity(p, T)
+        mu_o = self._hc.oil_viscosity(p, T)
         mu_w = water_viscosity(T)
         lambda_w = self.wlr / self.liquid_fvf(p, T)  # In-situ water fraction of the liquid (PVT-MIX-6)
         return lambda_w * mu_w + (1 - lambda_w) * mu_o
 
     def gas_viscosity(self, p, T, rho_g):
         """Gas viscosity at (p, T) and gas density rho_g (Pa s) (CasADi-compatible)."""
-        return self.pvt.gas_viscosity(p, T, rho_g)
+        return self._hc.gas_viscosity(p, T, rho_g)
 
     def mixture_viscosity(self, p, T, alpha, rho_g, rho_l):
         """
@@ -246,7 +268,7 @@ class FluidModel:
         """
         if self.surface_tension_model == 'liquid':
             return dead_oil_surface_tension(rho_l, T)  # spec: PVT-MIX-5
-        return self.pvt.oil_surface_tension(p, T)  # spec: PVT-MIX-7
+        return self._hc.oil_surface_tension(p, T)  # spec: PVT-MIX-7
 
     def dissolved_gas(self, p, T, w_o):  # spec: PVT-OIL-13
         """Dissolved gas mass at (p, T) for a given oil mass flow rate w_o (kg/s)."""
@@ -280,7 +302,7 @@ class FluidModel:
         :return: Gas and liquid mass flow rates, (w_g, w_l) (kg/s)
         """
         w_g_res = self.reservoir_gas_rate(w_res)
-        if not self.pvt.dissolves_gas:
+        if not self._hc.dissolves_gas:
             return w_g_res + w_lg, w_res  # spec: INF-5
         w_o = w_res * self.f_o_in_liquid  # Oil mass flow rate
         w_d = ca_min_approx(self.dissolved_gas(p, T, w_o), w_g_res)  # Dissolved gas mass flow rate

@@ -320,12 +320,16 @@ RUST_ADAPTERS = {
 }
 
 # Equations no row of the system uses: the sampler's liquid mixing, conversions between the inputs, and water's
-# formation volume factor; the core has no function for them (specs/features/015-rust-develop-model.md)
+# formation volume factor; the core has no function for them (specs/features/015-rust-develop-model.md). And the
+# PVT table, which the core does not have yet (specs/features/018-pvt-tables.md)
 RUST_NOT_IN_CORE = {
     'PVT-GAS-2': 'a conversion between inputs (R_s and the gas density at standard conditions), in Python only',
     'PVT-MIX-2, PVT-MIX-3, PVT-MIX-4': "the sampler's liquid mixing (SMP-12), in Python only",
     'PVT-WAT-2': 'water is incompressible in every configuration: no row uses its formation volume factor',
     'INF-3': NOT_ON_DEVELOP['INF-3'],
+    **{heading: 'the core has no PVT table yet (feature 018): RustSimulator refuses one'
+       for heading in ('PVT-TAB-2', 'PVT-TAB-2 (one temperature)', 'PVT-TAB-3', 'PVT-TAB-4', 'PVT-TAB-5',
+                       'PVT-TAB-5 (correlations)')},
 }
 
 def rust_vector_params():

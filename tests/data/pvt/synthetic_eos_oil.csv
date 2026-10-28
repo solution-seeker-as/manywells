@@ -1,4 +1,4 @@
-# ManyWells PVT table (specs/features/018-pvt-tables.md, draft)
+# ManyWells PVT table (specs/model/pvt/table.md)
 # name: synthetic_eos_oil
 # source: plans/evidence/pvt_table_eos.py; NeqSim 3.4.0, Peng-Robinson with Peneloux volume correction; a synthetic composition, not a real fluid
 # separation: single stage at 1.01325 bar and 288.15 K

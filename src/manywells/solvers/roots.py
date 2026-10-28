@@ -168,7 +168,8 @@ class RootFinder:
         roots = []
         for x in solutions:
             slope = self.slope(x, params)
-            roots.append(Root(x=x, label=label_of(slope), slope=slope, **self.system.root_outputs(x, params)))
+            roots.append(Root(x=x, label=label_of(slope), slope=slope, off_table=self.system.wp.fluid.off_table(x),
+                              **self.system.root_outputs(x, params)))
         return RootSet.of(roots, search=attempts)
 
     def flow_regimes(self, x) -> tuple:

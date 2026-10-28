@@ -131,7 +131,7 @@ class RustRootFinder:
             slope = normalized_slope(r.slope, x, bc.p_r, bc.p_s, self.wp.geometry.A)
             label = label_of(slope) if np.isfinite(slope) else 'indeterminate'
             roots.append(Root(x=x, label=label, slope=slope, choked=r.choked, flow_regime=tuple(r.flow_regime),
-                              w_res=r.w_res, w_g_res=r.w_g_res))
+                              w_res=r.w_res, w_g_res=r.w_g_res, off_table=self.wp.fluid.off_table(x)))
         unresolved = counts['rejected']
         outcome = (f'{len(roots)} roots' + (f', {rejected} not admissible' if rejected else '')
                    + (f', {unresolved} sign changes of R not accepted' if unresolved else ''))

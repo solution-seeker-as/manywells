@@ -33,6 +33,7 @@ from manywells.pvt.black_oil import BlackOil, BlackOilPVT, live_oil_surface_tens
 from manywells.pvt.dead_oil import DeadOil, dead_oil_viscosity
 from manywells.pvt.fluid import FluidModel
 from manywells.pvt.gas import dak_jt_factor, dak_z_factor, gas_viscosity, sutton_pseudo_critical
+from manywells.pvt.table import PVTTable
 from manywells.pvt.water import water_fvf, water_viscosity
 from manywells.slip import SlipModel, classify_flow_regime
 from manywells.thermal import ThermalModel
@@ -125,6 +126,36 @@ def black_oil(api, sg_gas, p, T):
 def fluid_parameters(rho_o, rho_g_sc, rho_w, gor, wlr, cp_o, cp_w):
     fl = FluidModel(pvt=BlackOil(rho_o=rho_o, rho_g=rho_g_sc), rho_w=rho_w, gor=gor, wlr=wlr, cp_o=cp_o, cp_w=cp_w)
     return fl.f_g, fl.rho_l, fl.cp_l, fl.f_o_in_liquid
+
+
+# pvt/table.md's tables: 3 x 3 nodes with all six columns, R_so below 0 at low pressure and high temperature as a
+# flash gives it (PVT-TAB-6); and its R_so, B_o and Z at 350 K alone. The first nine rows of PVT-TAB-2 are TAB's nodes.
+TAB = PVTTable(p=(50.0, 150.0, 300.0), T=(300.0, 350.0, 400.0), rho_o=850.0, rho_g=0.9, gor=120.0,
+               R_so=((22.0, 15.5, -2.0), (78.0, 66.0, 54.0), (120.0, 120.0, 112.0)),
+               B_o=((1.09, 1.11, 0.99), (1.21, 1.23, 1.24), (1.29, 1.32, 1.33)),
+               Z=((0.90, 0.93, 0.95), (0.78, 0.85, 0.90), (0.85, 0.89, 0.93)),
+               mu_o=((4.0e-3, 2.2e-3, 1.6e-3), (2.4e-3, 1.4e-3, 1.0e-3), (1.9e-3, 1.1e-3, 0.8e-3)),
+               mu_g=((1.2e-5, 1.3e-5, 1.45e-5), (1.6e-5, 1.6e-5, 1.7e-5), (2.5e-5, 2.2e-5, 2.1e-5)),
+               sigma=((0.020, 0.017, 0.014), (0.011, 0.009, 0.007), (0.006, 0.005, 0.004)))
+TAB_350 = PVTTable(p=TAB.p, T=(350.0,), rho_o=TAB.rho_o, rho_g=TAB.rho_g, gor=TAB.gor,
+                   **{c: [row[1] for row in getattr(TAB, c)] for c in ('R_so', 'B_o', 'Z')})
+TAB_NODES = tuple((p, T) for p in TAB.p for T in TAB.T)
+# Between the nodes, on a grid line, and clamped: below and above the pressures, below the temperatures, a corner
+TAB_POINTS = ((100.0, 325.0), (225.0, 380.0), (60.0, 390.0), (150.0, 375.0), (20.0, 325.0), (450.0, 360.0),
+              (225.0, 250.0), (10.0, 420.0))
+
+
+def table_columns(table, p, T):
+    return tuple(table.interpolate(c, p, T) for c in table.columns)
+
+
+def table_properties(table, p, T, rho_g):
+    return table.oil_viscosity(p, T), table.gas_viscosity(p, T, rho_g), table.oil_surface_tension(p, T)
+
+
+def table_fluid(gor, wlr, p, T, w_res, w_lg):
+    fl = FluidModel(pvt=TAB, gor=gor, wlr=wlr)
+    return (*fl.phase_rates(p, T, w_res, w_lg), fl.liquid_density(p, T))
 
 
 # (v_g, v_l, alpha, rho_g, rho_l, sigma): bubbly, slug, annular, and near the bubbly-slug threshold
@@ -223,6 +254,28 @@ TABLES = [
           ((35.0, 0.65, 150.0, 0.0, 100.0, 350.0, 20.0, 0.0), (35.0, 0.65, 150.0, 0.3, 250.0, 380.0, 20.0, 2.0),
            (35.0, 0.65, 20.0, 0.0, 250.0, 380.0, 20.0, 1.0), (25.0, 0.8, 300.0, 0.5, 30.0, 320.0, 5.0, 0.0)),
           lambda p, T, w_res, w_lg, **kw: fluid(**kw).phase_rates(p, T, w_res, w_lg)),
+    # pvt/table.md
+    Table('pvt/table.md', 'PVT-TAB-2', ('p', 'T'), TAB.columns, TAB_NODES + TAB_POINTS,
+          lambda p, T: table_columns(TAB, p, T)),
+    Table('pvt/table.md', 'PVT-TAB-2 (one temperature)', ('p', 'T'), TAB_350.columns,
+          ((50.0, 350.0), (150.0, 350.0), (300.0, 350.0), (100.0, 350.0), (100.0, 300.0), (225.0, 420.0),
+           (20.0, 350.0), (450.0, 280.0)),
+          lambda p, T: table_columns(TAB_350, p, T)),
+    Table('pvt/table.md', 'PVT-TAB-3', ('gor', 'wlr', 'p', 'T', 'w_res', 'w_lg'), ('w_g', 'w_l', 'rho_l'),
+          ((120.0, 0.0, 100.0, 325.0, 20.0, 0.0), (120.0, 0.3, 225.0, 380.0, 20.0, 2.0),
+           (100.0, 0.0, 300.0, 300.0, 20.0, 0.0), (120.0, 0.0, 50.0, 400.0, 20.0, 0.0),
+           (150.0, 0.2, 20.0, 450.0, 10.0, 1.0)),
+          table_fluid),
+    Table('pvt/table.md', 'PVT-TAB-4', ('p', 'T', 'rho_g'), ('Z', 'row'),
+          ((100.0, 325.0, 80.0), (225.0, 380.0, 150.0), (50.0, 400.0, 12.0), (450.0, 250.0, 300.0),
+           (300.0, 300.0, 0.0)),
+          lambda p, T, rho_g: (FluidModel(pvt=TAB).z_factor(p, T), FluidModel(pvt=TAB).gas_law_row(p, T, rho_g))),
+    Table('pvt/table.md', 'PVT-TAB-5', ('p', 'T', 'rho_g'), ('mu_o', 'mu_g', 'sigma'),
+          ((100.0, 325.0, 80.0), (225.0, 380.0, 150.0), (450.0, 250.0, 300.0)),
+          lambda p, T, rho_g: table_properties(TAB, p, T, rho_g)),
+    Table('pvt/table.md', 'PVT-TAB-5 (correlations)', ('p', 'T', 'rho_g'), ('mu_o', 'mu_g', 'sigma'),
+          ((100.0, 325.0, 80.0), (225.0, 380.0, 150.0), (300.0, 350.0, 200.0), (20.0, 300.0, 10.0)),
+          lambda p, T, rho_g: table_properties(TAB_350, p, T, rho_g)),
     # pvt/water.md
     Table('pvt/water.md', 'PVT-WAT-2', ('p_Pa', 'T'), ('B_w',),
           ((P_REF, 288.15), (200e5, 350.0)), lambda p_Pa, T: water_fvf(p_Pa, T)),

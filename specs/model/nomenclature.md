@@ -83,8 +83,10 @@ Parameters and quantities of `develop`'s options, in addition (the dataclass fie
 | $\Phi_f$, $\Phi_g$, $\Phi_{JT}$ | – | K/m | frictional heating, gravity and Joule–Thomson terms of the temperature gradient |
 | $J$ | `jt_factor` | – | the gas's Joule–Thomson factor $T(\partial \ln Z/\partial T)_ p$; $\mu_{JT} = J/(\rho_g c_{pg})$ (PVT-GAS-10) |
 | $\rho_r$ | `reduced_density` | – | the gas's reduced density of the Dranchuk–Abou-Kassem equation of state (PVT-GAS-9) |
-| – | `pvt` | – | the fluid's hydrocarbon PVT model, a `PVTModel`: `DeadOil` (PVT-OIL-1) or `BlackOil` (PVT-OIL-4) |
-| – | `gas_law` | – | the PVT model's gas law: `'ideal'` (PVT-GAS-1), `'dak'` (PVT-GAS-11) or `'papay'` (PVT-GAS-3, PVT-GAS-4) |
+| – | `pvt` | – | the fluid's hydrocarbon PVT model, a `PVTModel`: `DeadOil` (PVT-OIL-1), `BlackOil` (PVT-OIL-4), `PVTTable` (PVT-TAB-1) or `PVTTableSet`, tables at several GORs (PVT-TAB-7) |
+| – | `gas_law` | – | the PVT model's gas law: `'ideal'` (PVT-GAS-1), `'dak'` (PVT-GAS-11), `'papay'` (PVT-GAS-3, PVT-GAS-4) or `'table'` (PVT-TAB-4) |
+| $\hat y$ | `interpolate` | – | a column $y$ of a PVT table at $(p, T)$, bilinear on its grid (PVT-TAB-2) |
+| $X$, $\rho_L$, $\rho_V$ | `X`, `rho_L`, `rho_V` | –, kg/m³ | a flash's vapour mass fraction of the hydrocarbon stream, and its liquid's and vapour's densities (PVT-TAB-6) |
 
 Boundary conditions and controls (v1.0.0's `BoundaryConditions`):
 
