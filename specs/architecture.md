@@ -76,8 +76,9 @@ Every function of the state accepts CasADi symbols as well as floats in the CasA
 | | `reservoir_gas_rate(w_res)` | kg/s | $w_{g,\text{res}}$, kg/s | INF-4 |
 | | `phase_rates(p, T, w_res, w_lg)` | bar, K, kg/s, kg/s | $(w_g, w_l)$, kg/s | no mass transfer (BAL-3): constants, exactly · dissolved gas |
 | | `cp_g`, `cp_l` | – | J/(kg K) | constants |
-| `SlipModel` | `identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl)` | SI | $(C_0, v_\infty)$ | three regimes (SLIP-1 to SLIP-8) · inclination terms; four regimes (after the plan) |
-| | `flow_regime(...)` | floats | regime name | |
+| `SlipModel` | `identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl)` | SI | $(C_0, v_\infty)$ | `regime_model`: five regimes after Hasan et al. (SLIP-12 to SLIP-16, default) · v1.0.0's fitted three (SLIP-1 to SLIP-8), with the inclination terms |
+| | `classify(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl)` | SI | the probabilities of `regimes` | |
+| | `flow_regime(...)`, `label(probs)` | floats | a regime of `regimes` | |
 | `FrictionModel` | `pressure_gradient(s, fluid, D)` | state, fluid, m | $F$, Pa/m (FRIC-1) | fixed $f_D$ (FRIC-2) · roughness with Chen or Haaland |
 | `ThermalModel` | `ambient_temperature(tvd_frac, T_r, T_s)` | –, K, K | K | linear in depth (THM-2; implemented as THM-4) |
 | | `inflow_temperature(w_res, w_lg, T_r, T_lg, fluid)` | kg/s, kg/s, K, K, fluid | K | $T_r$ (THM-3) · lift-gas mixing |
@@ -108,7 +109,7 @@ Contract changes against `develop` today, all in Step 7:
 | `bottom_rows` | `ca.Function(x_0, params) -> r_0`: the six rows of point 0; the march fixes $p_0$ and solves them for the other six unknowns |
 | `point_rows` | `ca.Function(x_i, x_prev, w_res, params, delta_md, cos_incl, tvd_frac) -> r_i`: the seven rows of point $i > 0$ without CHK-1, one function for every cell, used by the march |
 | `bounds(bc)` | `(lbx, ubx)`: the admissible box of SOL-1 and the solver's temperature bounds |
-| `regime_probabilities` | `ca.Function(x) -> P`: the flow-regime probabilities at each point, one function mapped over the points (`plans/improvements.md` §4.4), for the labels of SLIP-8 (Step 7: split from `outputs`, as it needs no parameters) |
+| `regime_probabilities` | `ca.Function(x) -> P`: the flow-regime probabilities at each point, one function mapped over the points (`plans/improvements.md` §4.4), for the labels of SLIP-8 or SLIP-16 (Step 7: split from `outputs`, as it needs no parameters) |
 | `outputs` | `ca.Function(x, params) -> ...`: the rest of what a `Root` carries besides its state: CHOKED (CHK-12) and the reservoir phase rates |
 | `reservoir_rate`, `bottom_guess` | `ca.Function(p_0, params)`: $w_\text{res}$, and a start for point 0's rows at $p_0$, for the march (Step 7) |
 
@@ -173,7 +174,7 @@ A new option is a contributor's change, not a runtime plug-in (decision 1): new 
 | Well trajectory | a `WellGeometry` factory, such as from a directional survey file or an L-shaped well. Any (MD, TVD) survey already works, because the rows read only `delta_md`, `cos_incl` and `tvd_frac` | `geometry` |
 | Thermal | a `ThermalModel` option: another heat-loss law, a term that needs the cell's pressure gradient (`dp_dmd`), or another ambient profile (such as a seabed temperature) through `ambient_temperature`. A new energy term must keep the Rust core's temperature bracket valid (design point 4) | `thermal` |
 | Fluid | a `PVTModel` class, the hydrocarbon PVT with its gas law (feature 018), or a mass-transfer law behind `FluidModel.phase_rates`. A user's `PVTModel` subclass runs on the CasADi backend only | `pvt/` |
-| Slip | a slip law or flow-regime classifier, such as the four-regime model | `slip` |
+| Slip | a slip law or flow-regime classifier, such as the five-regime model (`specs/features/019-five-flow-regimes.md`) | `slip` |
 | Inflow, choke | an `InflowModel` or `ChokeModel` class, or a choke profile | `inflow`, `choke` |
 | Integrator | a DISC option | `discretization` |
 | Solver | an adapter with the `solve` contract | `solvers/` |
@@ -227,7 +228,7 @@ Every planned v2 feature, from `specs/goals.md` and the plan's "After this plan"
 | Surface tension from the fluid model, live-oil correction | `pvt/` (`fluid.py`) |
 | Deviated and L-shaped wells | `geometry` |
 | Inclination in the slip model | `slip` |
-| Four-regime flow-regime model | `slip` |
+| Five-regime flow-regime model (019) | `slip` |
 | Friction from roughness (Chen, Haaland); the Step 10 correlation | `friction` |
 | Frictional heating, gravity term in the energy balance | `thermal` |
 | Lift-gas temperature | `thermal` |

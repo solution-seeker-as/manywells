@@ -51,7 +51,8 @@ ROOT_ROW = 1e-8       # a core-only root zeroes every CasADi row but the choke r
 ROOT_CHOKE_REL = 1e-6  # and the choke row to this fraction of the wellhead rate, or to what p_0's resolution allows,
 ROOT_P0_ULPS = 8       # this many ulp of p_r times |dR/dp_0|, if more (steep at the trickle roots next to p_r)
 SEED = 20261002       # the comparison set's seed (SMP-31)
-FEATURES = ('001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011', '016', '018')
+FEATURES = ('001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011', '016', '018',
+            '019')
 
 
 def features(wp) -> frozenset:
@@ -61,8 +62,12 @@ def features(wp) -> frozenset:
         out.add('001')
     if not np.allclose(geo.cos_incl, 1.0, rtol=0, atol=1e-12):
         out |= {'001', '002'}
-    if wp.slip != SlipModel():
+    slip, fitted = wp.slip, SlipModel(regime_model='fitted')
+    if (slip.C_0_annular, slip.C_0_slug, slip.C_0_bubbly, slip.v_inf_annular) != \
+            (fitted.C_0_annular, fitted.C_0_slug, fitted.C_0_bubbly, fitted.v_inf_annular):
         out.add('002')
+    if slip.regime_model == 'hasan':
+        out.add('019')
     if fluid.surface_tension_model != 'liquid':
         out.add('003')
     if type(wp.friction) is RoughnessFriction:
@@ -213,8 +218,9 @@ OVERLAYS = {
     'non-uniform grid': non_uniform,
     'deviated': deviated,
     'L-shaped': l_shaped,
-    'slip constants': lambda wp, bc: (replace(wp, slip=SlipModel(C_0_annular=1.02, C_0_slug=1.15, C_0_bubbly=1.25,
-                                                                 v_inf_annular=0.02)), bc),
+    'slip constants': lambda wp, bc: (replace(wp, slip=SlipModel(regime_model='fitted', C_0_annular=1.02, C_0_slug=1.15,
+                                                                 C_0_bubbly=1.25, v_inf_annular=0.02)), bc),
+    'five regimes': lambda wp, bc: (replace(wp, slip=SlipModel(regime_model='hasan')), bc),
     'water': fluid(wlr=0.3),
     'frictional heating': thermal(frictional_heating=True),
     'gravity term': thermal(gravity_term=True),
@@ -242,6 +248,7 @@ OVERLAYS = {
     'no gravity term': thermal(gravity_term=False),
     'no lift-gas mixing': thermal(lift_gas_mixing=False),
     'no joule-thomson': thermal(joule_thomson=False),
+    'fitted': lambda wp, bc: (replace(wp, slip=SlipModel(regime_model='fitted')), bc),
     'pvt table': pvt_table(),
     'pvt table, one temperature': pvt_table(one_temperature=True),
 }
@@ -271,10 +278,10 @@ BASES = {
 
 V1_OVERLAYS = ('non-uniform grid', 'deviated', 'L-shaped', 'slip constants', 'water', 'frictional heating',
                'gravity term', 'energy terms', 'real gas', 'papay', 'joule-thomson', 'black oil', 'bubble point',
-               'oil surface tension', 'chen', 'haaland', 'lift-gas temperature', 'fixed rate')
+               'oil surface tension', 'chen', 'haaland', 'lift-gas temperature', 'fixed rate', 'five regimes')
 DEVELOP_OVERLAYS = ('dead oil', 'ideal gas', 'liquid surface tension', 'fixed f_D', 'haaland', 'no frictional heating',
-                    'no gravity term', 'no lift-gas mixing', 'no joule-thomson', 'papay', 'deviated', 'L-shaped',
-                    'non-uniform grid',
+                    'no gravity term', 'no lift-gas mixing', 'no joule-thomson', 'fitted', 'papay', 'deviated',
+                    'L-shaped', 'non-uniform grid',
                     'slip constants', 'water', 'bubble point', 'lift-gas temperature', 'fixed rate', 'vogel', 'simpson',
                     'pvt table', 'pvt table, one temperature')
 
@@ -303,6 +310,7 @@ def matrix() -> list:
     out += [Configuration('develop')] + [Configuration('develop', (o,)) for o in DEVELOP_OVERLAYS]
     out += [Configuration('develop', ('deviated', 'fixed rate')), Configuration('develop', ('L-shaped', 'haaland'))]
     out += [Configuration('W1', ('papay', 'joule-thomson')), Configuration('W2', ('energy terms', 'joule-thomson'))]
+    out += [Configuration('W1', ('deviated', 'five regimes')), Configuration('W2', ('L-shaped', 'five regimes'))]
     return out
 
 
@@ -365,10 +373,10 @@ def row_difference(ids, rust, casadi) -> tuple:
 COMPARISON = {
     V1: ('', 'deviated', 'L-shaped', 'real gas', 'papay', 'joule-thomson', 'black oil', 'bubble point',
          'oil surface tension', 'chen', 'haaland', 'frictional heating', 'gravity term', 'lift-gas temperature',
-         'fixed rate'),
+         'fixed rate', 'five regimes'),
     DEVELOP: ('', 'dead oil', 'ideal gas', 'papay', 'liquid surface tension', 'haaland', 'fixed f_D',
               'no frictional heating', 'no gravity term', 'no joule-thomson', 'lift-gas temperature', 'fixed rate',
-              'productivity index', 'bernoulli', 'bubble point', 'pvt table', 'pvt table, one temperature'),
+              'productivity index', 'bernoulli', 'bubble point', 'fitted', 'pvt table', 'pvt table, one temperature'),
 }
 
 

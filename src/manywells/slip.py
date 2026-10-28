@@ -17,6 +17,12 @@ from manywells.ca_functions import ca_softmax
 from manywells.units import STD_GRAVITY
 
 
+REGIME_MODELS = ('hasan', 'fitted')
+FITTED_REGIMES = ('annular', 'slug-churn', 'bubbly')                          # SLIP-8
+HASAN_REGIMES = ('annular', 'churn', 'dispersed-bubbly', 'slug', 'bubbly')    # SLIP-16
+SQRT_GUARD = 1e-6                        # delta of SLIP-12: bounds the derivative of sqrt(lambda_g) at no free gas
+
+
 def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl):  # spec: SLIP-6, SLIP-7
     """
     Classify flow regime (annular, slug/churn, or bubbly) based on the following conditions:
@@ -106,24 +112,103 @@ def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl):  # spe
     return p
 
 
+def hasan_rule_quantities(v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl, f_ms, lambda_floor):  # spec: SLIP-12
+    """
+    The quantities the rules of the five-regime classifier compare, after Hasan, Kabir & Sayarpour (2010).
+
+    :param v_gs: Superficial gas velocity (m/s)
+    :param v_ls: Superficial liquid velocity (m/s)
+    :param rho_g: Gas density (kg/m³)
+    :param rho_l: Liquid density (kg/m³)
+    :param sigma: Gas-liquid surface tension (J/m²)
+    :param D: Inner diameter of pipe (m)
+    :param cos_incl: Cosine of the angle to the vertical
+    :param f_ms: Friction factor in (A-17)
+    :param lambda_floor: Floor of the no-slip gas fraction, in units of the bubble rise velocity
+    :return: lambda_g (no-slip gas fraction, floored), alpha_b (void fraction with bubbly flow's parameters),
+        alpha_t (bubbly-slug threshold, A-14), v_gc (gas velocity for annular flow, A-19, m/s) and v_ms (mixture
+        velocity of dispersed bubbly flow, A-17, m/s)
+    """
+    v_m = v_gs + v_ls
+    v_inf_b = SlipModel.harmathy_rise_velocity(rho_g, rho_l, sigma)
+    lambda_g = v_gs / (v_m + lambda_floor * v_inf_b)
+    alpha_b = v_gs / (1.2 * v_m + v_inf_b)
+    alpha_t = cos_incl / (2.8 + 1.2 * cos_incl)
+    v_gc = 3.1 * ca.constpow(STD_GRAVITY * sigma * (rho_l - rho_g) / rho_g ** 2, 1 / 4)
+    k = (2 * ca.constpow(f_ms / (2 * D), 0.4) * ca.constpow(rho_l / sigma, 0.6)
+         * ca.sqrt(0.4 * sigma / (STD_GRAVITY * (rho_l - rho_g))))
+    v_ms = ca.constpow((0.725 + 4.15 * ca.sqrt(lambda_g + SQRT_GUARD)) / k, 1 / 1.2)
+    return lambda_g, alpha_b, alpha_t, v_gc, v_ms
+
+
+def hasan_probabilities(v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl, f_ms, transition_width,
+                        lambda_floor):  # spec: SLIP-13, SLIP-14
+    """
+    Probabilities of the five regimes, [p_annular, p_churn, p_dispersed, p_slug, p_bubbly], from the rules of Hasan,
+    Kabir & Sayarpour's (2010) pattern-transition criteria as a soft decision tree. Each rule's soft truth is
+    (1 + tanh(z / 2w)) / 2 of its margin z, positive where the rule holds:
+
+        A1: v_gs > v_gc (A-19)                      z = v_gs / v_gc - 1
+        A2: alpha > 0.7 with annular parameters     z = lambda_g - 0.7
+        M:  v_m > v_ms (A-17)                       z = v_m / v_ms - 1
+        G:  v_gs > 1.08 v_ls (A-18)                 z = lambda_g - 1.08 / 2.08
+        S:  v_gs > v_gb (A-14)                      z = alpha_b - alpha_t
+
+    and the tree is: annular if A1 and A2; else churn if M and G; else dispersed bubbly if M; else slug if S; else
+    bubbly. Nothing depends on the void fraction but through v_gs and v_ls. Arguments as hasan_rule_quantities, and
+    transition_width is w (dimensionless).
+    """
+    lambda_g, alpha_b, alpha_t, v_gc, v_ms = hasan_rule_quantities(v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl,
+                                                                   f_ms, lambda_floor)
+    margins = (v_gs / v_gc - 1, lambda_g - 0.7, (v_gs + v_ls) / v_ms - 1, lambda_g - 1.08 / 2.08, alpha_b - alpha_t)
+    s_A1, s_A2, s_M, s_G, s_S = (0.5 * (1 + ca.tanh(z / (2 * transition_width))) for z in margins)
+    a = s_A1 * s_A2
+    return ca.vertcat(a, (1 - a) * s_M * s_G, (1 - a) * s_M * (1 - s_G), (1 - a) * (1 - s_M) * s_S,
+                      (1 - a) * (1 - s_M) * (1 - s_S))
+
+
 @dataclass(frozen=True)
 class SlipModel:
     """
     Slip model:
         v_g = C_0 * v_m + v_inf
-    where the parameters C_0 and v_inf are determined based on the flow regime (bubbly, slug / churn, or annular flow).
+    where the parameters C_0 and v_inf are the probability-weighted values of the flow regimes, after the paper
+    "Simplified two-phase flow modeling in wellbores" by Hasan, Kabir & Sayarpour (2010).
 
-    Inspired by the slip model in the paper "Simplified two-phase flow modeling in wellbores"
-    by Hasan, Kabir & Sayarpour (2010).
+    regime_model selects the classifier:
+        'hasan'   five regimes (annular, churn, dispersed bubbly, slug, bubbly) from the rules of Hasan et al.'s
+                  hierarchy (SLIP-12 to SLIP-16); develop's default
+        'fitted'  three regimes (annular, slug/churn, bubbly) from v1.0.0's fitted classifier (SLIP-2 to SLIP-8)
     """
 
-    # Profile parameter for different flow regimes
+    regime_model: str = 'hasan'
+
+    # The fitted classifier: profile parameter for each regime, and the annular drift velocity
     C_0_annular: float = 1.0
     C_0_slug: float = 1.175
     C_0_bubbly: float = 1.2
-
-    # Drift velocity
     v_inf_annular: float = 0.0
+
+    # The five-regime classifier: friction factor in (A-17), logistic width of the rules, floor of the no-slip gas
+    # fraction (SLIP-12, SLIP-13)
+    f_ms: float = 0.02
+    transition_width: float = 0.02
+    lambda_floor: float = 0.1
+
+    def __post_init__(self):
+        if self.regime_model not in REGIME_MODELS:
+            raise ValueError(f'regime_model {self.regime_model!r} is not one of {REGIME_MODELS}')
+        if not self.f_ms > 0:
+            raise ValueError('f_ms must be positive')
+        if not self.transition_width > 0:
+            raise ValueError('transition_width must be positive')
+        if not self.lambda_floor >= 0:
+            raise ValueError('lambda_floor must be non-negative')
+
+    @property
+    def regimes(self) -> tuple:
+        """The regimes of the classifier, in the order of classify()'s probabilities."""
+        return HASAN_REGIMES if self.regime_model == 'hasan' else FITTED_REGIMES
 
     @staticmethod
     def harmathy_rise_velocity(rho_g, rho_l, sigma):  # spec: SLIP-4
@@ -148,11 +233,15 @@ class SlipModel:
         """
         return 0.35 * ca.sqrt(STD_GRAVITY * D * (1 - rho_g / rho_l))
 
-    def classify(self, v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl):
+    def classify(self, v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl):
         """
-        Flow-regime probabilities [p_annular, p_slug, p_bubbly] of the classifier (classify_flow_regime).
+        Flow-regime probabilities, in the order of self.regimes: [p_annular, p_slug, p_bubbly] of the fitted
+        classifier (classify_flow_regime, which does not use D), or the five of hasan_probabilities.
         """
-        return classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl)
+        if self.regime_model == 'fitted':
+            return classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl)
+        return hasan_probabilities(alpha * v_g, (1 - alpha) * v_l, rho_g, rho_l, sigma, D, cos_incl, self.f_ms,
+                                   self.transition_width, self.lambda_floor)
 
     def identify_parameters(self, v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl):
         """
@@ -169,16 +258,9 @@ class SlipModel:
         :return: C_0, v_inf
         """
 
-        probs = self.classify(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl)
-        p_annular = probs[0]
-        p_slug = probs[1]
-        p_bubbly = probs[2]
+        probs = self.classify(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl)
 
-        # Set profile parameter
-        C_0 = p_annular * self.C_0_annular + p_slug * self.C_0_slug + p_bubbly * self.C_0_bubbly  # spec: SLIP-2
-
-        # Set drift velocity
-        v_inf_annular = self.v_inf_annular
+        # Rise velocities
         v_inf_slug = self.taylor_rise_velocity(rho_g, rho_l, D)
         v_inf_bubbly = self.harmathy_rise_velocity(rho_g, rho_l, sigma)
 
@@ -188,7 +270,23 @@ class SlipModel:
         deviation_factor = ca.sqrt(cos_incl) * (1 + sin_incl) ** 1.2  # spec: SLIP-10
         v_inf_slug *= deviation_factor
 
-        v_inf = p_annular * v_inf_annular + p_slug * v_inf_slug + p_bubbly * v_inf_bubbly  # spec: SLIP-3
+        if self.regime_model == 'hasan':
+            # Table 1 of Hasan et al. (2010) for upward cocurrent flow, weighted by the five probabilities; bubbly and
+            # dispersed bubbly flow share their values
+            p_annular, p_churn, p_dispersed, p_slug, p_bubbly = (probs[k] for k in range(5))
+            C_0 = 1.0 * p_annular + 1.15 * p_churn + 1.2 * (p_dispersed + p_slug + p_bubbly)  # spec: SLIP-15
+            v_inf = v_inf_bubbly * (p_bubbly + p_dispersed) + v_inf_slug * (p_slug + p_churn)  # spec: SLIP-15
+            return C_0, v_inf
+
+        p_annular = probs[0]
+        p_slug = probs[1]
+        p_bubbly = probs[2]
+
+        # Set profile parameter
+        C_0 = p_annular * self.C_0_annular + p_slug * self.C_0_slug + p_bubbly * self.C_0_bubbly  # spec: SLIP-2
+
+        # Set drift velocity
+        v_inf = p_annular * self.v_inf_annular + p_slug * v_inf_slug + p_bubbly * v_inf_bubbly  # spec: SLIP-3
 
         return C_0, v_inf
 
@@ -211,7 +309,11 @@ class SlipModel:
         eq = v_g - (C_0 * v_m + v_inf)
         return eq
 
-    def flow_regime(self, v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl) -> str:
+    def label(self, probs) -> str:
+        """The label of the most probable regime, from classify()'s probabilities as floats (SLIP-8 or SLIP-16)."""
+        return hasan_regime_label(probs) if self.regime_model == 'hasan' else regime_label(probs)
+
+    def flow_regime(self, v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl) -> str:
         """
         Return textual description of classified (most probable) flow regime
 
@@ -221,11 +323,12 @@ class SlipModel:
         :param rho_g: Gas density (kg/m³)
         :param rho_l: Liquid density (kg/m³)
         :param sigma: Oil-gas surface tension (J/m²)
+        :param D: Inner diameter of pipe (m)
         :param cos_incl: Cosine of the angle to the vertical (dimensionless)
-        :return: Textual description of classified flow regime (annular, slug-churn, or bubbly)
+        :return: Textual description of classified flow regime, one of self.regimes
         """
-        probs = self.classify(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl)
-        return regime_label(ca.DM(probs).full().flatten().tolist())
+        probs = self.classify(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl)
+        return self.label(ca.DM(probs).full().flatten().tolist())
 
 
 def regime_label(probs) -> str:  # spec: SLIP-8
@@ -242,6 +345,21 @@ def regime_label(probs) -> str:  # spec: SLIP-8
         return 'slug-churn'
     else:
         return 'bubbly'
+
+
+def hasan_regime_label(probs) -> str:  # spec: SLIP-16
+    """
+    The most probable of the five regimes; a tie goes to the regime later in HASAN_REGIMES
+
+    :param probs: Probabilities [p_annular, p_churn, p_dispersed, p_slug, p_bubbly] (floats), as from
+        hasan_probabilities
+    :return: 'annular', 'churn', 'dispersed-bubbly', 'slug' or 'bubbly'
+    """
+    best = 0
+    for k in range(1, len(HASAN_REGIMES)):
+        if probs[k] >= probs[best]:
+            best = k
+    return HASAN_REGIMES[best]
 
 
 if __name__ == '__main__':

@@ -30,7 +30,7 @@ class Root:
     label: str                   # One of LABELS (SOL-3)
     slope: float                 # dR/dp_0 normalized by (p_r - p_s) / w_m; positive is unstable
     choked: bool                 # CHK-12, at the root
-    flow_regime: tuple           # Regime label at each point (SLIP-8), bottomhole first
+    flow_regime: tuple           # Regime label at each point (SLIP-8 or SLIP-16), bottomhole first
     w_res: float                 # Reservoir liquid mass rate (kg/s)
     w_g_res: float               # Reservoir gas mass rate (kg/s), without the lift gas
     off_table: bool = False      # Whether a point lies off the fluid's PVT table (specs/model/pvt/table.md)

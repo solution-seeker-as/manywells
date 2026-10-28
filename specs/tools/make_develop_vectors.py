@@ -35,7 +35,7 @@ from manywells.pvt.fluid import FluidModel
 from manywells.pvt.gas import dak_jt_factor, dak_z_factor, gas_viscosity, sutton_pseudo_critical
 from manywells.pvt.table import PVTTable
 from manywells.pvt.water import water_fvf, water_viscosity
-from manywells.slip import SlipModel, classify_flow_regime
+from manywells.slip import SlipModel, classify_flow_regime, hasan_probabilities, hasan_rule_quantities
 from manywells.thermal import ThermalModel
 from manywells.units import CF_BAR, CF_RS, P_REF, T_REF
 
@@ -61,7 +61,7 @@ class Table:
         for case in self.cases:
             kwargs = dict(zip(self.inputs, case))
             out = self.fn(**kwargs)
-            yield kwargs, tuple(num(v) for v in (out if isinstance(out, tuple) else (out,)))
+            yield kwargs, tuple(v if isinstance(v, str) else num(v) for v in (out if isinstance(out, tuple) else (out,)))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -162,6 +162,18 @@ def table_fluid(gor, wlr, p, T, w_res, w_lg):
 SLIP_STATES = ((1.2, 1.0, 0.15, 60.0, 780.0, 0.022), (6.0, 2.0, 0.4, 80.0, 800.0, 0.02),
                (25.0, 3.0, 0.85, 40.0, 820.0, 0.018), (3.0, 1.5, 0.27, 100.0, 750.0, 0.025))
 
+# (v_gs, v_ls, rho_g, rho_l, sigma, D): bubbly, slug, dispersed bubbly, churn and annular flow in a vertical cell, and
+# a state near the annular boundary (lambda_g = 0.71)
+HASAN_STATES = ((0.05, 1.0, 80.0, 780.0, 0.018, 0.127), (0.6, 0.5, 80.0, 780.0, 0.018, 0.127),
+                (1.0, 4.0, 15.0, 820.0, 0.025, 0.1), (4.0, 3.0, 80.0, 780.0, 0.018, 0.127),
+                (10.0, 0.3, 40.0, 820.0, 0.02, 0.15), (2.45, 1.0, 80.0, 780.0, 0.018, 0.127))
+HASAN = SlipModel()
+
+
+def hasan_slip(**kw):
+    """C_0, v_inf and the label of develop's default slip model, the five regimes."""
+    return tuple(HASAN.identify_parameters(**kw)) + (HASAN.flow_regime(**kw),)
+
 TABLES = [
     # thermal.md
     Table('thermal.md', 'THM-4', ('tvd_frac', 'T_r', 'T_s'), ('T_a',),
@@ -191,11 +203,24 @@ TABLES = [
     Table('slip.md', 'SLIP-10, SLIP-11', ('v_g', 'v_l', 'alpha', 'rho_g', 'rho_l', 'sigma', 'D', 'cos_incl'),
           ('C_0', 'v_inf'),
           tuple(s + (0.1524, c) for s in SLIP_STATES for c in (1.0, 0.7, 0.0)),
-          lambda **kw: SlipModel().identify_parameters(**kw)),
+          lambda **kw: SlipModel(regime_model='fitted').identify_parameters(**kw)),
     Table('slip.md', 'SLIP-11 (classifier)', ('v_g', 'v_l', 'alpha', 'rho_g', 'rho_l', 'sigma', 'cos_incl'),
           ('p_annular', 'p_slug', 'p_bubbly'),
           tuple(s + (c,) for s in SLIP_STATES for c in (0.7, 0.2)),
           lambda **kw: tuple(np.asarray(ca.DM(classify_flow_regime(**kw))).ravel())),
+    Table('slip.md', 'SLIP-12', ('v_gs', 'v_ls', 'rho_g', 'rho_l', 'sigma', 'D', 'cos_incl'),
+          ('lambda_g', 'alpha_b', 'alpha_t', 'v_gc', 'v_ms'),
+          tuple(s + (c,) for s in HASAN_STATES for c in (1.0, 0.5, 0.0)),
+          lambda **kw: hasan_rule_quantities(**kw, f_ms=HASAN.f_ms, lambda_floor=HASAN.lambda_floor)),
+    Table('slip.md', 'SLIP-13, SLIP-14', ('v_gs', 'v_ls', 'rho_g', 'rho_l', 'sigma', 'D', 'cos_incl'),
+          ('p_annular', 'p_churn', 'p_dispersed', 'p_slug', 'p_bubbly'),
+          tuple(s + (c,) for s in HASAN_STATES for c in (1.0, 0.5, 0.0)),
+          lambda **kw: tuple(np.asarray(ca.DM(hasan_probabilities(
+              **kw, f_ms=HASAN.f_ms, transition_width=HASAN.transition_width, lambda_floor=HASAN.lambda_floor))).ravel())),
+    Table('slip.md', 'SLIP-15, SLIP-16', ('v_g', 'v_l', 'alpha', 'rho_g', 'rho_l', 'sigma', 'D', 'cos_incl'),
+          ('C_0', 'v_inf', 'regime'),
+          tuple((s[0] / a, s[1] / (1 - a), a) + s[2:] + (c,) for s in HASAN_STATES for a in (0.2, 0.5) for c in (1.0, 0.0)),
+          hasan_slip),
     # friction.md
     Table('friction.md', 'FRIC-3', ('p', 'T', 'alpha', 'v_g', 'v_l', 'rho_g', 'rho_l', 'D', 'roughness'),
           ('f_D', 'F'),
@@ -305,7 +330,7 @@ def markdown(table):
     lines = [f'### {table.heading}', '', '| ' + ' | '.join(cols) + ' |', '|' + '---|' * len(cols)]
     for kwargs, out in table.rows():
         lines.append('| ' + ' | '.join(repr(float(kwargs[k])) for k in table.inputs) + ' | '
-                     + ' | '.join(repr(v) for v in out) + ' |')
+                     + ' | '.join(v if isinstance(v, str) else repr(v) for v in out) + ' |')
     return '\n'.join(lines)
 
 

@@ -19,6 +19,7 @@ from manywells.pvt import density_from_api, gas_density_from_sg
 from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.dead_oil import DeadOil
 from manywells.pvt.fluid import FluidModel
+from manywells.slip import SlipModel
 from manywells.solution import Root, RootSet
 
 
@@ -250,4 +251,4 @@ def test_simulator_solution_as_df_shape():
     for name in sim.variable_names:
         assert name in df.columns
     assert len(df) == sim.n_cells + 1
-    assert set(df['flow-regime']) <= {'annular', 'slug-churn', 'bubbly'}
+    assert set(df['flow-regime']) <= set(SlipModel().regimes)

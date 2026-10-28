@@ -23,7 +23,7 @@ The plan ends when new equations are easy to add and test:
 - The Rust core implements `develop`'s model, checked against the CasADi backend (plan, Step 9).
 - One new equation has gone through the whole loop, in both backends (plan, Step 10).
 
-The new flow-regime model comes after the plan.
+The new flow-regime model comes after the plan; it is `specs/features/019-five-flow-regimes.md`.
 
 ## Direction for v2
 
@@ -34,7 +34,7 @@ The new flow-regime model comes after the plan.
   4. Simplified thermal model: frictional heating, a gravity term in the energy balance, and lift-gas temperature (on `develop`).
   5. Unrealistic sampled wells: a sampling redesign, after the plan.
 
-  The other model changes on `develop` (fixed-rate inflow, inclination terms in the slip model) are in scope too. v2 also adds a flow-regime model with four regimes (bubbly, slug, churn, annular) after Hasan et al.; `develop`'s classifier merges slug and churn. It is a draft (`scripts/flow_regimes/new_flow_regime_model.md`), not yet on `develop`. Any other model change needs its own feature spec and Bjarne's approval. Which features ship in v2.0 and which wait for v2.x is decided later.
+  The other model changes on `develop` (fixed-rate inflow, inclination terms in the slip model) are in scope too. v2 also adds a flow-regime model with five regimes (bubbly, dispersed bubbly, slug, churn, annular) after Hasan et al., `develop`'s default (`specs/features/019-five-flow-regimes.md`); v1.0.0's fitted classifier, which merges slug and churn, stays as an option. Any other model change needs its own feature spec and Bjarne's approval. Which features ship in v2.0 and which wait for v2.x is decided later.
 - **Solution.** The model's answer is a root set: every steady-state root, each labelled stable or unstable. The label is static (nodal-analysis) stability: at a stable root, a small increase in rate makes the flow fall back; at an unstable one it runs away. The unstable roots in v1's data are low-rate *trickle* roots. The operating point is the stable root; if there is none, the well cannot flow at those conditions. `simulate()` returns the operating point and raises if there is none; the full root set is available on request.
 - **Implementation.** Two backends behind one Python API, `SSDFSimulator(wp, backend=...)`: `develop`'s Python/CasADi simulator, and a Rust core with Python bindings. The Rust core covers the full model from the plan's Step 9 on.
   - **Developed together.** Both backends are kept and developed together (Bjarne, 2026-10-01). Each equation is implemented in both, under the same spec ID.

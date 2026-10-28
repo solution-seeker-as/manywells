@@ -55,6 +55,6 @@ The following relations apply:
 - QTOT = QLIQ + QGAS + QGL
 
 The flow regime features, FRBH and FRWH, may take on one of the following string values: 
-'bubbly', 'slug-churn', 'annular'. 
+'bubbly', 'slug-churn', 'annular'. These are the labels of v1.0.0's fitted classifier, which the v1 datasets and the `v1.0.0` configuration use. Datasets made with `develop`'s default slip model, the five regimes (`specs/features/019-five-flow-regimes.md`), take 'bubbly', 'dispersed-bubbly', 'slug', 'churn' or 'annular'. 
 
 The WEEKS feature is only present in non-stationary datasets.

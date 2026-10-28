@@ -21,7 +21,6 @@ from dataclasses import dataclass
 import casadi as ca
 import numpy as np
 
-from manywells.slip import regime_label
 from manywells.units import CF_BAR, STD_GRAVITY
 
 JT_T_PR_MIN = 1.05
@@ -213,9 +212,9 @@ class System:
         return np.array([bc.p_r, bc.p_s, bc.T_r, bc.T_s, T_lg, bc.u, bc.w_lg], dtype=float)
 
     def flow_regimes(self, x) -> tuple:
-        """The flow-regime label at each point of a state (SLIP-8)."""
+        """The flow-regime label at each point of a state (SLIP-8, or SLIP-16 with the five regimes)."""
         P = np.asarray(self.regime_probabilities(x), dtype=float)
-        return tuple(regime_label(P[:, i]) for i in range(P.shape[1]))
+        return tuple(self.wp.slip.label(P[:, i]) for i in range(P.shape[1]))
 
     def root_outputs(self, x, params) -> dict:
         """What a root carries besides its state, as Python values: flow_regime, choked, w_res and w_g_res."""
@@ -326,12 +325,12 @@ def build_system(wp) -> System:  # spec: DISC-11
     bottom_guess = ca.Function('bottom_guess', [p_0, prm], [guess], ['p_0', 'params'], ['x_0'])
 
     # Outputs of a root: the flow-regime probabilities at every point (one function mapped over the points, for the
-    # regime labels of SLIP-8), CHOKED and the reservoir rates
+    # regime labels of SLIP-8 or SLIP-16), CHOKED and the reservoir rates
     x_pt, cos_pt = ca.SX.sym('x_pt', DIM_X), ca.SX.sym('cos_incl')
     s = PointState.of(x_pt)
     sigma = fluid.surface_tension(s.p, s.T, s.rho_l)
     classify = ca.Function('classify', [x_pt, cos_pt],
-                           [wp.slip.classify(s.v_g, s.v_l, s.alpha, s.rho_g, s.rho_l, sigma, cos_pt)])
+                           [wp.slip.classify(s.v_g, s.v_l, s.alpha, s.rho_g, s.rho_l, sigma, geo.D, cos_pt)])
     cos_points = [geo.cos_incl[max(i - 1, 0)] for i in range(N + 1)]
     P = classify.map(N + 1)(ca.reshape(x, DIM_X, N + 1), ca.DM(cos_points).T)
     regimes = ca.Function('regime_probabilities', [x], [P], ['x'], ['P'])
