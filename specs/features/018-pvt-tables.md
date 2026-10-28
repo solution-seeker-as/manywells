@@ -1,6 +1,6 @@
 # 018 · PVT tables, and one interface for every PVT model
 
-*Feature spec, 2026-10-28. Status: approved by Bjarne on 2026-10-28, with each decision as recommended (Rulings). Phase A, the interface (ruling 1), is implemented: `FluidModel(pvt=...)` with `DeadOil` and `BlackOil`, each method's value unchanged to the bit. Phase B, the tables in Python and the CasADi backend (`specs/model/pvt/table.md`, PVT-TAB-1 to PVT-TAB-7), and phase C, the tables in the Rust core, are implemented. The measurements on both backends follow (acceptance 9). The prototype is in `plans/evidence/` (Measurements) and the example tables in `tests/data/pvt/`. The bug the prototype found is issue #10, fixed by PR #23.*
+*Feature spec, 2026-10-28. Status: approved by Bjarne on 2026-10-28, with each decision as recommended (Rulings). Phase A, the interface (ruling 1), is implemented: `FluidModel(pvt=...)` with `DeadOil` and `BlackOil`, each method's value unchanged to the bit. Phase B, the tables in Python and the CasADi backend (`specs/model/pvt/table.md`, PVT-TAB-1 to PVT-TAB-7), phase C, the tables in the Rust core, and phase D, the measurements on both backends (acceptance 9, Measurements), the guide `docs/pvt_tables.md` and the reworded non-goal (ruling 2), are implemented. The prototype is in `plans/evidence/` (Measurements) and the example tables in `tests/data/pvt/`. The bug the prototype found is issue #10, fixed by PR #23.*
 
 ## Rulings (Bjarne, 2026-10-28)
 
@@ -177,7 +177,24 @@ The sign is the table minus the other. With the same stock-tank densities and GO
 
 Operating points: 139 with the uncapped black oil, 146 capped, 130 with the table and 128 without its viscosities. Of the 17 cases the capped black oil solves and the table does not, 16 have the black oil's PBH above the table's bubble point at $T_r$, so that with the table the bottomhole is all liquid; with 0.01 kg/s of lift gas, the table solves 12 of the 17, at a PBH from 1.7 bar below to 8.8 bar above the black oil's (part `scan`). This is a gap of the CasADi search, not of the table (Findings 1).
 
-**Cost.** On the CasADi backend each interpolant is a call node, whose derivatives are further call nodes. On one well the residual's Jacobian takes 2.5 ms to evaluate with a table against 0.69 ms with the black oil, and Ipopt's iterations cost about 2.6 times as much; the number of iterations does not grow (design choice 1). That is the 1.7 to 1.9 times of the solved wells. The Rust core evaluates a bilinear table by two binary searches and a few products, which should cost less than Vazquez–Beggs's powers and DAK's Newton solve; it is measured when implemented (Acceptance 9).
+**Cost.** On the CasADi backend each interpolant is a call node, whose derivatives are further call nodes. On one well the residual's Jacobian takes 2.5 ms to evaluate with a table against 0.69 ms with the black oil, and Ipopt's iterations cost about 2.6 times as much; the number of iterations does not grow (design choice 1). That is the 1.7 to 1.9 times of the solved wells. The Rust core evaluates a bilinear table by a search of each axis and a few products; on its own black oil's cases a table costs it nothing (below).
+
+**Both backends** (acceptance 9; `pvt_table_backends.py`, on the branch at `1e463fd`, each case on one process, 12 processes sharing 24 cores). The tables as implemented (`PVTTable`), solved cold on the CasADi backend and on the Rust core.
+
+- **The tables of each well's black oil** (part `wells`), on the 263 cases of the solved wells above, on the medium grid. With the black oil and with its table, each backend finds an operating point in the same 260 cases: the table loses none and gains none. Against the black oil, PBH is within 0.013 bar (10th / 90th percentile −0.0016 / +0.0012 bar), PWH within 0.018 bar on the core and 0.052 bar on CasADi, and TWH within 0.031 K, on either backend. The two backends' operating points agree to $10^{-6}$ bar but at two cases (wells 17 and 45, the first sampled point of each), where they differ by 0.05 bar in PBH and 0.3 to 0.5 bar in PWH with the black oil as with its table: a difference of the backends on `develop`'s black oil that the table does not add to.
+- **The synthetic equation-of-state fluid** (part `eos`), on the 186 cases the table covers, against develop's black oil at its stock-tank densities and GOR, capped at its bubble point at $T_r$. The capped black oil has an operating point in 148 cases and the table in 141, the same cases on both backends; the prototype's CasADi search found 146 and 130, before issue #10's fix. In each of the 7 cases the table lacks, the black oil's PBH lies above the table's bubble point, and the table has no root: the core's shooting residual is positive at 2000 values of $p_0$ across $(p_s, p_r)$, so the well cannot flow with that fluid there. The table's differences from the capped black oil are those of the prototype's table, on both backends to $10^{-6}$ bar: PBH +1.6 bar at the median, from −1.2 to +9.9; PWH −0.8 bar, from −6.4 to +15.6.
+- **Cost per case**, to build the well and find its roots:
+
+| Fluid | CasADi: median; total (s) | Rust core: median; total (s) | CasADi / Rust, total |
+|---|---|---|---|
+| black oil (263 cases) | 3.69; 1268 | 0.302; 111.3 | 11 |
+| its table | 7.34; 2735 | 0.308; 111.3 | 25 |
+| table / black oil | 1.76 at the median; 2.16 in total | 1.00; 1.00 | |
+| black oil capped at $p_b$ (186 cases) | 4.06; 866 | 0.205; 67.2 | 13 |
+| the equation-of-state table | 6.46; 1515 | 0.154; 48.3 | 31 |
+| table / black oil | 1.50; 1.75 | 0.75; 0.72 | |
+
+Making a table of a well's black oil takes 0.024 s at the median. On the CasADi backend a table's interpolants make the search about twice as slow (Cost, above); on the Rust core it costs nothing.
 
 ## Findings
 

@@ -44,6 +44,13 @@ Scripts behind the measurements in `../../specs/features/018-pvt-tables.md`, run
 | `pvt_table_eos.py gor` | One table read at 0.6 to 2 times its GOR by the black-oil rule, and a GOR axis, against the recombined stream's own tables | Within 10% of the GOR: no-slip density within 1.2–1.7% at the median, 4.7% at most; a GOR axis: 0.01–0.3%, 2.2% at most |
 | `pvt_table_eos.py gor_table OUT.csv` | Writes `synthetic_eos_oil_gor.csv` | |
 
+`pvt_table_backends.py` measures the tables as implemented, on both backends (the feature spec's acceptance 9). It was run on 2026-10-28 on the branch `pvt-tables` at `1e463fd` (Python 3.14, casadi 3.8.1), each case on one process, 12 processes sharing 24 CPUs with other work.
+
+| Script | What it shows | Result |
+|---|---|---|
+| `pvt_table_backends.py wells 88 OUT.csv` | The 263 cases of `jt_wells.py`, with develop's black oil and a table of it on 10 bar by 10 K, on each backend: operating points, PBH, PWH and TWH, and the time per case | Each fluid has an operating point in the same 260 cases on each backend: the table loses none. PBH within 0.013 bar of the black oil's. The table costs the Rust core nothing (1.00 times the black oil's time), and CasADi 1.76 times at the median |
+| `pvt_table_backends.py eos 88 OUT.csv` | The synthetic fluid's table against develop's black oil capped at the table's bubble point, on the cases the table covers, on each backend | 148 and 141 operating points, the same cases on both backends. In the 7 the table lacks, it has no root at all (the core's shooting residual is positive across $(p_s, p_r)$). The two backends agree to $10^{-6}$ bar |
+
 ## Feature 017: calibration
 
 Scripts behind the measurements in `../../specs/features/017-calibration.md` that the twin study (`scripts/calibration/twins.py`) does not make, run on 2026-10-02 on the branch `calibration`, with 24 CPUs. Run from the project root as `uv run python plans/evidence/calibration_measurements.py <part>`.

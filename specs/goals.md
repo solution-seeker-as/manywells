@@ -54,7 +54,7 @@ The new flow-regime model comes after the plan.
 - Transient flow, including heading and other dynamic instabilities. The model is steady state.
 - Competing with commercial simulators such as OLGA or LedaFlow.
 - Closed-loop simulation in v2.
-- Compositional PVT: cubic equations of state and flash calculations. v2 stays with black oil and correlations, such as the Dranchuk–Abou-Kassem z-factor.
+- Compositional PVT: cubic equations of state and flash calculations. v2 stays with black oil, correlations and tables; a fluid from an equation of state enters as a table (feature 018).
 - Anything downstream of the choke: flowlines, risers, manifolds, networks.
 - Oil–water slip. Oil and water stay one mixed liquid phase.
 - Complex completions: annulus flow, multilaterals, multiple tubing strings. A well has one flow path from bottomhole to wellhead.
