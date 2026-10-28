@@ -36,7 +36,8 @@ from manywells.friction import RoughnessFriction
 from manywells.geometry import WellGeometry
 from manywells.inflow import ProductivityIndex, Vogel
 from manywells.pvt import LiquidProperties, api_from_density, density_from_api, gas_density_from_sg, liquid_mix
-from manywells.pvt.dead_oil import dead_oil_surface_tension
+from manywells.pvt.black_oil import BlackOil
+from manywells.pvt.dead_oil import DeadOil, dead_oil_surface_tension
 from manywells.pvt.fluid import FluidModel
 from manywells.pvt.gas import gas_density
 from manywells.simulator import BoundaryConditions
@@ -200,20 +201,22 @@ def choke_rates(s):
     return A * s.alpha * s.rho_g * s.v_g, A * (1 - s.alpha) * s.rho_l * s.v_l, s.alpha, s.rho_g, s.rho_l
 
 
-def oil(api, sg_gas, gor=150.0, wlr=0.0, **kw):
+def oil(api, sg_gas, gor=150.0, wlr=0.0, surface_tension_model='liquid', p_bubble=None):
     """Black oil as the develop tables' fluid, with an ideal gas and the 'liquid' surface tension unless given."""
-    kw = {'ideal_gas': True, 'surface_tension_model': 'liquid', **kw}
-    return FluidModel(rho_o=density_from_api(api), rho_g=gas_density_from_sg(sg_gas), gor=gor, wlr=wlr, **kw)
+    return FluidModel(pvt=BlackOil(rho_o=density_from_api(api), rho_g=gas_density_from_sg(sg_gas), gas_law='ideal',
+                                   p_bubble=p_bubble),
+                      gor=gor, wlr=wlr, surface_tension_model=surface_tension_model)
 
 
-def dead_fluid(**kw):
-    """A dead oil, ideal gas and 'liquid' surface tension, as in v1.0.0, with the given fields."""
-    return FluidModel(**{'oil_model': 'dead_oil', 'ideal_gas': True, 'surface_tension_model': 'liquid', **kw})
+def dead_fluid(rho_o=DeadOil.rho_o, rho_g=DeadOil.rho_g, gas_law='ideal', **kw):
+    """A dead oil, ideal gas and 'liquid' surface tension, as in v1.0.0, with the given gas and FluidModel fields."""
+    return FluidModel(pvt=DeadOil(rho_o=rho_o, rho_g=rho_g, gas_law=gas_law),
+                      **{'surface_tension_model': 'liquid', **kw})
 
 
 def papay_fluid(**kw):
     """dead_fluid with a real gas by Papay's z-factor."""
-    return dead_fluid(ideal_gas=False, z_factor_model='papay', **kw)
+    return dead_fluid(gas_law='papay', **kw)
 
 
 def thermal(**on):
@@ -272,15 +275,15 @@ RUST_ADAPTERS = {
     'THM-7': lambda cos_incl, **kw: -thermal_term(F=0.0, cos_incl=cos_incl, gravity_term=True, **kw),
     'THM-8': lambda alpha, rho_g, v_g, rho_l, v_l, F, cos_incl, T, sg_gas, cp_g, cp_l: -rust(
         'temperature_gradient', 100.0, v_g, v_l, alpha, rho_g, rho_l, T, T, F, cos_incl,
-        fluid=dead_fluid(rho_g=gas_density_from_sg(sg_gas), ideal_gas=False, cp_g=cp_g, cp_o=cp_l),
+        fluid=dead_fluid(rho_g=gas_density_from_sg(sg_gas), gas_law='dak', cp_g=cp_g, cp_o=cp_l),
         thermal=thermal(joule_thomson=True), geometry=WellGeometry.vertical(length=1000.0, n_cells=10, D=0.1)),
     'SLIP-10, SLIP-11': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl:
         rust('slip_parameters', v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl),
     'SLIP-11 (classifier)': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl:
         rust('regime_probabilities', v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl),
     'FRIC-3': lambda p, T, alpha, v_g, v_l, rho_g, rho_l, D, roughness:
-        rust('friction', p, v_g, v_l, alpha, rho_g, rho_l, T, fluid=replace(FluidModel(), ideal_gas=True,
-                                                                             surface_tension_model='liquid'),
+        rust('friction', p, v_g, v_l, alpha, rho_g, rho_l, T, fluid=FluidModel(pvt=BlackOil(gas_law='ideal'),
+                                                                                surface_tension_model='liquid'),
              friction=RoughnessFriction(roughness=roughness), geometry=WellGeometry.vertical(1000.0, 10, D=D)),
     'FRIC-4': lambda Re, eps_D: rust('chen_friction_factor', Re, eps_D),
     'FRIC-5': lambda Re, eps_D: rust('haaland_friction_factor', Re, eps_D),
@@ -291,8 +294,8 @@ RUST_ADAPTERS = {
         rust('z_factor', p, T, fluid=papay_fluid(rho_g=gas_density_from_sg(sg_gas)))),
     'PVT-GAS-9': lambda r, t: rust('dak_z_factor', r, t),
     'PVT-GAS-10': lambda r, t: rust('dak_jt_factor', r, t),
-    'PVT-GAS-11': lambda p, T, rho_g_sc: (rust('gas_density', p, T, fluid=dead_fluid(rho_g=rho_g_sc, ideal_gas=False)),
-                                          rust('z_factor', p, T, fluid=dead_fluid(rho_g=rho_g_sc, ideal_gas=False))),
+    'PVT-GAS-11': lambda p, T, rho_g_sc: (rust('gas_density', p, T, fluid=dead_fluid(rho_g=rho_g_sc, gas_law='dak')),
+                                          rust('z_factor', p, T, fluid=dead_fluid(rho_g=rho_g_sc, gas_law='dak'))),
     'PVT-GAS-6': lambda rho_g_sc: rust('gas_parameters', fluid=dead_fluid(rho_g=rho_g_sc)),
     'PVT-GAS-7': lambda T, rho_g, M_g: rust('gas_viscosity', T, rho_g, M_g),
     'PVT-OIL-5': lambda api, sg_gas, p_sep, T_sep: rust('separator_gravity', api, sg_gas, p_sep, T_sep),

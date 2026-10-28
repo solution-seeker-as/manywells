@@ -3,12 +3,15 @@ Copyright (C) 2024 Solution Seeker AS - All Rights Reserved
 You may use, distribute and modify this code under the
 terms of the CC BY-NC 4.0 International Public License.
 
-Correlations for dead oil properties (CasADi-compatible)
+Correlations for dead oil properties (CasADi-compatible), and the dead-oil PVT model, DeadOil
 """
+
+from dataclasses import dataclass
 
 import casadi as ca
 
-from manywells.pvt import api_from_density
+from manywells.pvt import api_from_density, gas_density_from_sg
+from manywells.pvt.model import CorrelationPVT
 from manywells.units import kelvin_to_fahrenheit, kelvin_to_celsius, CF_CP, CF_DYNCM
 
 
@@ -49,3 +52,40 @@ def dead_oil_surface_tension(rho, T):  # spec: PVT-OIL-3
     T_degC = kelvin_to_celsius(T)
     api = api_from_density(rho)
     return CF_DYNCM * (1.11591 - 0.00305 * T_degC) * (38.085 - 0.259 * api)
+
+
+@dataclass(frozen=True)
+class DeadOil(CorrelationPVT):
+    """
+    Dead oil (PVT-OIL-1): incompressible, with no gas dissolved, so its phase rates are the same at every point
+    (INF-5). The gas law is one of the correlations' (CorrelationPVT); v1.0.0's is the ideal gas.
+
+    :param rho_o: Stock-tank oil density (kg/m3)
+    :param rho_g: Gas density at standard conditions (kg/m3)
+    :param gas_law: 'ideal', 'dak' or 'papay'
+    """
+    rho_o: float = 850.0
+    rho_g: float = gas_density_from_sg(0.554)
+    gas_law: str = 'dak'
+
+    dissolves_gas = False
+
+    def __post_init__(self):
+        self._validate()
+        self._derive()
+
+    def rs(self, p, T):  # spec: PVT-OIL-4
+        """No gas dissolves: 0."""
+        return 0
+
+    def bo(self, p, T):  # spec: PVT-OIL-4
+        """The oil does not swell: 1."""
+        return 1.0
+
+    def oil_viscosity(self, p, T):  # spec: PVT-OIL-10
+        """Beggs-Robinson's dead-oil viscosity at T (Pa s)."""
+        return dead_oil_viscosity(self._api, T)
+
+    def oil_surface_tension(self, p, T):  # spec: PVT-OIL-3
+        """The dead-oil surface tension at the stock-tank oil's density and T (J/m2)."""
+        return dead_oil_surface_tension(self.rho_o, T)

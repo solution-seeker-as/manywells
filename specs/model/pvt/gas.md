@@ -14,7 +14,7 @@ The gas phase's equation of state, the standard conditions that volumetric rates
 
 v1.0.0's code takes $p$ in Pa in `pvt.gas_density`; the vectors below are in bar.
 
-In `develop` the gas is parameterized by its density at standard conditions $\rho_{g,\text{sc}}$ (`FluidModel.rho_g`), from which PVT-GAS-6 gives the specific gravity and $R_s$; `FluidModel.ideal_gas` chooses PVT-GAS-1 or a real gas, and `FluidModel.z_factor_model` the real gas's law: `'dak'` (PVT-GAS-11, the default) or `'papay'` (PVT-GAS-3 with PVT-GAS-4). `FluidModel.jt_factor(T, rho_g)` gives PVT-GAS-10. The correlations of PVT-GAS-4, PVT-GAS-5 and PVT-GAS-7 take $p$ in Pa internally; `FluidModel`'s methods take bar.
+In `develop` the gas is parameterized by its density at standard conditions $\rho_{g,\text{sc}}$ (the `rho_g` of the fluid's PVT model, `FluidModel.pvt`), from which PVT-GAS-6 gives the specific gravity and $R_s$. The PVT model's `gas_law` chooses the law: `'ideal'` (PVT-GAS-1), `'dak'` (PVT-GAS-11, the default) or `'papay'` (PVT-GAS-3 with PVT-GAS-4). `FluidModel.jt_factor(T, rho_g)` gives PVT-GAS-10. The correlations of PVT-GAS-4, PVT-GAS-5 and PVT-GAS-7 take $p$ in Pa internally; `FluidModel`'s methods take bar.
 
 ## Equations
 
@@ -112,9 +112,9 @@ with $Z$ and $\rho_r$ of PVT-GAS-9 and $p$ in bar. $Z$ is explicit in the state'
 
 | Option | IDs | Used by |
 |---|---|---|
-| Ideal gas | PVT-GAS-1 | `v1.0.0`; `develop` with `ideal_gas=True` |
-| Real gas, Dranchuk–Abou-Kassem equation of state (Sutton pseudo-critical properties) | PVT-GAS-5, PVT-GAS-9, PVT-GAS-11 | `develop` default (`z_factor_model='dak'`) |
-| Real gas with Papay's z-factor (Sutton pseudo-critical properties) | PVT-GAS-3 to PVT-GAS-5 | `develop` with `z_factor_model='papay'` |
+| Ideal gas | PVT-GAS-1 | `v1.0.0`; `develop` with `gas_law='ideal'` |
+| Real gas, Dranchuk–Abou-Kassem equation of state (Sutton pseudo-critical properties) | PVT-GAS-5, PVT-GAS-9, PVT-GAS-11 | `develop` default (`gas_law='dak'`) |
+| Real gas with Papay's z-factor (Sutton pseudo-critical properties) | PVT-GAS-3 to PVT-GAS-5 | `develop` with `gas_law='papay'` |
 
 PVT-GAS-2 and PVT-GAS-6 apply to every option, PVT-GAS-7 to the friction of `develop` (FRIC-3), and PVT-GAS-10 to the Joule–Thomson term of the energy balance (THM-8).
 

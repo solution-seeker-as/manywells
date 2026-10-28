@@ -14,11 +14,12 @@ import dataclasses
 import pytest
 
 from manywells.discretization import PointState
+from manywells.pvt.dead_oil import DeadOil
 from manywells.pvt.fluid import FluidModel
 from manywells.thermal import ThermalModel
 from manywells.units import STD_GRAVITY
 
-FLUID = FluidModel(oil_model='dead_oil', cp_g=2225.0, cp_o=4180.0)
+FLUID = FluidModel(pvt=DeadOil(), cp_g=2225.0, cp_o=4180.0)
 V1 = ThermalModel(h=20.0, frictional_heating=False, gravity_term=False, lift_gas_mixing=False, joule_thomson=False)
 JT = ThermalModel(h=0.0, frictional_heating=False, gravity_term=False, lift_gas_mixing=False, joule_thomson=True)
 D, T_A = 0.15, 330.0
@@ -93,7 +94,7 @@ def test_joule_thomson_term_of_pure_gas_is_mu_jt_times_the_pressure_gradient():
 
 
 def test_joule_thomson_term_vanishes_for_an_ideal_gas_and_for_pure_liquid():
-    ideal = dataclasses.replace(FLUID, ideal_gas=True)
+    ideal = dataclasses.replace(FLUID, pvt=dataclasses.replace(FLUID.pvt, gas_law='ideal'))
     assert JT.temperature_gradient(state(0.5), ideal, T_A, 500.0, dp_dmd=0.0, cos_incl=1.0, D=D) == 0.0
     assert gradient(JT, state(0.0), F=500.0) == pytest.approx(0.0, abs=1e-15)
 

@@ -19,7 +19,7 @@ from manywells.pvt import (
     mixture_viscosity,    
 )
 from manywells.pvt.dead_oil import dead_oil_viscosity, dead_oil_surface_tension
-from manywells.pvt.black_oil import live_oil_viscosity, live_oil_surface_tension
+from manywells.pvt.black_oil import BlackOil, live_oil_surface_tension, live_oil_viscosity
 from manywells.pvt.gas import specific_gas_constant, gas_density, gas_viscosity, gas_z_factor, sutton_pseudo_critical, molecular_weight
 from manywells.pvt.gas import DAK_ZC, dak_jt_factor, dak_reduced_density, dak_z_factor
 from manywells.pvt.fluid import FluidModel
@@ -402,7 +402,7 @@ class TestDranchukAbouKassem:
 
     def test_the_factor_is_t_dlnz_dt_along_an_isobar(self):
         """PVT-GAS-10's closed form equals a central difference of ln Z from PVT-GAS-9 at constant pressure."""
-        fl = FluidModel(rho_g=gas_density_from_sg(0.7))
+        fl = FluidModel(pvt=BlackOil(rho_g=gas_density_from_sg(0.7)))
         for p, T in ((20.0, 300.0), (100.0, 330.0), (250.0, 380.0), (450.0, 420.0)):
             h = 1e-3
             fd = T * (np.log(float(fl.z_factor(p, T + h))) - np.log(float(fl.z_factor(p, T - h)))) / (2 * h)
@@ -410,16 +410,16 @@ class TestDranchukAbouKassem:
             assert J == pytest.approx(fd, rel=1e-6, abs=1e-9)
 
     def test_the_factor_is_zero_for_an_ideal_gas(self):
-        assert FluidModel(ideal_gas=True).jt_factor(350.0, 80.0) == 0.0
+        assert FluidModel(pvt=BlackOil(gas_law='ideal')).jt_factor(350.0, 80.0) == 0.0
 
     def test_the_factor_is_the_same_for_both_z_factor_models(self):
         """The factor is DAK's at the state's density, whatever the gas law (specs/features/016-joule-thomson.md)."""
-        dak, papay = FluidModel(), FluidModel(z_factor_model='papay')
+        dak, papay = FluidModel(), FluidModel(pvt=BlackOil(gas_law='papay'))
         assert float(dak.jt_factor(350.0, 80.0)) == float(papay.jt_factor(350.0, 80.0))
 
     def test_methane_against_the_reference_equation_of_state(self):
         """J within 0.03 + 0.1 |J_ref| (signed off by Bjarne, 2026-10-02) and Z within 2% of the reference."""
-        fl = FluidModel(rho_g=gas_density_from_sg(METHANE_SG))
+        fl = FluidModel(pvt=BlackOil(rho_g=gas_density_from_sg(METHANE_SG)))
         for p, T, J_ref, Z_ref in METHANE_REFERENCE:
             rho = fl.gas_density(p, T)
             assert abs(float(fl.jt_factor(T, rho)) - J_ref) <= 0.03 + 0.1 * abs(J_ref), (p, T)

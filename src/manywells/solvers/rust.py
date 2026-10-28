@@ -28,6 +28,8 @@ from manywells.discretization import System
 from manywells.friction import FixedFrictionFactor, RoughnessFriction
 from manywells.geometry import WellGeometry
 from manywells.inflow import FixedFlowRate, ProductivityIndex, Vogel
+from manywells.pvt.black_oil import BlackOil
+from manywells.pvt.dead_oil import DeadOil
 from manywells.pvt.fluid import FluidModel
 from manywells.slip import SlipModel
 from manywells.solution import Root, RootSet
@@ -38,6 +40,7 @@ from manywells.thermal import ThermalModel
 CORE_CLASSES = {'geometry': (WellGeometry,), 'fluid': (FluidModel,), 'friction': (FixedFrictionFactor, RoughnessFriction),
                 'thermal': (ThermalModel,), 'slip': (SlipModel,), 'inflow': (Vogel, ProductivityIndex, FixedFlowRate),
                 'choke': (SimpsonChokeModel, BernoulliChokeModel)}
+PVT_CLASSES = (DeadOil, BlackOil)  # The fluid's PVT models that the core implements, exactly
 
 
 def not_in_core(wp) -> list:
@@ -49,6 +52,8 @@ def not_in_core(wp) -> list:
     slip = wp.slip
     if type(slip) is SlipModel and (min(slip.C_0_annular, slip.C_0_slug, slip.C_0_bubbly) < 1 or slip.v_inf_annular < 0):
         out.append(f'slip: the core needs every C_0 >= 1 and v_inf_annular >= 0 ({slip})')
+    if type(wp.fluid) is FluidModel and type(wp.fluid.pvt) not in PVT_CLASSES:
+        out.append(f'fluid: pvt is {type(wp.fluid.pvt).__name__}, not one of the core\'s classes')
     # The core takes the gas mass fraction of the reservoir inflow in (0, 1), as INF-4 defines it
     if type(wp.fluid) is FluidModel and not wp.fluid.f_g > 0:
         out.append(f'fluid: the core needs gas in the reservoir inflow, f_g > 0 (gor = {wp.fluid.gor})')
@@ -63,10 +68,8 @@ def core_well(wp) -> '_core.Well':
     geo, fluid, thermal, slip, choke = wp.geometry, wp.fluid, wp.thermal, wp.slip, wp.choke
     return _core.Well(md=list(geo.md), tvd=list(geo.tvd), D=geo.D,
                       rho_o=fluid.rho_o, rho_g=fluid.rho_g, rho_w=fluid.rho_w, gor=fluid.gor, wlr=fluid.wlr,
-                      cp_g=fluid.cp_g, cp_o=fluid.cp_o, cp_w=fluid.cp_w, ideal_gas=fluid.ideal_gas,
-                      z_factor_model=fluid.z_factor_model,
-                      oil_model=fluid.oil_model, surface_tension_model=fluid.surface_tension_model, p_sep=fluid.p_sep,
-                      T_sep=fluid.T_sep, p_bubble=fluid.p_bubble,
+                      cp_g=fluid.cp_g, cp_o=fluid.cp_o, cp_w=fluid.cp_w,
+                      surface_tension_model=fluid.surface_tension_model, **_pvt(fluid.pvt),
                       **_friction(wp.friction),
                       h=thermal.h, frictional_heating=thermal.frictional_heating, gravity_term=thermal.gravity_term,
                       lift_gas_mixing=thermal.lift_gas_mixing, joule_thomson=thermal.joule_thomson,
@@ -75,6 +78,16 @@ def core_well(wp) -> '_core.Well':
                       **_inflow(wp.inflow),
                       choke='simpson' if type(choke) is SimpsonChokeModel else 'bernoulli', K_c=choke.K_c,
                       profile=choke.chk_profile)
+
+
+def _pvt(pvt) -> dict:
+    """The core's fluid options for a PVT model: its oil model and gas law, and the black oil's separator and bubble
+    point (the dead oil's are not used)."""
+    black_oil = type(pvt) is BlackOil
+    return dict(oil_model='black_oil' if black_oil else 'dead_oil', ideal_gas=pvt.gas_law == 'ideal',
+                z_factor_model='papay' if pvt.gas_law == 'papay' else 'dak',
+                p_sep=pvt.p_sep if black_oil else BlackOil.p_sep, T_sep=pvt.T_sep if black_oil else BlackOil.T_sep,
+                p_bubble=pvt.p_bubble if black_oil else None)
 
 
 def _inflow(inflow) -> dict:

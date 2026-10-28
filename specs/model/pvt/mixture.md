@@ -14,7 +14,7 @@ The liquid phase is oil and water mixed, with no slip between them (paper §4). 
 
 $x_o = f_o/(f_o + f_w)$ is the oil mass fraction of the liquid, from the mass fractions $f_o$ and $f_w$ of the reservoir inflow. In `v1.0.0` the mixing is applied by the sampler, before the simulator is built: the simulator takes $\rho_l$ and $c_{pl}$ as parameters.
 
-In `develop` the fluid model (`FluidModel`) takes the phase densities at standard conditions $\rho_o$, $\rho_{g,\text{sc}}$ and $\rho_w$, the gas–oil ratio $R_{go}$ and the water–liquid ratio $\alpha_{w,l}$ (both at standard conditions, `gor` and `wlr`), and the heat capacities $c_{pg}$, $c_{po}$ and $c_{pw}$; PVT-MIX-10 derives the rest. Its `surface_tension(p, T, rho_l)` takes the point's liquid density, which PVT-MIX-5 needs, and its `surface_tension_model` chooses PVT-MIX-5 (`'liquid'`) or PVT-MIX-7 (`'oil'`).
+In `develop` the fluid model (`FluidModel`) takes the phase densities at standard conditions $\rho_o$ and $\rho_{g,\text{sc}}$ (from its PVT model, `pvt`) and $\rho_w$, the gas–oil ratio $R_{go}$ and the water–liquid ratio $\alpha_{w,l}$ (both at standard conditions, `gor` and `wlr`), and the heat capacities $c_{pg}$, $c_{po}$ and $c_{pw}$; PVT-MIX-10 derives the rest. Its `surface_tension(p, T, rho_l)` takes the point's liquid density, which PVT-MIX-5 needs, and its `surface_tension_model` chooses PVT-MIX-5 (`'liquid'`) or PVT-MIX-7 (`'oil'`).
 
 ## Equations
 
