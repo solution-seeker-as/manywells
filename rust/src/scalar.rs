@@ -8,8 +8,10 @@
 //!
 //! `brentq` is a transcription of SciPy's `scipy/optimize/Zeros/brentq.c` (BSD-3-Clause, Copyright (c) 2001-2002
 //! Enthought, Inc., 2003-2024 SciPy Developers): the same bisection and interpolation steps and the same
-//! convergence test, `delta = (xtol + rtol |x|) / 2`. The function returns a Result, so that a failure inside a
-//! nested solve stops the outer one.
+//! convergence test, `delta = (xtol + rtol |x|) / 2`, and its signs compared as SciPy compares them, by sign bit
+//! rather than by product, so that end values whose product underflows still bracket a root. The function returns a
+//! Result, so that a failure inside a nested solve stops the outer one, and refuses a non-finite end value, which has
+//! no sign.
 
 /// SciPy's default rtol for brentq (4 times machine epsilon)
 pub const RTOL: f64 = 4.0 * f64::EPSILON;
@@ -18,6 +20,8 @@ pub const RTOL: f64 = 4.0 * f64::EPSILON;
 pub enum RootError {
     /// f(a) and f(b) have the same sign
     NoSignChange,
+    /// f(a) or f(b) is not finite
+    NotFinite,
     /// No convergence within maxiter iterations
     MaxIter,
 }
@@ -26,6 +30,7 @@ impl std::fmt::Display for RootError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RootError::NoSignChange => write!(f, "f(a) and f(b) must have different signs"),
+            RootError::NotFinite => write!(f, "f(a) and f(b) must be finite"),
             RootError::MaxIter => write!(f, "failed to converge within maxiter iterations"),
         }
     }
@@ -43,18 +48,21 @@ where
 
     let mut fpre = f(xpre)?;
     let mut fcur = f(xcur)?;
+    if !(fpre.is_finite() && fcur.is_finite()) {
+        return Err(RootError::NotFinite);
+    }
     if fpre == 0.0 {
         return Ok((xpre, fpre));
     }
     if fcur == 0.0 {
         return Ok((xcur, fcur));
     }
-    if fpre * fcur > 0.0 {
+    if fpre.is_sign_negative() == fcur.is_sign_negative() {
         return Err(RootError::NoSignChange);
     }
 
     for _ in 0..maxiter {
-        if fpre != 0.0 && fcur != 0.0 && (fpre * fcur < 0.0) {
+        if fpre != 0.0 && fcur != 0.0 && fpre.is_sign_negative() != fcur.is_sign_negative() {
             xblk = xpre;
             fblk = fpre;
             spre = xcur - xpre;
@@ -178,6 +186,23 @@ mod tests {
     fn brentq_needs_a_sign_change() {
         let mut f = |x: f64| Ok(x * x + 1.0);
         assert_eq!(brentq(&mut f, -1.0, 1.0, 1e-8, RTOL, 100), Err(RootError::NoSignChange));
+    }
+
+    #[test]
+    fn brentq_needs_finite_ends() {
+        let mut f = |x: f64| Ok(if x == 250.0 { f64::NAN } else { x - 290.0 });
+        assert_eq!(brentq(&mut f, 250.0, 300.0, 2e-12, RTOL, 100), Err(RootError::NotFinite));
+        let mut g = |x: f64| Ok(if x == 300.0 { f64::INFINITY } else { x - 290.0 });
+        assert_eq!(brentq(&mut g, 250.0, 300.0, 2e-12, RTOL, 100), Err(RootError::NotFinite));
+    }
+
+    #[test]
+    fn brentq_compares_signs_where_the_product_underflows() {
+        let mut f = |x: f64| Ok(1e-170 * x);
+        assert_eq!(brentq(&mut f, 1.0, 2.0, 2e-12, RTOL, 100), Err(RootError::NoSignChange));
+        let mut g = |x: f64| Ok(1e-170 * (x - 1.5));
+        let (r, _) = brentq(&mut g, 1.0, 2.0, 2e-12, RTOL, 100).unwrap();
+        assert!((r - 1.5).abs() < 1e-11);
     }
 
     #[test]
