@@ -43,6 +43,18 @@ def test_from_survey_accepts_vertical_sections_below_the_surface():
                              n_cells=100)
 
 
+def test_from_survey_checks_the_survey():
+    """from_survey checks the survey's stations before it interpolates them: np.interp assumes an increasing MD."""
+    with pytest.raises(ValueError, match="strictly increasing"):
+        WellGeometry.from_survey([0, 2000, 1000], [0, 1900, 1000], 10)  # was a 1000 m well, 950 m deep
+    with pytest.raises(ValueError, match="same length"):
+        WellGeometry.from_survey([0, 1000, 2000], [0, 1000], 10)
+    with pytest.raises(ValueError, match="finite"):
+        WellGeometry.from_survey([0, 1000, np.nan], [0, 1000, 1500], 10)
+    with pytest.raises(ValueError, match="MD must be >= TVD"):
+        WellGeometry.from_survey([0, 1000, 2000], [0, 1000, 2500], 10)
+
+
 class TestWellGeometry:
     """Tests for the WellGeometry dataclass."""
 

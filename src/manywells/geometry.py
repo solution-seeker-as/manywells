@@ -22,6 +22,24 @@ from typing import Sequence
 import numpy as np
 
 
+def _check_stations(md, tvd):
+    """The checks of a survey's stations, md and tvd (m) as float arrays from the surface, as GEO-3 needs them."""
+    if len(md) != len(tvd):
+        raise ValueError("md_survey and tvd_survey must have the same length")
+    if len(md) < 2:
+        raise ValueError("Survey must have at least two stations")
+    if not (np.all(np.isfinite(md)) and np.all(np.isfinite(tvd))):
+        raise ValueError("md_survey and tvd_survey must be finite")
+    if md[0] != 0.0:
+        raise ValueError("md_survey must start at 0 (surface)")
+    if tvd[0] != 0.0:
+        raise ValueError("tvd_survey must start at 0 (surface)")
+    if not np.all(np.diff(md) > 0):
+        raise ValueError("md_survey must be strictly increasing")
+    if np.any(md < tvd - 1e-12):
+        raise ValueError("MD must be >= TVD at every survey station")
+
+
 @dataclass(frozen=True)
 class WellGeometry:
     """Wellbore geometry defined by an (MD, TVD) survey.
@@ -75,18 +93,7 @@ class WellGeometry:
         tvd_grid = np.asarray(self.tvd_survey, dtype=float)
 
         # --- validation ---
-        if len(md_grid) != len(tvd_grid):
-            raise ValueError("md_survey and tvd_survey must have the same length")
-        if len(md_grid) < 2:
-            raise ValueError("Survey must have at least two stations")
-        if md_grid[0] != 0.0:
-            raise ValueError("md_survey must start at 0 (surface)")
-        if tvd_grid[0] != 0.0:
-            raise ValueError("tvd_survey must start at 0 (surface)")
-        if not np.all(np.diff(md_grid) > 0):
-            raise ValueError("md_survey must be strictly increasing")
-        if np.any(md_grid < tvd_grid - 1e-12):
-            raise ValueError("MD must be >= TVD at every survey station")
+        _check_stations(md_grid, tvd_grid)
         if self.D <= 0:
             raise ValueError("Pipe diameter D must be positive")
 
@@ -155,6 +162,7 @@ class WellGeometry:
         """
         md_arr = np.asarray(md_survey, dtype=float)
         tvd_arr = np.asarray(tvd_survey, dtype=float)
+        _check_stations(md_arr, tvd_arr)  # np.interp assumes an increasing MD, and does not check it
         md_uniform = np.linspace(0.0, md_arr[-1], n_cells + 1)
         tvd_uniform = np.interp(md_uniform, md_arr, tvd_arr)
         # On a vertical section below the surface, rounding can put a cell's TVD step an ulp above its MD step, and
