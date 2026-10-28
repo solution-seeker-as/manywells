@@ -61,3 +61,14 @@ Measurements behind the ruling on PVT-MIX-6 and PVT-MIX-8 in `../../specs/featur
 | `scripts/verification/compare_backends.py --configurations develop --per-configuration 60` | The backends on the comparison set's `develop` wells | 59 of 60 cases pass the rule of `tests/test_backend_comparison.py` before and after; the failing case is the same (`develop#17`, two roots the core misses). |
 
 In 117 of the 1456 cases with water that both runs solve, $R_{so}$ at the bottomhole exceeds the gas–oil ratio, so the density assumes more dissolved gas than PVT-OIL-13 carries (007, open items). There PBH falls by 0.2 bar at the median.
+
+## Issue #10: the march with an all-liquid bottomhole
+
+Measurements behind the retry of point 0 in `../../specs/features/012-root-search.md`, run on 2026-10-28 on `develop` at `ae754d8` with the retry added (Python 3.14, casadi 3.8.1), with 24 CPUs shared with other work. `all_liquid_bottomhole.py` compares the variants of the search: the Rust core, the CasADi search with the retry, without it (`old`), and with the rejected no-slip guess at every start (`guess`). The problem was found with the prototype of feature 018 (PVT tables, a draft on the branch `pvt-tables`).
+
+| Run | What it shows | Result |
+|---|---|---|
+| `repro` | Well 87 of seed 2026 at its nominal point, `gor=40` | Without the retry, no operating point, and point 0 fails from 0.5 at four of the seven starts; with it, 304.40 bar, the core's |
+| `cases 88 OUT.csv` | The 263 cases of `jt_wells.py` at their GOR and at half and a quarter of it (789), every variant | Without the retry the search misses 15 of the 116 operating points with an all-liquid bottomhole; with it, none, and none lost. 9 misses with gas-rich bottomholes in every variant |
+| `attempts 20 OUT.csv` | The 60 cases of the first 20 wells at their GOR, one process: each start's outcome and Ipopt iterations | The retry changes 4 of 420 starts, each from a failed march to a root, and no other: 0.16% more iterations. The `guess` variant changes the paths of others: 11% more (20% in a first measurement whose starts differed by rounding) |
+| `scripts.verification.develop_candidate`, with and without the retry, twice each | The verifier's case set | PASS, 100% for both; the same 200 roots to the bit; 1.66 and 1.68 s per case against 1.68 and 1.64 s |

@@ -57,6 +57,19 @@ as the code does (D-13).
   tree is current (`661e36d`). `NOTES.md` is no longer in the repo.
 - Dropped: `friction.py`'s 2024 copyright line is the header every file carries.
 
+### 1.7 The CasADi search missed operating points where the bottomhole is all liquid
+
+**[done 2026-10-28, issue #10]** Where all the reservoir gas is dissolved at the
+bottomhole, point 0's void fraction is $10^{-4}$ to $10^{-3}$, and from the bottom
+guess's 0.5 point 0 failed at every start near the root: at well 87 of seed 2026
+with `gor=40` the CasADi search found no operating point, and the Rust core one at
+304.40 bar. The march now retries point 0 from the phase rates' no-slip void
+fraction where it fails. On develop's sampled wells the search finds all 116 such
+operating points, where it missed 15, for 0.16% more Ipopt iterations, and the
+verifier's root sets are unchanged (`specs/features/012-root-search.md`;
+`plans/evidence/all_liquid_bottomhole.py`). Bjarne chose the retry over guessing
+the no-slip void fraction at every start, which cost 11 to 20% more iterations.
+
 ## 2. Robustness and API quality
 
 ### 2.1 Replace `assert` validation with exceptions
@@ -135,6 +148,9 @@ completeness matters.
   backend cannot calibrate well 1 (L-shaped), where its search finds no root at
   two of the four rows and the core finds a stable one. The core is calibration's
   backend.
+- *Issue #10, 2026-10-28:* one cause found and fixed. An all-liquid bottomhole
+  defeated the march's guess for point 0 (§1.7). The search still misses 9 of
+  636 operating points with gas-rich bottomholes on develop's sampled wells.
 - An option, in the `v1.0.0` configuration and later in every configuration the
   core covers: use the core's roots as extra starts for Ipopt, and record which
   roots only one backend finds. That is a comparison between the backends, not an
