@@ -135,3 +135,29 @@ The measurements behind `../../specs/model/validity.md`, run on 2026-10-29 on `d
 |---|---|---|
 | `run 500 OUT --backend rust` | 1494 cases of 500 wells: the wells' inputs, and the state and each correlation's inputs along the 1453 operating points (146,753 grid points) | The solves take 436 s in total, a few minutes on 8 processes |
 | `summary OUT` | Per row of the table: the sampler's range, and the share of cases outside the published range | See the table in `validity.md` |
+
+## Independent checks
+
+The checks behind `../../specs/model/README.md`, Test vectors, Independent checks (`../model-lock-plan.md`, Step L3, which takes over Step V1 of the validation plan's draft), run on 2026-10-29 on `develop` at `f7f1218` (Python 3.14, casadi 3.8.1, numpy 2.5.3), with `fluids` 1.3.1 and scipy 1.18.1 in an overlay environment, so that neither is a dependency:
+
+```console
+uv run --with fluids==1.3.1 python plans/evidence/independent_checks.py
+```
+
+It compares the CasADi backend's component functions; the vectors carry the result to the Rust core. It takes a few seconds. The worked examples are in `tests/test_worked_examples.py`, which runs with the test suite.
+
+| Check | Grid | Result |
+|---|---|---|
+| FRIC-4 against `fluids.friction.Chen_1979(Re, eD)` | Re from 4000 to $10^{8}$ (81 points, logarithmic), $\varepsilon/D$ 0 and $10^{-7}$ to 0.05 (42) | largest relative difference $5.9\cdot10^{-16}$ |
+| FRIC-5 against `fluids.friction.Haaland(Re, eD)` | the same | $6.5\cdot10^{-16}$ |
+| FRIC-4 and FRIC-5 against the exact Colebrook–White solution, `fluids.friction.Clamond(Re, eD)` | the same | FRIC-4 −0.32% to +0.33%, FRIC-5 −1.42% to +1.31% |
+| FRIC-4 against Chen's form of Colebrook's equation (3.7065, 2.5226), solved here | his range: Re from 4000 to $4\cdot10^{8}$ (61), $\varepsilon/D$ from $5\cdot10^{-7}$ to 0.05 (31) | Colebrook exceeds FRIC-4 by −0.28% to +0.4651%; his Table I gives at most +0.4651% and at least −0.2286% over 36 points |
+| CHK-4 against `fluids.compressible.P_critical_flow(1, k)` | $k$ from 1.05 to 1.67 | identical |
+| PVT-MIX-9 against `fluids.two_phase_voidage.gas_liquid_viscosity(x, mu_l, mu_g, Method='Cicchitti')` | $\alpha$ from 0 to 1, four gas and three liquid densities and viscosities | identical. `fluids` is given `develop`'s in-situ mass fraction, so this checks the mixing rule only; which fraction is the open finding of `pvt/mixture.md` |
+| PVT-GAS-9, PVT-GAS-11 against Dranchuk and Abou-Kassem's Eqs. (2) and (3), transcribed and solved by bisection | $p_{pr}$ from 0.2 to 15 (33), $T_{pr}$ from 1.05 to 3 (40) | $\rho_r$ within $7.7\cdot10^{-15}$, $Z$ within $1.3\cdot10^{-15}$ (relative) |
+| PVT-GAS-10 against a central difference of that transcription's $\ln Z$ in $T_{pr}$ along an isobar | the same | within $1.8\cdot10^{-7}$, the difference's truncation error |
+| PVT-GAS-5 against Sutton's Eqs. (14) and (15) as printed | $\gamma_g$ from 0.571 to 1.679, his data | $T_{pc}$ within $1.2\cdot10^{-16}$; $p_{pc}$ lower by $5.9\cdot10^{-5}$ to $2.2\cdot10^{-4}$, from 131.07 for 131.0 (the open finding of `pvt/gas.md`) |
+| PVT-OIL-3 against Abdul-Majeed and Abu Al-Soof's Eqs. (1) and (3) | API 15 to 50, 0 to 150 °C | within $4.5\cdot10^{-16}$; against the 18 measurements of their Table 1, within 0.78 dyn/cm, 0.27 dyn/cm on average |
+| PVT-OIL-12 against their Eqs. (4) and (5) | $R_{so}$ from 0.5 to 20 and 80 to 400 Sm³/Sm³, where the blend has no weight | within $1.9\cdot10^{-7}$. At 50 Sm³/Sm³ the blend gives 0.400, between the two equations' 0.425 and 0.375 |
+
+The first run of Step V1 (2026-10-02) found the same agreement with `fluids`. Rerun the script when a vector of these IDs is regenerated.
