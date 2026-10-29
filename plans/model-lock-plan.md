@@ -1,6 +1,6 @@
 # Lock the model for the new sampler — plan
 
-*Draft 2026-10-29. Owner: Bjarne Grimstad. Status: proposal.*
+*Draft 2026-10-29. Owner: Bjarne Grimstad. Status: in progress; L4 done, L2 decided but for decision 5, L2 and L3 implemented on branches.*
 
 The next step towards v2 is a new sampling procedure: synthetic wells and data that are more realistic than v1's (`specs/goals.md`, limitation 5). The sampler draws the inputs of a model, so the model should not move under it. This plan brings `develop` to the point where the sampler can be implemented:
 
@@ -38,6 +38,7 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
     - The Vazquez–Beggs black oil does not model the oil carried in a rich gas, which drops out as the pressure falls.
     - `validity.md`'s decision 4 recommends letting the black oil take any gas–oil ratio, as today. A gas condensate whose dropout matters then enters as a PVT table from a flash (018). The alternative is to refuse gas–oil ratios above a bound such as 3000 scf/STB. The sampler would then have to draw tables to have gas wells at all.
   - **Horizontal sections** (`validity.md`'s decision 5). The redesign keeps drawing L-shaped wells, with the known limit that no option has stratified flow, or it stops until a model with stratified flow exists, which would need its own feature spec.
+  - **Decided 2026-10-29.** The black oil takes any gas–oil ratio (`validity.md`, decision 4), so the model needs no change for gas-rich wells. Which well types the datasets draw, and whether they draw horizontal sections (decision 5), Bjarne decides with the sampling distribution in the redesign. What remains of this step is the inputs below.
   - **Inputs the model lacks:**
     - *Lift-gas injection depth.* Lift gas enters at the bottomhole (`inflow.md`); real gas-lift wells inject through a valve above the perforations.
     - *A gas-rate inflow for gas wells.* The reservoir gas is a fixed fraction of the liquid inflow (INF-4), and every sampled well uses Vogel's inflow, which Vogel derived for solution-gas drive below the bubble point (`validity.md`, note 10).
@@ -55,7 +56,7 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
 ### Step L2 — Validity ranges, with a rule for each
 
 - **Goal.** One table of every correlation's valid range, the range the sampler reaches, and what the model does outside it: the input from which the redesign chooses its ranges.
-- **Status.** Drafted and committed on 2026-10-29 (`5294d52`), for Bjarne's sign-off. `specs/model/validity.md` proposes three rules.
+- **Status.** Drafted and committed on 2026-10-29 (`5294d52`), for Bjarne's sign-off. Bjarne took decisions 1 to 4 as recommended on 2026-10-29 and deferred decision 5 to the sampling redesign; the record, the follow-ups and the refusals are on the branch `validity-refusals`. `specs/model/validity.md` proposes three rules.
   - *Refuse* inputs fixed before the solve where the correlation fails.
   - *Extrapolate* every state-dependent quantity, and any input whose correlation degrades gradually.
   - *Clamp* only a PVT table.
@@ -81,6 +82,7 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
 
 ### Step L3 — Check the correlations against independent sources
 
+- **Status.** In progress on the branch `independent-checks` (2026-10-29).
 - **Goal.** Independent evidence that each correlation in the v2 configuration is implemented as published. Today the `develop` vectors come from `develop` itself, and the two backends implement the same spec, so agreement between them does not check the values. This step takes over Step V1 of the validation plan's draft (`plans/validation-plan.md`).
 - **Work.**
   - **Against `fluids`** (Caleb Bell, MIT licence), run by hand with `uv run --with fluids==1.3.1`, so it is not a dependency. A script in `plans/evidence/` compares:
@@ -108,6 +110,7 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
 
 ### Step L4 — Rule on the several-void-fractions question
 
+- **Status.** Done 2026-10-29. Bjarne ruled that the new sampler uses `develop`'s default only, the five regimes, so the v2 configuration leaves the fitted classifier out, and the question stays open for the fitted classifier alone (`slip.md`, `solution.md`).
 - **Goal.** Close the last open model question in `specs/model/`.
 - **Status.** `slip.md`, Open question: settled for the five regimes, `develop`'s default, where the slip law has one root in α. It is open for the fitted classifier, which the `v1.0.0` configuration keeps and `develop` has as an option (014, Finding 2; 015, Findings 2 and 3).
 - **Work.** Bjarne rules. The options:
@@ -122,7 +125,7 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
 
 - **Goal.** The lock: a named configuration that the sampler draws in and that a test pins, so that later work on `develop` cannot change it unnoticed.
 - **Work** (after Steps L1 to L4, and the feature specs that L1 adds):
-  1. In `specs/model/README.md`, a column for the configuration next to `v1.0.0`, one option per part. The name is Bjarne's to choose; `v2.0` is proposed. `develop`'s defaults can then move on without moving it.
+  1. In `specs/model/README.md`, a column for the configuration next to `v1.0.0`, one option per part, with the five regimes and not the fitted classifier (L4). The name is Bjarne's to choose; `v2.0` is proposed. `develop`'s defaults can then move on without moving it.
   2. In `configurations.py`:
      - add the name to `CONFIGURATIONS`;
      - have `check(wp, name)` test every option, with exact types (`plans/improvements.md` §2.11, Step L7);
@@ -205,13 +208,13 @@ Steps L1 to L4 can run in parallel: L1, L2 and L4 are mostly Bjarne's decisions,
 - the v2.0 feature split and any new input (L1), in `specs/goals.md` and the feature specs;
 - `specs/model/validity.md`: its rules and five decisions, and the follow-ups in the component files (L1, L2);
 - the independent-check notes, and a ruling on any finding (L3);
-- the several-void-fractions ruling (L4);
+- the several-void-fractions ruling (L4): done 2026-10-29;
 - the v2 configuration, its name, and the rule for changing it (L5);
 - the distribution check's margin (L6);
 - the QTOT filter's standard deviation (L7, §1.11).
 
 ## Open decisions
 
-- **Which well types v2 covers:** gas condensates and gas wells, and L-shaped wells without stratified flow (L1, with decisions 4 and 5 of `validity.md`).
+- **The inputs v2 adds** (L1): lift-gas injection depth, a gas-rate inflow, a tubing diameter that changes along the well, heat capacities that depend on $(p, T)$, a heat-transfer coefficient that varies.
+- **Which well types the datasets draw, and horizontal sections** (`validity.md`'s decision 5): with the sampling distribution, in the redesign.
 - **The configuration's name** (L5).
-- **Whether the fitted classifier stays an option in v2** (L4, L5).
