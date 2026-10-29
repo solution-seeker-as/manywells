@@ -17,18 +17,19 @@ from manywells.units import R_UNIVERSAL, P_REF, T_REF, M_AIR
 # FLUIDS
 ################################################
 
+
 @dataclass
 class LiquidProperties:
-    name: str       # Name of liquid
-    rho: float      # Density (kg/m³)
-    cp: float       # Specific heat capacity (J/kg/K) - note that this is a temperature dependent property
+    name: str  # Name of liquid
+    rho: float  # Density (kg/m³)
+    cp: float  # Specific heat capacity (J/kg/K) - note that this is a temperature dependent property
 
 
 @dataclass
 class GasProperties:
-    name: str       # Name of gas
-    R_s: float      # Specific gas constant (J/kg/K)
-    cp: float       # Specific heat capacity (J/kg/K) - note that this is a temperature dependent property
+    name: str  # Name of gas
+    R_s: float  # Specific gas constant (J/kg/K)
+    cp: float  # Specific heat capacity (J/kg/K) - note that this is a temperature dependent property
 
 
 # Common fluids
@@ -64,7 +65,10 @@ See api_from_density() and density_from_api() for more details on how to convert
 # LIQUID UTILITIES AND API CONVERSIONS
 ################################################
 
-def liquid_mix(liquid_1: LiquidProperties, liquid_2: LiquidProperties, mass_fraction: float):  # spec: PVT-MIX-2, PVT-MIX-3, PVT-MIX-4
+
+def liquid_mix(
+    liquid_1: LiquidProperties, liquid_2: LiquidProperties, mass_fraction: float
+):  # spec: PVT-MIX-2, PVT-MIX-3, PVT-MIX-4
     """
     Mix two liquids based on mass fraction. The mixture properties are computed from the volume fraction.
 
@@ -84,7 +88,9 @@ def liquid_mix(liquid_1: LiquidProperties, liquid_2: LiquidProperties, mass_frac
         vol_fraction = 1 / (1 + (liquid_1.rho / liquid_2.rho) * (1 / mass_fraction - 1))  # Volume fraction of liquid 1
         mix_rho = vol_fraction * liquid_1.rho + (1 - vol_fraction) * liquid_2.rho  # Density of liquid mixture
         mix_cp = vol_fraction * liquid_1.cp + (1 - vol_fraction) * liquid_2.cp  # Specific heat capacity of mixture
-        mix_name = f'{100*mass_fraction:.1f}% of {liquid_1.name} + {100*(1 - mass_fraction):.1f}% of {liquid_2.name}'
+        mix_name = (
+            f'{100 * mass_fraction:.1f}% of {liquid_1.name} + {100 * (1 - mass_fraction):.1f}% of {liquid_2.name}'
+        )
         return LiquidProperties(name=mix_name, rho=mix_rho, cp=mix_cp)
 
 
@@ -108,7 +114,7 @@ def density_from_api(api):  # spec: PVT-OIL-2
     Compute oil density at standard reference conditions from API gravity
 
     Given the API gravity, we can compute the density of the oil (at standard conditions):
-        density of oil = 141.5 * (density of water) / (API + 131.5) 
+        density of oil = 141.5 * (density of water) / (API + 131.5)
 
     Example:
         API = 40
@@ -123,6 +129,7 @@ def density_from_api(api):  # spec: PVT-OIL-2
 ################################################
 # GAS DENSITY / SPECIFIC GRAVITY CONVERSIONS
 ################################################
+
 
 def gas_density_from_sg(sg_gas):  # spec: PVT-GAS-6
     """
@@ -147,6 +154,7 @@ def sg_from_gas_density(rho_g):  # spec: PVT-GAS-6
 ################################################
 # MIXTURE VISCOSITY
 ################################################
+
 
 def mixture_viscosity(mu_l, mu_g, alpha, rho_l, rho_g):  # spec: PVT-MIX-9
     """

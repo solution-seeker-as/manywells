@@ -49,14 +49,21 @@ def well_cases(well, backend):
         except ValueError:  # no oil to give a gas-oil ratio (SMP-43)
             continue
         fl = wp.fluid
-        rec = dict(well=well, k=k, wlr=fl.wlr, gor=fl.gor, api=fl.api, w_lg=bc.w_lg, p_r=bc.p_r, p_s=bc.p_s,
-                   T_r=bc.T_r, u=bc.u)
+        rec = dict(
+            well=well, k=k, wlr=fl.wlr, gor=fl.gor, api=fl.api, w_lg=bc.w_lg, p_r=bc.p_r, p_s=bc.p_s, T_r=bc.T_r, u=bc.u
+        )
         t0 = time.time()
         try:
             op = SSDFSimulator(wp, backend=backend).simulate(bc)
             x = op.state
-            rec.update(PBH=x[0, 0], PWH=x[-1, 0], TWH=x[-1, 6], w_res=op.w_res, rho_l_bh=x[0, 5],
-                       Rs_bh=float(fl.pvt.rs(x[0, 0], x[0, 6])))
+            rec.update(
+                PBH=x[0, 0],
+                PWH=x[-1, 0],
+                TWH=x[-1, 6],
+                w_res=op.w_res,
+                rho_l_bh=x[0, 5],
+                Rs_bh=float(fl.pvt.rs(x[0, 0], x[0, 6])),
+            )
         except SimError as e:
             rec['err'] = type(e).__name__
         rec['seconds'] = time.time() - t0
@@ -69,18 +76,22 @@ def run(n_wells, out, backend, processes):
         rows = [r for rs in pool.map(partial(well_cases, backend=backend), range(n_wells), chunksize=1) for r in rs]
     df = pd.DataFrame(rows)
     df.to_csv(out, index=False)
-    print(f'{len(df)} cases from {n_wells} wells ({backend}), operating point in {df.PBH.notna().sum()}, '
-          f'{df.seconds.sum():.0f} s in total')
+    print(
+        f'{len(df)} cases from {n_wells} wells ({backend}), operating point in {df.PBH.notna().sum()}, '
+        f'{df.seconds.sum():.0f} s in total'
+    )
 
 
 def changes(df):
-    return pd.DataFrame({
-        'rho_l bh (%)': 100 * (df.rho_l_bh_a / df.rho_l_bh_b - 1),
-        'PBH (bar)': df.PBH_a - df.PBH_b,
-        'PWH (bar)': df.PWH_a - df.PWH_b,
-        'TWH (K)': df.TWH_a - df.TWH_b,
-        'w_res (%)': 100 * (df.w_res_a / df.w_res_b - 1),
-    })
+    return pd.DataFrame(
+        {
+            'rho_l bh (%)': 100 * (df.rho_l_bh_a / df.rho_l_bh_b - 1),
+            'PBH (bar)': df.PBH_a - df.PBH_b,
+            'PWH (bar)': df.PWH_a - df.PWH_b,
+            'TWH (K)': df.TWH_a - df.TWH_b,
+            'w_res (%)': 100 * (df.w_res_a / df.w_res_b - 1),
+        }
+    )
 
 
 def compare(before, after):
@@ -88,21 +99,32 @@ def compare(before, after):
     b, a = pd.read_csv(before), pd.read_csv(after)
     df = b.merge(a, on=['well', 'k'], suffixes=('_b', '_a'))
     found_b, found_a = df.PBH_b.notna(), df.PBH_a.notna()
-    print(f'{len(df)} cases; operating point before {found_b.sum()}, after {found_a.sum()}; '
-          f'lost {(found_b & ~found_a).sum()}, gained {(~found_b & found_a).sum()}')
+    print(
+        f'{len(df)} cases; operating point before {found_b.sum()}, after {found_a.sum()}; '
+        f'lost {(found_b & ~found_a).sum()}, gained {(~found_b & found_a).sum()}'
+    )
     for name, rows in (('lost', df[found_b & ~found_a]), ('gained', df[~found_b & found_a])):
         if len(rows):
             print(f'  {name}: ' + ', '.join(f'({r.well}, {r.k})' for r in rows.itertuples()))
     both = df[found_b & found_a]
     under = both.Rs_bh_b > both.gor_b  # undersaturated at the bottomhole, by the solved state before
-    for name, rows in (('undersaturated at the bottomhole', both[under]), ('saturated at the bottomhole', both[~under])):
-        print(f'\n{len(rows)} cases {name}, with an operating point in both. Quantiles of the changes, after minus before:')
+    for name, rows in (
+        ('undersaturated at the bottomhole', both[under]),
+        ('saturated at the bottomhole', both[~under]),
+    ):
+        print(
+            f'\n{len(rows)} cases {name}, with an operating point in both. Quantiles of the changes, after minus before:'
+        )
         print(changes(rows).quantile(q).round(4).to_string())
-    print(f'\nGOR of the undersaturated cases: {both[under].gor_b.min():.1f} to {both[under].gor_b.max():.1f} Sm3/Sm3, '
-          f'median {both[under].gor_b.median():.1f}; their R_so at the bottomhole up to '
-          f'{(both[under].Rs_bh_b / both[under].gor_b).max():.2f} times the GOR')
-    print(f'Seconds per case, median (total): before {df.seconds_b.median():.3f} ({df.seconds_b.sum():.0f}), '
-          f'after {df.seconds_a.median():.3f} ({df.seconds_a.sum():.0f})')
+    print(
+        f'\nGOR of the undersaturated cases: {both[under].gor_b.min():.1f} to {both[under].gor_b.max():.1f} Sm3/Sm3, '
+        f'median {both[under].gor_b.median():.1f}; their R_so at the bottomhole up to '
+        f'{(both[under].Rs_bh_b / both[under].gor_b).max():.2f} times the GOR'
+    )
+    print(
+        f'Seconds per case, median (total): before {df.seconds_b.median():.3f} ({df.seconds_b.sum():.0f}), '
+        f'after {df.seconds_a.median():.3f} ({df.seconds_a.sum():.0f})'
+    )
 
 
 def main():

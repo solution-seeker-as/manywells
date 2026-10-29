@@ -41,6 +41,7 @@ DATA = Path('verification/data')
 @dataclass(frozen=True)
 class VerifierCase:
     """A case of the verifier's case set, in the v1.0.0 configuration, with an overlay (or none)."""
+
     case_id: str
     overlay: str = ''
 
@@ -50,6 +51,7 @@ class VerifierCase:
 
     def inputs(self):
         from scripts.verification.develop_candidate import well_of
+
         wp, bc = well_of(_cases()[self.case_id])
         return OVERLAYS[self.overlay](wp, bc) if self.overlay else (wp, bc)
 
@@ -61,6 +63,7 @@ class VerifierCase:
 @functools.cache
 def _cases():
     from manywells_verify.cases import read_cases
+
     return read_cases(DATA / 'cases.parquet')
 
 
@@ -87,16 +90,21 @@ def run(case, backends):
 
 
 def agreement_table(results) -> str:
-    rows = ['| Configuration | Cases | CasADi roots | Core roots | Missed | Labels differ | Core-only (zero the rows) '
-            '| Several α | Other branch | Largest row difference | Errors |', '|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|']
+    rows = [
+        '| Configuration | Cases | CasADi roots | Core roots | Missed | Labels differ | Core-only (zero the rows) '
+        '| Several α | Other branch | Largest row difference | Errors |',
+        '|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|--:|',
+    ]
     for conf in dict.fromkeys(k for _, k in results):
         cs = [c for c, k in results if k == conf]
         core_only = [z for c in cs for _, z in c.core_only]
-        rows.append(f'| {conf} | {len(cs)} | {sum(len(c.casadi) for c in cs)} | {sum(len(c.rust) for c in cs)} '
-                    f'| {sum(len(c.missed) for c in cs)} | {sum(len(c.labels) for c in cs)} '
-                    f'| {len(core_only)} ({sum(core_only)}) | {sum(c.several_alpha for c in cs)} '
-                    f'| {sum(bool(c.other_branch) for c in cs)} '
-                    f'| {max((c.row_rel for c in cs), default=0):.1e} | {sum(bool(c.error) for c in cs)} |')
+        rows.append(
+            f'| {conf} | {len(cs)} | {sum(len(c.casadi) for c in cs)} | {sum(len(c.rust) for c in cs)} '
+            f'| {sum(len(c.missed) for c in cs)} | {sum(len(c.labels) for c in cs)} '
+            f'| {len(core_only)} ({sum(core_only)}) | {sum(c.several_alpha for c in cs)} '
+            f'| {sum(bool(c.other_branch) for c in cs)} '
+            f'| {max((c.row_rel for c in cs), default=0):.1e} | {sum(bool(c.error) for c in cs)} |'
+        )
     return '\n'.join(rows)
 
 
@@ -106,18 +114,22 @@ def timing_table(results, backends) -> str:
     rows = ['| Backend | Cases | Median (s) | p90 (s) | Total (s) | Median marches |', '|---|--:|--:|--:|--:|--:|']
     for b in backends:
         marches = np.median([c.marches for c in cs]) if b == 'rust' and cs else float('nan')
-        rows.append(f'| {b} | {len(cs)} | {np.median(t[b]):.4f} | {np.percentile(t[b], 90):.4f} | {t[b].sum():.2f} '
-                    f'| {marches:.0f} |')
+        rows.append(
+            f'| {b} | {len(cs)} | {np.median(t[b]):.4f} | {np.percentile(t[b], 90):.4f} | {t[b].sum():.2f} '
+            f'| {marches:.0f} |'
+        )
     if len(backends) == 2:
-        rows.append(f'\nCasADi / core: {np.median(t["casadi"]) / np.median(t["rust"]):.1f}× at the median, '
-                    f'{t["casadi"].sum() / t["rust"].sum():.1f}× in total; per case at least '
-                    f'{np.min(t["casadi"] / t["rust"]):.1f}×')
+        rows.append(
+            f'\nCasADi / core: {np.median(t["casadi"]) / np.median(t["rust"]):.1f}× at the median, '
+            f'{t["casadi"].sum() / t["rust"].sum():.1f}× in total; per case at least '
+            f'{np.min(t["casadi"] / t["rust"]):.1f}×'
+        )
     return '\n'.join(rows)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[1])
-    parser.add_argument('out', type=Path, help='JSON file for every case\'s comparison')
+    parser.add_argument('out', type=Path, help="JSON file for every case's comparison")
     parser.add_argument('--set', choices=('comparison', 'verifier'), default='comparison')
     parser.add_argument('--per-configuration', type=int, default=20, help='wells per configuration (comparison)')
     parser.add_argument('--configurations', nargs='*', help='only these configurations of the comparison set')
@@ -138,11 +150,16 @@ def main():
     if len(backends) == 2:
         print(agreement_table(results) + '\n')
         failed = [c for c, _ in results if not c.ok]
-        print(f'{len(results) - len(failed)} of {len(results)} cases pass the rule of test_backend_comparison.py'
-              + ''.join(f'\n  {c.case}: missed {c.missed}, labels {c.labels}, core-only {c.core_only}, '
-                        f'rows {c.row_rel:.1e} {c.row_at} {c.error.splitlines()[0] if c.error else ""}' for c in failed)
-              + ''.join(f'\n  {c.case}: other branch at {c.other_branch}' for c, _ in results if c.other_branch)
-              + '\n')
+        print(
+            f'{len(results) - len(failed)} of {len(results)} cases pass the rule of test_backend_comparison.py'
+            + ''.join(
+                f'\n  {c.case}: missed {c.missed}, labels {c.labels}, core-only {c.core_only}, '
+                f'rows {c.row_rel:.1e} {c.row_at} {c.error.splitlines()[0] if c.error else ""}'
+                for c in failed
+            )
+            + ''.join(f'\n  {c.case}: other branch at {c.other_branch}' for c, _ in results if c.other_branch)
+            + '\n'
+        )
     print(timing_table(results, backends))
     args.out.write_text(json.dumps([{**asdict(c), 'configuration': k} for c, k in results], indent=1, default=str))
 

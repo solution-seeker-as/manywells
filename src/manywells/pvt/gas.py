@@ -14,8 +14,12 @@ gas constant conversions.
 import casadi as ca
 
 from manywells.units import (
-    R_UNIVERSAL, P_REF, T_REF,
-    CF_PSI, CF_KGM3_TO_GCC, CF_UP,
+    R_UNIVERSAL,
+    P_REF,
+    T_REF,
+    CF_PSI,
+    CF_KGM3_TO_GCC,
+    CF_UP,
     kelvin_to_rankine,
 )
 
@@ -109,8 +113,8 @@ def sutton_pseudo_critical(sg_gas):  # spec: PVT-GAS-5
     :param sg_gas: Gas specific gravity relative to air (dimensionless)
     :return: (ppc, tpc) — pseudo-critical pressure (Pa) and temperature (K)
     """
-    ppc_psia = 756.8 - 131.07 * sg_gas - 3.6 * sg_gas ** 2
-    tpc_R = 169.2 + 349.5 * sg_gas - 74.0 * sg_gas ** 2
+    ppc_psia = 756.8 - 131.07 * sg_gas - 3.6 * sg_gas**2
+    tpc_R = 169.2 + 349.5 * sg_gas - 74.0 * sg_gas**2
     return ppc_psia * CF_PSI, tpc_R / 1.8
 
 
@@ -129,17 +133,19 @@ Newton converges to 1e-12 in at most 17 steps for 1.05 <= T_pr <= 3 and p_pr <= 
 def _dak_terms(r, t):
     """DAK's Z, dZ/dr and t dZ/dt at reduced density r and pseudo-reduced temperature t."""
     a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11 = DAK_A
-    c1 = a1 + a2 / t + a3 / t ** 3 + a4 / t ** 4 + a5 / t ** 5
-    c2 = a6 + a7 / t + a8 / t ** 2
-    c3 = a9 * (a7 / t + a8 / t ** 2)
-    c4 = a10 / t ** 3
-    e = ca.exp(-a11 * r ** 2)
-    Z = 1 + c1 * r + c2 * r ** 2 - c3 * r ** 5 + c4 * r ** 2 * (1 + a11 * r ** 2) * e
-    Z_r = c1 + 2 * c2 * r - 5 * c3 * r ** 4 + 2 * c4 * r * e * (1 + a11 * r ** 2 - a11 ** 2 * r ** 4)
-    tZ_t = ((-a2 / t - 3 * a3 / t ** 3 - 4 * a4 / t ** 4 - 5 * a5 / t ** 5) * r
-            + (-a7 / t - 2 * a8 / t ** 2) * r ** 2
-            - a9 * (-a7 / t - 2 * a8 / t ** 2) * r ** 5
-            - 3 * a10 / t ** 3 * r ** 2 * (1 + a11 * r ** 2) * e)
+    c1 = a1 + a2 / t + a3 / t**3 + a4 / t**4 + a5 / t**5
+    c2 = a6 + a7 / t + a8 / t**2
+    c3 = a9 * (a7 / t + a8 / t**2)
+    c4 = a10 / t**3
+    e = ca.exp(-a11 * r**2)
+    Z = 1 + c1 * r + c2 * r**2 - c3 * r**5 + c4 * r**2 * (1 + a11 * r**2) * e
+    Z_r = c1 + 2 * c2 * r - 5 * c3 * r**4 + 2 * c4 * r * e * (1 + a11 * r**2 - a11**2 * r**4)
+    tZ_t = (
+        (-a2 / t - 3 * a3 / t**3 - 4 * a4 / t**4 - 5 * a5 / t**5) * r
+        + (-a7 / t - 2 * a8 / t**2) * r**2
+        - a9 * (-a7 / t - 2 * a8 / t**2) * r**5
+        - 3 * a10 / t**3 * r**2 * (1 + a11 * r**2) * e
+    )
     return Z, Z_r, tZ_t
 
 
@@ -206,8 +212,4 @@ def gas_z_factor(p, T, sg_gas):  # spec: PVT-GAS-4
     ppc, tpc = sutton_pseudo_critical(sg_gas)
     ppr = p / ppc
     tpr = T / tpc
-    return (
-        1
-        - 3.52 * ppr * ca.power(10, -0.9813 * tpr)
-        + 0.274 * ppr ** 2 * ca.power(10, -0.8157 * tpr)
-    )
+    return 1 - 3.52 * ppr * ca.power(10, -0.9813 * tpr) + 0.274 * ppr**2 * ca.power(10, -0.8157 * tpr)

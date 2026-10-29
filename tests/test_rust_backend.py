@@ -37,10 +37,20 @@ DATA = Path(__file__).resolve().parents[1] / 'verification' / 'data'
 def well_977():
     """Well 977 of manywells-sol-1 (the public config) at u = 0.5. v1.0.0 has its stable root at p_0 = 169.00 bar and
     the trickle root at 208.02 bar (plans/evidence/README.md); the port put the stable root at 169.13 bar."""
-    wp = v1_well(L=2113.295350541874, D=0.1016, rho_l=989.4990880705913, R_s=414.3821670270195, cp_g=2225,
-                 cp_l=3962.1236794293, f_D=0.0272533546952829, h=32.95930831622784, f_g=0.2090894400617591,
-                 inflow=Vogel(w_l_max=23.864413094825), choke=SimpsonChokeModel(K_c=0.0016739098450736,
-                                                                                chk_profile='concave'), n_cells=100)
+    wp = v1_well(
+        L=2113.295350541874,
+        D=0.1016,
+        rho_l=989.4990880705913,
+        R_s=414.3821670270195,
+        cp_g=2225,
+        cp_l=3962.1236794293,
+        f_D=0.0272533546952829,
+        h=32.95930831622784,
+        f_g=0.2090894400617591,
+        inflow=Vogel(w_l_max=23.864413094825),
+        choke=SimpsonChokeModel(K_c=0.0016739098450736, chk_profile='concave'),
+        n_cells=100,
+    )
     bc = BoundaryConditions(p_r=210.7407624097664, p_s=69.43649798000607, T_r=351.5488605162562, T_s=277.15, u=0.5)
     return wp, bc
 
@@ -49,22 +59,70 @@ def well_977():
 # number of roots and their bottomhole pressures there (to 2%), highest first
 PORT_WELLS = {
     'pi_bernoulli_u0.5': (
-        dict(L=2000, D=0.1554, rho_l=850, R_s=518.3, cp_g=2225, cp_l=4180, f_D=0.05, h=20.0, f_g=0.1379,
-             inflow=ProductivityIndex(k_l=0.5), choke=BernoulliChokeModel(K_c=0.0018966705911591126)),
-        dict(p_r=170, p_s=20, T_r=373.15, T_s=277.15, u=0.5, w_lg=0.0), [169.732375, 130.565907]),
+        dict(
+            L=2000,
+            D=0.1554,
+            rho_l=850,
+            R_s=518.3,
+            cp_g=2225,
+            cp_l=4180,
+            f_D=0.05,
+            h=20.0,
+            f_g=0.1379,
+            inflow=ProductivityIndex(k_l=0.5),
+            choke=BernoulliChokeModel(K_c=0.0018966705911591126),
+        ),
+        dict(p_r=170, p_s=20, T_r=373.15, T_s=277.15, u=0.5, w_lg=0.0),
+        [169.732375, 130.565907],
+    ),
     'vogel_simpson_u0.63': (
-        dict(L=1721.9603339481268, D=0.1397, rho_l=930.743487963018, R_s=363.4427150793591, cp_g=2225,
-             cp_l=3156.504075437806, f_D=0.05, h=12.67595099338305, f_g=0.2599255592113066,
-             inflow=Vogel(w_l_max=106.717070619435), choke=SimpsonChokeModel(K_c=0.0014075302875897,
-                                                                             chk_profile='convex')),
-        dict(p_r=115.18137045160027, p_s=18.19728485632093, T_r=339.8088100184438, T_s=277.15, u=0.6323478195871421,
-             w_lg=4.802525514813793), [109.94]),
+        dict(
+            L=1721.9603339481268,
+            D=0.1397,
+            rho_l=930.743487963018,
+            R_s=363.4427150793591,
+            cp_g=2225,
+            cp_l=3156.504075437806,
+            f_D=0.05,
+            h=12.67595099338305,
+            f_g=0.2599255592113066,
+            inflow=Vogel(w_l_max=106.717070619435),
+            choke=SimpsonChokeModel(K_c=0.0014075302875897, chk_profile='convex'),
+        ),
+        dict(
+            p_r=115.18137045160027,
+            p_s=18.19728485632093,
+            T_r=339.8088100184438,
+            T_s=277.15,
+            u=0.6323478195871421,
+            w_lg=4.802525514813793,
+        ),
+        [109.94],
+    ),
     'no_solution': (
-        dict(L=3464.592636891714, D=0.0761999999999999, rho_l=972.9309195918396, R_s=355.44652560268554, cp_g=2225,
-             cp_l=3828.209929393251, f_D=0.05, h=22.77347807279142, f_g=0.2052894249538803,
-             inflow=Vogel(w_l_max=24.759037189495423), choke=SimpsonChokeModel(K_c=0.0009286106405242)),
-        dict(p_r=222.35772124368995, p_s=42.0459274200113, T_r=392.0877791067514, T_s=277.15, u=0.3594533898306623,
-             w_lg=0.0), []),
+        dict(
+            L=3464.592636891714,
+            D=0.0761999999999999,
+            rho_l=972.9309195918396,
+            R_s=355.44652560268554,
+            cp_g=2225,
+            cp_l=3828.209929393251,
+            f_D=0.05,
+            h=22.77347807279142,
+            f_g=0.2052894249538803,
+            inflow=Vogel(w_l_max=24.759037189495423),
+            choke=SimpsonChokeModel(K_c=0.0009286106405242),
+        ),
+        dict(
+            p_r=222.35772124368995,
+            p_s=42.0459274200113,
+            T_r=392.0877791067514,
+            T_s=277.15,
+            u=0.3594533898306623,
+            w_lg=0.0,
+        ),
+        [],
+    ),
 }
 
 
@@ -137,7 +195,8 @@ def test_integer_switches_solve_on_the_core():
     wp, bc = well_977()
     thermal = ThermalModel(h=wp.thermal.h, frictional_heating=0, gravity_term=0, lift_gas_mixing=0, joule_thomson=0)
     assert SSDFSimulator(replace(wp, thermal=thermal), backend='rust').simulate(bc).p_0 == pytest.approx(
-        SSDFSimulator(wp, backend='rust').simulate(bc).p_0, abs=0)
+        SSDFSimulator(wp, backend='rust').simulate(bc).p_0, abs=0
+    )
 
 
 @pytest.mark.parametrize('regime_model', ['fitted', 'hasan'])
@@ -201,6 +260,7 @@ def test_rust_and_casadi_find_the_same_roots(name):
 def case_set():
     from manywells_verify.cases import read_cases
     from scripts.verification.develop_candidate import well_of
+
     return {cid: well_of(case) for cid, case in read_cases(DATA / 'cases.parquet').items()}
 
 
@@ -209,6 +269,7 @@ def test_the_slope_has_the_sign_of_the_bracket_on_the_case_set():
     """The label comes from a central difference of R; the core also reports which way R crossed zero in the
     bracket the root came from. With one crossing per bracket the two agree."""
     from manywells.solvers.rust import RustRootFinder, operating_point
+
     n = 0
     for cid, (wp, bc) in case_set().items():
         found, _ = RustRootFinder(wp).core.root_set(operating_point(bc))
@@ -221,11 +282,13 @@ def test_the_slope_has_the_sign_of_the_bracket_on_the_case_set():
 def void_fraction_residual(slip=SlipModel(regime_model='fitted')):
     """h(α) = α (C_0 j_m + v_inf) - j_g, the slip row times -α at fixed superficial velocities, as a CasADi function
     of (α, j_g, j_l, rho_g, rho_l, sigma, D, cos_incl) on a slip model, by default the v1.0.0 configuration's."""
-    alpha, j_g, j_l, rho_g, rho_l, sigma, D, cos_incl = (ca.SX.sym(n) for n in ('alpha', 'j_g', 'j_l', 'rho_g',
-                                                                                'rho_l', 'sigma', 'D', 'cos_incl'))
+    alpha, j_g, j_l, rho_g, rho_l, sigma, D, cos_incl = (
+        ca.SX.sym(n) for n in ('alpha', 'j_g', 'j_l', 'rho_g', 'rho_l', 'sigma', 'D', 'cos_incl')
+    )
     C_0, v_inf = slip.identify_parameters(j_g / alpha, j_l / (1 - alpha), alpha, rho_g, rho_l, sigma, D, cos_incl)
-    return ca.Function('h', [alpha, j_g, j_l, rho_g, rho_l, sigma, D, cos_incl],
-                       [alpha * (C_0 * (j_g + j_l) + v_inf) - j_g])
+    return ca.Function(
+        'h', [alpha, j_g, j_l, rho_g, rho_l, sigma, D, cos_incl], [alpha * (C_0 * (j_g + j_l) + v_inf) - j_g]
+    )
 
 
 @pytest.mark.slow
@@ -237,6 +300,7 @@ def test_the_slip_row_has_one_root_in_alpha_at_every_reference_point():
     """
     import pandas as pd
     from manywells_verify.cases import read_cases
+
     cases = read_cases(DATA / 'cases.parquet')
     ref = pd.read_parquet(DATA / 'reference_roots.parquet')
     X = np.vstack([np.reshape(x, (-1, 7)) for x in ref.x])
@@ -265,6 +329,7 @@ def _gas_well(well, sample):
     from manywells.configurations import DEVELOP
     from manywells.sampling.conditions import nominal_conditions, sample_conditions
     from manywells.sampling.wells import rng_for, sample_well, well_properties
+
     draw = sample_well(2026, well)
     rng = rng_for(2026, well, 'jt')
     bc, fractions = nominal_conditions(draw), draw.fractions
@@ -285,5 +350,6 @@ def test_the_core_finds_the_operating_point_of_a_gas_well_with_joule_thomson_coo
     assert counts['edge_refinements'] > 0 and counts['lower_step_outs'] > 0
     assert well != 22 or counts['temperature_minima'] > 0
     from manywells.discretization import build_system
+
     system = build_system(wp)
     assert system.energy_rows_rise(op.x, system.params(bc))  # SOL-9: the upper root where the row is U-shaped

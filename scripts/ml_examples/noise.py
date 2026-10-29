@@ -24,9 +24,25 @@ def add_noise(df, config, percentage_noise=0.1):
     :param percentage_noise:
     :return:
     """
-    noise_cols = ['PBH', 'PWH', 'PDC', 'TBH', 'TWH',
-                  'WGL', 'WGAS', 'WLIQ', 'WOIL', 'WWAT', 'WTOT',
-                  'QGL', 'QGAS', 'QLIQ', 'QOIL', 'QWAT', 'QTOT']
+    noise_cols = [
+        'PBH',
+        'PWH',
+        'PDC',
+        'TBH',
+        'TWH',
+        'WGL',
+        'WGAS',
+        'WLIQ',
+        'WOIL',
+        'WWAT',
+        'WTOT',
+        'QGL',
+        'QGAS',
+        'QLIQ',
+        'QOIL',
+        'QWAT',
+        'QTOT',
+    ]
 
     derived_w_cols = ['WLIQ', 'WTOT']
     derived_q_cols = ['QGL', 'QGAS', 'QLIQ', 'QOIL', 'QWAT', 'QTOT']
@@ -48,30 +64,30 @@ def add_noise(df, config, percentage_noise=0.1):
     for col in derived_q_cols:
         for id in df['ID'].unique():
             c_i = config[config['ID'] == id]
-            #df_i = df[df['ID'] == id]
+            # df_i = df[df['ID'] == id]
             rho_g = gas_density(c_i['wp.R_s'].values[0])  # At standard conditions
             rho_l = c_i['wp.rho_l'].values[0]
             rho_oil = c_i['oil.rho'].values[0]
             rho_water = c_i['water.rho'].values[0]
             mask = noise_df['ID'] == id
             if col == 'QGL':
-                noise_df.loc[mask,col] = noise_df.loc[mask,'WGL'] / rho_g * 3600
+                noise_df.loc[mask, col] = noise_df.loc[mask, 'WGL'] / rho_g * 3600
             if col == 'QGAS':
-                noise_df.loc[mask,col] = noise_df.loc[mask,'WGAS'] / rho_g * 3600
+                noise_df.loc[mask, col] = noise_df.loc[mask, 'WGAS'] / rho_g * 3600
             if col == 'QLIQ':
-                noise_df.loc[mask,col] = noise_df.loc[mask,'WLIQ'] / rho_l * 3600
+                noise_df.loc[mask, col] = noise_df.loc[mask, 'WLIQ'] / rho_l * 3600
             elif col == 'QOIL':
-                noise_df.loc[mask,col] = noise_df.loc[mask,'WOIL'] / rho_oil * 3600
+                noise_df.loc[mask, col] = noise_df.loc[mask, 'WOIL'] / rho_oil * 3600
             elif col == 'QWAT':
-                noise_df.loc[mask,col] = noise_df.loc[mask,'WWAT'] / rho_water * 3600
+                noise_df.loc[mask, col] = noise_df.loc[mask, 'WWAT'] / rho_water * 3600
             elif col == 'QTOT':  # QTOT = QGL + QGAS + QOIL + QWAT, whose noise is set above
-                noise_df.loc[mask,col] = noise_df.loc[mask,['QGL', 'QGAS', 'QOIL', 'QWAT']].sum(axis=1)
-
+                noise_df.loc[mask, col] = noise_df.loc[mask, ['QGL', 'QGAS', 'QOIL', 'QWAT']].sum(axis=1)
 
     df_copy = df.copy()
 
     df_copy[noise_cols] += noise_df[noise_cols]
     return df_copy, noise_df
+
 
 def save_data(df, path):
     """
@@ -97,13 +113,13 @@ def init_noise_df(df, cols):
     return noise_df
 
 
-if __name__=='__main__':
+if __name__ == '__main__':
     dataset_name = 'manywells-sol-1'
     # add_noise_and_save(dataset_name, dataset_name + '_noisy.csv')
     config = load_config(dataset_name)
-    print(config.loc[config['ID']==0,'wp.R_s'].iloc[0])
+    print(config.loc[config['ID'] == 0, 'wp.R_s'].iloc[0])
     df = load_data(dataset_name)
-    df_new,noise_df = add_noise(df, config)
+    df_new, noise_df = add_noise(df, config)
     w_zero = noise_df['WLIQ'] - noise_df['WWAT'] - noise_df['WOIL']
     q_zero = noise_df['QLIQ'] - noise_df['QWAT'] - noise_df['QOIL']
     df = pd.DataFrame()
@@ -115,4 +131,3 @@ if __name__=='__main__':
     noise_df.plot(subplots=True, layout=(4, 5))
 
     plt.show()
-

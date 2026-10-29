@@ -52,9 +52,13 @@ def test_develop_defaults_are_the_develop_configuration():
 
 
 def test_check_lists_every_difference():
-    wp = dataclasses.replace(v1(), geometry=WellGeometry.from_survey([0, 1000, 2500], [0, 1000, 2200], n_cells=40),
-                             friction=WellProperties().friction,
-                             thermal=ThermalModel(h=25.0), inflow=FixedFlowRate(10.0))
+    wp = dataclasses.replace(
+        v1(),
+        geometry=WellGeometry.from_survey([0, 1000, 2500], [0, 1000, 2200], n_cells=40),
+        friction=WellProperties().friction,
+        thermal=ThermalModel(h=25.0),
+        inflow=FixedFlowRate(10.0),
+    )
     with pytest.raises(ValueError) as e:
         check(wp, V1)
     message = str(e.value)
@@ -73,24 +77,30 @@ def test_check_rejects_fluid_options():
 
 def test_check_rejects_subclasses():
     """A subclass may change the physics, as a quadratic IPR in a ProductivityIndex would: each class is exact."""
+
     class QuadraticPI(ProductivityIndex):
         pass
 
     class MyThermal(ThermalModel):
         pass
 
-    wp = dataclasses.replace(v1(), inflow=QuadraticPI(k_l=1.0),
-                             thermal=MyThermal(h=25.0, frictional_heating=False, gravity_term=False,
-                                               lift_gas_mixing=False, joule_thomson=False))
+    wp = dataclasses.replace(
+        v1(),
+        inflow=QuadraticPI(k_l=1.0),
+        thermal=MyThermal(
+            h=25.0, frictional_heating=False, gravity_term=False, lift_gas_mixing=False, joule_thomson=False
+        ),
+    )
     diff = differences(wp, V1)
     assert any('QuadraticPI, not Vogel or ProductivityIndex' in d for d in diff)
     assert any('thermal: MyThermal, not ThermalModel' in d for d in diff)
     with pytest.raises(ValueError):
         v1_well(**PARAMS, inflow=QuadraticPI(k_l=1.0), choke=SimpsonChokeModel(K_c=0.002), n_cells=40)
     assert differences(dataclasses.replace(WellProperties(), thermal=MyThermal()), DEVELOP) == [
-        'thermal: MyThermal, not ThermalModel']
+        'thermal: MyThermal, not ThermalModel'
+    ]
 
 
 def test_unknown_configuration():
-    with pytest.raises(ValueError, match="unknown configuration"):
+    with pytest.raises(ValueError, match='unknown configuration'):
         differences(v1(), 'v0.9')

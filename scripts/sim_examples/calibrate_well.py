@@ -22,8 +22,9 @@ from manywells.simulator import BoundaryConditions, WellProperties
 
 # -- The well as the user knows it ----------------------------------------
 geometry = WellGeometry.vertical(length=2500, n_cells=50, D=0.1)
-wp = WellProperties(geometry=geometry, inflow=Vogel(w_l_max=60.0),
-                    choke=SimpsonChokeModel(K_c=0.12 * geometry.A, chk_profile='linear'))
+wp = WellProperties(
+    geometry=geometry, inflow=Vogel(w_l_max=60.0), choke=SimpsonChokeModel(K_c=0.12 * geometry.A, chk_profile='linear')
+)
 bc = BoundaryConditions(p_r=250.0, p_s=20.0, T_r=360.0, T_s=280.0)
 
 # -- The "measured" data: the true well differs from what the user knows --
@@ -43,8 +44,10 @@ table = evaluate(result.well, new, bc)
 before = evaluate(wp, new, bc)
 
 fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
-for ax, (obs, label) in zip(axes, [('PWH', 'Wellhead pressure (bar)'), ('PBH', 'Bottomhole pressure (bar)'),
-                                   ('WRES', 'Reservoir mass rate (kg/s)')]):
+for ax, (obs, label) in zip(
+    axes,
+    [('PWH', 'Wellhead pressure (bar)'), ('PBH', 'Bottomhole pressure (bar)'), ('WRES', 'Reservoir mass rate (kg/s)')],
+):
     ax.plot(table['CHK'], table[f'{obs}_obs'], 'ko', label='measured')
     ax.plot(before['CHK'], before[f'{obs}_pred'], 'x', color='tab:red', label='before calibration')
     ax.plot(table['CHK'], table[f'{obs}_pred'], '+', color='tab:blue', ms=10, label='calibrated')

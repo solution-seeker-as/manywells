@@ -20,10 +20,10 @@ from manywells.discretization import PARAMS
 
 @dataclass(frozen=True, eq=False)
 class SolveResult:
-    x: np.ndarray       # The solver's last iterate
-    success: bool       # Ipopt reported success
-    status: str         # Ipopt's return status
-    stats: dict         # CasADi's solver statistics
+    x: np.ndarray  # The solver's last iterate
+    success: bool  # Ipopt reported success
+    status: str  # Ipopt's return status
+    stats: dict  # CasADi's solver statistics
 
 
 class IpoptSolver:
@@ -31,8 +31,13 @@ class IpoptSolver:
 
     # Quiet: no banner, no iteration log, no CasADi warnings about NaN in a trial step, and no multipliers of the
     # parameters, which a feasibility problem does not need
-    OPTIONS = {'ipopt.print_level': 0, 'ipopt.sb': 'yes', 'print_time': 0, 'show_eval_warnings': False,
-               'calc_lam_p': False}
+    OPTIONS = {
+        'ipopt.print_level': 0,
+        'ipopt.sb': 'yes',
+        'print_time': 0,
+        'show_eval_warnings': False,
+        'calc_lam_p': False,
+    }
 
     def __init__(self, system, options=None):
         x = ca.SX.sym('x', system.n_x)
@@ -43,5 +48,9 @@ class IpoptSolver:
     def solve(self, x0, params, lbx, ubx) -> SolveResult:
         result = self._nlp(x0=x0, p=params, lbx=lbx, ubx=ubx, lbg=0, ubg=0)
         stats = self._nlp.stats()
-        return SolveResult(x=np.asarray(result['x'], dtype=float).ravel(), success=bool(stats['success']),
-                           status=str(stats['return_status']), stats=stats)
+        return SolveResult(
+            x=np.asarray(result['x'], dtype=float).ravel(),
+            success=bool(stats['success']),
+            status=str(stats['return_status']),
+            stats=stats,
+        )

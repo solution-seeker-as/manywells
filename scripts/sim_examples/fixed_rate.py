@@ -30,10 +30,10 @@ A = wp.geometry.A
 df['w_g'] = A * df['alpha'] * df['rho_g'] * df['v_g']
 df['w_l'] = A * (1 - df['alpha']) * df['rho_l'] * df['v_l']
 
-print(f"Fixed liquid rate : {W_L:.2f} kg/s")
-print(f"Bottom-hole pressure: {df['p'].iloc[0]:.2f} bar")
-print(f"Wellhead pressure   : {df['p'].iloc[-1]:.2f} bar")
-print(f"Wellhead temperature: {df['T'].iloc[-1] - 273.15:.1f} °C")
+print(f'Fixed liquid rate : {W_L:.2f} kg/s')
+print(f'Bottom-hole pressure: {df["p"].iloc[0]:.2f} bar')
+print(f'Wellhead pressure   : {df["p"].iloc[-1]:.2f} bar')
+print(f'Wellhead temperature: {df["T"].iloc[-1] - 273.15:.1f} °C')
 
 # -- Plot results ---------------------------------------------------------
 panels = [
@@ -57,7 +57,8 @@ for ax, (col, ylabel) in zip(axes.flat, panels):
 
 fig.suptitle(
     f'Fixed flow rate simulation  ($w_l$ = {W_L:.1f} kg/s)',
-    fontsize=14, fontweight='bold',
+    fontsize=14,
+    fontweight='bold',
 )
 plt.tight_layout(rect=[0, 0, 1, 0.96])
 plt.show()

@@ -37,8 +37,18 @@ from manywells.simulator import SimError, SSDFSimulator
 
 SEED = 2026
 VARIANTS = {'old': ('papay', False), 'dak': ('dak', False), 'papay_jt': ('papay', True), 'new': ('dak', True)}
-COUNTS = ('marches', 'states', 'temperature_solves', 'chord_fallbacks', 'step_outs', 'lower_step_outs',
-          'temperature_minima', 'temperature_failures', 'non_finite', 'edge_refinements')
+COUNTS = (
+    'marches',
+    'states',
+    'temperature_solves',
+    'chord_fallbacks',
+    'step_outs',
+    'lower_step_outs',
+    'temperature_minima',
+    'temperature_failures',
+    'non_finite',
+    'edge_refinements',
+)
 
 
 def cases(n_wells):
@@ -64,8 +74,13 @@ def solve(wp, bc):
     if op is not None:
         X = op.state
         T_a = np.array([wp.thermal.ambient_temperature(f, bc.T_r, bc.T_s) for f in wp.geometry.tvd_frac])
-        out.update(PBH=X[0, 0], PWH=X[-1, 0], TWH=X[-1, 6], min_T_minus_Ta=float(np.min(X[1:, 6] - T_a[1:])),
-                   min_T_minus_Ts=float(np.min(X[:, 6]) - bc.T_s))
+        out.update(
+            PBH=X[0, 0],
+            PWH=X[-1, 0],
+            TWH=X[-1, 6],
+            min_T_minus_Ta=float(np.min(X[1:, 6] - T_a[1:])),
+            min_T_minus_Ts=float(np.min(X[:, 6]) - bc.T_s),
+        )
     return out
 
 
@@ -76,20 +91,28 @@ def summary(df):
         print(f'  {v}: operating point in {df[f"TWH_{v}"].notna().sum()}')
     ok = df.dropna(subset=[f'TWH_{v}' for v in VARIANTS])
     print(f'{len(ok)} with an operating point in every variant')
-    diff = pd.DataFrame({f'{k} {a}-{b}': ok[f'{k}_{a}'] - ok[f'{k}_{b}']
-                         for a, b in (('new', 'old'), ('dak', 'old'), ('new', 'dak'), ('papay_jt', 'old'))
-                         for k in ('TWH', 'PWH', 'PBH')})
+    diff = pd.DataFrame(
+        {
+            f'{k} {a}-{b}': ok[f'{k}_{a}'] - ok[f'{k}_{b}']
+            for a, b in (('new', 'old'), ('dak', 'old'), ('new', 'dak'), ('papay_jt', 'old'))
+            for k in ('TWH', 'PWH', 'PBH')
+        }
+    )
     pd.set_option('display.width', 250)
     print(diff.quantile(q).round(2).to_string())
     for v in VARIANTS:
         c = ok[f'min_T_minus_Ta_{v}']
-        print(f'{v}: colder than ambient somewhere in {(c < 0).sum()} (min {c.min():.2f} K); '
-              f'min T - T_s {ok[f"min_T_minus_Ts_{v}"].min():.2f} K')
+        print(
+            f'{v}: colder than ambient somewhere in {(c < 0).sum()} (min {c.min():.2f} K); '
+            f'min T - T_s {ok[f"min_T_minus_Ts_{v}"].min():.2f} K'
+        )
     print('Work, every case:')
     for v in VARIANTS:
         s = df[f'seconds_{v}']
-        print(f'  {v}: {s.median() * 1e3:.1f} ms median, {s.sum():.1f} s total; '
-              + ', '.join(f'{c} {int(df[f"{c}_{v}"].sum())}' for c in COUNTS))
+        print(
+            f'  {v}: {s.median() * 1e3:.1f} ms median, {s.sum():.1f} s total; '
+            + ', '.join(f'{c} {int(df[f"{c}_{v}"].sum())}' for c in COUNTS)
+        )
 
 
 def main(out):

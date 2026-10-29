@@ -30,8 +30,9 @@ DATA, BUILD = VERIFICATION / 'data', VERIFICATION / 'data' / 'build'
 
 def main():
     cases = read_cases(DATA / 'cases.parquet')
-    report = verify(cases, read_roots(DATA / 'v1_cold.parquet'), read_roots(DATA / 'reference_roots.parquet'),
-                    name='v1.0.0')
+    report = verify(
+        cases, read_roots(DATA / 'v1_cold.parquet'), read_roots(DATA / 'reference_roots.parquet'), name='v1.0.0'
+    )
     runs = json.loads((BUILD / 'v1_runs.json').read_text())
 
     rows, other = [], []
@@ -39,11 +40,18 @@ def main():
         cold = runs.get(case_id, {}).get('cold', {})
         if check == 'operating_point' and cases[case_id].source != 'convergence':
             if cold.get('status') == 'failed':
-                rows.append({'case_id': case_id, 'check': check, 'reason': f'v1 default guess fails ({cold.get("stage")})'})
+                rows.append(
+                    {'case_id': case_id, 'check': check, 'reason': f'v1 default guess fails ({cold.get("stage")})'}
+                )
                 continue
             if cold.get('slope', 0) > 0:
-                rows.append({'case_id': case_id, 'check': check,
-                             'reason': f'v1 default guess reaches the trickle root (p0 = {cold["p0"]:.3f} bar)'})
+                rows.append(
+                    {
+                        'case_id': case_id,
+                        'check': check,
+                        'reason': f'v1 default guess reaches the trickle root (p0 = {cold["p0"]:.3f} bar)',
+                    }
+                )
                 continue
         other.append((case_id, check, detail.detail))
 

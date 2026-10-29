@@ -30,15 +30,15 @@ v2.0.0 may break any part of the API; every break is listed here with an old→n
 # old
 sim = SSDFSimulator(wp, bc)
 sim.x_guess = x_prev
-x = sim.simulate()                  # list: whichever root Ipopt reached
+x = sim.simulate()  # list: whichever root Ipopt reached
 df = sim.solution_as_df(x)
 
 # new
 sim = SSDFSimulator(wp)
-op = sim.simulate(bc, x_guess=x_prev)   # Root: the stable root; raises NoOperatingPoint without one
-x = op.x                                # numpy array, same order as before
+op = sim.simulate(bc, x_guess=x_prev)  # Root: the stable root; raises NoOperatingPoint without one
+x = op.x  # numpy array, same order as before
 df = sim.solution_as_df(op)
-rs = sim.root_set(bc)                   # every root found, each labelled stable or unstable
+rs = sim.root_set(bc)  # every root found, each labelled stable or unstable
 ```
 
 **Friction and heat transfer** are components of the well.
@@ -51,8 +51,9 @@ wp = WellProperties(roughness=4.5e-5)
 # new
 from manywells.friction import FixedFrictionFactor, RoughnessFriction
 from manywells.thermal import ThermalModel
+
 wp = WellProperties(friction=FixedFrictionFactor(f_D=0.03), thermal=ThermalModel(h=20.0))
-wp = WellProperties(friction=RoughnessFriction(roughness=4.5e-5))   # the default; correlation='chen' or 'haaland'
+wp = WellProperties(friction=RoughnessFriction(roughness=4.5e-5))  # the default; correlation='chen' or 'haaland'
 ```
 
 **Frozen inputs.** `WellProperties`, `BoundaryConditions`, `FluidModel`, `WellGeometry`, and the inflow, choke, slip, friction and thermal models are frozen dataclasses, so assigning to a field, or to a misspelt one, raises. Validation raises `ValueError`, not `AssertionError`. The default choke is set by `WellProperties` itself.
@@ -60,12 +61,15 @@ wp = WellProperties(friction=RoughnessFriction(roughness=4.5e-5))   # the defaul
 ```python
 # old
 bc.u = 0.5
-wp.choke = None; SSDFSimulator(wp, bc); wp.choke   # the simulator wrote the default choke into wp
+wp.choke = None
+SSDFSimulator(wp, bc)
+wp.choke  # the simulator wrote the default choke into wp
 
 # new
 from dataclasses import replace
+
 bc = replace(bc, u=0.5)
-WellProperties().choke                             # BernoulliChokeModel(K_c=0.1 A)
+WellProperties().choke  # BernoulliChokeModel(K_c=0.1 A)
 ```
 
 **Pressures in bar.** The black oil's `p_sep` and `p_bubble` are in bar, like every other interface.
@@ -104,6 +108,7 @@ SimpsonChokeModel().mass_flow_rate(u, p_in, p_out, x_g, rho_g, rho_l)
 
 # new
 from manywells.discretization import PointState
+
 s = PointState(p=p_in, v_g=v_g, v_l=v_l, alpha=alpha, rho_g=rho_g, rho_l=rho_l, T=T)
 choke.mass_flow_rate(u, p_out, s, A)
 ```
@@ -115,7 +120,7 @@ choke.mass_flow_rate(u, p_out, s, A)
 fluid.surface_tension(p, T)
 
 # new
-fluid.surface_tension(p, T, rho_l)            # surface_tension_model='oil' (default) ignores rho_l
+fluid.surface_tension(p, T, rho_l)  # surface_tension_model='oil' (default) ignores rho_l
 ```
 
 **Phase rates** moved from the simulator to the fluid model.
@@ -125,7 +130,7 @@ fluid.surface_tension(p, T, rho_l)            # surface_tension_model='oil' (def
 sim._gas_and_liquid_flow_rate(p, T, w_l_inflow)
 
 # new
-fluid.phase_rates(p, T, w_res, w_lg)          # and fluid.reservoir_gas_rate(w_res)
+fluid.phase_rates(p, T, w_res, w_lg)  # and fluid.reservoir_gas_rate(w_res)
 ```
 
 **Closed loop** is removed: closed-loop simulation is out of scope for v2 (`specs/goals.md`). `manywells.closed_loop`, the closed-loop and loaded-wells generators, and the v1.0.0 sampler they used (`scripts/data_generation/well.py`, `nonstationary_well.py`) are gone; v1.0.0 has them, and generated the published `manywells-nscl-1`.
@@ -143,12 +148,14 @@ from manywells.closed_loop.cl_simulator import ClosedLoopWellSimulator
 ```python
 # old
 from manywells.calibration.choke_cal import calibrate_simpson_choke_model
+
 K_c = calibrate_simpson_choke_model(df_with_p_w_m_u_p_s_x_g_rho_g_rho_l, choke)
 
 # new
 from manywells.calibration import CalibrationData, calibrate
+
 result = calibrate(wp, CalibrationData(df_with_CHK_PDC_PWH_TWH_QOIL_QGAS_QWAT), bc, free=['K_c'])
-K_c = result.values['K_c']          # result.well is the calibrated WellProperties
+K_c = result.values['K_c']  # result.well is the calibrated WellProperties
 ```
 
 ### Breaks since v1.0.0 that predate this list

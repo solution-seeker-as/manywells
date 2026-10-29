@@ -9,7 +9,6 @@ Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 Implementation of slip models
 """
 
-
 import math
 from dataclasses import dataclass
 
@@ -19,9 +18,9 @@ from manywells.units import STD_GRAVITY
 
 
 REGIME_MODELS = ('hasan', 'fitted')
-FITTED_REGIMES = ('annular', 'slug-churn', 'bubbly')                          # SLIP-8
-HASAN_REGIMES = ('annular', 'churn', 'dispersed-bubbly', 'slug', 'bubbly')    # SLIP-16
-SQRT_GUARD = 1e-6                        # delta of SLIP-12: bounds the derivative of sqrt(lambda_g) at no free gas
+FITTED_REGIMES = ('annular', 'slug-churn', 'bubbly')  # SLIP-8
+HASAN_REGIMES = ('annular', 'churn', 'dispersed-bubbly', 'slug', 'bubbly')  # SLIP-16
+SQRT_GUARD = 1e-6  # delta of SLIP-12: bounds the derivative of sqrt(lambda_g) at no free gas
 
 
 def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl):  # spec: SLIP-6, SLIP-7
@@ -93,7 +92,7 @@ def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl):  # spe
     v_ls = (1 - alpha) * v_l  # Superficial liquid velocity (m/s)
 
     # Velocity condition for annular flow
-    annular_boundary = 3.1 * (STD_GRAVITY * sigma * (rho_l - rho_g) / rho_g ** 2) ** (1 / 4)
+    annular_boundary = 3.1 * (STD_GRAVITY * sigma * (rho_l - rho_g) / rho_g**2) ** (1 / 4)
 
     # Conditions in flow regime hierarchy
     c_1 = ca.tanh(v_gs - annular_boundary)  # Eq. A-19 in Hasan, Kabir & Sayarpour (2010)
@@ -135,15 +134,20 @@ def hasan_rule_quantities(v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl, f_ms, la
     lambda_g = v_gs / (v_m + lambda_floor * v_inf_b)
     alpha_b = v_gs / (1.2 * v_m + v_inf_b)
     alpha_t = cos_incl / (2.8 + 1.2 * cos_incl)
-    v_gc = 3.1 * ca.constpow(STD_GRAVITY * sigma * (rho_l - rho_g) / rho_g ** 2, 1 / 4)
-    k = (2 * ca.constpow(f_ms / (2 * D), 0.4) * ca.constpow(rho_l / sigma, 0.6)
-         * ca.sqrt(0.4 * sigma / (STD_GRAVITY * (rho_l - rho_g))))
+    v_gc = 3.1 * ca.constpow(STD_GRAVITY * sigma * (rho_l - rho_g) / rho_g**2, 1 / 4)
+    k = (
+        2
+        * ca.constpow(f_ms / (2 * D), 0.4)
+        * ca.constpow(rho_l / sigma, 0.6)
+        * ca.sqrt(0.4 * sigma / (STD_GRAVITY * (rho_l - rho_g)))
+    )
     v_ms = ca.constpow((0.725 + 4.15 * ca.sqrt(lambda_g + SQRT_GUARD)) / k, 1 / 1.2)
     return lambda_g, alpha_b, alpha_t, v_gc, v_ms
 
 
-def hasan_probabilities(v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl, f_ms, transition_width,
-                        lambda_floor):  # spec: SLIP-13, SLIP-14
+def hasan_probabilities(
+    v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl, f_ms, transition_width, lambda_floor
+):  # spec: SLIP-13, SLIP-14
     """
     Probabilities of the five regimes, [p_annular, p_churn, p_dispersed, p_slug, p_bubbly], from the rules of Hasan,
     Kabir & Sayarpour's (2010) pattern-transition criteria as a soft decision tree. Each rule's soft truth is
@@ -159,13 +163,15 @@ def hasan_probabilities(v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl, f_ms, tran
     bubbly. Nothing depends on the void fraction but through v_gs and v_ls. Arguments as hasan_rule_quantities, and
     transition_width is w (dimensionless).
     """
-    lambda_g, alpha_b, alpha_t, v_gc, v_ms = hasan_rule_quantities(v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl,
-                                                                   f_ms, lambda_floor)
+    lambda_g, alpha_b, alpha_t, v_gc, v_ms = hasan_rule_quantities(
+        v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl, f_ms, lambda_floor
+    )
     margins = (v_gs / v_gc - 1, lambda_g - 0.7, (v_gs + v_ls) / v_ms - 1, lambda_g - 1.08 / 2.08, alpha_b - alpha_t)
     s_A1, s_A2, s_M, s_G, s_S = (0.5 * (1 + ca.tanh(z / (2 * transition_width))) for z in margins)
     a = s_A1 * s_A2
-    return ca.vertcat(a, (1 - a) * s_M * s_G, (1 - a) * s_M * (1 - s_G), (1 - a) * (1 - s_M) * s_S,
-                      (1 - a) * (1 - s_M) * (1 - s_S))
+    return ca.vertcat(
+        a, (1 - a) * s_M * s_G, (1 - a) * s_M * (1 - s_G), (1 - a) * (1 - s_M) * s_S, (1 - a) * (1 - s_M) * (1 - s_S)
+    )
 
 
 @dataclass(frozen=True)
@@ -235,7 +241,7 @@ class SlipModel:
         :param sigma: Oil-gas surface tension (J/m²)
         :return: Bubble rise velocity (m/s)
         """
-        return 1.53 * ca.constpow(STD_GRAVITY * sigma * (rho_l - rho_g) / (rho_l ** 2), 1 / 4)
+        return 1.53 * ca.constpow(STD_GRAVITY * sigma * (rho_l - rho_g) / (rho_l**2), 1 / 4)
 
     @staticmethod
     def taylor_rise_velocity(rho_g, rho_l, D):  # spec: SLIP-5
@@ -255,8 +261,18 @@ class SlipModel:
         """
         if self.regime_model == 'fitted':
             return classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl)
-        return hasan_probabilities(alpha * v_g, (1 - alpha) * v_l, rho_g, rho_l, sigma, D, cos_incl, self.f_ms,
-                                   self.transition_width, self.lambda_floor)
+        return hasan_probabilities(
+            alpha * v_g,
+            (1 - alpha) * v_l,
+            rho_g,
+            rho_l,
+            sigma,
+            D,
+            cos_incl,
+            self.f_ms,
+            self.transition_width,
+            self.lambda_floor,
+        )
 
     def identify_parameters(self, v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl):
         """
@@ -281,7 +297,7 @@ class SlipModel:
 
         # Adjust rise velocity by well-deviation factor in Eq. (A-10) of Hasan et al. (2010). It is exactly 1 in a
         # vertical cell. cos_incl is in [0, 1] (WellGeometry), and may be symbolic (a parameter of the march's rows).
-        sin_incl = ca.sqrt(1 - cos_incl ** 2)
+        sin_incl = ca.sqrt(1 - cos_incl**2)
         deviation_factor = ca.sqrt(cos_incl) * (1 + sin_incl) ** 1.2  # spec: SLIP-10
         v_inf_slug *= deviation_factor
 

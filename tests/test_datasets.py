@@ -17,8 +17,11 @@ import pandas as pd
 from manywells.datasets.io import write_dataset
 from manywells.sampling.wells import sample_well
 
-TRAJECTORY_PARAMETERS = {'vertical': (), 'deviated': ('kickoff_fraction', 'inclination'),
-                         'l_shaped': ('horizontal_length',)}
+TRAJECTORY_PARAMETERS = {
+    'vertical': (),
+    'deviated': ('kickoff_fraction', 'inclination'),
+    'l_shaped': ('horizontal_length',),
+}
 
 
 def test_a_dataset_round_trips_with_every_trajectory(tmp_path):
@@ -39,7 +42,9 @@ def test_a_dataset_round_trips_with_every_trajectory(tmp_path):
         row = config.loc[i]
         assert row['trajectory'] == kind
         assert [row[k] for k in TRAJECTORY_PARAMETERS[kind]] == prm
-        others = [k for k in ('kickoff_fraction', 'inclination', 'horizontal_length') if k not in TRAJECTORY_PARAMETERS[kind]]
+        others = [
+            k for k in ('kickoff_fraction', 'inclination', 'horizontal_length') if k not in TRAJECTORY_PARAMETERS[kind]
+        ]
         assert np.all(np.isnan(row[others].astype(float)))
         assert row['L'] == draw.L and list(row['fractions']) == list(draw.fractions)
 
@@ -50,6 +55,7 @@ def test_a_dotted_name_keeps_its_dot(tmp_path):
     for name, chk in (('sol-v1.0', 0.5), ('sol-v1.1', 0.6)):
         write_dataset(tmp_path / name, pd.DataFrame({'ID': [0], 'CHK': [chk]}), draws, {'name': name})
     assert sorted(p.name for p in tmp_path.iterdir()) == sorted(
-        f'sol-v1.{k}{suffix}' for k in (0, 1) for suffix in ('.parquet', '_config.parquet', '_meta.json'))
+        f'sol-v1.{k}{suffix}' for k in (0, 1) for suffix in ('.parquet', '_config.parquet', '_meta.json')
+    )
     assert pd.read_parquet(tmp_path / 'sol-v1.1.parquet')['CHK'].item() == 0.6
     assert json.loads((tmp_path / 'sol-v1.0_meta.json').read_text())['name'] == 'sol-v1.0'

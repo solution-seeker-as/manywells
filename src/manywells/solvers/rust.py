@@ -38,24 +38,36 @@ from manywells.solvers.roots import Attempt, admissible, label_of, normalized_sl
 from manywells.thermal import ThermalModel
 
 # The classes of each model part that the core implements, exactly: a subclass may override any method
-CORE_CLASSES = {'geometry': (WellGeometry,), 'fluid': (FluidModel,), 'friction': (FixedFrictionFactor, RoughnessFriction),
-                'thermal': (ThermalModel,), 'slip': (SlipModel,), 'inflow': (Vogel, ProductivityIndex, FixedFlowRate),
-                'choke': (SimpsonChokeModel, BernoulliChokeModel)}
+CORE_CLASSES = {
+    'geometry': (WellGeometry,),
+    'fluid': (FluidModel,),
+    'friction': (FixedFrictionFactor, RoughnessFriction),
+    'thermal': (ThermalModel,),
+    'slip': (SlipModel,),
+    'inflow': (Vogel, ProductivityIndex, FixedFlowRate),
+    'choke': (SimpsonChokeModel, BernoulliChokeModel),
+}
 PVT_CLASSES = (DeadOil, BlackOil, PVTTable, PVTTableSet)  # The fluid's PVT models that the core implements, exactly
 
 
 def not_in_core(wp) -> list:
     """Every part of wp that the core cannot solve, as readable strings (empty if it can solve the well)."""
-    out = [f'{name}: {type(getattr(wp, name)).__name__} is not one of the core\'s classes'
-           for name, classes in CORE_CLASSES.items() if type(getattr(wp, name)) not in classes]
+    out = [
+        f"{name}: {type(getattr(wp, name)).__name__} is not one of the core's classes"
+        for name, classes in CORE_CLASSES.items()
+        if type(getattr(wp, name)) not in classes
+    ]
     # The core's void-fraction solve brackets the slip law on [0, 1], which needs C_0 >= 1 and v_inf >= 0 in every
     # regime (manywells._core, march.rs); the five regimes' values are fixed (SLIP-15), the fitted classifier's fields
     slip = wp.slip
-    if type(slip) is SlipModel and slip.regime_model == 'fitted' and not (
-            all(c >= 1 for c in (slip.C_0_annular, slip.C_0_slug, slip.C_0_bubbly)) and slip.v_inf_annular >= 0):
+    if (
+        type(slip) is SlipModel
+        and slip.regime_model == 'fitted'
+        and not (all(c >= 1 for c in (slip.C_0_annular, slip.C_0_slug, slip.C_0_bubbly)) and slip.v_inf_annular >= 0)
+    ):
         out.append(f'slip: the core needs every C_0 >= 1 and v_inf_annular >= 0 ({slip})')
     if type(wp.fluid) is FluidModel and type(wp.fluid.pvt) not in PVT_CLASSES:
-        out.append(f'fluid: pvt is {type(wp.fluid.pvt).__name__}, not one of the core\'s classes')
+        out.append(f"fluid: pvt is {type(wp.fluid.pvt).__name__}, not one of the core's classes")
     # The core takes the gas mass fraction of the reservoir inflow in (0, 1), as INF-4 defines it
     if type(wp.fluid) is FluidModel and not wp.fluid.f_g > 0:
         out.append(f'fluid: the core needs gas in the reservoir inflow, f_g > 0 (gor = {wp.fluid.gor})')
@@ -68,20 +80,40 @@ def core_well(wp) -> '_core.Well':
     if missing:
         raise ValueError('the Rust core cannot solve this well: ' + '; '.join(missing) + '. Use backend="casadi".')
     geo, fluid, thermal, slip, choke = wp.geometry, wp.fluid, wp.thermal, wp.slip, wp.choke
-    return _core.Well(md=list(geo.md), tvd=list(geo.tvd), D=geo.D,
-                      rho_o=fluid.rho_o, rho_g=fluid.rho_g, rho_w=fluid.rho_w, gor=fluid.gor, wlr=fluid.wlr,
-                      cp_g=fluid.cp_g, cp_o=fluid.cp_o, cp_w=fluid.cp_w,
-                      surface_tension_model=fluid.surface_tension_model, **_pvt(fluid),
-                      **_friction(wp.friction),
-                      h=thermal.h, frictional_heating=thermal.frictional_heating, gravity_term=thermal.gravity_term,
-                      lift_gas_mixing=thermal.lift_gas_mixing, joule_thomson=thermal.joule_thomson,
-                      regime_model=slip.regime_model, C_0_annular=slip.C_0_annular, C_0_slug=slip.C_0_slug,
-                      C_0_bubbly=slip.C_0_bubbly, v_inf_annular=slip.v_inf_annular, f_ms=slip.f_ms,
-                      transition_width=slip.transition_width, lambda_floor=slip.lambda_floor,
-                      profile_scale=slip.profile_scale,
-                      **_inflow(wp.inflow),
-                      choke='simpson' if type(choke) is SimpsonChokeModel else 'bernoulli', K_c=choke.K_c,
-                      profile=choke.chk_profile)
+    return _core.Well(
+        md=list(geo.md),
+        tvd=list(geo.tvd),
+        D=geo.D,
+        rho_o=fluid.rho_o,
+        rho_g=fluid.rho_g,
+        rho_w=fluid.rho_w,
+        gor=fluid.gor,
+        wlr=fluid.wlr,
+        cp_g=fluid.cp_g,
+        cp_o=fluid.cp_o,
+        cp_w=fluid.cp_w,
+        surface_tension_model=fluid.surface_tension_model,
+        **_pvt(fluid),
+        **_friction(wp.friction),
+        h=thermal.h,
+        frictional_heating=thermal.frictional_heating,
+        gravity_term=thermal.gravity_term,
+        lift_gas_mixing=thermal.lift_gas_mixing,
+        joule_thomson=thermal.joule_thomson,
+        regime_model=slip.regime_model,
+        C_0_annular=slip.C_0_annular,
+        C_0_slug=slip.C_0_slug,
+        C_0_bubbly=slip.C_0_bubbly,
+        v_inf_annular=slip.v_inf_annular,
+        f_ms=slip.f_ms,
+        transition_width=slip.transition_width,
+        lambda_floor=slip.lambda_floor,
+        profile_scale=slip.profile_scale,
+        **_inflow(wp.inflow),
+        choke='simpson' if type(choke) is SimpsonChokeModel else 'bernoulli',
+        K_c=choke.K_c,
+        profile=choke.chk_profile,
+    )
 
 
 def _pvt(fluid) -> dict:
@@ -89,15 +121,29 @@ def _pvt(fluid) -> dict:
     bubble point (the dead oil's are not used); or its table at the fluid's GOR (PVT-TAB-7), which replaces them."""
     pvt = fluid._hc  # The PVT model at the fluid's GOR, which FluidModel reads once
     if type(pvt) is PVTTable:
-        table = {'p': list(pvt.p), 'T': list(pvt.T),
-                 **{c: np.array(getattr(pvt, c)).ravel(order='F').tolist() for c in pvt.columns}}
-        return dict(oil_model='table', ideal_gas=False, z_factor_model='dak', p_sep=BlackOil.p_sep,
-                    T_sep=BlackOil.T_sep, p_bubble=None, table=table)
+        table = {
+            'p': list(pvt.p),
+            'T': list(pvt.T),
+            **{c: np.array(getattr(pvt, c)).ravel(order='F').tolist() for c in pvt.columns},
+        }
+        return dict(
+            oil_model='table',
+            ideal_gas=False,
+            z_factor_model='dak',
+            p_sep=BlackOil.p_sep,
+            T_sep=BlackOil.T_sep,
+            p_bubble=None,
+            table=table,
+        )
     black_oil = type(pvt) is BlackOil
-    return dict(oil_model='black_oil' if black_oil else 'dead_oil', ideal_gas=pvt.gas_law == 'ideal',
-                z_factor_model='papay' if pvt.gas_law == 'papay' else 'dak',
-                p_sep=pvt.p_sep if black_oil else BlackOil.p_sep, T_sep=pvt.T_sep if black_oil else BlackOil.T_sep,
-                p_bubble=pvt.p_bubble if black_oil else None)
+    return dict(
+        oil_model='black_oil' if black_oil else 'dead_oil',
+        ideal_gas=pvt.gas_law == 'ideal',
+        z_factor_model='papay' if pvt.gas_law == 'papay' else 'dak',
+        p_sep=pvt.p_sep if black_oil else BlackOil.p_sep,
+        T_sep=pvt.T_sep if black_oil else BlackOil.T_sep,
+        p_bubble=pvt.p_bubble if black_oil else None,
+    )
 
 
 def _inflow(inflow) -> dict:
@@ -139,11 +185,24 @@ class RustRootFinder:
                 rejected += 1
                 continue
             slope = normalized_slope(r.slope, x, bc.p_r, bc.p_s, self.wp.geometry.A)
-            roots.append(Root(x=x, label=label_of(slope), slope=slope, choked=r.choked, flow_regime=tuple(r.flow_regime),
-                              w_res=r.w_res, w_g_res=r.w_g_res, off_table=self.wp.fluid.off_table(x)))
+            roots.append(
+                Root(
+                    x=x,
+                    label=label_of(slope),
+                    slope=slope,
+                    choked=r.choked,
+                    flow_regime=tuple(r.flow_regime),
+                    w_res=r.w_res,
+                    w_g_res=r.w_g_res,
+                    off_table=self.wp.fluid.off_table(x),
+                )
+            )
         unresolved = counts['rejected']
-        outcome = (f'{len(roots)} roots' + (f', {rejected} not admissible' if rejected else '')
-                   + (f', {unresolved} sign changes of R not accepted' if unresolved else ''))
+        outcome = (
+            f'{len(roots)} roots'
+            + (f', {rejected} not admissible' if rejected else '')
+            + (f', {unresolved} sign changes of R not accepted' if unresolved else '')
+        )
         search = [Attempt('shooting', np.nan, outcome, time.perf_counter() - t0, counts['marches'], found=len(roots))]
         return RootSet.of(roots, search=search)
 

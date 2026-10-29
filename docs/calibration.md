@@ -33,10 +33,10 @@ The workflow in short:
 ```python
 from manywells.calibration import CalibrationData, calibrate
 
-data = CalibrationData(df)                                  # one row per steady period
+data = CalibrationData(df)  # one row per steady period
 result = calibrate(wp, data, bc, free=['K_c', 'w_l_max', 'h'])
-print(result.summary())                                     # the estimate, its shifts from the priors, the fit
-well = result.well                                          # a WellProperties with the fitted values
+print(result.summary())  # the estimate, its shifts from the priors, the fit
+well = result.well  # a WellProperties with the fitted values
 ```
 
 `wp` is the well as you know it, `bc` its boundary conditions, and `df` its rows. The sections below explain each.
@@ -60,12 +60,15 @@ from manywells.thermal import ThermalModel
 
 geometry = WellGeometry.from_survey([0, 800, 3100], [0, 800, 2600], n_cells=50, D=0.1)  # MD and TVD survey (m)
 fluid = FluidModel(pvt=BlackOil(rho_o=density_from_api(32), rho_g=gas_density_from_sg(0.7)), gor=150.0, wlr=0.2)
-wp = WellProperties(geometry=geometry, fluid=fluid,
-                    inflow=Vogel(w_l_max=40.0),                   # your estimate: it is the prior's median
-                    choke=SimpsonChokeModel(K_c=0.12 * geometry.A, chk_profile='linear'),
-                    friction=RoughnessFriction(roughness=4.6e-5),
-                    thermal=ThermalModel(h=15.0))
-bc = BoundaryConditions(p_r=280.0, T_r=368.0, T_s=280.0)          # bar and K
+wp = WellProperties(
+    geometry=geometry,
+    fluid=fluid,
+    inflow=Vogel(w_l_max=40.0),  # your estimate: it is the prior's median
+    choke=SimpsonChokeModel(K_c=0.12 * geometry.A, chk_profile='linear'),
+    friction=RoughnessFriction(roughness=4.6e-5),
+    thermal=ThermalModel(h=15.0),
+)
+bc = BoundaryConditions(p_r=280.0, T_r=368.0, T_s=280.0)  # bar and K
 ```
 
 Things to get right:
@@ -122,21 +125,23 @@ import pandas as pd
 
 from manywells.calibration import CalibrationData
 
-tests = pd.read_csv('well_tests.csv')                     # your export, one row per test or averaged period
-df = pd.DataFrame({
-    'TIME': pd.to_datetime(tests['date']),
-    'CHK': tests['choke_percent'] / 100,
-    'PDC': tests['p_downstream_barg'] + 1.01325,          # barg to bar (absolute)
-    'PWH': tests['p_wellhead_barg'] + 1.01325,
-    'PBH': tests['p_downhole_barg'] + 1.01325,            # leave out if the well has no downhole gauge
-    'TWH': tests['t_wellhead_degC'] + 273.15,
-    'QOIL': tests['oil_Sm3_per_day'] / 24,                # Sm³/d to Sm³/h
-    'QGAS': tests['gas_Sm3_per_day'] / 24,
-    'QWAT': tests['water_Sm3_per_day'] / 24,
-})
+tests = pd.read_csv('well_tests.csv')  # your export, one row per test or averaged period
+df = pd.DataFrame(
+    {
+        'TIME': pd.to_datetime(tests['date']),
+        'CHK': tests['choke_percent'] / 100,
+        'PDC': tests['p_downstream_barg'] + 1.01325,  # barg to bar (absolute)
+        'PWH': tests['p_wellhead_barg'] + 1.01325,
+        'PBH': tests['p_downhole_barg'] + 1.01325,  # leave out if the well has no downhole gauge
+        'TWH': tests['t_wellhead_degC'] + 273.15,
+        'QOIL': tests['oil_Sm3_per_day'] / 24,  # Sm³/d to Sm³/h
+        'QGAS': tests['gas_Sm3_per_day'] / 24,
+        'QWAT': tests['water_Sm3_per_day'] / 24,
+    }
+)
 df['gor'] = df['QGAS'] / df['QOIL']
 df['wlr'] = df['QWAT'] / (df['QOIL'] + df['QWAT'])
-df[['gor', 'wlr']] = df[['gor', 'wlr']].ffill()           # rows between tests keep the latest test's ratios
+df[['gor', 'wlr']] = df[['gor', 'wlr']].ffill()  # rows between tests keep the latest test's ratios
 data = CalibrationData(df)
 ```
 
@@ -199,17 +204,26 @@ The defaults are physics-based (`specs/calibration.md`, CAL-6):
 Replace a default with what you know of the well:
 
 ```python
-from manywells.calibration import (CENTIPOISE, MILLIDARCY, Parameter, calibrate, darcy_productivity_index,
-                                   vogel_maximum_rate)
+from manywells.calibration import (
+    CENTIPOISE,
+    MILLIDARCY,
+    Parameter,
+    calibrate,
+    darcy_productivity_index,
+    vogel_maximum_rate,
+)
 
 # The choke's throat area from its data sheet: K_c's prior becomes C_D A_c with C_D = 0.6
 result = calibrate(wp, data, bc, free=['K_c', 'w_l_max', 'h'], A_c=1.2e-3)
 
 # A productivity from the reservoir: pseudo-steady radial inflow, then Vogel's maximum rate with that slope
-k_l = darcy_productivity_index(k=150 * MILLIDARCY, h_net=25.0, mu=1.5 * CENTIPOISE, B=1.25, r_e=600.0, r_w=0.108,
-                               skin=2.0, rho_sc=wp.fluid.rho_l)
-priors = {'w_l_max': Parameter('w_l_max', vogel_maximum_rate(k_l, bc.p_r), 0.7, 'Darcy, from core data'),
-          'h': Parameter('h', 20.0, 0.3, 'completion with insulated tubing')}
+k_l = darcy_productivity_index(
+    k=150 * MILLIDARCY, h_net=25.0, mu=1.5 * CENTIPOISE, B=1.25, r_e=600.0, r_w=0.108, skin=2.0, rho_sc=wp.fluid.rho_l
+)
+priors = {
+    'w_l_max': Parameter('w_l_max', vogel_maximum_rate(k_l, bc.p_r), 0.7, 'Darcy, from core data'),
+    'h': Parameter('h', 20.0, 0.3, 'completion with insulated tubing'),
+}
 result = calibrate(wp, data, bc, free=['K_c', 'w_l_max', 'h'], priors=priors)
 ```
 
@@ -318,7 +332,7 @@ from manywells.calibration import evaluate
 
 train, test = df[df['TIME'] < '2026-06-01'], df[df['TIME'] >= '2026-06-01']
 result = calibrate(wp, CalibrationData(train), bc, free=['K_c', 'w_l_max', 'h'])
-table = evaluate(result.well, CalibrationData(test), bc)        # the same columns as result.residuals
+table = evaluate(result.well, CalibrationData(test), bc)  # the same columns as result.residuals
 print(table[['TIME', 'PWH_obs', 'PWH_pred', 'WRES_obs', 'WRES_pred']])
 ```
 
@@ -332,9 +346,9 @@ from dataclasses import replace
 from manywells.datasets.rows import root_features
 from manywells.simulator import SSDFSimulator
 
-well = result.well                                        # or replace(result.well, fluid=...) for the current ratios
+well = result.well  # or replace(result.well, fluid=...) for the current ratios
 new_bc = replace(bc, u=0.8, p_s=21.0)
-op = SSDFSimulator(well, backend='rust').simulate(new_bc)     # NoOperatingPoint if the well cannot flow there
+op = SSDFSimulator(well, backend='rust').simulate(new_bc)  # NoOperatingPoint if the well cannot flow there
 f = well.fluid
 pred = root_features(op, new_bc, f.rho_o, f.rho_w, f.rho_g, 1 - f.f_o_in_liquid)
 print(pred['QOIL'], pred['QGAS'], pred['QWAT'], pred['PWH'], pred['TWH'])
@@ -346,8 +360,10 @@ A calibration covers one well and one window of rows, with the same parameters f
 by well, each with its own `WellProperties` and its own instruments:
 
 ```python
-results = {name: calibrate(wells[name], CalibrationData(rows), conditions[name], free=['K_c', 'w_l_max', 'h'])
-           for name, rows in field.groupby('WELL')}   # wells and conditions: dicts of WellProperties and BoundaryConditions
+results = {
+    name: calibrate(wells[name], CalibrationData(rows), conditions[name], free=['K_c', 'w_l_max', 'h'])
+    for name, rows in field.groupby('WELL')
+}  # wells and conditions: dicts of WellProperties and BoundaryConditions
 ```
 
 Wells change:

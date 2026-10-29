@@ -35,20 +35,21 @@ class BlackOilPVT:
     Inputs and outputs use SI units. Internally, the correlations are evaluated
     in field units (psia, degF, scf/STB) with conversions at the boundaries.
     """
-    api: float              # Oil API gravity (degrees, valid range 10-40)
-    sg_gas: float           # Gas specific gravity relative to air (dimensionless)
-    p_sep: float            # Separator pressure (Pa)
-    T_sep: float            # Separator temperature (K)
+
+    api: float  # Oil API gravity (degrees, valid range 10-40)
+    sg_gas: float  # Gas specific gravity relative to air (dimensionless)
+    p_sep: float  # Separator pressure (Pa)
+    T_sep: float  # Separator temperature (K)
     p_bubble: float = None  # Bubble point pressure (Pa). None = no Rs cap.
-    gor: float = None       # The stream's gas-oil ratio (Sm3/Sm3), which caps Rs (PVT-OIL-15). None = no cap.
+    gor: float = None  # The stream's gas-oil ratio (Sm3/Sm3), which caps Rs (PVT-OIL-15). None = no cap.
 
     def __post_init__(self):
         if not (10 <= self.api <= 40):
-            raise ValueError(f"Oil API {self.api} outside valid range 10-40")
+            raise ValueError(f'Oil API {self.api} outside valid range 10-40')
         if self.sg_gas <= 0:
-            raise ValueError(f"Gas specific gravity must be positive, got {self.sg_gas}")
+            raise ValueError(f'Gas specific gravity must be positive, got {self.sg_gas}')
         if self.gor is not None and not (math.isfinite(self.gor) and self.gor >= 0):
-            raise ValueError(f"gor must be None, or non-negative and finite, got {self.gor}")
+            raise ValueError(f'gor must be None, or non-negative and finite, got {self.gor}')
 
         # Separator conditions in field units (float constants)
         p_sep_psia = self.p_sep / CF_PSI
@@ -69,8 +70,8 @@ class BlackOilPVT:
 
         # Densities at standard conditions
         R_s_gas = R_UNIVERSAL / (M_AIR * self.sg_gas)
-        self.rho_o_sc = density_from_api(self.api)          # kg/m3
-        self.rho_g_sc = P_REF / (R_s_gas * T_REF)          # kg/m3
+        self.rho_o_sc = density_from_api(self.api)  # kg/m3
+        self.rho_g_sc = P_REF / (R_s_gas * T_REF)  # kg/m3
 
     @property
     def R_s_gas(self):
@@ -83,19 +84,11 @@ class BlackOilPVT:
 
     def _rs_field(self, p_psia, T_F):  # spec: PVT-OIL-6
         """Vazquez-Beggs Rs in scf/STB (CasADi-compatible)."""
-        return (
-            self._c1 * self.sg_gas_corr
-            * ca.constpow(p_psia, self._c2)
-            * ca.exp(self._c3 * self.api / (T_F + 460))
-        )
+        return self._c1 * self.sg_gas_corr * ca.constpow(p_psia, self._c2) * ca.exp(self._c3 * self.api / (T_F + 460))
 
     def _bo_field(self, rs_scf, T_F):  # spec: PVT-OIL-8
         """Vazquez-Beggs Bo in bbl/STB (CasADi-compatible)."""
-        return (
-            1
-            + self._f1 * rs_scf
-            + (self._f2 + self._f3 * rs_scf) * (T_F - 60) * (self.api / self.sg_gas_corr)
-        )
+        return 1 + self._f1 * rs_scf + (self._f2 + self._f3 * rs_scf) * (T_F - 60) * (self.api / self.sg_gas_corr)
 
     def _to_field(self, p, T):
         """Convert SI pressure/temperature to field units."""
@@ -147,8 +140,8 @@ class BlackOilPVT:
         :param T: Temperature (K), may be CasADi symbolic
         :return: Live oil density (kg/m3)
         """
-        Rs = self.rs(p, T)      # Sm3/Sm3
-        Bo = self.bo(p, T)      # dimensionless
+        Rs = self.rs(p, T)  # Sm3/Sm3
+        Bo = self.bo(p, T)  # dimensionless
         return (self.rho_o_sc + Rs * self.rho_g_sc) / Bo
 
     def bubble_point_pressure(self, Rs_total, T):  # spec: PVT-OIL-14
@@ -172,7 +165,6 @@ class BlackOilPVT:
         yg = (Rs_scf / self.sg_gas) ** 0.83
         p_b_psia = 18.2 * (yg * 10 ** (0.00091 * T_F - 0.0125 * self.api) - 1.4)
         return p_b_psia * CF_PSI
-
 
 
 def live_oil_viscosity(mu_dead, Rs_scf):  # spec: PVT-OIL-11
@@ -244,6 +236,7 @@ class BlackOil(CorrelationPVT):
     :param T_sep: Separator temperature (K)
     :param p_bubble: Bubble point pressure (bar), or None for no cap
     """
+
     rho_o: float = 850.0
     rho_g: float = gas_density_from_sg(0.554)
     gas_law: str = 'dak'
@@ -259,13 +252,17 @@ class BlackOil(CorrelationPVT):
         if self.p_bubble is not None and not (math.isfinite(self.p_bubble) and self.p_bubble > 0):
             raise ValueError(f'p_bubble must be None, or positive and finite, got {self.p_bubble}')
         self._derive()
-        object.__setattr__(self, '_black_oil', BlackOilPVT(
-            api=self._api,
-            sg_gas=self._sg_gas,
-            p_sep=self.p_sep * CF_BAR,
-            T_sep=self.T_sep,
-            p_bubble=None if self.p_bubble is None else self.p_bubble * CF_BAR,
-        ))
+        object.__setattr__(
+            self,
+            '_black_oil',
+            BlackOilPVT(
+                api=self._api,
+                sg_gas=self._sg_gas,
+                p_sep=self.p_sep * CF_BAR,
+                T_sep=self.T_sep,
+                p_bubble=None if self.p_bubble is None else self.p_bubble * CF_BAR,
+            ),
+        )
 
     def at_gor(self, gor) -> 'BlackOil':  # spec: PVT-OIL-15
         """The black oil of a fluid of gas-oil ratio gor (Sm3/Sm3): its solution gas-oil ratio is capped at gor, and
