@@ -1,6 +1,6 @@
 # Lock the model for the new sampler — plan
 
-*Draft 2026-10-29. Owner: Bjarne Grimstad. Status: in progress; L1 decided (feature 021 to implement), L2 decided but for decision 5, L4 done; L2 and L3 implemented on branches.*
+*Draft 2026-10-29. Owner: Bjarne Grimstad. Status: in progress; L1 decided (feature 021 in implementation), L2 signed off (PR #30), L3 signed off (two fixes in progress), L4 done, L7 done but for §1.11.*
 
 The next step towards v2 is a new sampling procedure: synthetic wells and data that are more realistic than v1's (`specs/goals.md`, limitation 5). The sampler draws the inputs of a model, so the model should not move under it. This plan brings `develop` to the point where the sampler can be implemented:
 
@@ -58,7 +58,7 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
 ### Step L2 — Validity ranges, with a rule for each
 
 - **Goal.** One table of every correlation's valid range, the range the sampler reaches, and what the model does outside it: the input from which the redesign chooses its ranges.
-- **Status.** Drafted and committed on 2026-10-29 (`5294d52`), for Bjarne's sign-off. Bjarne took decisions 1 to 4 as recommended on 2026-10-29 and deferred decision 5 to the sampling redesign; the record, the follow-ups and the refusals are on the branch `validity-refusals`. `specs/model/validity.md` proposes three rules.
+- **Status.** Drafted and committed on 2026-10-29 (`5294d52`), for Bjarne's sign-off. Bjarne took decisions 1 to 4 as recommended on 2026-10-29 and deferred decision 5 to the sampling redesign; the record, the follow-ups and the refusals are on the branch `validity-refusals`. Bjarne signed off the implementation the same day: PR #30. `specs/model/validity.md` proposes three rules.
   - *Refuse* inputs fixed before the solve where the correlation fails.
   - *Extrapolate* every state-dependent quantity, and any input whose correlation degrades gradually.
   - *Clamp* only a PVT table.
@@ -84,7 +84,7 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
 
 ### Step L3 — Check the correlations against independent sources
 
-- **Status.** In progress on the branch `independent-checks` (2026-10-29).
+- **Status.** Implemented on the branch `independent-checks` and signed off by Bjarne on 2026-10-29: `tests/test_worked_examples.py`, the notes in the specs and the list in `specs/model/README.md`. It found two differences from the sources, both ruled the same day to follow the source, and fixed on the same branch before its PR: Sutton's $p_{pc}$ has 131.0 where the code had 131.07 (PVT-GAS-5), and the mixture viscosity weights by the flowing gas fraction of Hasan et al.'s Eq. (A-3), where the code took the in-situ one (PVT-MIX-9).
 - **Goal.** Independent evidence that each correlation in the v2 configuration is implemented as published. Today the `develop` vectors come from `develop` itself, and the two backends implement the same spec, so agreement between them does not check the values. This step takes over Step V1 of the validation plan's draft (`plans/validation-plan.md`).
 - **Work.**
   - **Against `fluids`** (Caleb Bell, MIT licence), run by hand with `uv run --with fluids==1.3.1`, so it is not a dependency. A script in `plans/evidence/` compares:
