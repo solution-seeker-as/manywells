@@ -57,7 +57,7 @@ The `v1.0.0` configuration reproduces ManyWells v1.0.0, which generated the publ
 | Geometry | GEO-1 (vertical), GEO-2 | GEO-3, GEO-4 (any survey), GEO-2 |
 | Mass transfer | BAL-3 (none) | BAL-10, PVT-OIL-13 (dissolved gas) |
 | Gas | PVT-GAS-1 (ideal gas) | PVT-GAS-5, PVT-GAS-6, PVT-GAS-9, PVT-GAS-11 (real gas, Dranchuk–Abou-Kassem); Papay's PVT-GAS-3, PVT-GAS-4 as an option |
-| Oil | PVT-OIL-1 (dead oil) | PVT-OIL-4 to PVT-OIL-9 (black oil, Vazquez–Beggs) |
+| Oil | PVT-OIL-1 (dead oil) | PVT-OIL-4 to PVT-OIL-9, PVT-OIL-15 (black oil, Vazquez–Beggs, capped at the gas–oil ratio) |
 | Liquid density | PVT-MIX-1 (constant) | PVT-MIX-6 (black oil and water) |
 | Fluid parameters | $\rho_l$, $R_s$, $c_{pg}$, $c_{pl}$, $f_g$ | PVT-MIX-10 ($\rho_o$, $\rho_{g,\text{sc}}$, $\rho_w$, gas–oil and water–liquid ratios), PVT-GAS-6 |
 | Surface tension | PVT-MIX-5 with PVT-OIL-3 | PVT-MIX-7 with PVT-OIL-3 and PVT-OIL-12 |

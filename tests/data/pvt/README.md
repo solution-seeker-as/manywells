@@ -11,7 +11,7 @@ Tables in the format of `specs/model/pvt/table.md`, which `PVTTable.read_csv` re
 
 What each exercises:
 
-- `vazquez_beggs.csv`: a table whose source ManyWells has, so that a test can compare the table with it, and check that a fresh tabulation reproduces the file.
+- `vazquez_beggs.csv`: a table whose source ManyWells has, so that a test can compare the table with it, and check that a fresh tabulation reproduces the file. It tabulates the black oil's correlations, `BlackOil`'s own methods, so below 360 K and above $p_b$ its $R_{so}$ exceeds the GOR: a fluid's black oil caps it there (PVT-OIL-15), and a table is not capped (PVT-TAB-3).
 - `synthetic_eos_oil.csv`: the shape of an equation of state's $R_{so}(p)$, which a one-gravity black oil cannot follow; negative $R_{so}$ and $B_o < 1$ at low pressure and high temperature, where the free gas carries components that are oil at standard conditions (PVT-TAB-6); a table's own viscosities and surface tension.
 - `synthetic_eos_oil_360K.csv`: a one-temperature table at a laboratory report's spacing, read independently of $T$, with the correlations where columns are missing.
 - `synthetic_eos_oil_gor.csv`: a GOR axis (PVT-TAB-7), each GOR on its own grid. Its $R_{so}$ is negative at low pressure and high temperature, so it carries its own viscosities and surface tension (PVT-TAB-1).

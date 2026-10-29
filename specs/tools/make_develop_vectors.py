@@ -119,7 +119,13 @@ def separator_gravity(api, sg_gas, p_sep, T_sep):
 
 
 def black_oil(api, sg_gas, p, T):
-    fl = fluid(api, sg_gas)
+    """The correlations alone: the fluid's PVT model, without the cap at the fluid's gas-oil ratio (PVT-OIL-15)."""
+    pvt = fluid(api, sg_gas).pvt
+    return pvt.rs(p, T), pvt.bo(p, T)
+
+
+def gor_cap(api, sg_gas, gor, p, T):
+    fl = fluid(api, sg_gas, gor=gor)
     return fl.rs(p, T), fl.bo(p, T)
 
 
@@ -285,7 +291,7 @@ TABLES = [
           black_oil),
     Table('pvt/oil.md', 'PVT-OIL-7', ('api', 'sg_gas', 'p_bubble', 'p', 'T'), ('R_so',),
           ((35.0, 0.65, 150.0, 100.0, 350.0), (35.0, 0.65, 150.0, 150.0, 350.0), (35.0, 0.65, 150.0, 250.0, 350.0)),
-          lambda api, sg_gas, p_bubble, p, T: fluid(api, sg_gas, p_bubble=p_bubble).rs(p, T)),
+          lambda api, sg_gas, p_bubble, p, T: fluid(api, sg_gas, p_bubble=p_bubble).pvt.rs(p, T)),
     Table('pvt/oil.md', 'PVT-OIL-9', ('api', 'sg_gas', 'p', 'T'), ('rho_lo',),
           ((35.0, 0.65, 100.0, 350.0), (25.0, 0.8, 250.0, 380.0)),
           lambda api, sg_gas, p, T: fluid(api, sg_gas).liquid_density(p, T)),
@@ -300,6 +306,10 @@ TABLES = [
           ((35.0, 0.65, 150.0, 0.0, 100.0, 350.0, 20.0, 0.0), (35.0, 0.65, 150.0, 0.3, 250.0, 380.0, 20.0, 2.0),
            (35.0, 0.65, 20.0, 0.0, 250.0, 380.0, 20.0, 1.0), (25.0, 0.8, 300.0, 0.5, 30.0, 320.0, 5.0, 0.0)),
           lambda p, T, w_res, w_lg, **kw: fluid(**kw).phase_rates(p, T, w_res, w_lg)),
+    Table('pvt/oil.md', 'PVT-OIL-15', ('api', 'sg_gas', 'gor', 'p', 'T'), ('R_so', 'B_o'),
+          ((35.0, 0.65, 150.0, 100.0, 350.0), (35.0, 0.65, 100.0, 250.0, 380.0), (35.0, 0.65, 50.0, 250.0, 380.0),
+           (25.0, 0.8, 20.0, 150.0, 340.0)),
+          gor_cap),
     # pvt/table.md
     Table('pvt/table.md', 'PVT-TAB-2', ('p', 'T'), TAB.columns, TAB_NODES + TAB_POINTS,
           lambda p, T: table_columns(TAB, p, T)),
@@ -328,7 +338,8 @@ TABLES = [
     Table('pvt/water.md', 'PVT-WAT-3', ('T',), ('mu_w',), ((293.15,), (350.0,), (400.0,)), water_viscosity),
     # pvt/mixture.md
     Table('pvt/mixture.md', 'PVT-MIX-6', ('api', 'sg_gas', 'gor', 'wlr', 'p', 'T'), ('rho_l',),
-          ((35.0, 0.65, 150.0, 0.0, 100.0, 350.0), (35.0, 0.65, 150.0, 0.4, 250.0, 380.0)),
+          ((35.0, 0.65, 150.0, 0.0, 100.0, 350.0), (35.0, 0.65, 150.0, 0.4, 250.0, 380.0),
+           (35.0, 0.65, 50.0, 0.0, 250.0, 380.0), (35.0, 0.65, 50.0, 0.3, 250.0, 380.0)),
           lambda p, T, **kw: fluid(**kw).liquid_density(p, T)),
     Table('pvt/mixture.md', 'PVT-MIX-7', ('api', 'sg_gas', 'p', 'T', 'rho_l'), ('sigma',),
           ((35.0, 0.65, 100.0, 350.0, 700.0), (35.0, 0.65, 250.0, 380.0, 700.0), (25.0, 0.8, 30.0, 300.0, 900.0)),

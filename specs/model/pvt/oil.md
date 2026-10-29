@@ -38,7 +38,7 @@ The coefficients are the source's, which gives the correlation in °C. It was fi
 
 ### PVT-OIL-4 · Black oil
 
-Gas dissolves into the oil up to the solution gas–oil ratio $R_{so}(p, T)$ of PVT-OIL-6, capped at the bubble point by PVT-OIL-7, and the oil swells by the formation volume factor $B_o(p, T)$ of PVT-OIL-8. With dead oil (PVT-OIL-1) $R_{so} = 0$ and $B_o = 1$.
+Gas dissolves into the oil up to the solution gas–oil ratio $R_{so}(p, T)$ of PVT-OIL-6, capped at the bubble point by PVT-OIL-7 and at the stream's gas–oil ratio by PVT-OIL-15, and the oil swells by the formation volume factor $B_o(p, T)$ of PVT-OIL-8 at that $R_{so}$. With dead oil (PVT-OIL-1) $R_{so} = 0$ and $B_o = 1$.
 
 ### PVT-OIL-5 · Separator gas gravity
 
@@ -58,11 +58,11 @@ with $p$ in psia and $T$ in °F; $(C_1, C_2, C_3) = (0.0362, 1.0937, 25.7240)$ f
 
 ### PVT-OIL-7 · Bubble-point cap
 
-If a bubble-point pressure $p_b$ is given, $R_{so} = \mathop{\mathrm{smin}}\big(R_{so}(p), R_{so}(p_b)\big)$ (SMO-2, $\epsilon = 10^{-6}$ in (scf/STB)²), so that no more gas dissolves above $p_b$. Without $p_b$ there is no cap: gas dissolves up to the gas available (PVT-OIL-13).
+If a bubble-point pressure $p_b$ is given, $R_{so} = \mathop{\mathrm{smin}}\big(R_{so}(p), R_{so}(p_b)\big)$ (SMO-2, $\epsilon = 10^{-6}$ in (scf/STB)²), so that no more gas dissolves above $p_b$. Without $p_b$, PVT-OIL-15 alone caps $R_{so}$: gas dissolves up to the gas the stream carries.
 
 ### PVT-OIL-8 · Oil formation volume factor
 
-Vazquez and Beggs (1980), with $R_{so}$ in scf/STB (capped by PVT-OIL-7) and $T$ in °F:
+Vazquez and Beggs (1980), with $R_{so}$ in scf/STB (capped by PVT-OIL-7 and PVT-OIL-15) and $T$ in °F:
 
 $$B_o = 1 + C_4 R_{so} + (C_5 + C_6 R_{so})(T - 60)\frac{\text{API}}{\gamma_{gs}},$$
 
@@ -72,7 +72,7 @@ with $(C_4, C_5, C_6) = (4.677\cdot10^{-4}, 1.751\cdot10^{-5}, -1.811\cdot10^{-8
 
 $$\rho_{lo} = \frac{\rho_o + R_{so}\rho_{g,\text{sc}}}{B_o}$$
 
-with $R_{so}$ in Sm³/Sm³: the stock-tank oil and its dissolved gas, in the swollen volume.
+with $R_{so}$ in Sm³/Sm³ and $B_o$ at it, after PVT-OIL-15: the stock-tank oil and the gas dissolved in it, in the swollen volume.
 
 ### PVT-OIL-10 · Dead-oil viscosity
 
@@ -102,9 +102,11 @@ where $R = \mathop{\mathrm{smax}}(R_{so}, 10^{-6})$ (SMO-1) and $\sigma_{od}$ is
 
 With the reservoir liquid rate $w_\text{res}$ (INF-1, INF-2 or INF-8), the reservoir gas rate $w_{g,\text{res}}$ of INF-4 and the lift-gas rate $w_{lg}$, the gas dissolved at $(p, T)$ and the phase mass rates are
 
-$$w_d = \mathop{\mathrm{smin}}\negthinspace\left(R_{so}\frac{\rho_{g,\text{sc}}}{\rho_o} x_o w_\text{res},\ w_{g,\text{res}}\right), \qquad w_g = \mathop{\mathrm{smax}}\big(w_{g,\text{res}} + w_{lg} - w_d,\ 0\big), \qquad w_l = w_\text{res} + w_d,$$
+$$w_d = \mathop{\mathrm{smin}}\big(R_{so},\ R_{go}\big)\frac{\rho_{g,\text{sc}}}{\rho_o} x_o w_\text{res}, \qquad w_g = \mathop{\mathrm{smax}}\big(w_{g,\text{res}} + w_{lg} - w_d,\ 0\big), \qquad w_l = w_\text{res} + w_d,$$
 
-with $R_{so}$ in Sm³/Sm³, $x_o$ the oil mass fraction of the liquid at standard conditions (PVT-MIX-10), and SMO-1 and SMO-2 with $\epsilon = 10^{-6}$ (kg/s)². Only reservoir gas dissolves, not the lift gas. With dead oil the phase rates are INF-5's exactly, with no smoothing: the smooth min of PVT-OIL-13 would be $-\epsilon/(4 w_{g,\text{res}})$ at $R_{so} = 0$, not 0 (`plans/develop_model_changes.md`, change 8). The total $w_g + w_l$ is $w_{g,\text{res}} + w_{lg} + w_\text{res}$ wherever neither smoothing is active.
+with $R_{so}$ and the gas–oil ratio $R_{go}$ in Sm³/Sm³, $x_o$ the oil mass fraction of the liquid at standard conditions (PVT-MIX-10), SMO-2 evaluated in scf/STB with $\epsilon = 10^{-6}$ (scf/STB)², as in PVT-OIL-7 and PVT-OIL-15, and SMO-1 with $\epsilon = 10^{-6}$ (kg/s)². Since $w_{g,\text{res}} = R_{go}(\rho_{g,\text{sc}}/\rho_o) x_o w_\text{res}$ (INF-4, PVT-MIX-10), $w_d$ is the smaller of the gas the oil can dissolve and the reservoir gas, and never exceeds the latter. With black oil PVT-OIL-15 has already capped $R_{so}$; the min is for a PVT table, whose $R_{so}$ is not capped (PVT-TAB-3). Only reservoir gas dissolves, not the lift gas.
+
+Until 2026-10-29 the smooth min was of the mass rates, $\mathop{\mathrm{smin}}(R_{so}(\rho_{g,\text{sc}}/\rho_o) x_o w_\text{res},\ w_{g,\text{res}})$ with $\epsilon = 10^{-6}$ (kg/s)². Its smoothing scaled with the rate: it left $\sqrt\epsilon/2 = 5\cdot10^{-4}$ kg/s of reservoir gas undissolved where its arguments are equal, which with PVT-OIL-15 is wherever the oil is undersaturated, and made $5\cdot10^{-4}$ kg/s of gas at $w_\text{res} = 0$. Evaluated in scf/STB, the offset is in proportion to the rate, $10^{-6}$ kg/s at 10 to 30 kg/s of liquid, and $w_d = 0$ at $w_\text{res} = 0$. The free gas where all the reservoir gas is dissolved is SMO-1's floor, $5\cdot10^{-4}$ kg/s, as before (decided by Bjarne, 2026-10-29, with PVT-OIL-15; issue #16). With dead oil the phase rates are INF-5's exactly, with no smoothing: the smooth min of PVT-OIL-13 would be $-\epsilon/(4 w_{g,\text{res}})$ at $R_{so} = 0$, not 0 (`plans/develop_model_changes.md`, change 8). The total $w_g + w_l$ is $w_{g,\text{res}} + w_{lg} + w_\text{res}$ wherever neither smoothing is active.
 
 ### PVT-OIL-14 · Bubble-point pressure
 
@@ -114,12 +116,22 @@ $$p_b = 18.2\left[\left(\frac{R_{so}}{\gamma_g}\right)^{0.83} 10^{0.00091 T - 0.
 
 or the given $p_b$ if there is one. Not used by the simulator.
 
+### PVT-OIL-15 · Gas–oil-ratio cap
+
+The oil holds no more dissolved gas than the stream carries. With the stream's gas–oil ratio $R_{go}$ (PVT-MIX-10), the black oil's solution gas–oil ratio is
+
+$$R_{so} = \mathop{\mathrm{smin}}\big(R_{so}(p, T),\ R_{go}\big)$$
+
+in scf/STB, after PVT-OIL-7, with SMO-2 and $\epsilon = 10^{-6}$ (scf/STB)², as in PVT-OIL-7. Where PVT-OIL-6 gives more than $R_{go}$, the oil is undersaturated: all the reservoir gas is dissolved, and $B_o$ (PVT-OIL-8), the live-oil density (PVT-OIL-9, PVT-MIX-6), the viscosity (PVT-OIL-11) and the surface tension (PVT-OIL-12, PVT-MIX-7) are those of the oil with $R_{go}$ dissolved. PVT-OIL-13's dissolved gas then stays below the reservoir gas, and the liquid density is the one its mass rates imply (PVT-MIX-6). Above the bubble point $B_o$ does not depend on $p$: the undersaturated oil's compressibility is not modelled. Decided by Bjarne, 2026-10-29 (issue #16, `specs/features/007-black-oil.md`). Until then the density, $B_o$, the viscosity and the surface tension took the uncapped $R_{so}$, so undersaturated oil was too light: by 6% at 250 bar and 360 K with $\rho_o$ = 850 kg/m³ and a gas–oil ratio of 50 Sm³/Sm³, where PVT-OIL-6 gives 95 Sm³/Sm³.
+
+A PVT table (PVT-TAB-3) is not capped: its $R_{so}$ and $B_o$ come together from the table, and above the fluid's bubble point its $R_{so}$ is already the table's GOR (PVT-TAB-1).
+
 ## Options
 
 | Option | IDs | Used by |
 |---|---|---|
 | Dead oil | PVT-OIL-1 | `v1.0.0`; `develop` with `pvt=DeadOil(...)` |
-| Black oil: Vazquez–Beggs $R_{so}$ and $B_o$, live-oil density, dissolved gas | PVT-OIL-4 to PVT-OIL-9, PVT-OIL-13 | `develop` default (`pvt=BlackOil()`) |
+| Black oil: Vazquez–Beggs $R_{so}$ and $B_o$, live-oil density, dissolved gas | PVT-OIL-4 to PVT-OIL-9, PVT-OIL-13, PVT-OIL-15 | `develop` default (`pvt=BlackOil()`) |
 | PVT table: $R_{so}$ and $B_o$ from a table, live-oil density, dissolved gas | PVT-TAB-3 (`table.md`), PVT-OIL-9, PVT-OIL-13 | `develop` with `pvt=PVTTable(...)` |
 | Oil viscosity, for friction | PVT-OIL-10, and PVT-OIL-11 with black oil or a table without $\mu_o$ (PVT-TAB-5) | `develop`'s `RoughnessFriction` |
 | Live-oil surface tension | PVT-OIL-12 | `develop` default (PVT-MIX-7), and a table without $\sigma_{go}$ (PVT-TAB-5) |
@@ -127,8 +139,8 @@ or the given $p_b$ if there is one. Not used by the simulator.
 ## Safeguards
 
 - Neither v1.0.0 function checks that the API gravity or the temperature is in the correlation's range; $\sigma_{od}$ is positive for $T_C < 365$ °C and API $< 147$.
-- `BlackOilPVT` raises `ValueError` for API gravities outside 10 to 40, the Vazquez–Beggs range, and for $\gamma_g \le 0$. Nothing checks $p$ or $T$ against the correlations' ranges, or caps $R_{so}$ (`specs/sampling.md`, SMP-43).
-- The smooth maxima and minima of PVT-OIL-7, PVT-OIL-12 and PVT-OIL-13.
+- `BlackOilPVT` raises `ValueError` for API gravities outside 10 to 40, the Vazquez–Beggs range, and for $\gamma_g \le 0$. Nothing checks $p$ or $T$ against the correlations' ranges, or bounds the gas–oil ratio (`specs/sampling.md`, SMP-43).
+- The smooth maxima and minima of PVT-OIL-7, PVT-OIL-12, PVT-OIL-13 and PVT-OIL-15.
 
 ## Sources
 
@@ -195,8 +207,8 @@ Generated by `specs/tools/make_develop_vectors.py` from develop (casadi 3.8.1): 
 
 | api | sg_gas | p | T | → rho_lo |
 |---|---|---|---|---|
-| 35.0 | 0.65 | 100.0 | 350.0 | 747.1961049371042 |
-| 25.0 | 0.8 | 250.0 | 380.0 | 770.4809662042255 |
+| 35.0 | 0.65 | 100.0 | 350.0 | 747.1961049371773 |
+| 25.0 | 0.8 | 250.0 | 380.0 | 770.4809662042934 |
 
 ### PVT-OIL-10
 
@@ -229,10 +241,19 @@ Generated by `specs/tools/make_develop_vectors.py` from develop (casadi 3.8.1): 
 
 | api | sg_gas | gor | wlr | p | T | w_res | w_lg | → w_g | → w_l |
 |---|---|---|---|---|---|---|---|---|---|
-| 35.0 | 0.65 | 150.0 | 0.0 | 100.0 | 350.0 | 20.0 | 0.0 | 2.0777847635751927 | 20.736032593985804 |
-| 35.0 | 0.65 | 150.0 | 0.3 | 250.0 | 380.0 | 20.0 | 2.0 | 2.5632072227295097 | 21.30732037378895 |
-| 35.0 | 0.65 | 20.0 | 0.0 | 250.0 | 380.0 | 20.0 | 1.0 | 1.0000004070927844 | 20.375175474539187 |
-| 25.0 | 0.8 | 300.0 | 0.5 | 30.0 | 320.0 | 5.0 | 0.0 | 0.7440738546852541 | 5.02875439561121 |
+| 35.0 | 0.65 | 150.0 | 0.0 | 100.0 | 350.0 | 20.0 | 0.0 | 2.0777846432574285 | 20.736032714303576 |
+| 35.0 | 0.65 | 150.0 | 0.3 | 250.0 | 380.0 | 20.0 | 2.0 | 2.5632067788474764 | 21.307320817671002 |
+| 35.0 | 0.65 | 20.0 | 0.0 | 250.0 | 380.0 | 20.0 | 1.0 | 1.0000019205449315 | 20.375173961086663 |
+| 25.0 | 0.8 | 300.0 | 0.5 | 30.0 | 320.0 | 5.0 | 0.0 | 0.7440735186972426 | 5.028754731599373 |
+
+### PVT-OIL-15
+
+| api | sg_gas | gor | p | T | → R_so | → B_o |
+|---|---|---|---|---|---|---|
+| 35.0 | 0.65 | 150.0 | 100.0 | 350.0 | 39.236701547116084 | 1.1781815984810362 |
+| 35.0 | 0.65 | 100.0 | 250.0 | 380.0 | 99.99999999835998 | 1.3788890523206216 |
+| 35.0 | 0.65 | 50.0 | 250.0 | 380.0 | 49.99999999985537 | 1.2440616114162397 |
+| 25.0 | 0.8 | 20.0 | 150.0 | 340.0 | 19.9999999998055 | 1.1009409875026135 |
 <!-- vectors:end develop -->
 
 ## Coverage
@@ -253,3 +274,4 @@ Generated by `specs/tools/make_develop_vectors.py` from develop (casadi 3.8.1): 
 | PVT-OIL-12 | — | — | vectors; property: tests/test_pvt.py |
 | PVT-OIL-13 | — | — | vectors; property: tests/test_fluid.py (mass conservation, exact dead-oil rates) |
 | PVT-OIL-14 | — | — | property: tests/test_black_oil.py |
+| PVT-OIL-15 | — | — | vectors; property: tests/test_fluid.py (the cap, and the density, viscosity and surface tension at it) |

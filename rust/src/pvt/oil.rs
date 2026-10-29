@@ -73,18 +73,25 @@ pub struct BlackOil {
     c: [f64; 3],               // Coefficients of R_so (PVT-OIL-6)
     f: [f64; 3],               // Coefficients of B_o (PVT-OIL-8)
     p_bubble: Option<f64>,     // Bubble point pressure (Pa), which caps R_so (PVT-OIL-7)
+    gor: Option<f64>,          // The stream's gas-oil ratio (Sm³/Sm³), which caps R_so (PVT-OIL-15)
 }
 
 impl BlackOil {
     /// For an oil of API gravity api (10 to 40), gas of specific gravity sg_gas, a separator at p_sep (Pa) and
-    /// t_sep (K), and an optional bubble point p_bubble (Pa)
-    pub fn new(api: f64, sg_gas: f64, p_sep: f64, t_sep: f64, p_bubble: Option<f64>) -> Self {
+    /// t_sep (K), an optional bubble point p_bubble (Pa), and the optional gas-oil ratio gor (Sm³/Sm³) of the stream
+    /// it is part of
+    pub fn new(api: f64, sg_gas: f64, p_sep: f64, t_sep: f64, p_bubble: Option<f64>, gor: Option<f64>) -> Self {
         let (c, f) = if api <= 30.0 {
             ([0.0362, 1.0937, 25.7240], [4.677e-4, 1.751e-5, -1.811e-8])
         } else {
             ([0.0178, 1.1870, 23.9310], [4.670e-4, 1.100e-5, 1.337e-9])
         };
-        Self { api, sg_gas_corr: separator_gravity(api, sg_gas, p_sep, t_sep), c, f, p_bubble }
+        Self { api, sg_gas_corr: separator_gravity(api, sg_gas, p_sep, t_sep), c, f, p_bubble, gor }
+    }
+
+    /// The correlations alone, without the stream's gas-oil ratio cap, as the vectors of PVT-OIL-6 to PVT-OIL-8 pin them
+    pub fn correlation(&self) -> Self {
+        Self { gor: None, ..*self }
     }
 
     /// Solution gas-oil ratio (scf/STB) at p_psia (psia) and t_f (°F)
@@ -92,11 +99,16 @@ impl BlackOil {
         self.c[0] * self.sg_gas_corr * p_psia.powf(self.c[1]) * (self.c[2] * self.api / (t_f + 460.0)).exp()
     }
 
-    /// Solution gas-oil ratio (scf/STB), capped at the bubble point's if one is set
+    /// Solution gas-oil ratio (scf/STB), capped at the bubble point's if one is set, and at the stream's gas-oil ratio
+    /// if one is set
     fn rs_field_capped(&self, p_psia: f64, t_f: f64) -> f64 {  // spec: PVT-OIL-7
         let rs = self.rs_field(p_psia, t_f);
-        match self.p_bubble {
+        let rs = match self.p_bubble {
             Some(p_b) => min_approx(rs, self.rs_field(p_b / CF_PSI, t_f), 1e-6),
+            None => rs,
+        };
+        match self.gor {
+            Some(gor) => min_approx(rs, gor / CF_RS, 1e-6), // spec: PVT-OIL-15
             None => rs,
         }
     }
@@ -124,11 +136,22 @@ mod tests {
 
     #[test]
     fn the_bubble_point_caps_the_solution_gas() {
-        let free = BlackOil::new(35.0, 0.65, 101325.0, 288.15, None);
-        let capped = BlackOil::new(35.0, 0.65, 101325.0, 288.15, Some(150e5));
+        let free = BlackOil::new(35.0, 0.65, 101325.0, 288.15, None, None);
+        let capped = BlackOil::new(35.0, 0.65, 101325.0, 288.15, Some(150e5), None);
         assert!(free.rs(250e5, 350.0) > capped.rs(250e5, 350.0));
         assert!((capped.rs(250e5, 350.0) - capped.rs(150e5, 350.0)).abs() < 1e-3 * capped.rs(150e5, 350.0));
         assert!((capped.rs(50e5, 350.0) - free.rs(50e5, 350.0)).abs() < 1e-3);
+    }
+
+    #[test]
+    fn the_gas_oil_ratio_caps_the_solution_gas() {
+        let free = BlackOil::new(35.0, 0.65, 101325.0, 288.15, None, None);
+        let capped = BlackOil::new(35.0, 0.65, 101325.0, 288.15, None, Some(50.0));
+        assert!(free.rs(250e5, 350.0) > 60.0);
+        assert!((capped.rs(250e5, 350.0) - 50.0).abs() < 1e-6);
+        assert!((capped.bo(250e5, 350.0) - capped.bo(400e5, 350.0)).abs() < 1e-9);
+        assert!((capped.rs(30e5, 350.0) - free.rs(30e5, 350.0)).abs() < 1e-6);
+        assert_eq!(capped.correlation(), free);
     }
 
     #[test]
