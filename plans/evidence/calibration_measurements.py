@@ -71,8 +71,9 @@ def step():
 
     base = out(wp)
     for name in FREE:
-        v0 = {'K_c': wp.choke.K_c, 'w_l_max': wp.inflow.w_l_max, 'roughness': wp.friction.roughness,
-              'h': wp.thermal.h}[name]
+        v0 = {'K_c': wp.choke.K_c, 'w_l_max': wp.inflow.w_l_max, 'roughness': wp.friction.roughness, 'h': wp.thermal.h}[
+            name
+        ]
         print(name)
         for h in 10.0 ** -np.arange(1, 9):
             d = (out(apply(wp, {name: v0 * np.exp(h)})) - base) / h
@@ -90,18 +91,39 @@ def valley():
 
     def fit(z0, bound=np.inf):
         obj = Objective(wp, data, bc, priors)
-        sol = least_squares(obj.residuals, z0, jac=obj.jacobian, method='trf', x_scale=1.0, xtol=X_TOL, ftol=F_TOL,
-                            gtol=G_TOL, max_nfev=MAX_NFEV, bounds=(-bound, bound))
+        sol = least_squares(
+            obj.residuals,
+            z0,
+            jac=obj.jacobian,
+            method='trf',
+            x_scale=1.0,
+            xtol=X_TOL,
+            ftol=F_TOL,
+            gtol=G_TOL,
+            max_nfev=MAX_NFEV,
+            bounds=(-bound, bound),
+        )
         return sol, obj
 
     obj = Objective(wp, data, bc, priors)
-    print('z*', np.round(z_true, 3), '; cost at z*', round(0.5 * np.sum(obj.residuals(z_true) ** 2), 1),
-          '; at the medians', round(0.5 * np.sum(obj.residuals(np.zeros(4)) ** 2), 1))
-    for label, z0, bound in (('medians', np.zeros(4), np.inf), ('medians, |z| <= 4', np.zeros(4), 4.0),
-                             ('start search', start(Objective(wp, data, bc, priors)), np.inf)):
+    print(
+        'z*',
+        np.round(z_true, 3),
+        '; cost at z*',
+        round(0.5 * np.sum(obj.residuals(z_true) ** 2), 1),
+        '; at the medians',
+        round(0.5 * np.sum(obj.residuals(np.zeros(4)) ** 2), 1),
+    )
+    for label, z0, bound in (
+        ('medians', np.zeros(4), np.inf),
+        ('medians, |z| <= 4', np.zeros(4), 4.0),
+        ('start search', start(Objective(wp, data, bc, priors)), np.inf),
+    ):
         sol, o = fit(z0, bound)
-        print(f'{label:18s}: start {np.round(z0, 2)} -> z {np.round(sol.x, 3)}, cost {sol.cost:.1f}, '
-              f'{sol.message} ({o.n_solves} solves)')
+        print(
+            f'{label:18s}: start {np.round(z0, 2)} -> z {np.round(sol.x, 3)}, cost {sol.cost:.1f}, '
+            f'{sol.message} ({o.n_solves} solves)'
+        )
 
 
 def backends():
@@ -115,8 +137,10 @@ def backends():
         for _, row in data.rows.iterrows():
             b = replace(bc, u=float(row['CHK']), p_s=float(row['PDC']))
             sets = {name: SSDFSimulator(truth, backend=name).root_set(b) for name in ('rust', 'casadi')}
-            print(f'  u = {b.u:.3f}: ' + '; '.join(f'{name} {[(round(r.p_0, 3), r.label) for r in rs.roots]}'
-                                                  for name, rs in sets.items()))
+            print(
+                f'  u = {b.u:.3f}: '
+                + '; '.join(f'{name} {[(round(r.p_0, 3), r.label) for r in rs.roots]}' for name, rs in sets.items())
+            )
 
 
 if __name__ == '__main__':

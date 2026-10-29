@@ -38,9 +38,20 @@ def main():
     settings = Settings(seed=args.seed, configuration=args.configuration)
     t0 = time.perf_counter()
     rows, draws, drawn = generate('nsol', args.wells, args.samples, settings, args.processes)
-    write_dataset(args.out, rows, draws, {'procedure': 'nsol (SMP-29)', 'seed': args.seed,
-                                          'configuration': args.configuration, 'n_cells': settings.n_cells,
-                                          'wells': args.wells, 'samples': args.samples, 'wells_drawn': drawn})
+    write_dataset(
+        args.out,
+        rows,
+        draws,
+        {
+            'procedure': 'nsol (SMP-29)',
+            'seed': args.seed,
+            'configuration': args.configuration,
+            'n_cells': settings.n_cells,
+            'wells': args.wells,
+            'samples': args.samples,
+            'wells_drawn': drawn,
+        },
+    )
     print(f'{len(draws)} wells of {drawn} drawn, {len(rows)} rows, in {time.perf_counter() - t0:.0f} s')
 
 

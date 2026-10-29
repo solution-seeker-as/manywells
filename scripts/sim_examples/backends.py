@@ -41,7 +41,7 @@ for backend in BACKENDS:
     t0 = time.perf_counter()
     sims[backend] = SSDFSimulator(wp, backend=backend)  # builds the well's system once
     t1 = time.perf_counter()
-    root_sets[backend] = sims[backend].root_set(bc)     # every root, labelled; simulate(bc) returns the stable one
+    root_sets[backend] = sims[backend].root_set(bc)  # every root, labelled; simulate(bc) returns the stable one
     t2 = time.perf_counter()
 
     rs = root_sets[backend]
@@ -57,8 +57,10 @@ if len(rs_c.roots) != len(rs_r.roots):
     print(f'The backends found {len(rs_c.roots)} and {len(rs_r.roots)} roots')
 for k, (r_c, r_r) in enumerate(zip(rs_c.roots, rs_r.roots)):
     diff = np.max(np.abs(r_c.state - r_r.state), axis=0)  # largest difference over the grid, per state variable
-    print(f'Root {k} ({r_c.label} / {r_r.label}), largest difference:',
-          ', '.join(f'{name} {d:.1e}' for name, d in zip(STATE, diff)))
+    print(
+        f'Root {k} ({r_c.label} / {r_r.label}), largest difference:',
+        ', '.join(f'{name} {d:.1e}' for name, d in zip(STATE, diff)),
+    )
 
 # -- Plot every root from both backends ----------------------------------
 panels = [
@@ -76,15 +78,15 @@ for ax, (col, ylabel) in zip(axes, panels):
         ax.plot(df['md'], df[col], '-', lw=2, color=colors[r.label], label=f'casadi, {r.label}')
     for r in rs_r.roots:
         df = sims['rust'].solution_as_df(r)
-        ax.plot(df['md'], df[col], 'o', ms=4, markevery=5, mfc='none', color=colors[r.label],
-                label=f'rust, {r.label}')
+        ax.plot(df['md'], df[col], 'o', ms=4, markevery=5, mfc='none', color=colors[r.label], label=f'rust, {r.label}')
     ax.set_xlabel('MD (m)')
     ax.set_ylabel(ylabel)
     ax.grid(True, alpha=0.3)
 axes[0].legend()
 
-fig.suptitle('The same well solved by each backend: lines are CasADi, circles the Rust core',
-             fontsize=13, fontweight='bold')
+fig.suptitle(
+    'The same well solved by each backend: lines are CasADi, circles the Rust core', fontsize=13, fontweight='bold'
+)
 plt.tight_layout(rect=[0, 0, 1, 0.94])
 
 
@@ -92,6 +94,7 @@ plt.tight_layout(rect=[0, 0, 1, 0.94])
 @dataclass(frozen=True)
 class DamagedProductivityIndex(ProductivityIndex):
     """A user's inflow model: the productivity index, reduced by near-wellbore damage."""
+
     damage: float = 0.2  # Fraction of the inflow lost (-)
 
     def liquid_mass_flow_rate(self, p, p_r):
@@ -107,7 +110,9 @@ except ValueError as err:
 # not_in_core lists the parts of a well the Rust core cannot solve, so a script can pick the backend
 backend = 'casadi' if not_in_core(wp_user) else 'rust'
 op = SSDFSimulator(wp_user, backend=backend).simulate(bc)
-print(f'Damaged well ({backend}): p_0 = {op.p_0:.2f} bar ({op.label}), '
-      f'liquid rate {op.w_res:.2f} kg/s, against {rs_c.operating_point.w_res:.2f} kg/s without damage')
+print(
+    f'Damaged well ({backend}): p_0 = {op.p_0:.2f} bar ({op.label}), '
+    f'liquid rate {op.w_res:.2f} kg/s, against {rs_c.operating_point.w_res:.2f} kg/s without damage'
+)
 
 plt.show()

@@ -39,7 +39,7 @@ def create_feature_dict(v_gs, v_ls, alpha):
     rho_l = 900
     g = 9.81
     sigma = 0.033  # Really a function of the densities and temperature
-    c1_const = 3.1 * (g * sigma * (rho_l - rho_g) / rho_g ** 2) ** (1 / 4)
+    c1_const = 3.1 * (g * sigma * (rho_l - rho_g) / rho_g**2) ** (1 / 4)
     # c1_const = 12.821059412975487  # TODO: remove later
     print('c1_const:', c1_const)
 
@@ -83,12 +83,9 @@ def create_class_dict(feature_dict):
     }
 
     # Encoded as integer
-    class_dict_v2 = {
-        'regime': class_array
-    }
+    class_dict_v2 = {'regime': class_array}
 
     return class_dict, class_dict_v2
-
 
 
 # Classify flow regime
@@ -97,10 +94,14 @@ def classify(x):
     :param x: Features computed from v_gs, v_ls, alpha
     :return: prediction (0: annular, 1: slug, 2: bubbly), probability vector
     """
-    A = np.array([[ 3.17715258,  6.81938489,  0.30182974,  3.58362465],
-                  [-1.47973427, -4.34033317,  2.58200006,  3.49656911],
-                  [-1.6974183 , -2.47905172, -2.8838298 , -7.08019376]])
-    b = np.array([-3.92904391, -1.46509477,  5.39413869])
+    A = np.array(
+        [
+            [3.17715258, 6.81938489, 0.30182974, 3.58362465],
+            [-1.47973427, -4.34033317, 2.58200006, 3.49656911],
+            [-1.6974183, -2.47905172, -2.8838298, -7.08019376],
+        ]
+    )
+    b = np.array([-3.92904391, -1.46509477, 5.39413869])
 
     y = x.dot(A.T) + b
 
@@ -109,7 +110,6 @@ def classify(x):
     proba = exp_y / exp_y.sum(axis=1, keepdims=True)
 
     return y, proba
-
 
 
 # Brief test
@@ -208,5 +208,3 @@ plt.legend(handles=[annular_patch, slug_patch, bubbly_patch], loc='upper left')
 plt.tight_layout()
 
 plt.show()
-
-

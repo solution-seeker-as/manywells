@@ -25,19 +25,19 @@ import numpy as np
 def _check_stations(md, tvd):
     """The checks of a survey's stations, md and tvd (m) as float arrays from the surface, as GEO-3 needs them."""
     if len(md) != len(tvd):
-        raise ValueError("md_survey and tvd_survey must have the same length")
+        raise ValueError('md_survey and tvd_survey must have the same length')
     if len(md) < 2:
-        raise ValueError("Survey must have at least two stations")
+        raise ValueError('Survey must have at least two stations')
     if not (np.all(np.isfinite(md)) and np.all(np.isfinite(tvd))):
-        raise ValueError("md_survey and tvd_survey must be finite")
+        raise ValueError('md_survey and tvd_survey must be finite')
     if md[0] != 0.0:
-        raise ValueError("md_survey must start at 0 (surface)")
+        raise ValueError('md_survey must start at 0 (surface)')
     if tvd[0] != 0.0:
-        raise ValueError("tvd_survey must start at 0 (surface)")
+        raise ValueError('tvd_survey must start at 0 (surface)')
     if not np.all(np.diff(md) > 0):
-        raise ValueError("md_survey must be strictly increasing")
+        raise ValueError('md_survey must be strictly increasing')
     if np.any(md < tvd - 1e-12):
-        raise ValueError("MD must be >= TVD at every survey station")
+        raise ValueError('MD must be >= TVD at every survey station')
 
 
 @dataclass(frozen=True)
@@ -95,14 +95,14 @@ class WellGeometry:
         # --- validation ---
         _check_stations(md_grid, tvd_grid)
         if not self.D > 0:  # NaN too
-            raise ValueError("Pipe diameter D must be positive")
+            raise ValueError('Pipe diameter D must be positive')
 
         # store inputs as immutable tuples
-        object.__setattr__(self, "md_survey", tuple(md_grid))
-        object.__setattr__(self, "tvd_survey", tuple(tvd_grid))
-        
+        object.__setattr__(self, 'md_survey', tuple(md_grid))
+        object.__setattr__(self, 'tvd_survey', tuple(tvd_grid))
+
         # Store number of cells
-        object.__setattr__(self, "n_cells", len(md_grid) - 1)
+        object.__setattr__(self, 'n_cells', len(md_grid) - 1)
 
         # per-cell increments in survey order
         d_md = np.diff(md_grid)
@@ -110,13 +110,13 @@ class WellGeometry:
         cos_survey = d_tvd / d_md
 
         if np.any(cos_survey < 0) or np.any(cos_survey > 1):
-            raise ValueError("cos_incl must be in the unit interval [0, 1]")
+            raise ValueError('cos_incl must be in the unit interval [0, 1]')
 
         # --- convert to simulator order (bottom → top) ---
-        object.__setattr__(self, "md", tuple(md_grid[::-1].tolist()))
-        object.__setattr__(self, "tvd", tuple(tvd_grid[::-1].tolist()))
-        object.__setattr__(self, "delta_md", tuple(d_md[::-1].tolist()))
-        object.__setattr__(self, "cos_incl", tuple(cos_survey[::-1].tolist()))
+        object.__setattr__(self, 'md', tuple(md_grid[::-1].tolist()))
+        object.__setattr__(self, 'tvd', tuple(tvd_grid[::-1].tolist()))
+        object.__setattr__(self, 'delta_md', tuple(d_md[::-1].tolist()))
+        object.__setattr__(self, 'cos_incl', tuple(cos_survey[::-1].tolist()))
 
         # tvd_frac: fraction of max TVD at each node (simulator order)
         tvd_sim = tvd_grid[::-1]
@@ -125,7 +125,7 @@ class WellGeometry:
             frac = tvd_sim / max_tvd
         else:
             frac = np.zeros_like(tvd_sim)
-        object.__setattr__(self, "tvd_frac", tuple(frac.tolist()))
+        object.__setattr__(self, 'tvd_frac', tuple(frac.tolist()))
 
     # ----- properties ---------------------------------------------------
 

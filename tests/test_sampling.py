@@ -19,8 +19,15 @@ from manywells.datasets.rows import sample_row
 from manywells.datasets.schema import FEATURES
 from manywells.sampling.conditions import NonStationaryBehavior, nominal_conditions, sample_conditions
 from manywells.sampling.generate import Settings, solve, stationary_well
-from manywells.sampling.wells import (INCH, OUTER_DIAMETERS, liquid, rng_for, sample_well, well_from_config,
-                                      well_properties)
+from manywells.sampling.wells import (
+    INCH,
+    OUTER_DIAMETERS,
+    liquid,
+    rng_for,
+    sample_well,
+    well_from_config,
+    well_properties,
+)
 
 SEED = 11
 DRAWS = [sample_well(SEED, i) for i in range(3000)]
@@ -43,6 +50,7 @@ def test_seeding_is_reproducible():
 def test_develop_draws_do_not_shift_the_v1_draws():
     """The develop draws come from their own generator, so both configurations share the v1 draws (SMP-40)."""
     from manywells.sampling import wells
+
     rng = rng_for(SEED, 17, 'well')
     draw = None
     while draw is None:
@@ -145,11 +153,32 @@ def test_nonstationary_behaviour():
 
 
 def test_well_from_config():
-    row = {'ID': 0, 'wp.L': 2668.0, 'wp.D': 0.0762, 'wp.f_D': 0.018, 'wp.h': 25.8, 'wp.inflow.class_name': 'Vogel',
-           'wp.inflow.w_l_max': 33.2, 'wp.choke.class_name': 'SimpsonChokeModel', 'wp.choke.K_c': 0.00096,
-           'wp.choke.chk_profile': 'convex', 'bc.p_r': 265.8, 'bc.p_s': 23.7, 'bc.T_r': 368.2, 'bc.T_s': 277.15,
-           'gas.R_s': 472.2, 'gas.cp': 2225, 'oil.rho': 885.6, 'oil.cp': 2000, 'water.rho': 999.1, 'water.cp': 4184,
-           'fraction.gas': 0.237, 'fraction.oil': 0.7345, 'fraction.water': 0.0285, 'has_gas_lift': False}
+    row = {
+        'ID': 0,
+        'wp.L': 2668.0,
+        'wp.D': 0.0762,
+        'wp.f_D': 0.018,
+        'wp.h': 25.8,
+        'wp.inflow.class_name': 'Vogel',
+        'wp.inflow.w_l_max': 33.2,
+        'wp.choke.class_name': 'SimpsonChokeModel',
+        'wp.choke.K_c': 0.00096,
+        'wp.choke.chk_profile': 'convex',
+        'bc.p_r': 265.8,
+        'bc.p_s': 23.7,
+        'bc.T_r': 368.2,
+        'bc.T_s': 277.15,
+        'gas.R_s': 472.2,
+        'gas.cp': 2225,
+        'oil.rho': 885.6,
+        'oil.cp': 2000,
+        'water.rho': 999.1,
+        'water.cp': 4184,
+        'fraction.gas': 0.237,
+        'fraction.oil': 0.7345,
+        'fraction.water': 0.0285,
+        'has_gas_lift': False,
+    }
     d = well_from_config(row)
     assert d.L == 2668.0 and d.fractions == (0.237, 0.7345, 0.0285) and differences(well_properties(d), V1) == []
 
@@ -175,6 +204,7 @@ def test_sample_row_in_the_v1_configuration():
 def test_stationary_generation():
     """SMP-28 on one well: samples at the stable root, or the well is discarded with a reason."""
     from manywells.sampling.generate import WellDiscarded
+
     for well in range(5):
         try:
             df = stationary_well(DRAWS[well], well, 8, Settings(seed=SEED))

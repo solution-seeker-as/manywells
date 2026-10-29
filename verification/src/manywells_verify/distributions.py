@@ -35,12 +35,33 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-FEATURES = ('CHK', 'PBH', 'PWH', 'PDC', 'TBH', 'TWH', 'WGL', 'WGAS', 'WLIQ', 'WOIL', 'WWAT', 'WTOT',
-            'QGL', 'QGAS', 'QLIQ', 'QOIL', 'QWAT', 'QTOT', 'FGAS', 'FOIL', 'FWAT')
+FEATURES = (
+    'CHK',
+    'PBH',
+    'PWH',
+    'PDC',
+    'TBH',
+    'TWH',
+    'WGL',
+    'WGAS',
+    'WLIQ',
+    'WOIL',
+    'WWAT',
+    'WTOT',
+    'QGL',
+    'QGAS',
+    'QLIQ',
+    'QOIL',
+    'QWAT',
+    'QTOT',
+    'FGAS',
+    'FOIL',
+    'FWAT',
+)
 PERCENTILES = np.arange(1, 100)
-TRICKLE_DP = 0.01        # bar: rows with PWH - PDC below this are on the trickle-root signature
-MAX_CDF_GAP = 0.02       # largest allowed empirical-CDF difference per feature
-MAX_CORR_GAP = 0.05      # largest allowed rank-correlation difference
+TRICKLE_DP = 0.01  # bar: rows with PWH - PDC below this are on the trickle-root signature
+MAX_CDF_GAP = 0.02  # largest allowed empirical-CDF difference per feature
+MAX_CORR_GAP = 0.05  # largest allowed rank-correlation difference
 REFERENCE = Path(__file__).resolve().parents[2] / 'data' / 'distribution_reference.json'
 
 
@@ -66,7 +87,7 @@ def summarize(df: pd.DataFrame) -> dict:
 def well_weights(reference: dict, df: pd.DataFrame) -> np.ndarray:
     """Row weights that mix the candidate's wells as the reference's: n_ref(well) / n_cand(well) per row."""
     if 'ID' not in df:
-        raise ValueError('the candidate rows need an ID column with the reference\'s well IDs')
+        raise ValueError("the candidate rows need an ID column with the reference's well IDs")
     n_ref = df['ID'].map(lambda k: reference['well_rows'].get(str(int(k)), 0)).to_numpy(dtype=float)
     n_cand = df.groupby('ID')['ID'].transform('size').to_numpy(dtype=float)
     return n_ref / n_cand
@@ -111,8 +132,9 @@ def compare(reference: dict, df: pd.DataFrame, weights=None) -> dict:
     w = np.ones(len(df)) if weights is None else np.asarray(weights, dtype=float)
     keep = w > 0
     if not keep.any():
-        raise ValueError('no candidate row belongs to a reference well' if weights is not None
-                         else 'the candidate has no rows')
+        raise ValueError(
+            'no candidate row belongs to a reference well' if weights is not None else 'the candidate has no rows'
+        )
     df, w = df[keep], w[keep]
     gaps = {}
     for f in FEATURES:
@@ -123,17 +145,25 @@ def compare(reference: dict, df: pd.DataFrame, weights=None) -> dict:
     i, j = np.unravel_index(np.argmax(diff), diff.shape)
     worst_cdf = max(gaps, key=gaps.get)
     passed = gaps[worst_cdf] <= MAX_CDF_GAP and diff[i, j] <= MAX_CORR_GAP
-    return {'passed': bool(passed), 'cdf_gaps': gaps, 'worst_cdf': (worst_cdf, gaps[worst_cdf]),
-            'worst_corr': (FEATURES[i], FEATURES[j], float(diff[i, j]))}
+    return {
+        'passed': bool(passed),
+        'cdf_gaps': gaps,
+        'worst_cdf': (worst_cdf, gaps[worst_cdf]),
+        'worst_corr': (FEATURES[i], FEATURES[j], float(diff[i, j])),
+    }
 
 
 def report(result: dict, dataset: str, rows: int) -> str:
     f, gap = result['worst_cdf']
     a, b, cgap = result['worst_corr']
-    lines = [f'## Distributions against {dataset} (stable-root reference)', '',
-             f'**Verdict: {"PASS" if result["passed"] else "FAIL"}.** {rows} candidate rows.', '',
-             f'- Largest CDF gap: {gap:.3f} ({f}); bound {MAX_CDF_GAP}.',
-             f'- Largest rank-correlation gap: {cgap:.3f} ({a}, {b}); bound {MAX_CORR_GAP}.']
+    lines = [
+        f'## Distributions against {dataset} (stable-root reference)',
+        '',
+        f'**Verdict: {"PASS" if result["passed"] else "FAIL"}.** {rows} candidate rows.',
+        '',
+        f'- Largest CDF gap: {gap:.3f} ({f}); bound {MAX_CDF_GAP}.',
+        f'- Largest rank-correlation gap: {cgap:.3f} ({a}, {b}); bound {MAX_CORR_GAP}.',
+    ]
     over = [f'{k} {v:.3f}' for k, v in sorted(result['cdf_gaps'].items(), key=lambda kv: -kv[1]) if v > MAX_CDF_GAP]
     if over:
         lines.append('- Features over the bound: ' + ', '.join(over) + '.')
@@ -141,8 +171,10 @@ def report(result: dict, dataset: str, rows: int) -> str:
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(prog='manywells-verify-distributions',
-                                     description='Compare a regenerated dataset with the stable-root reference.')
+    parser = argparse.ArgumentParser(
+        prog='manywells-verify-distributions',
+        description='Compare a regenerated dataset with the stable-root reference.',
+    )
     parser.add_argument('candidate', type=Path, help='dataset rows (parquet or csv) with the ManyWells features')
     parser.add_argument('--dataset', required=True, help='reference dataset, e.g. sol-1 or nsol-1')
     parser.add_argument('--reference', type=Path, default=REFERENCE)

@@ -50,10 +50,10 @@ class FluidModel:
     rho_w: float = 999.1
 
     # Volumetric ratios at standard conditions
-    gor: float = 200.0          # Gas-oil ratio (Sm3/Sm3)
-    wlr: float = 0.0            # Water-liquid ratio (also known as water cut), in [0, 1)
+    gor: float = 200.0  # Gas-oil ratio (Sm3/Sm3)
+    wlr: float = 0.0  # Water-liquid ratio (also known as water cut), in [0, 1)
 
-    surface_tension_model: str = 'oil'    # One of SURFACE_TENSION_MODELS
+    surface_tension_model: str = 'oil'  # One of SURFACE_TENSION_MODELS
 
     # Heat capacities (J/kg/K)
     cp_g: float = 2225.0
@@ -64,7 +64,7 @@ class FluidModel:
         if not isinstance(self.pvt, PVTModel):
             raise ValueError(f'pvt must be a PVTModel, such as BlackOil() or DeadOil(), got {self.pvt!r}')
         if self.surface_tension_model not in SURFACE_TENSION_MODELS:
-            raise ValueError(f"Unknown surface_tension_model: {self.surface_tension_model!r}")
+            raise ValueError(f'Unknown surface_tension_model: {self.surface_tension_model!r}')
         if not 0 <= self.wlr < 1:
             raise ValueError('Water-liquid ratio must be in [0, 1)')
         for name in ('rho_w', 'cp_g', 'cp_o', 'cp_w'):

@@ -140,11 +140,11 @@ Another solver adapter (Newton or KINSOL on the square system, JIT compilation, 
 ### Public API
 
 ```python
-sim = SSDFSimulator(wp)                  # validates and builds the well's system once
-op = sim.simulate(bc)                    # the operating point, a Root; raises NoOperatingPoint
-rs = sim.root_set(bc)                    # every root found, labelled; empty if the well cannot flow
-df = sim.solution_as_df(op)              # per point: state, md, tvd, flow regime
-op2 = sim.simulate(bc2, x_guess=op.x)   # a warm start makes the search faster, not the answer different
+sim = SSDFSimulator(wp)  # validates and builds the well's system once
+op = sim.simulate(bc)  # the operating point, a Root; raises NoOperatingPoint
+rs = sim.root_set(bc)  # every root found, labelled; empty if the well cannot flow
+df = sim.solution_as_df(op)  # per point: state, md, tvd, flow regime
+op2 = sim.simulate(bc2, x_guess=op.x)  # a warm start makes the search faster, not the answer different
 ```
 
 `NoOperatingPoint` is a `SimError` and carries the root set (SOL-5). Log messages go to `logging.getLogger('manywells')`. Whether `simulate` tries every start or stops early is solver policy: Step 7 measured its stable-root rate and cost on the case set, and each backend may choose differently, because only the returned operating point is specified (principle 6). The two-argument constructor `SSDFSimulator(wp, bc)` with `simulate()` keeps working, with a `DeprecationWarning`, until v2.0.0; it returns the operating point's state as a flat list, as before. `SSDFSimulator(wp, backend='casadi' | 'rust')` chooses the backend; both take the same inputs and return the same types. Step 8 added the `backend` argument with the Rust core; `'rust'` takes wells in the `v1.0.0` configuration only and refuses others, and builds no CasADi system.
@@ -154,10 +154,10 @@ op2 = sim.simulate(bc2, x_guess=op.x)   # a warm start makes the search faster, 
 *Added with `specs/calibration.md` (`plans/calibration-plan.md`, Step C1), 2026-10-02; signed off by Bjarne the same day.*
 
 ```python
-data = CalibrationData(df, noise=Noise())                  # one well's rows: inputs, observations (NaN where missing)
+data = CalibrationData(df, noise=Noise())  # one well's rows: inputs, observations (NaN where missing)
 result = calibrate(wp, data, bc, free=['K_c', 'w_l_max', 'roughness', 'h'], priors=None, backend='rust')
-result.values, result.z, result.well, result.residuals    # MAP estimate, shifts in prior sds, calibrated well, table
-table = evaluate(result.well, other_data, bc)             # the same table on rows it was not calibrated on
+result.values, result.z, result.well, result.residuals  # MAP estimate, shifts in prior sds, calibrated well, table
+table = evaluate(result.well, other_data, bc)  # the same table on rows it was not calibrated on
 ```
 
 - **On top of the simulator.** `calibration/` calls only `SSDFSimulator(wp, backend=...).simulate(bc)` and the datasets' feature definitions (`datasets.rows.root_features`), so it works with both backends and holds no model equation. A free parameter is a plain field of a component (CAL-5), applied with `dataclasses.replace`, so every component the core has takes it.

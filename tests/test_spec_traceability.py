@@ -13,8 +13,17 @@ every ID is tagged in code or marked spec-only (specs/model/README.md).
 
 import collections
 
-from .spec_parse import (CHECK_KINDS, NAMESPACES, code_tags, coverage, definitions, namespace, retired_ids,
-                         row_vectors, vector_tables)
+from .spec_parse import (
+    CHECK_KINDS,
+    NAMESPACES,
+    code_tags,
+    coverage,
+    definitions,
+    namespace,
+    retired_ids,
+    row_vectors,
+    vector_tables,
+)
 
 
 def defined():
@@ -53,9 +62,15 @@ def test_checked_by_is_valid():
         if not r.checked_by:
             bad.append((r.eq_id, 'empty'))
         for check in r.checked_by:
-            kind = next((k for k in CHECK_KINDS if check == k or check.startswith(k + ' (')
-                         or (k.endswith(':') and check.startswith(k))), None)
-            if kind is None or (kind.endswith(':') and not check[len(kind):].strip()):
+            kind = next(
+                (
+                    k
+                    for k in CHECK_KINDS
+                    if check == k or check.startswith(k + ' (') or (k.endswith(':') and check.startswith(k))
+                ),
+                None,
+            )
+            if kind is None or (kind.endswith(':') and not check[len(kind) :].strip()):
                 bad.append((r.eq_id, check))
     assert not bad
 
@@ -68,10 +83,12 @@ def test_vector_claims_are_backed():
             in_tables[eq_id].add(t.file)
     rows = coverage()
     claims = {r.eq_id: r for r in rows}
-    assert not [r.eq_id for r in rows if 'vectors' in r.checked_by and r.file not in in_tables[r.eq_id]], \
+    assert not [r.eq_id for r in rows if 'vectors' in r.checked_by and r.file not in in_tables[r.eq_id]], (
         'coverage claims vectors, but the file has no table for the ID'
-    assert not [i for i in in_tables if i not in claims or 'vectors' not in claims[i].checked_by], \
+    )
+    assert not [i for i in in_tables if i not in claims or 'vectors' not in claims[i].checked_by], (
         'vector tables for IDs whose coverage does not claim vectors'
+    )
     assert all(t.rows for t in tables), 'empty vector table'
 
 

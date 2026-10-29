@@ -28,12 +28,23 @@ BEGIN, END = '<!-- vectors:begin', '<!-- vectors:end'
 BLOCK = re.compile(r'^<!-- vectors:begin( develop|) -->$(.*?)^<!-- vectors:end\1 -->$', re.M | re.S)
 
 NAMESPACES = {
-    'BAL': 'model/balances.md', 'DISC': 'model/discretization.md', 'SOL': 'model/solution.md',
-    'GEO': 'model/geometry.md', 'PVT-GAS': 'model/pvt/gas.md', 'PVT-OIL': 'model/pvt/oil.md',
-    'PVT-WAT': 'model/pvt/water.md', 'PVT-MIX': 'model/pvt/mixture.md', 'PVT-TAB': 'model/pvt/table.md',
+    'BAL': 'model/balances.md',
+    'DISC': 'model/discretization.md',
+    'SOL': 'model/solution.md',
+    'GEO': 'model/geometry.md',
+    'PVT-GAS': 'model/pvt/gas.md',
+    'PVT-OIL': 'model/pvt/oil.md',
+    'PVT-WAT': 'model/pvt/water.md',
+    'PVT-MIX': 'model/pvt/mixture.md',
+    'PVT-TAB': 'model/pvt/table.md',
     'SLIP': 'model/slip.md',
-    'FRIC': 'model/friction.md', 'THM': 'model/thermal.md', 'INF': 'model/inflow.md',
-    'CHK': 'model/choke.md', 'SMO': 'model/smoothing.md', 'SMP': 'sampling.md', 'CAL': 'calibration.md',
+    'FRIC': 'model/friction.md',
+    'THM': 'model/thermal.md',
+    'INF': 'model/inflow.md',
+    'CHK': 'model/choke.md',
+    'SMO': 'model/smoothing.md',
+    'SMP': 'sampling.md',
+    'CAL': 'calibration.md',
 }
 CHECK_KINDS = ('vectors', 'rows', 'verifier:', 'property:', 'spec-only:')
 
@@ -139,7 +150,7 @@ class VectorTable:
     ids: tuple
     inputs: tuple
     outputs: tuple
-    rows: tuple      # each row: (inputs dict, outputs dict)
+    rows: tuple  # each row: (inputs dict, outputs dict)
     source: str = 'v1.0.0'  # the block: 'v1.0.0' (from v1.0.0) or 'develop' (pins develop's options)
 
 
@@ -153,7 +164,7 @@ def vector_tables():
             starts = [k for k, line in enumerate(block) if line.startswith('### ')]
             for k, start in enumerate(starts):
                 heading = block[start][4:].strip()
-                lines = block[start + 1:starts[k + 1] if k + 1 < len(starts) else len(block)]
+                lines = block[start + 1 : starts[k + 1] if k + 1 < len(starts) else len(block)]
                 header = next(line for line in lines if line.startswith('|'))
                 cols = [c.strip() for c in header.strip().strip('|').split('|')]
                 outputs = tuple(c[1:].strip() for c in cols if c.startswith('→'))
@@ -161,7 +172,7 @@ def vector_tables():
                 rows = []
                 for cells in table_rows(lines):
                     values = [parse_value(c) for c in cells]
-                    rows.append((dict(zip(inputs, values[:len(inputs)])), dict(zip(outputs, values[len(inputs):]))))
+                    rows.append((dict(zip(inputs, values[: len(inputs)])), dict(zip(outputs, values[len(inputs) :]))))
                 ids = tuple(re.findall(ID, heading.split('(')[0]))
                 tables.append(VectorTable(rel(path), heading, ids, inputs, outputs, tuple(rows), source))
     return tables

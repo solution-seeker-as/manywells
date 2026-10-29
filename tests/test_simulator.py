@@ -57,7 +57,7 @@ def test_inputs_are_frozen():
 
 
 def test_well_properties_rejects_wrong_component():
-    with pytest.raises(ValueError, match="friction must be a FrictionModel"):
+    with pytest.raises(ValueError, match='friction must be a FrictionModel'):
         WellProperties(friction=0.03)
 
 
@@ -76,8 +76,20 @@ def test_well_properties_refuses_a_relative_roughness_above_005(correlation):
 
 def test_a_fixed_friction_factor_has_no_roughness_to_refuse():
     """The v1.0.0 configuration's friction (FRIC-2) refuses nothing that v1.0.0 accepts (specs/model/validity.md)."""
-    wp = v1_well(L=2000.0, D=0.0762, rho_l=1050.0, R_s=420.0, cp_g=2225.0, cp_l=4000.0, f_D=0.08, h=20.0, f_g=0.15,
-                 inflow=Vogel(w_l_max=20.0), choke=SimpsonChokeModel(K_c=0.001), n_cells=10)
+    wp = v1_well(
+        L=2000.0,
+        D=0.0762,
+        rho_l=1050.0,
+        R_s=420.0,
+        cp_g=2225.0,
+        cp_l=4000.0,
+        f_D=0.08,
+        h=20.0,
+        f_g=0.15,
+        inflow=Vogel(w_l_max=20.0),
+        choke=SimpsonChokeModel(K_c=0.001),
+        n_cells=10,
+    )
     assert type(wp.friction) is FixedFrictionFactor and wp.fluid.api < 10
 
 
@@ -92,30 +104,30 @@ def test_boundary_conditions_defaults():
 
 def test_boundary_conditions_invalid_pressure():
     """BoundaryConditions rejects non-positive pressures."""
-    with pytest.raises(ValueError, match="Reservoir pressure"):
+    with pytest.raises(ValueError, match='Reservoir pressure'):
         BoundaryConditions(p_r=0)
-    with pytest.raises(ValueError, match="Separator pressure"):
+    with pytest.raises(ValueError, match='Separator pressure'):
         BoundaryConditions(p_s=-1)
 
 
 def test_boundary_conditions_invalid_choke():
     """BoundaryConditions requires u in [0, 1]."""
-    with pytest.raises(ValueError, match="Choke opening"):
+    with pytest.raises(ValueError, match='Choke opening'):
         BoundaryConditions(u=-0.1)
-    with pytest.raises(ValueError, match="Choke opening"):
+    with pytest.raises(ValueError, match='Choke opening'):
         BoundaryConditions(u=1.5)
 
 
 def test_boundary_conditions_negative_lift_gas():
     """BoundaryConditions rejects negative lift gas rate."""
-    with pytest.raises(ValueError, match="Gas lift"):
+    with pytest.raises(ValueError, match='Gas lift'):
         BoundaryConditions(w_lg=-1.0)
 
 
 def test_boundary_conditions_must_be_finite():
     """BoundaryConditions rejects infinite values: p_r = inf gave the Rust core's scan an infinite step."""
     for name in ('p_r', 'p_s', 'T_r', 'T_s', 'T_lg', 'u', 'w_lg'):
-        with pytest.raises(ValueError, match="finite"):
+        with pytest.raises(ValueError, match='finite'):
             BoundaryConditions(**{name: np.inf})
 
 
@@ -127,7 +139,7 @@ def test_the_reservoir_pressure_must_exceed_the_separator_pressure(backend):
     """
     sim = SSDFSimulator(WellProperties(geometry=WellGeometry.vertical(2000, 20)), backend=backend)
     for p_r in (15.0, 20.0):
-        with pytest.raises(ValueError, match="must exceed the separator pressure"):
+        with pytest.raises(ValueError, match='must exceed the separator pressure'):
             sim.simulate(BoundaryConditions(p_r=p_r, p_s=20.0), x_guess=np.ones(DIM_X * 21))
 
 
@@ -137,7 +149,7 @@ def test_simulator_construction():
     sim = SSDFSimulator(WellProperties(geometry=geo))
     assert sim.n_cells == 5
     assert sim.dim_x == 7
-    assert sim.variable_names == ["p", "v_g", "v_l", "alpha", "rho_g", "rho_l", "T"]
+    assert sim.variable_names == ['p', 'v_g', 'v_l', 'alpha', 'rho_g', 'rho_l', 'T']
     assert sim.system.n_x == 7 * 6
     assert len(sim.system.row_ids) == sim.system.n_x
     assert sim.system.residual.size1_out(0) == sim.system.n_x
@@ -169,8 +181,10 @@ def test_injection_point():
     """INF-9: the grid point nearest the injection depth, the deeper of two equally near; 0 without one."""
     geo = WellGeometry.vertical(2000.0, 10)  # Points every 200 m, point 0 at 2000 m
     assert WellProperties(geometry=geo).injection_point == 0
-    assert [WellProperties(geometry=geo, injection_md=md).injection_point
-            for md in (2000.0, 1900.0, 1899.0, 1000.0, 1100.0, 0.0)] == [0, 0, 1, 5, 4, 10]
+    assert [
+        WellProperties(geometry=geo, injection_md=md).injection_point
+        for md in (2000.0, 1900.0, 1899.0, 1000.0, 1100.0, 0.0)
+    ] == [0, 0, 1, 5, 4, 10]
 
 
 def test_row_order_with_an_injection_point():
@@ -220,6 +234,7 @@ def test_deprecated_two_argument_constructor():
 # Solves
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.slow
 def test_simulator_solve_small():
     """Simulator solve runs with minimal grid."""
@@ -262,9 +277,9 @@ def test_simulator_solve_l_shaped():
     sim = SSDFSimulator(wp)
     op = sim.simulate(BoundaryConditions(p_r=200, p_s=20, u=0.8))
     df = sim.solution_as_df(op)
-    assert df["p"].iloc[0] > df["p"].iloc[-1]  # pressure decreases bottom to top
-    assert all(df["alpha"] >= 0) and all(df["alpha"] <= 1)
-    assert "md" in df.columns and "tvd" in df.columns
+    assert df['p'].iloc[0] > df['p'].iloc[-1]  # pressure decreases bottom to top
+    assert all(df['alpha'] >= 0) and all(df['alpha'] <= 1)
+    assert 'md' in df.columns and 'tvd' in df.columns
 
 
 @pytest.mark.slow
@@ -320,6 +335,7 @@ def test_no_operating_point_pickles():
 
 class GuessRecorder:
     """A root finder that records the guess it is given and finds no root."""
+
     x_guess = 'not called'
 
     def find(self, bc, x_guess=None):
@@ -341,8 +357,9 @@ def test_x_guess_reaches_the_search():
         sim.simulate()
     assert sim._roots.x_guess == [2.0] * 28
 
-    root = Root(x=np.arange(28.0), label='stable', slope=-1.0, choked=False, flow_regime=('slug',) * 4, w_res=1.0,
-                w_g_res=0.1)
+    root = Root(
+        x=np.arange(28.0), label='stable', slope=-1.0, choked=False, flow_regime=('slug',) * 4, w_res=1.0, w_g_res=0.1
+    )
     sim.root_set(bc, x_guess=root)
     assert sim._roots.x_guess is root.x
 
@@ -350,8 +367,15 @@ def test_x_guess_reaches_the_search():
 def test_solution_as_df_copies_the_state():
     """An edit of the frame leaves the frozen root as it was, with or without pandas' copy-on-write."""
     sim = SSDFSimulator(WellProperties(geometry=WellGeometry.vertical(100, 3, D=0.1)))
-    root = Root(x=np.tile([50.0, 5.0, 2.0, 0.3, 50.0, 700.0, 300.0], 4), label='stable', slope=-1.0, choked=False,
-                flow_regime=('slug',) * 4, w_res=1.0, w_g_res=0.1)
+    root = Root(
+        x=np.tile([50.0, 5.0, 2.0, 0.3, 50.0, 700.0, 300.0], 4),
+        label='stable',
+        slope=-1.0,
+        choked=False,
+        flow_regime=('slug',) * 4,
+        w_res=1.0,
+        w_g_res=0.1,
+    )
     for x in (root, root.x):
         df = sim.solution_as_df(x)
         df.loc[0, 'p'] = -1.0
@@ -369,8 +393,8 @@ def test_simulator_solution_as_df_shape():
     for _ in range(n_nodes):
         dummy_state.extend([50.0, 5.0, 2.0, 0.3, 50.0, 700.0, 300.0])
     df = sim.solution_as_df(dummy_state)
-    assert "md" in df.columns
-    assert "tvd" in df.columns
+    assert 'md' in df.columns
+    assert 'tvd' in df.columns
     for name in sim.variable_names:
         assert name in df.columns
     assert len(df) == sim.n_cells + 1

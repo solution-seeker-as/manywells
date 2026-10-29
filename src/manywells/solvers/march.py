@@ -44,10 +44,10 @@ from manywells.discretization import DIM_X, PARAMS, lifts
 
 QUIET = {'show_eval_warnings': False}  # A failed solve raises MarchFailed; CasADi need not warn as well
 IPOPT = {'ipopt.print_level': 0, 'ipopt.sb': 'yes', 'print_time': 0, 'show_eval_warnings': False, 'calc_lam_p': False}
-LOWER = [0.0] * DIM_X                                          # v1.0.0's march: every unknown non-negative,
+LOWER = [0.0] * DIM_X  # v1.0.0's march: every unknown non-negative,
 UPPER = [np.inf, np.inf, np.inf, 1.0, np.inf, np.inf, np.inf]  # and alpha <= 1
 NEWTON_ROW_TOL = 1e-6  # Largest |row| of a point Newton solved (bar, K, m/s, kg/(m² s), kg/m³)
-ALPHA_MIN = 1e-6       # Smallest void fraction of point 0's retry (issue #10)
+ALPHA_MIN = 1e-6  # Smallest void fraction of point 0's retry (issue #10)
 
 
 class MarchFailed(RuntimeError):
@@ -83,7 +83,7 @@ def no_slip_guess(guess):
     carry the same phase rates; None where that is the guess itself, or where nothing flows.
     """
     alpha, v_g, v_l = guess[3], guess[1], guess[2]
-    q_g, q_l = alpha * v_g, (1 - alpha) * v_l       # Volume rates per unit area
+    q_g, q_l = alpha * v_g, (1 - alpha) * v_l  # Volume rates per unit area
     if not q_g + q_l > 0:
         return None
     no_slip = min(alpha, max(q_g / (q_g + q_l), ALPHA_MIN))
@@ -109,7 +109,9 @@ class Marcher:
         # Point i > 0: parameters [x_prev, w_res, params, delta_md, cos_incl, tvd_frac, lift, lift_prev]
         x_i, q = ca.SX.sym('x_i', DIM_X), ca.SX.sym('q', DIM_X + 1 + n_p + 5)
         k = DIM_X + 1 + n_p
-        r_i = system.point_rows(x_i, q[:DIM_X], q[DIM_X], q[DIM_X + 1:k], q[k], q[k + 1], q[k + 2], q[k + 3], q[k + 4])
+        r_i = system.point_rows(
+            x_i, q[:DIM_X], q[DIM_X], q[DIM_X + 1 : k], q[k], q[k + 1], q[k + 2], q[k + 3], q[k + 4]
+        )
         self._cell = _PointSolver('march_cell', x_i, q, r_i, LOWER, UPPER)
         self._lift = lifts(system.wp)  # Whether the lift gas flows at each point (INF-9)
 
@@ -122,8 +124,14 @@ class Marcher:
             x.append(np.concatenate([[p_0], self._bottom_point(guess, np.concatenate([[p_0], params]))]))
             w_res = float(system.reservoir_rate(p_0, params))
             for i in range(1, system.n_cells + 1):
-                q = np.concatenate([x[-1], [w_res], params, [geo.delta_md[i - 1], geo.cos_incl[i - 1], geo.tvd_frac[i],
-                                                            self._lift[i], self._lift[i - 1]]])
+                q = np.concatenate(
+                    [
+                        x[-1],
+                        [w_res],
+                        params,
+                        [geo.delta_md[i - 1], geo.cos_incl[i - 1], geo.tvd_frac[i], self._lift[i], self._lift[i - 1]],
+                    ]
+                )
                 x.append(self._cell(x[-1], q))
         except MarchFailed as e:
             raise MarchFailed(f'march from p_0 = {p_0:.3f} bar failed at point {len(x)}: {e}') from e

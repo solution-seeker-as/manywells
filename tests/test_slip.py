@@ -49,7 +49,7 @@ def test_harmathy_rise_velocity_positive():
     rho_g, rho_l = 10.0, 800.0
     sigma = _sigma(rho_l, 293.15)
     v = SlipModel.harmathy_rise_velocity(rho_g, rho_l, sigma)
-    v_val = v.full().item() if hasattr(v, "full") else float(v)
+    v_val = v.full().item() if hasattr(v, 'full') else float(v)
     assert v_val > 0
 
 
@@ -57,7 +57,7 @@ def test_taylor_rise_velocity_positive():
     """Taylor bubble rise velocity is positive."""
     rho_g, rho_l, D = 10.0, 800.0, 0.1
     v = SlipModel.taylor_rise_velocity(rho_g, rho_l, D)
-    v_val = v.full().item() if hasattr(v, "full") else float(v)
+    v_val = v.full().item() if hasattr(v, 'full') else float(v)
     assert v_val > 0
 
 
@@ -69,10 +69,10 @@ def test_identify_parameters_returns_two():
     sigma = _sigma(rho_l, 293.15)
     cos_incl = 1.0
     C_0, v_inf = model.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl)
-    assert hasattr(C_0, "full") or isinstance(C_0, (int, float))
-    assert hasattr(v_inf, "full") or isinstance(v_inf, (int, float))
-    c0_val = C_0.full().item() if hasattr(C_0, "full") else float(C_0)
-    v_val = v_inf.full().item() if hasattr(v_inf, "full") else float(v_inf)
+    assert hasattr(C_0, 'full') or isinstance(C_0, (int, float))
+    assert hasattr(v_inf, 'full') or isinstance(v_inf, (int, float))
+    c0_val = C_0.full().item() if hasattr(C_0, 'full') else float(C_0)
+    v_val = v_inf.full().item() if hasattr(v_inf, 'full') else float(v_inf)
     assert 1.0 <= c0_val <= 1.25
     assert v_val >= 0
 
@@ -103,6 +103,7 @@ def test_flow_regime_string(model):
 # ---------------------------------------------------------------------------
 # Inclination (SLIP-10, SLIP-11) and the slip parameters as fields
 # ---------------------------------------------------------------------------
+
 
 def _params(cos_incl, **state):
     s = dict(v_g=6.0, v_l=2.0, alpha=0.4, rho_g=80.0, rho_l=800.0) | state
@@ -145,19 +146,43 @@ def test_slip_parameters_are_fields():
     model = SlipModel(C_0_slug=1.2)
     assert model.C_0_slug == 1.2 and SlipModel().C_0_slug == 1.175
     assert [f.name for f in dataclasses.fields(SlipModel)] == [
-        'regime_model', 'C_0_annular', 'C_0_slug', 'C_0_bubbly', 'v_inf_annular', 'f_ms', 'transition_width',
-        'lambda_floor', 'profile_scale']
-    assert (SlipModel().regime_model, SlipModel().f_ms, SlipModel().transition_width, SlipModel().lambda_floor,
-            SlipModel().profile_scale) == ('hasan', 0.02, 0.02, 0.1, 1.0)
+        'regime_model',
+        'C_0_annular',
+        'C_0_slug',
+        'C_0_bubbly',
+        'v_inf_annular',
+        'f_ms',
+        'transition_width',
+        'lambda_floor',
+        'profile_scale',
+    ]
+    assert (
+        SlipModel().regime_model,
+        SlipModel().f_ms,
+        SlipModel().transition_width,
+        SlipModel().lambda_floor,
+        SlipModel().profile_scale,
+    ) == ('hasan', 0.02, 0.02, 0.1, 1.0)
     with pytest.raises(dataclasses.FrozenInstanceError):
         model.C_0_bubbly = 1.0
 
 
-@pytest.mark.parametrize('kw', [dict(regime_model='four'), dict(f_ms=0.0), dict(transition_width=0.0),
-                                dict(lambda_floor=-0.1), dict(profile_scale=-0.1), dict(profile_scale=float('nan')),
-                                dict(profile_scale=float('inf')), dict(C_0_annular=0.9),
-                                dict(C_0_slug=float('nan')), dict(C_0_bubbly=float('inf')),
-                                dict(v_inf_annular=float('nan'))])
+@pytest.mark.parametrize(
+    'kw',
+    [
+        dict(regime_model='four'),
+        dict(f_ms=0.0),
+        dict(transition_width=0.0),
+        dict(lambda_floor=-0.1),
+        dict(profile_scale=-0.1),
+        dict(profile_scale=float('nan')),
+        dict(profile_scale=float('inf')),
+        dict(C_0_annular=0.9),
+        dict(C_0_slug=float('nan')),
+        dict(C_0_bubbly=float('inf')),
+        dict(v_inf_annular=float('nan')),
+    ],
+)
 def test_slip_model_validates_its_fields(kw):
     with pytest.raises(ValueError):
         SlipModel(**kw)
@@ -166,6 +191,7 @@ def test_slip_model_validates_its_fields(kw):
 # ---------------------------------------------------------------------------
 # The five regimes (SLIP-12 to SLIP-17)
 # ---------------------------------------------------------------------------
+
 
 def _states(n=4000, seed=20261028):
     """Random points across the sampler's range: superficial velocities, densities, surface tension, D, inclination."""
@@ -183,14 +209,15 @@ def _hasan(states, model=SlipModel()):
     SLIP-12 (lambda_g, alpha_b, alpha_t, v_gc, v_ms), one row each."""
     x = ca.SX.sym('x', 7)
     v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl = (x[k] for k in range(7))
-    P = hasan_probabilities(v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl, model.f_ms, model.transition_width,
-                            model.lambda_floor)
-    Q = ca.vertcat(*hasan_rule_quantities(v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl, model.f_ms,
-                                          model.lambda_floor))
+    P = hasan_probabilities(
+        v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl, model.f_ms, model.transition_width, model.lambda_floor
+    )
+    Q = ca.vertcat(*hasan_rule_quantities(v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl, model.f_ms, model.lambda_floor))
     alpha = 0.5  # any void fraction: C_0 and v_inf depend on the state through v_gs and v_ls only
     C_0, v_inf = model.identify_parameters(v_gs / alpha, v_ls / (1 - alpha), alpha, rho_g, rho_l, sigma, D, cos_incl)
-    P, C_0, v_inf, Q = (np.asarray(o) for o in ca.Function('f', [x], [P, C_0, v_inf, Q]).map(len(states[0]))(
-        np.vstack(states)))
+    P, C_0, v_inf, Q = (
+        np.asarray(o) for o in ca.Function('f', [x], [P, C_0, v_inf, Q]).map(len(states[0]))(np.vstack(states))
+    )
     return P, C_0.ravel(), v_inf.ravel(), Q
 
 
@@ -200,8 +227,9 @@ def _crisp(states, Q, model=SlipModel()):
     lam, a_b, a_t, v_gc, v_ms = Q
     z = np.vstack([v_gs / v_gc - 1, lam - 0.7, (v_gs + v_ls) / v_ms - 1, lam - 1.08 / 2.08, a_b - a_t])
     A1, A2, M, G, S = z > 0
-    regime = np.where(A1 & A2, 'annular', np.where(M & G, 'churn', np.where(M, 'dispersed-bubbly',
-                                                                             np.where(S, 'slug', 'bubbly'))))
+    regime = np.where(
+        A1 & A2, 'annular', np.where(M & G, 'churn', np.where(M, 'dispersed-bubbly', np.where(S, 'slug', 'bubbly')))
+    )
     return regime, np.min(np.abs(z), axis=0) / model.transition_width
 
 
@@ -231,11 +259,18 @@ def test_five_regime_parameters_are_table_1_blends():  # SLIP-15
 def test_five_regime_parameters_do_not_depend_on_the_void_fraction():  # SLIP-15: one void fraction
     """At fixed superficial velocities C_0 and v_inf do not depend on alpha, so the slip law has one root in alpha."""
     model = SlipModel()
-    for v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl in [(0.6, 0.5, 80.0, 780.0, 0.018, 0.127, 1.0),
-                                                        (2.45, 1.0, 80.0, 780.0, 0.018, 0.127, 0.5),
-                                                        (4.0, 3.0, 15.0, 820.0, 0.025, 0.1, 0.0)]:
-        values = [tuple(float(v) for v in model.identify_parameters(v_gs / a, v_ls / (1 - a), a, rho_g, rho_l, sigma,
-                                                                    D, cos_incl)) for a in (0.05, 0.3, 0.6, 0.95)]
+    for v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl in [
+        (0.6, 0.5, 80.0, 780.0, 0.018, 0.127, 1.0),
+        (2.45, 1.0, 80.0, 780.0, 0.018, 0.127, 0.5),
+        (4.0, 3.0, 15.0, 820.0, 0.025, 0.1, 0.0),
+    ]:
+        values = [
+            tuple(
+                float(v)
+                for v in model.identify_parameters(v_gs / a, v_ls / (1 - a), a, rho_g, rho_l, sigma, D, cos_incl)
+            )
+            for a in (0.05, 0.3, 0.6, 0.95)
+        ]
         assert np.allclose(values, values[0], rtol=1e-12, atol=0)
 
 
@@ -263,6 +298,7 @@ def test_dispersed_bubbly_flow_holds_less_gas_than_its_limit():  # SLIP-14: Hasa
 # The scaled profile parameter (SLIP-18)
 # ---------------------------------------------------------------------------
 
+
 def _parameters(model, states, alpha):
     """C_0 and v_inf of a slip model at the states of _states, at void fraction alpha, as arrays."""
     x = ca.SX.sym('x', 7)
@@ -279,8 +315,9 @@ def test_profile_scale_moves_c_0_towards_no_slip(regime_model):  # SLIP-18
     states = _states(n=1000)
     for alpha in (0.1, 0.5, 0.9):
         C_0, v_inf = _parameters(SlipModel(regime_model=regime_model), states, alpha)
-        assert np.array_equal(_parameters(SlipModel(regime_model=regime_model, profile_scale=1.0), states, alpha)[0],
-                              C_0)
+        assert np.array_equal(
+            _parameters(SlipModel(regime_model=regime_model, profile_scale=1.0), states, alpha)[0], C_0
+        )
         last = np.ones_like(C_0)
         for k in (0.0, 0.25, 0.5, 1.0, 1.5):
             C_0_k, v_inf_k = _parameters(SlipModel(regime_model=regime_model, profile_scale=k), states, alpha)

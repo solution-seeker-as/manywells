@@ -22,9 +22,9 @@ from manywells.pvt.dead_oil import dead_oil_surface_tension, dead_oil_viscosity
 from manywells.pvt.model import PVTModel
 from manywells.units import CF_BAR, CF_RS, M_AIR, R_UNIVERSAL
 
-COLUMNS = ('R_so', 'B_o', 'Z')                  # Every table has them
-OPTIONAL_COLUMNS = ('mu_o', 'mu_g', 'sigma')    # A table may have them; the correlations stand in where it does not
-TEXT_KEYS = ('name', 'source', 'separation')    # Free text in a file's header
+COLUMNS = ('R_so', 'B_o', 'Z')  # Every table has them
+OPTIONAL_COLUMNS = ('mu_o', 'mu_g', 'sigma')  # A table may have them; the correlations stand in where it does not
+TEXT_KEYS = ('name', 'source', 'separation')  # Free text in a file's header
 
 
 def _grid(values, n_p, n_T, name):
@@ -55,6 +55,7 @@ class PVTTable(PVTModel):
     :param sigma: Gas-oil surface tension (J/m2), or None for Abdul-Majeed and Abu Al-Soof
     :param gor: The GOR of the stream the table was made at (Sm3/Sm3), or None
     """
+
     p: tuple
     T: tuple
     R_so: tuple
@@ -84,9 +85,14 @@ class PVTTable(PVTModel):
         self._validate()
         self._derive()
         grid = [np.array(p)] if len(T) == 1 else [np.array(p), np.array(T)]
-        object.__setattr__(self, '_f', {c: ca.interpolant(f'pvt_table_{c}', 'linear', grid,
-                                                          np.array(getattr(self, c)).ravel(order='F'))
-                                        for c in self.columns})
+        object.__setattr__(
+            self,
+            '_f',
+            {
+                c: ca.interpolant(f'pvt_table_{c}', 'linear', grid, np.array(getattr(self, c)).ravel(order='F'))
+                for c in self.columns
+            },
+        )
 
     def _validate(self):  # spec: PVT-TAB-1
         super()._validate()
@@ -95,7 +101,7 @@ class PVTTable(PVTModel):
             raise ValueError(f'a PVT table needs at least two pressures and one temperature, got {len(p)} and {len(T)}')
         for name, axis in (('p', p), ('T', T)):
             if not (np.all(np.isfinite(axis)) and np.all(axis > 0) and np.all(np.diff(axis) > 0)):
-                raise ValueError(f'the grid\'s {name} must be positive, finite and strictly increasing')
+                raise ValueError(f"the grid's {name} must be positive, finite and strictly increasing")
         for name in self.columns:
             a = np.array(getattr(self, name))
             if not np.all(np.isfinite(a)):
@@ -190,8 +196,9 @@ class PVTTable(PVTModel):
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_phase_split(cls, p, T, X, rho_L, rho_V, rho_o, rho_g, gor, mu_o=None, mu_g=None, sigma=None,
-                         **text) -> 'PVTTable':  # spec: PVT-TAB-6
+    def from_phase_split(
+        cls, p, T, X, rho_L, rho_V, rho_o, rho_g, gor, mu_o=None, mu_g=None, sigma=None, **text
+    ) -> 'PVTTable':  # spec: PVT-TAB-6
         """
         The table that reproduces a flash's phase split at the stream's GOR: at each node, the vapour mass fraction X
         of the hydrocarbon stream, and the liquid's and the vapour's densities, rho_L and rho_V (kg/m3), each of shape
@@ -207,11 +214,22 @@ class PVTTable(PVTModel):
         """
         p, T = np.asarray(p, dtype=float), np.asarray(T, dtype=float)
         X, rho_L, rho_V = (np.asarray(a, dtype=float).reshape(len(p), len(T)) for a in (X, rho_L, rho_V))
-        m = rho_o + gor * rho_g                                       # The stream's mass per Sm3 of stock-tank oil
-        R_s = R_UNIVERSAL / (M_AIR * sg_from_gas_density(rho_g))      # As PVTModel.R_s (PVT-GAS-6)
-        return cls(p=p, T=T, R_so=gor - X * m / rho_g, B_o=(1 - X) * m / rho_L,
-                   Z=CF_BAR * p[:, None] / (rho_V * R_s * T[None, :]), rho_o=rho_o, rho_g=rho_g, mu_o=mu_o,
-                   mu_g=mu_g, sigma=sigma, gor=gor, **text)
+        m = rho_o + gor * rho_g  # The stream's mass per Sm3 of stock-tank oil
+        R_s = R_UNIVERSAL / (M_AIR * sg_from_gas_density(rho_g))  # As PVTModel.R_s (PVT-GAS-6)
+        return cls(
+            p=p,
+            T=T,
+            R_so=gor - X * m / rho_g,
+            B_o=(1 - X) * m / rho_L,
+            Z=CF_BAR * p[:, None] / (rho_V * R_s * T[None, :]),
+            rho_o=rho_o,
+            rho_g=rho_g,
+            mu_o=mu_o,
+            mu_g=mu_g,
+            sigma=sigma,
+            gor=gor,
+            **text,
+        )
 
     @staticmethod
     def read_csv(path) -> 'PVTTable | PVTTableSet':
@@ -228,19 +246,22 @@ class PVTTable(PVTModel):
         unknown = [c for c in df if c not in ('gor', 'p', 'T') + COLUMNS + OPTIONAL_COLUMNS]
         if unknown:
             raise ValueError(f'{path}: unknown columns {unknown}')
-        common = dict(rho_o=float(meta['rho_o']), rho_g=float(meta['rho_g']),
-                      **{k: meta[k] for k in TEXT_KEYS if k in meta})
+        common = dict(
+            rho_o=float(meta['rho_o']), rho_g=float(meta['rho_g']), **{k: meta[k] for k in TEXT_KEYS if k in meta}
+        )
         if 'gor' in df:
-            return PVTTableSet(tables=tuple(_from_frame(d, path, gor=float(g), **common)
-                                            for g, d in df.groupby('gor', sort=True)))
+            return PVTTableSet(
+                tables=tuple(_from_frame(d, path, gor=float(g), **common) for g, d in df.groupby('gor', sort=True))
+            )
         gor = _number(meta.get('gor'))
         return _from_frame(df, path, gor=gor, **common)
 
     def frame(self) -> pd.DataFrame:
         """The table as one row per node, temperatures outer and pressures inner, as the files have it."""
         P, TT = np.meshgrid(self.p, self.T, indexing='xy')
-        return pd.DataFrame({'p': P.ravel(), 'T': TT.ravel(),
-                             **{c: np.array(getattr(self, c)).T.ravel() for c in self.columns}})
+        return pd.DataFrame(
+            {'p': P.ravel(), 'T': TT.ravel(), **{c: np.array(getattr(self, c)).T.ravel() for c in self.columns}}
+        )
 
     def write_csv(self, path):
         """The table as a CSV file that read_csv reads back."""
@@ -254,6 +275,7 @@ class PVTTableSet(PVTModel):
     with the same rho_o and rho_g. FluidModel reads it at its own GOR (at_gor, PVT-TAB-7) when it is built; it has
     no properties of its own at (p, T).
     """
+
     tables: tuple
 
     gas_law = 'table'
@@ -292,7 +314,7 @@ class PVTTableSet(PVTModel):
         """
         gors = self.gors
         if not gors[0] <= gor <= gors[-1]:
-            raise ValueError(f'gor {gor} is outside the PVT table\'s GOR axis, {gors[0]} to {gors[-1]} Sm3/Sm3')
+            raise ValueError(f"gor {gor} is outside the PVT table's GOR axis, {gors[0]} to {gors[-1]} Sm3/Sm3")
         if gor in gors:
             return self.tables[gors.index(gor)]
         i = int(np.searchsorted(gors, gor)) - 1
@@ -300,10 +322,18 @@ class PVTTableSet(PVTModel):
         w = (gor - a.gor) / (b.gor - a.gor)
         p, T = np.union1d(a.p, b.p), np.union1d(a.T, b.T)
         P, TT = np.meshgrid(p, T, indexing='ij')
-        columns = {c: (1 - w) * _on_grid(a, c, P, TT) + w * _on_grid(b, c, P, TT)
-                   for c in a.columns if c in b.columns}
-        return PVTTable(p=p, T=T, rho_o=a.rho_o, rho_g=a.rho_g, gor=gor, name=a.name, source=a.source,
-                        separation=a.separation, **columns)
+        columns = {c: (1 - w) * _on_grid(a, c, P, TT) + w * _on_grid(b, c, P, TT) for c in a.columns if c in b.columns}
+        return PVTTable(
+            p=p,
+            T=T,
+            rho_o=a.rho_o,
+            rho_g=a.rho_g,
+            gor=gor,
+            name=a.name,
+            source=a.source,
+            separation=a.separation,
+            **columns,
+        )
 
     def _no_gor(self, *args):
         raise TypeError('a GOR axis has no properties of its own: read it at a GOR with at_gor, as FluidModel does')
@@ -313,8 +343,12 @@ class PVTTableSet(PVTModel):
     def write_csv(self, path):
         """The axis as one CSV file with a gor column, which PVTTable.read_csv reads back."""
         t = self.tables[0]
-        _write(path, t, pd.concat([x.frame().assign(gor=x.gor) for x in self.tables])
-               [['gor', 'p', 'T', *[c for c in t.columns]]], gor=False)
+        _write(
+            path,
+            t,
+            pd.concat([x.frame().assign(gor=x.gor) for x in self.tables])[['gor', 'p', 'T', *[c for c in t.columns]]],
+            gor=False,
+        )
 
 
 def _on_grid(table, column, P, TT):

@@ -93,8 +93,19 @@ def case_rows(case):
     (well, k, bc, wp), casadi = case
     rows = []
     for backend in ('rust', 'casadi') if casadi else ('rust',):
-        rec = dict(well=well, k=k, backend=backend, w_lg=bc.w_lg, p_r=bc.p_r, p_s=bc.p_s, u=bc.u, md=wp.geometry.L,
-                   f_g=wp.fluid.f_g, gor=wp.fluid.gor, wlr=wp.fluid.wlr)
+        rec = dict(
+            well=well,
+            k=k,
+            backend=backend,
+            w_lg=bc.w_lg,
+            p_r=bc.p_r,
+            p_s=bc.p_s,
+            u=bc.u,
+            md=wp.geometry.L,
+            f_g=wp.fluid.f_g,
+            gor=wp.fluid.gor,
+            wlr=wp.fluid.wlr,
+        )
         for name, share in VALVES.items():
             v = with_valve(wp, share)
             rec[f'point_{name}'] = v.injection_point
@@ -106,12 +117,17 @@ def case_rows(case):
 def run(n_wells, out, casadi_cases, processes):
     todo = cases(n_wells)
     with Pool(processes) as pool:
-        rows = [r for rs in pool.imap(case_rows, [(c, j < casadi_cases) for j, c in enumerate(todo)], chunksize=1)
-                for r in rs]
+        rows = [
+            r
+            for rs in pool.imap(case_rows, [(c, j < casadi_cases) for j, c in enumerate(todo)], chunksize=1)
+            for r in rs
+        ]
     df = pd.DataFrame(rows)
     df.to_csv(out, index=False)
-    print(f'{len(todo)} gas-lifted cases from {df.well.nunique()} of {n_wells} wells; '
-          f'{(df.backend == "casadi").sum()} on the CasADi backend too')
+    print(
+        f'{len(todo)} gas-lifted cases from {df.well.nunique()} of {n_wells} wells; '
+        f'{(df.backend == "casadi").sum()} on the CasADi backend too'
+    )
 
 
 def summary(path):
@@ -119,30 +135,39 @@ def summary(path):
     pd.set_option('display.width', 250)
     df = pd.read_csv(path)
     for backend, d in df.groupby('backend', sort=False):
-        print(f'== {backend}: {len(d)} cases from {d.well.nunique()} wells; MD {d.md.min():.0f} to {d.md.max():.0f} m, '
-              f'w_lg {d.w_lg.min():.2f} to {d.w_lg.max():.2f} kg/s')
+        print(
+            f'== {backend}: {len(d)} cases from {d.well.nunique()} wells; MD {d.md.min():.0f} to {d.md.max():.0f} m, '
+            f'w_lg {d.w_lg.min():.2f} to {d.w_lg.max():.2f} kg/s'
+        )
         for v in VALVES:
             s = d[f'seconds_{v}']
-            print(f'  {v:>3}: operating point in {d[f"PBH_{v}"].notna().sum()}, roots per case '
-                  f'{dict(sorted(Counter(d[f"roots_{v}"]).items()))}, {s.median():.2f} s median, {s.sum():.1f} s total')
+            print(
+                f'  {v:>3}: operating point in {d[f"PBH_{v}"].notna().sum()}, roots per case '
+                f'{dict(sorted(Counter(d[f"roots_{v}"]).items()))}, {s.median():.2f} s median, {s.sum():.1f} s total'
+            )
         for v in ('75', '50'):
             found_bh, found_v = d.PBH_bh.notna(), d[f'PBH_{v}'].notna()
             lost, gained = d[found_bh & ~found_v], d[~found_bh & found_v]
-            print(f'  valve at {v}% against the bottomhole: lost {len(lost)}, gained {len(gained)}; '
-                  f'flow only with the lift gas at the bottomhole: {len(lost)} of {found_bh.sum()} '
-                  f'({100 * len(lost) / max(found_bh.sum(), 1):.1f}%)')
+            print(
+                f'  valve at {v}% against the bottomhole: lost {len(lost)}, gained {len(gained)}; '
+                f'flow only with the lift gas at the bottomhole: {len(lost)} of {found_bh.sum()} '
+                f'({100 * len(lost) / max(found_bh.sum(), 1):.1f}%)'
+            )
             for name, rows in (('lost', lost), ('gained', gained)):
                 if len(rows):
                     print(f'    {name}: ' + ', '.join(f'({r.well}, {r.k})' for r in rows.itertuples()))
             both = d[found_bh & found_v]
-            changes = pd.DataFrame({
-                'PBH (bar)': both[f'PBH_{v}'] - both.PBH_bh,
-                'PWH (bar)': both[f'PWH_{v}'] - both.PWH_bh,
-                'TWH (K)': both[f'TWH_{v}'] - both.TWH_bh,
-                'w_res (%)': 100 * (both[f'w_res_{v}'] / both.w_res_bh - 1),
-            })
-            print(f'  {len(both)} cases with an operating point in both; quantiles of the change, valve minus '
-                  'bottomhole:')
+            changes = pd.DataFrame(
+                {
+                    'PBH (bar)': both[f'PBH_{v}'] - both.PBH_bh,
+                    'PWH (bar)': both[f'PWH_{v}'] - both.PWH_bh,
+                    'TWH (K)': both[f'TWH_{v}'] - both.TWH_bh,
+                    'w_res (%)': 100 * (both[f'w_res_{v}'] / both.w_res_bh - 1),
+                }
+            )
+            print(
+                f'  {len(both)} cases with an operating point in both; quantiles of the change, valve minus bottomhole:'
+            )
             print(changes.quantile(q).round(3).to_string())
         if backend == 'rust':
             for v in VALVES:
@@ -153,12 +178,15 @@ def summary(path):
         for v in VALVES:
             both = r[f'PBH_{v}'].notna() & c[f'PBH_{v}'].notna()
             differ = r[f'PBH_{v}'].notna() != c[f'PBH_{v}'].notna()
-            print(f'backends, {v}: operating point in both {both.sum()}, in one only {differ.sum()} '
-                  f'{list(r.index[differ])}; PBH within {np.max(np.abs(r[f"PBH_{v}"] - c[f"PBH_{v}"])[both]):.2e} bar')
+            print(
+                f'backends, {v}: operating point in both {both.sum()}, in one only {differ.sum()} '
+                f'{list(r.index[differ])}; PBH within {np.max(np.abs(r[f"PBH_{v}"] - c[f"PBH_{v}"])[both]):.2e} bar'
+            )
 
 
 def scan_case(args):
     from manywells.solvers.rust import core_well, operating_point
+
     (well, k, bc, wp), share, samples = args
     v = with_valve(wp, share)
     core, op = core_well(v), operating_point(v, bc)
@@ -167,9 +195,15 @@ def scan_case(args):
     finite = np.isfinite(R)
     signs = np.sign(R[finite])
     changes = int(np.sum(signs[1:] != signs[:-1]))
-    return dict(well=well, k=k, valve=share, finite=int(finite.sum()), sign_changes=changes,
-                R_min=float(np.min(R[finite])) if finite.any() else np.nan,
-                p_at_min=float(p[finite][np.argmin(R[finite])]) if finite.any() else np.nan)
+    return dict(
+        well=well,
+        k=k,
+        valve=share,
+        finite=int(finite.sum()),
+        sign_changes=changes,
+        R_min=float(np.min(R[finite])) if finite.any() else np.nan,
+        p_at_min=float(p[finite][np.argmin(R[finite])]) if finite.any() else np.nan,
+    )
 
 
 def scan(path, n_wells, samples, processes):

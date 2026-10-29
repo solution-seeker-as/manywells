@@ -33,7 +33,9 @@ def quantiles(name, values, unit=''):
         print(f'{name:50s} (no values)')
         return
     q = np.quantile(v, [0, 0.5, 0.9, 0.99, 1])
-    print(f'{name:50s} n={len(v):4d}  min {q[0]:.1e}  median {q[1]:.1e}  p90 {q[2]:.1e}  p99 {q[3]:.1e}  max {q[4]:.1e} {unit}')
+    print(
+        f'{name:50s} n={len(v):4d}  min {q[0]:.1e}  median {q[1]:.1e}  p90 {q[2]:.1e}  p99 {q[3]:.1e}  max {q[4]:.1e} {unit}'
+    )
 
 
 def main():
@@ -47,7 +49,7 @@ def main():
         refs = reference.get(cid, [])
         spread += [r.info['spread'] for r in refs if r.info['spread'] > 0]
         slopes += [abs(r.info['slope']) for r in refs]
-        separation += [state_distance(a.x, b.x, case) for i, a in enumerate(refs) for b in refs[i + 1:]]
+        separation += [state_distance(a.x, b.x, case) for i, a in enumerate(refs) for b in refs[i + 1 :]]
         for r in refs:
             X = grid(r.x, case.n_cells)
             w_g, w_l = mass_rates(X, case)

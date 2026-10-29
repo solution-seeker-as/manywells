@@ -32,9 +32,9 @@ fl = FluidModel(
     wlr=0.0,
 )
 
-print(f"Oil density (std):  {fl.rho_o:.1f} kg/m3  (API {fl.api:.1f})")
-print(f"Gas density (std):  {fl.rho_g:.3f} kg/m3  (sg_gas {fl.sg_gas:.3f})")
-print(f"Bubble point:       {fl.pvt.p_bubble:.0f} bar")
+print(f'Oil density (std):  {fl.rho_o:.1f} kg/m3  (API {fl.api:.1f})')
+print(f'Gas density (std):  {fl.rho_g:.3f} kg/m3  (sg_gas {fl.sg_gas:.3f})')
+print(f'Bubble point:       {fl.pvt.p_bubble:.0f} bar')
 print()
 
 
@@ -63,16 +63,22 @@ ax.axvline(p_bubble_bar, color='grey', ls='--', lw=1, label=f'Bubble point ({p_b
 ax.set_ylabel('Rs  (Sm$^3$ gas / Sm$^3$ oil)')
 ax.set_title('Solution Gas-Oil Ratio vs Pressure')
 ax.legend()
-ax.annotate('Below bubble point:\nRs increases with pressure\n(more gas dissolves)',
-            xy=(100, float(fl.rs(100, T_fixed))),
-            xytext=(120, rs_vals.max() * 0.35),
-            arrowprops=dict(arrowstyle='->', color='blue'),
-            fontsize=9, color='blue')
-ax.annotate('Above bubble point:\nRs is capped\nat Rs(p_bubble)',
-            xy=(300, float(fl.rs(300, T_fixed))),
-            xytext=(280, rs_vals.max() * 0.55),
-            arrowprops=dict(arrowstyle='->', color='grey'),
-            fontsize=9, color='grey')
+ax.annotate(
+    'Below bubble point:\nRs increases with pressure\n(more gas dissolves)',
+    xy=(100, float(fl.rs(100, T_fixed))),
+    xytext=(120, rs_vals.max() * 0.35),
+    arrowprops=dict(arrowstyle='->', color='blue'),
+    fontsize=9,
+    color='blue',
+)
+ax.annotate(
+    'Above bubble point:\nRs is capped\nat Rs(p_bubble)',
+    xy=(300, float(fl.rs(300, T_fixed))),
+    xytext=(280, rs_vals.max() * 0.55),
+    arrowprops=dict(arrowstyle='->', color='grey'),
+    fontsize=9,
+    color='grey',
+)
 
 ax = axes[1]
 ax.plot(p_bar, bo_vals, 'r-', lw=2)
@@ -80,15 +86,22 @@ ax.axvline(p_bubble_bar, color='grey', ls='--', lw=1)
 ax.axhline(1.0, color='black', ls=':', lw=0.8)
 ax.set_ylabel('Bo  (dimensionless)')
 ax.set_title('Oil Formation Volume Factor vs Pressure')
-ax.annotate('Bo = 1 means no expansion\n(dead oil / surface conditions)',
-            xy=(20, 1.0), xytext=(40, 1.05),
-            arrowprops=dict(arrowstyle='->', color='black'),
-            fontsize=9, color='black')
-ax.annotate('Dissolved gas makes\nthe oil swell (Bo > 1)',
-            xy=(180, float(fl.bo(180, T_fixed))),
-            xytext=(100, bo_vals.max() * 0.97),
-            arrowprops=dict(arrowstyle='->', color='red'),
-            fontsize=9, color='red')
+ax.annotate(
+    'Bo = 1 means no expansion\n(dead oil / surface conditions)',
+    xy=(20, 1.0),
+    xytext=(40, 1.05),
+    arrowprops=dict(arrowstyle='->', color='black'),
+    fontsize=9,
+    color='black',
+)
+ax.annotate(
+    'Dissolved gas makes\nthe oil swell (Bo > 1)',
+    xy=(180, float(fl.bo(180, T_fixed))),
+    xytext=(100, bo_vals.max() * 0.97),
+    arrowprops=dict(arrowstyle='->', color='red'),
+    fontsize=9,
+    color='red',
+)
 
 ax = axes[2]
 ax.plot(p_bar, rho_l_vals, 'g-', lw=2)
@@ -98,17 +111,21 @@ ax.set_ylabel(r'$\rho_l$  (kg/m$^3$)')
 ax.set_xlabel('Pressure (bar)')
 ax.set_title('Live-Oil Density vs Pressure')
 ax.legend(loc='lower right')
-ax.annotate('Density = (rho_o + Rs * rho_g) / Bo\n'
-            'Rs adds mass, Bo adds volume;\n'
-            'the net effect depends on which dominates',
-            xy=(150, float(fl.liquid_density(150, T_fixed))),
-            xytext=(30, fl.rho_o - 40),
-            arrowprops=dict(arrowstyle='->', color='green'),
-            fontsize=9, color='green')
+ax.annotate(
+    'Density = (rho_o + Rs * rho_g) / Bo\nRs adds mass, Bo adds volume;\nthe net effect depends on which dominates',
+    xy=(150, float(fl.liquid_density(150, T_fixed))),
+    xytext=(30, fl.rho_o - 40),
+    arrowprops=dict(arrowstyle='->', color='green'),
+    fontsize=9,
+    color='green',
+)
 
-fig.suptitle(f'Black Oil PVT at T = {T_fixed - 273.15:.0f} $\\degree$C  '
-             f'(API {fl.api:.0f}, $\\gamma_g$ = {fl.sg_gas:.2f})',
-             fontsize=13, fontweight='bold', y=0.98)
+fig.suptitle(
+    f'Black Oil PVT at T = {T_fixed - 273.15:.0f} $\\degree$C  (API {fl.api:.0f}, $\\gamma_g$ = {fl.sg_gas:.2f})',
+    fontsize=13,
+    fontweight='bold',
+    y=0.98,
+)
 plt.tight_layout(rect=[0, 0, 1, 0.96])
 
 
@@ -129,8 +146,7 @@ for i, T_C in enumerate(temperatures_C):
 ax2.axvline(p_bubble_bar, color='grey', ls='--', lw=1, label='Bubble point')
 ax2.set_xlabel('Pressure (bar)')
 ax2.set_ylabel('Rs  (Sm$^3$ gas / Sm$^3$ oil)')
-ax2.set_title('Temperature Effect on Rs: Hotter Oil Dissolves Less Gas',
-              fontsize=12, fontweight='bold')
+ax2.set_title('Temperature Effect on Rs: Hotter Oil Dissolves Less Gas', fontsize=12, fontweight='bold')
 ax2.legend(title='Temperature')
 
 
@@ -161,16 +177,24 @@ ax3b.plot(p_wellbore, rs_wellbore, 'b-', lw=2)
 ax3b.set_xlabel('Pressure (bar)')
 ax3b.set_ylabel('Rs  (Sm$^3$/Sm$^3$)')
 ax3b.set_title('Gas Exsolution Along the Wellbore')
-ax3b.annotate('Bottom of well\n(high pressure,\ngas dissolved)',
-              xy=(p_wellbore[0], rs_wellbore[0]),
-              xytext=(p_wellbore[0] - 30, rs_wellbore[0] * 0.7),
-              arrowprops=dict(arrowstyle='->', color='blue'),
-              fontsize=9, color='blue', ha='center')
-ax3b.annotate('Top of well\n(low pressure,\ngas exsolved)',
-              xy=(p_wellbore[-1], rs_wellbore[-1]),
-              xytext=(p_wellbore[-1] + 40, rs_wellbore[-1] + rs_wellbore[0] * 0.3),
-              arrowprops=dict(arrowstyle='->', color='blue'),
-              fontsize=9, color='blue', ha='center')
+ax3b.annotate(
+    'Bottom of well\n(high pressure,\ngas dissolved)',
+    xy=(p_wellbore[0], rs_wellbore[0]),
+    xytext=(p_wellbore[0] - 30, rs_wellbore[0] * 0.7),
+    arrowprops=dict(arrowstyle='->', color='blue'),
+    fontsize=9,
+    color='blue',
+    ha='center',
+)
+ax3b.annotate(
+    'Top of well\n(low pressure,\ngas exsolved)',
+    xy=(p_wellbore[-1], rs_wellbore[-1]),
+    xytext=(p_wellbore[-1] + 40, rs_wellbore[-1] + rs_wellbore[0] * 0.3),
+    arrowprops=dict(arrowstyle='->', color='blue'),
+    fontsize=9,
+    color='blue',
+    ha='center',
+)
 ax3b.invert_xaxis()
 
 fig3.suptitle('Dead Oil vs Black Oil Model', fontsize=13, fontweight='bold')
@@ -179,15 +203,15 @@ plt.tight_layout()
 
 # -- Summary printout -----------------------------------------------------
 
-print("Key values at typical wellbore conditions:")
-print(f"{'Pressure (bar)':>16} {'Rs (Sm3/Sm3)':>14} {'Bo':>8} {'rho_l (kg/m3)':>15}")
-print("-" * 56)
+print('Key values at typical wellbore conditions:')
+print(f'{"Pressure (bar)":>16} {"Rs (Sm3/Sm3)":>14} {"Bo":>8} {"rho_l (kg/m3)":>15}')
+print('-' * 56)
 for p in [30, 100, 150, 200, 250, 300]:
     rs = float(fl.rs(p, T_fixed))
     bo = float(fl.bo(p, T_fixed))
     rho = float(fl.liquid_density(p, T_fixed))
-    marker = " <-- bubble point" if abs(p - p_bubble_bar) < 1 else ""
-    print(f"{p:>16} {rs:>14.2f} {bo:>8.4f} {rho:>15.2f}{marker}")
+    marker = ' <-- bubble point' if abs(p - p_bubble_bar) < 1 else ''
+    print(f'{p:>16} {rs:>14.2f} {bo:>8.4f} {rho:>15.2f}{marker}')
 
 # fig.savefig('black_oil_tutorial_1_rs_bo_vs_pressure.png', dpi=150, bbox_inches='tight')
 # fig2.savefig('black_oil_tutorial_2_temperature_effect.png', dpi=150, bbox_inches='tight')

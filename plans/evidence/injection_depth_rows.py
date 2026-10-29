@@ -57,12 +57,19 @@ def dump(out, mode):
         system = build_system(wp)
         ids, r_casadi = cases.casadi_rows(system, bc, X)
         ids_rust, r_rust = RustRootFinder(wp).rows(bc, X)
-        data[conf.name] = dict(ids=tuple(ids), casadi=np.asarray(r_casadi), ids_rust=tuple(ids_rust),
-                               rust=np.asarray(r_rust), params=np.asarray(system.params(bc)), bounds=system.bounds(bc),
-                               roots_casadi=roots_of(SSDFSimulator(wp).root_set(bc)),
-                               roots_rust=roots_of(SSDFSimulator(wp, backend='rust').root_set(bc)))
-    for case in cases.comparison_set(2, configurations=['develop', 'develop+lift-gas temperature',
-                                                        'v1.0.0+lift-gas temperature']):
+        data[conf.name] = dict(
+            ids=tuple(ids),
+            casadi=np.asarray(r_casadi),
+            ids_rust=tuple(ids_rust),
+            rust=np.asarray(r_rust),
+            params=np.asarray(system.params(bc)),
+            bounds=system.bounds(bc),
+            roots_casadi=roots_of(SSDFSimulator(wp).root_set(bc)),
+            roots_rust=roots_of(SSDFSimulator(wp, backend='rust').root_set(bc)),
+        )
+    for case in cases.comparison_set(
+        2, configurations=['develop', 'develop+lift-gas temperature', 'v1.0.0+lift-gas temperature']
+    ):
         wp, bc = case.inputs()
         wp = with_mode(wp, mode)
         system = build_system(wp)
@@ -72,8 +79,13 @@ def dump(out, mode):
         for k, r in enumerate(list(casadi.roots) + list(rust.roots)):
             X = cases.perturb(r.state)
             rows[k] = (np.asarray(cases.casadi_rows(system, bc, X)[1]), RustRootFinder(wp).rows(bc, X)[1])
-        data[case.name] = dict(roots_casadi=roots_of(casadi), roots_rust=roots_of(rust), rows=rows,
-                               params=np.asarray(system.params(bc)), bounds=system.bounds(bc))
+        data[case.name] = dict(
+            roots_casadi=roots_of(casadi),
+            roots_rust=roots_of(rust),
+            rows=rows,
+            params=np.asarray(system.params(bc)),
+            bounds=system.bounds(bc),
+        )
     with open(out, 'wb') as f:
         pickle.dump(data, f)
     print(f'{len(data)} wells written to {out}')

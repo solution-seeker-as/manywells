@@ -49,8 +49,11 @@ def main():
                     R = np.nan
             vals.append((p0, R))
         signs = ''.join('+' if R > 0 else '-' if R < 0 else '?' for _, R in vals)
-        changes = [(round(vals[i][0], 2), round(vals[i + 1][0], 2)) for i in range(len(vals) - 1)
-                   if np.sign(vals[i][1]) * np.sign(vals[i + 1][1]) < 0]
+        changes = [
+            (round(vals[i][0], 2), round(vals[i + 1][0], 2))
+            for i in range(len(vals) - 1)
+            if np.sign(vals[i][1]) * np.sign(vals[i + 1][1]) < 0
+        ]
         print(f'well {wid}: {time.time() - t:.0f}s  signs {signs}\n  sign changes in {changes}', flush=True)
 
 

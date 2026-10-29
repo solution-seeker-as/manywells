@@ -39,10 +39,10 @@ from .backend_cases import compare_root_sets
 
 pytestmark = pytest.mark.slow
 
-TOL_RATE = 1e-6        # relative: mass rates
-TOL_P = 1e-6           # bar: a pressure rise between neighbouring points
-TOL_T = 1e-6           # K
-GAS_FLOOR = 1e-3       # kg/s: the free gas of PVT-OIL-13 where all the reservoir gas is dissolved, SMO-1's 5e-4
+TOL_RATE = 1e-6  # relative: mass rates
+TOL_P = 1e-6  # bar: a pressure rise between neighbouring points
+TOL_T = 1e-6  # K
+GAS_FLOOR = 1e-3  # kg/s: the free gas of PVT-OIL-13 where all the reservoir gas is dissolved, SMO-1's 5e-4
 
 
 def deviated(n_cells, tvd=2500.0, kickoff=0.3, theta_deg=45.0):
@@ -71,22 +71,35 @@ def with_valve(geometry, share, **kw):
 BLACK_OIL = FluidModel(pvt=BlackOil(rho_o=density_from_api(35.0), rho_g=gas_density_from_sg(0.7)), gor=120.0, wlr=0.3)
 VALVE_WELLS = ('deviated, cold lift gas at a valve halfway', 'L-shaped, lift gas at a valve at three quarters')
 WELLS = {
-    'deviated black oil': (lambda n: WellProperties(geometry=deviated(n), fluid=BLACK_OIL),
-                           BoundaryConditions(p_r=260.0, p_s=25.0, T_r=370.0, T_s=280.0, u=0.6)),
-    'L-shaped black oil': (lambda n: WellProperties(geometry=l_shaped(n), fluid=BLACK_OIL),
-                           BoundaryConditions(p_r=240.0, p_s=20.0, T_r=365.0, T_s=280.0, u=0.7)),
-    'deviated, cold lift gas': (lambda n: WellProperties(geometry=deviated(n, tvd=2000.0), fluid=dataclasses.replace(
-                                    BLACK_OIL, gor=40.0, wlr=0.5)),
-                                BoundaryConditions(p_r=200.0, p_s=20.0, T_r=360.0, T_s=280.0, u=0.8, w_lg=2.0, T_lg=300.0)),
-    'vertical dead oil, real gas': (lambda n: WellProperties(geometry=WellGeometry.vertical(2000.0, n),
-                                                             fluid=FluidModel(pvt=DeadOil(rho_o=880.0), gor=60.0)),
-                                    BoundaryConditions(p_r=210.0, p_s=20.0, T_r=360.0, T_s=280.0, u=0.5)),
-    VALVE_WELLS[0]: (lambda n: with_valve(deviated(n, tvd=2000.0), 0.5,
-                                          fluid=dataclasses.replace(BLACK_OIL, gor=40.0, wlr=0.5)),
-                     BoundaryConditions(p_r=200.0, p_s=20.0, T_r=360.0, T_s=280.0, u=0.8, w_lg=2.0, T_lg=300.0)),
+    'deviated black oil': (
+        lambda n: WellProperties(geometry=deviated(n), fluid=BLACK_OIL),
+        BoundaryConditions(p_r=260.0, p_s=25.0, T_r=370.0, T_s=280.0, u=0.6),
+    ),
+    'L-shaped black oil': (
+        lambda n: WellProperties(geometry=l_shaped(n), fluid=BLACK_OIL),
+        BoundaryConditions(p_r=240.0, p_s=20.0, T_r=365.0, T_s=280.0, u=0.7),
+    ),
+    'deviated, cold lift gas': (
+        lambda n: WellProperties(
+            geometry=deviated(n, tvd=2000.0), fluid=dataclasses.replace(BLACK_OIL, gor=40.0, wlr=0.5)
+        ),
+        BoundaryConditions(p_r=200.0, p_s=20.0, T_r=360.0, T_s=280.0, u=0.8, w_lg=2.0, T_lg=300.0),
+    ),
+    'vertical dead oil, real gas': (
+        lambda n: WellProperties(
+            geometry=WellGeometry.vertical(2000.0, n), fluid=FluidModel(pvt=DeadOil(rho_o=880.0), gor=60.0)
+        ),
+        BoundaryConditions(p_r=210.0, p_s=20.0, T_r=360.0, T_s=280.0, u=0.5),
+    ),
+    VALVE_WELLS[0]: (
+        lambda n: with_valve(deviated(n, tvd=2000.0), 0.5, fluid=dataclasses.replace(BLACK_OIL, gor=40.0, wlr=0.5)),
+        BoundaryConditions(p_r=200.0, p_s=20.0, T_r=360.0, T_s=280.0, u=0.8, w_lg=2.0, T_lg=300.0),
+    ),
     # The lift gas at the ambient temperature at the valve (T_lg None), in the well's build section
-    VALVE_WELLS[1]: (lambda n: with_valve(l_shaped(n), 0.75, fluid=BLACK_OIL),
-                     BoundaryConditions(p_r=240.0, p_s=20.0, T_r=365.0, T_s=280.0, u=0.7, w_lg=1.5)),
+    VALVE_WELLS[1]: (
+        lambda n: with_valve(l_shaped(n), 0.75, fluid=BLACK_OIL),
+        BoundaryConditions(p_r=240.0, p_s=20.0, T_r=365.0, T_s=280.0, u=0.7, w_lg=1.5),
+    ),
 }
 
 
@@ -188,12 +201,16 @@ def test_heat_flows_from_the_fluid_to_the_surroundings(solved, name, backend):
         assert np.all(T[1:] - T_a[1:] > 0)
 
 
-GAS_RICH = (lambda n, joule_thomson: WellProperties(
-                geometry=WellGeometry.vertical(3000.0, n),
-                fluid=FluidModel(pvt=BlackOil(rho_o=density_from_api(40.0), rho_g=gas_density_from_sg(0.65)),
-                                 gor=800.0, wlr=0.1),
-                thermal=ThermalModel(joule_thomson=joule_thomson)),
-            BoundaryConditions(p_r=300.0, p_s=20.0, T_r=380.0, T_s=280.0, u=0.5))
+GAS_RICH = (
+    lambda n, joule_thomson: WellProperties(
+        geometry=WellGeometry.vertical(3000.0, n),
+        fluid=FluidModel(
+            pvt=BlackOil(rho_o=density_from_api(40.0), rho_g=gas_density_from_sg(0.65)), gor=800.0, wlr=0.1
+        ),
+        thermal=ThermalModel(joule_thomson=joule_thomson),
+    ),
+    BoundaryConditions(p_r=300.0, p_s=20.0, T_r=380.0, T_s=280.0, u=0.5),
+)
 
 
 @pytest.mark.parametrize('backend', BACKENDS)
@@ -295,7 +312,7 @@ def test_convergence(name, backend):
     valve wells' grids have a point at the valve (INF-9) at each refinement."""
     make, bc = WELLS[name]
     outputs = []
-    for n in ((40, 80, 160) if name in VALVE_WELLS else (50, 100, 200)):
+    for n in (40, 80, 160) if name in VALVE_WELLS else (50, 100, 200):
         op = SSDFSimulator(make(n), backend=backend).simulate(bc)
         X = op.state
         outputs.append(np.array([X[0, 0], X[-1, 0], X[-1, 6], op.w_res]))  # PBH, PWH, TWH, liquid rate
@@ -311,6 +328,7 @@ def test_the_backends_find_the_same_roots(solved, name):
     system's, by the pass rule of test_backend_comparison.py."""
     casadi, bc, rs_casadi = solved[name, 'casadi']
     rust, _, rs_rust = solved[name, 'rust']
-    c = compare_root_sets(casadi.wp, bc, casadi.system, rs_casadi.roots, rs_rust.roots,
-                          lambda x: rust._roots.rows(bc, x)[1])
+    c = compare_root_sets(
+        casadi.wp, bc, casadi.system, rs_casadi.roots, rs_rust.roots, lambda x: rust._roots.rows(bc, x)[1]
+    )
     assert c.ok, c

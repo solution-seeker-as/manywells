@@ -16,10 +16,12 @@ from their Fig. 3. SI units. From the repository root (about a minute):
 
     uv run python plans/evidence/slip_models.py
 """
+
 import numpy as np
 from scipy.optimize import brentq
 
 g = 9.80665
+
 
 # ---------------------------------------------------------------- ManyWells (develop), numpy copy of slip.py
 def mw_params(alpha, jg, jl, rho_g, rho_l, sigma, D, cos):
@@ -48,34 +50,34 @@ def hasan_alpha(jg, jl, rho_g, rho_l, sigma, D, cos, f=0.02):
     sin = np.sqrt(max(1 - cos**2, 0.0))
     drho = rho_l - rho_g
     jm = jg + jl
-    vb = 1.53 * (g * drho * sigma / rho_l**2) ** 0.25                                 # (A-8)
-    vT = 0.35 * np.sqrt(g * D * drho / rho_l) * np.sqrt(cos) * (1 + sin) ** 1.2       # (A-9), (A-10), F_a = 1
-    vgb = (1.2 * jl + vb) / (4 - 1.2) * cos                                           # (A-14)
+    vb = 1.53 * (g * drho * sigma / rho_l**2) ** 0.25  # (A-8)
+    vT = 0.35 * np.sqrt(g * D * drho / rho_l) * np.sqrt(cos) * (1 + sin) ** 1.2  # (A-9), (A-10), F_a = 1
+    vgb = (1.2 * jl + vb) / (4 - 1.2) * cos  # (A-14)
     lhs = 2 * (f / (2 * D)) ** 0.4 * (rho_l / sigma) ** 0.6 * np.sqrt(0.4 * sigma / (g * drho))
-    vms = ((0.725 + 4.15 * np.sqrt(jg / jm)) / lhs) ** (1 / 1.2)                       # (A-17)
-    vgc = 3.1 * (g * sigma * drho / rho_g**2) ** 0.25                                 # (A-19)
+    vms = ((0.725 + 4.15 * np.sqrt(jg / jm)) / lhs) ** (1 / 1.2)  # (A-17)
+    vgc = 3.1 * (g * sigma * drho / rho_g**2) ** 0.25  # (A-19)
 
     def E(a, x):  # exp(-0.1 a / (x - a)) for x > a, else 0
         return np.exp(-0.1 * a / (x - a)) if x > a else 0.0
 
-    def vbar():   # (A-13)
+    def vbar():  # (A-13)
         e = E(vgb, jg)
         return vb * (1 - e) + vT * e
 
     if jg > vgc:
         e = E(vgc, jg)
-        C0 = 1.15 * (1 - e) + 1.0 * e                                                  # (A-22)
+        C0 = 1.15 * (1 - e) + 1.0 * e  # (A-22)
         a = jg / (C0 * jm)
         if a > 0.7:
             return a, C0, 0.0, 'annular'
-    if jm > vms and jg > 1.08 * jl:                                                   # churn
+    if jm > vms and jg > 1.08 * jl:  # churn
         e = E(vms, jm)
-        C0 = 1.2 * (1 - e) + 1.15 * e                                                  # (A-21)
+        C0 = 1.2 * (1 - e) + 1.15 * e  # (A-21)
         v = vbar()
         return jg / (C0 * jm + v), C0, v, 'churn'
-    if jm > vms:                                                                      # dispersed bubbly
+    if jm > vms:  # dispersed bubbly
         return jg / (1.2 * jm + vb), 1.2, vb, 'disp. bubbly'
-    if jg > vgb:                                                                      # slug, (A-20) with C_ob = C_os = 1.2
+    if jg > vgb:  # slug, (A-20) with C_ob = C_os = 1.2
         v = vbar()
         return jg / (1.2 * jm + v), 1.2, v, 'slug'
     return jg / (1.2 * jm + vb), 1.2, vb, 'bubbly'
@@ -83,9 +85,9 @@ def hasan_alpha(jg, jl, rho_g, rho_l, sigma, D, cos, f=0.02):
 
 # ---------------------------------------------------------------- Shi et al. (2005), ECLIPSE drift-flux
 SHI_SETS = {
-    'Shi opt': dict(A=1.0, B=0.3, a1=0.06, a2=0.21, m0=1.85, n1=0.21, n2=0.95),   # Table 1, Eq. 27
-    'Shi A=1.2': dict(A=1.2, B=0.6, a1=0.06, a2=0.12, m0=1.27, n1=0.24, n2=1.08), # Eq. 28
-    'ECLIPSE dflt': dict(A=1.2, B=0.3, a1=0.20, a2=0.40, m0=1.0, n1=0.5, n2=2.0), # Fig. 12, Eq. 22
+    'Shi opt': dict(A=1.0, B=0.3, a1=0.06, a2=0.21, m0=1.85, n1=0.21, n2=0.95),  # Table 1, Eq. 27
+    'Shi A=1.2': dict(A=1.2, B=0.6, a1=0.06, a2=0.12, m0=1.27, n1=0.24, n2=1.08),  # Eq. 28
+    'ECLIPSE dflt': dict(A=1.2, B=0.3, a1=0.20, a2=0.40, m0=1.0, n1=0.5, n2=2.0),  # Fig. 12, Eq. 22
 }
 
 
@@ -98,16 +100,17 @@ def shi_params(alpha, jg, jl, rho_g, rho_l, sigma, D, cos, A, B, a1, a2, m0, n1,
     sin = np.sqrt(np.maximum(1 - cos**2, 0.0))
     drho = rho_l - rho_g
     jm = jg + jl
-    Vc = (sigma * g * drho / rho_l**2) ** 0.25                                         # (9)
-    Ku = ku_of_dhat(np.sqrt(g * drho / sigma) * D)                                    # (11), Fig. 3
-    Vsgf = Ku * np.sqrt(rho_l / rho_g) * Vc                                            # (10)
-    beta = np.maximum(alpha, Fv * alpha * abs(jm) / Vsgf)                              # (6)
-    gam = np.clip((beta - B) / (1 - B), 0, 1)                                          # (5)
-    C0 = A / (1 + (A - 1) * gam**2)                                                    # (4)
-    K = np.where(alpha <= a1, 1.53 / C0,
-                 np.where(alpha >= a2, Ku, 1.53 / C0 + (Ku - 1.53 / C0) * (alpha - a1) / (a2 - a1)))
+    Vc = (sigma * g * drho / rho_l**2) ** 0.25  # (9)
+    Ku = ku_of_dhat(np.sqrt(g * drho / sigma) * D)  # (11), Fig. 3
+    Vsgf = Ku * np.sqrt(rho_l / rho_g) * Vc  # (10)
+    beta = np.maximum(alpha, Fv * alpha * abs(jm) / Vsgf)  # (6)
+    gam = np.clip((beta - B) / (1 - B), 0, 1)  # (5)
+    C0 = A / (1 + (A - 1) * gam**2)  # (4)
+    K = np.where(
+        alpha <= a1, 1.53 / C0, np.where(alpha >= a2, Ku, 1.53 / C0 + (Ku - 1.53 / C0) * (alpha - a1) / (a2 - a1))
+    )
     Vd = (1 - alpha * C0) * C0 * K * Vc / (alpha * C0 * np.sqrt(rho_g / rho_l) + 1 - alpha * C0)  # (15)
-    m = m0 * cos**n1 * (1 + sin) ** n2                                                 # (23)
+    m = m0 * cos**n1 * (1 + sin) ** n2  # (23)
     return C0, Vd * m
 
 
@@ -119,6 +122,7 @@ def all_roots(params, jg, jl, *fluid):
     def h(a):
         C0, v = params(a, jg, jl, *fluid)
         return a * (C0 * (jg + jl) + v) - jg
+
     hv = h(AG)
     idx = np.nonzero(np.sign(hv[:-1]) * np.sign(hv[1:]) < 0)[0]
     return [brentq(lambda a: float(h(np.array(a))), AG[i], AG[i + 1], xtol=1e-12) for i in idx]
@@ -140,6 +144,7 @@ FLUIDS = {
 def main():
     # 0. check the numpy copy against the package
     from manywells.slip import SlipModel
+
     rng = np.random.default_rng(0)
     sm = SlipModel(regime_model='fitted')  # develop's closure before feature 019, now an option
     err = 0.0
@@ -157,20 +162,36 @@ def main():
         dhat = np.sqrt(g * (rl - rg) / s) * D
         vgc = 3.1 * (g * s * (rl - rg) / rg**2) ** 0.25
         Vsgf = ku_of_dhat(dhat) * (s * g * (rl - rg) / rg**2) ** 0.25
-        print(f'== {fname}: rho_l={rl}, sigma={s}, D={D} m; D_hat={dhat:.0f}, Ku={ku_of_dhat(dhat):.2f}; '
-              f'Hasan v_gc={vgc:.2f} m/s, Shi V_sgf={Vsgf:.2f} m/s')
-        for cos_name, cos in [('vertical', 1.0), ('45 deg', np.cos(np.pi / 4)), ('80 deg', np.cos(np.radians(80))),
-                              ('horizontal', 0.0)]:
+        print(
+            f'== {fname}: rho_l={rl}, sigma={s}, D={D} m; D_hat={dhat:.0f}, Ku={ku_of_dhat(dhat):.2f}; '
+            f'Hasan v_gc={vgc:.2f} m/s, Shi V_sgf={Vsgf:.2f} m/s'
+        )
+        for cos_name, cos in [
+            ('vertical', 1.0),
+            ('45 deg', np.cos(np.pi / 4)),
+            ('80 deg', np.cos(np.radians(80))),
+            ('horizontal', 0.0),
+        ]:
             print(f'-- {cos_name}')
             print(f'{"j_g":>5} {"j_l":>5} | {"Hasan":>22} | ' + ' | '.join(f'{n:>14}' for n, _ in models()))
-            for jg, jl in [(0.05, 1.0), (0.3, 1.0), (0.6, 0.5), (1.0, 2.0), (2.0, 1.0), (5.0, 1.0), (10.0, 0.3),
-                           (20.0, 0.05)]:
+            for jg, jl in [
+                (0.05, 1.0),
+                (0.3, 1.0),
+                (0.6, 0.5),
+                (1.0, 2.0),
+                (2.0, 1.0),
+                (5.0, 1.0),
+                (10.0, 0.3),
+                (20.0, 0.05),
+            ]:
                 ah, C0h, vh, reg = hasan_alpha(jg, jl, *fl, cos)
                 cells = []
                 for name, p in models():
                     r = all_roots(p, jg, jl, *fl, cos)
                     cells.append(','.join(f'{x:.3f}' for x in r) if r else 'none')
-                print(f'{jg:5.2f} {jl:5.2f} | {ah:5.3f} {reg:>12} {C0h:4.2f} | ' + ' | '.join(f'{c:>14}' for c in cells))
+                print(
+                    f'{jg:5.2f} {jl:5.2f} | {ah:5.3f} {reg:>12} {C0h:4.2f} | ' + ' | '.join(f'{c:>14}' for c in cells)
+                )
             print()
 
     # 2. non-unique void fractions over a grid of superficial velocities
@@ -189,8 +210,12 @@ def main():
     print(f'{"theta":>5} | {"MW/Hasan (A-10)":>16} | {"Shi Eq.27":>16} | {"Shi Eq.28":>16} | {"ECLIPSE Eq.22":>16}')
     for th in [0, 15, 30, 45, 60, 70, 80, 85, 88, 90]:
         c, s_ = np.cos(np.radians(th)), np.sin(np.radians(th))
-        f = [np.sqrt(c) * (1 + s_) ** 1.2, 1.85 * c**0.21 * (1 + s_) ** 0.95, 1.27 * c**0.24 * (1 + s_) ** 1.08,
-             c**0.5 * (1 + s_) ** 2]
+        f = [
+            np.sqrt(c) * (1 + s_) ** 1.2,
+            1.85 * c**0.21 * (1 + s_) ** 0.95,
+            1.27 * c**0.24 * (1 + s_) ** 1.08,
+            c**0.5 * (1 + s_) ** 2,
+        ]
         f0 = [1.0, 1.85, 1.27, 1.0]
         print(f'{th:5d} | ' + ' | '.join(f'{x:6.2f} ({x / x0:4.2f}x)' for x, x0 in zip(f, f0)))
 
@@ -208,8 +233,10 @@ def main():
         for jg in np.geomspace(0.05, 30, 4000):
             a, C0, v, reg = hasan_alpha(jg, jl, *fl, 1.0)
             if prev and reg != prev[3]:
-                print(f'  j_g {prev[0]:.4f} -> {jg:.4f}: {prev[3]} -> {reg}, alpha {prev[1]:.3f} -> {a:.3f}, '
-                      f'C0 {prev[2]:.3f} -> {C0:.3f}, v_inf {prev[4]:.3f} -> {v:.3f}')
+                print(
+                    f'  j_g {prev[0]:.4f} -> {jg:.4f}: {prev[3]} -> {reg}, alpha {prev[1]:.3f} -> {a:.3f}, '
+                    f'C0 {prev[2]:.3f} -> {C0:.3f}, v_inf {prev[4]:.3f} -> {v:.3f}'
+                )
             prev = (jg, a, C0, reg, v)
 
     # 6. ManyWells' points with several void fractions on the grid of 2., with Hasan's void fraction there
@@ -221,19 +248,24 @@ def main():
                     r = all_roots(mw_params, jg, jl, *fl, cos)
                     if len(r) > 1:
                         a, C0, v, reg = hasan_alpha(jg, jl, *fl, cos)
-                        print(f'  {fname}, cos {cos}: j_g {jg:6.3f} j_l {jl:6.3f}: ManyWells '
-                              f'{", ".join(f"{x:.3f}" for x in r)}; Hasan {a:.3f} {reg}')
+                        print(
+                            f'  {fname}, cos {cos}: j_g {jg:6.3f} j_l {jl:6.3f}: ManyWells '
+                            f'{", ".join(f"{x:.3f}" for x in r)}; Hasan {a:.3f} {reg}'
+                        )
 
     # 7. The fitted classifier's regime weights at the feature spec's example points, deep fluid
     from manywells.slip import classify_flow_regime
+
     print('\n== examples (deep fluid): every ManyWells root with its regime weights, and Hasan')
     fl = FLUIDS['deep (rho_g=80)']
     for jg, jl, cos in [(0.6, 0.5, 1.0), (0.6, 0.5, np.cos(np.pi / 4)), (0.042, 0.010, 0.0), (1.0, 2.0, 1.0)]:
         a_h, _, _, reg = hasan_alpha(jg, jl, *fl, cos)
         for a in all_roots(mw_params, jg, jl, *fl, cos):
             p = np.asarray(classify_flow_regime(jg / a, jl / (1 - a), a, fl[0], fl[1], fl[2], cos)).ravel()
-            print(f'  j_g {jg} j_l {jl} cos {cos:.2f}: alpha {a:.3f}, weights annular {p[0]:.2f} slug-churn '
-                  f'{p[1]:.2f} bubbly {p[2]:.2f}; Hasan {a_h:.3f} {reg}')
+            print(
+                f'  j_g {jg} j_l {jl} cos {cos:.2f}: alpha {a:.3f}, weights annular {p[0]:.2f} slug-churn '
+                f'{p[1]:.2f} bubbly {p[2]:.2f}; Hasan {a_h:.3f} {reg}'
+            )
 
 
 if __name__ == '__main__':

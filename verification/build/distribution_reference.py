@@ -28,8 +28,17 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from manywells_verify.distributions import (FEATURES, MAX_CDF_GAP, MAX_CORR_GAP, REFERENCE, TRICKLE_DP, compare,
-                                            summarize, trickle_signature, well_weights)
+from manywells_verify.distributions import (
+    FEATURES,
+    MAX_CDF_GAP,
+    MAX_CORR_GAP,
+    REFERENCE,
+    TRICKLE_DP,
+    compare,
+    summarize,
+    trickle_signature,
+    well_weights,
+)
 
 
 def main():
@@ -42,12 +51,18 @@ def main():
     for name in ('sol-1', 'nsol-1', 'nscl-1'):
         df = pd.read_csv(args.data_dir / f'manywells-{name}.zip', compression='zip')
         trickle = trickle_signature(df)
-        out['trickle_signature'][name] = {'rows': int(trickle.sum()), 'share': float(trickle.mean()),
-                                          'wells': int(df.loc[trickle, 'ID'].nunique()), 'of_rows': int(len(df)),
-                                          'median_TWH_signature': float(df.loc[trickle, 'TWH'].median()),
-                                          'median_TWH_rest': float(df.loc[~trickle, 'TWH'].median())}
-        print(f'{name}: {trickle.sum()} signature rows ({100 * trickle.mean():.2f}%) in '
-              f'{df.loc[trickle, "ID"].nunique()} wells')
+        out['trickle_signature'][name] = {
+            'rows': int(trickle.sum()),
+            'share': float(trickle.mean()),
+            'wells': int(df.loc[trickle, 'ID'].nunique()),
+            'of_rows': int(len(df)),
+            'median_TWH_signature': float(df.loc[trickle, 'TWH'].median()),
+            'median_TWH_rest': float(df.loc[~trickle, 'TWH'].median()),
+        }
+        print(
+            f'{name}: {trickle.sum()} signature rows ({100 * trickle.mean():.2f}%) in '
+            f'{df.loc[trickle, "ID"].nunique()} wells'
+        )
         if name == 'nscl-1':
             continue
         stable = df[~trickle]
@@ -57,16 +72,22 @@ def main():
         # Calibration: a 50k-row subsample of the reference rows, and the published rows with trickle rows in
         noise = compare(ref, stable.sample(50_000, random_state=rng.integers(2**31)))
         spike = compare(ref, df)
-        print(f'  50k-row subsample: largest CDF gap {noise["worst_cdf"][1]:.4f} ({noise["worst_cdf"][0]}), '
-              f'rank correlation {noise["worst_corr"][2]:.4f}')
-        print(f'  published rows incl. signature rows: largest CDF gap {spike["worst_cdf"][1]:.4f} '
-              f'({spike["worst_cdf"][0]}), rank correlation {spike["worst_corr"][2]:.4f}; '
-              f'bounds {MAX_CDF_GAP}, {MAX_CORR_GAP}')
+        print(
+            f'  50k-row subsample: largest CDF gap {noise["worst_cdf"][1]:.4f} ({noise["worst_cdf"][0]}), '
+            f'rank correlation {noise["worst_corr"][2]:.4f}'
+        )
+        print(
+            f'  published rows incl. signature rows: largest CDF gap {spike["worst_cdf"][1]:.4f} '
+            f'({spike["worst_cdf"][0]}), rank correlation {spike["worst_corr"][2]:.4f}; '
+            f'bounds {MAX_CDF_GAP}, {MAX_CORR_GAP}'
+        )
         # A regeneration's design: five rows per well; unweighted, and weighted to the reference's mix of wells
         five = stable.sample(frac=1, random_state=rng.integers(2**31)).groupby('ID').head(5)
         equal, weighted = compare(ref, five), compare(ref, five, well_weights(ref, five))
-        print(f'  5 rows per well: unweighted CDF gap {equal["worst_cdf"][1]:.4f}, rank correlation '
-              f'{equal["worst_corr"][2]:.4f}; weighted {weighted["worst_cdf"][1]:.4f}, {weighted["worst_corr"][2]:.4f}')
+        print(
+            f'  5 rows per well: unweighted CDF gap {equal["worst_cdf"][1]:.4f}, rank correlation '
+            f'{equal["worst_corr"][2]:.4f}; weighted {weighted["worst_cdf"][1]:.4f}, {weighted["worst_corr"][2]:.4f}'
+        )
 
     REFERENCE.write_text(json.dumps(out) + '\n')
     print(f'Wrote {REFERENCE} ({REFERENCE.stat().st_size / 1e3:.0f} kB)')

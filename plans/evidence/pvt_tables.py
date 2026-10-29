@@ -78,9 +78,14 @@ from manywells.units import CF_BAR
 
 SEED = 2026
 P_MIN, P_MAX, T_MIN, T_MAX = 1.0, 470.0, 270.0, 430.0
-GRIDS = {'fine': (2.0, 5.0), 'medium': (10.0, 10.0), 'coarse': (25.0, 25.0), 'coarse_pchip': (25.0, 25.0),
-         'isothermal': (5.0, None)}
-REFINED = (2.0, 5.0)    # The grid coarse_pchip is refined to
+GRIDS = {
+    'fine': (2.0, 5.0),
+    'medium': (10.0, 10.0),
+    'coarse': (25.0, 25.0),
+    'coarse_pchip': (25.0, 25.0),
+    'isothermal': (5.0, None),
+}
+REFINED = (2.0, 5.0)  # The grid coarse_pchip is refined to
 
 
 def axis(lo, hi, step, extra=()):
@@ -141,6 +146,7 @@ class TableFluid(FluidModel):
     develop's FluidModel with R_so, B_o and Z from a table (black oil, so that gas dissolves), and the oil and gas
     viscosities and the surface tension from it where it has them.
     """
+
     table: Table = None
 
     def rs(self, p, T):
@@ -173,8 +179,7 @@ class TableFluid(FluidModel):
     def mixture_viscosity(self, p, T, alpha, rho_g, rho_l):
         if 'mu_g' not in self.table.cols:
             return super().mixture_viscosity(p, T, alpha, rho_g, rho_l)
-        return mixture_viscosity(self.liquid_viscosity(p, T), self.table('mu_g', p, T), alpha, rho_l=rho_l,
-                                 rho_g=rho_g)
+        return mixture_viscosity(self.liquid_viscosity(p, T), self.table('mu_g', p, T), alpha, rho_l=rho_l, rho_g=rho_g)
 
     def surface_tension(self, p, T, rho_l):  # PVT-MIX-7 with the table's gas-oil surface tension
         if 'sigma' not in self.table.cols:
@@ -183,13 +188,15 @@ class TableFluid(FluidModel):
 
 
 def table_fluid(fluid, grid, T_r=None, p_extra=()):
-    return TableFluid(**{f: getattr(fluid, f) for f in fluid.__dataclass_fields__},
-                      table=make_table(fluid, grid, T_r, p_extra))
+    return TableFluid(
+        **{f: getattr(fluid, f) for f in fluid.__dataclass_fields__}, table=make_table(fluid, grid, T_r, p_extra)
+    )
 
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Part 1: the tables' error at random points
 # ---------------------------------------------------------------------------------------------------------------------
+
 
 def sampled_fluids(n):
     fluids = []
@@ -206,8 +213,9 @@ def sampled_fluids(n):
 
 def evaluate(fluid, P, TT):
     ps, Ts = ca.SX.sym('p'), ca.SX.sym('T')
-    f = ca.Function('f', [ps, Ts], [fluid.rs(ps, Ts), fluid.bo(ps, Ts), fluid.liquid_density(ps, Ts),
-                                    fluid.gas_density(ps, Ts)])
+    f = ca.Function(
+        'f', [ps, Ts], [fluid.rs(ps, Ts), fluid.bo(ps, Ts), fluid.liquid_density(ps, Ts), fluid.gas_density(ps, Ts)]
+    )
     return [np.asarray(v, float).ravel() for v in f.map(P.size)(P, TT)]
 
 
@@ -217,10 +225,12 @@ def point_errors(fluid, T_r, rng, n=2000, p_extra=()):
     rows = {}
     for grid in GRIDS:
         got = evaluate(table_fluid(fluid, grid, T_r, p_extra), P, TT)
-        rows[grid] = {'R_so (Sm3/Sm3)': np.max(np.abs(got[0] - ref[0])),
-                      'B_o (%)': 100 * np.max(np.abs(got[1] / ref[1] - 1)),
-                      'rho_l (%)': 100 * np.max(np.abs(got[2] / ref[2] - 1)),
-                      'rho_g (%)': 100 * np.max(np.abs(got[3] / ref[3] - 1))}
+        rows[grid] = {
+            'R_so (Sm3/Sm3)': np.max(np.abs(got[0] - ref[0])),
+            'B_o (%)': 100 * np.max(np.abs(got[1] / ref[1] - 1)),
+            'rho_l (%)': 100 * np.max(np.abs(got[2] / ref[2] - 1)),
+            'rho_g (%)': 100 * np.max(np.abs(got[3] / ref[3] - 1)),
+        }
     # The gas density interpolated directly, on the medium grid, instead of Z
     p, T = axis(P_MIN, P_MAX, 10.0), axis(T_MIN, T_MAX, 10.0)
     Pg, Tg = np.meshgrid(p, T, indexing='ij')
@@ -238,7 +248,7 @@ def points():
     pd.set_option('display.width', 200)
     print('Largest error over 40 sampled fluids (develop, seed 2026), 2000 random points each, 5-460 bar, 277-423 K:')
     print(pd.concat(frames).groupby(level=0, sort=False).max().round(3).to_string())
-    print('\nMedian over the fluids of each fluid\'s largest error:')
+    print("\nMedian over the fluids of each fluid's largest error:")
     print(pd.concat(frames).groupby(level=0, sort=False).median().round(3).to_string())
     bp = FluidModel(p_bubble=150.0)
     print('\nA bubble-point fluid (FluidModel(p_bubble=150), API 35), without and with a node at p_b:')
@@ -250,9 +260,15 @@ def points():
 # Part 2: solved wells
 # ---------------------------------------------------------------------------------------------------------------------
 
+
 def outputs(root):
-    return dict(PBH=root.state[0, 0], PWH=root.state[-1, 0], TWH=root.state[-1, 6], p_min=root.state[:, 0].min(),
-                T_min=root.state[:, 6].min())
+    return dict(
+        PBH=root.state[0, 0],
+        PWH=root.state[-1, 0],
+        TWH=root.state[-1, 6],
+        p_min=root.state[:, 0].min(),
+        T_min=root.state[:, 6].min(),
+    )
 
 
 def solve(wp, bc, x_guess=None):
@@ -276,8 +292,20 @@ def well_cases(well):
             wp = well_properties(draw, fractions, DEVELOP)
         except ValueError:  # no oil to give a gas-oil ratio (SMP-43)
             continue
-        rec = dict(well=well, k=k, f_g=fractions[0], gor=wp.fluid.gor, api=wp.fluid.api, sg_gas=wp.fluid.sg_gas,
-                   w_lg=bc.w_lg, p_r=bc.p_r, p_s=bc.p_s, T_r=bc.T_r, T_s=bc.T_s, u=bc.u)
+        rec = dict(
+            well=well,
+            k=k,
+            f_g=fractions[0],
+            gor=wp.fluid.gor,
+            api=wp.fluid.api,
+            sg_gas=wp.fluid.sg_gas,
+            w_lg=bc.w_lg,
+            p_r=bc.p_r,
+            p_s=bc.p_s,
+            T_r=bc.T_r,
+            T_s=bc.T_s,
+            u=bc.u,
+        )
         base, out = solve(wp, bc)
         rec.update({f'{key}_base': v for key, v in out.items()})
         for grid in GRIDS:
@@ -297,12 +325,15 @@ def summary(df):
     print(f'{len(df)} cases, {len(base)} with a base operating point')
     for g in GRIDS:
         both = base[f'PBH_{g}'].notna()
-        print(f'  {g}: operating point in {both.sum()} of them, and in {df[df.PBH_base.isna()][f"PBH_{g}"].notna().sum()}'
-              f' of the {df.PBH_base.isna().sum()} without one')
+        print(
+            f'  {g}: operating point in {both.sum()} of them, and in {df[df.PBH_base.isna()][f"PBH_{g}"].notna().sum()}'
+            f' of the {df.PBH_base.isna().sum()} without one'
+        )
     for g in GRIDS:
         ok = base[base[f'PBH_{g}'].notna()]
-        d = pd.DataFrame({f'{x} (bar)' if x != 'TWH' else 'TWH (K)': ok[f'{x}_{g}'] - ok[f'{x}_base']
-                          for x in ('PBH', 'PWH', 'TWH')})
+        d = pd.DataFrame(
+            {f'{x} (bar)' if x != 'TWH' else 'TWH (K)': ok[f'{x}_{g}'] - ok[f'{x}_base'] for x in ('PBH', 'PWH', 'TWH')}
+        )
         print(f'\n{g}: quantiles of the change against the black oil, over {len(ok)} cases')
         print(d.quantile(q).round(4).to_string())
         print('largest |change|: ' + ', '.join(f'{c} {d[c].abs().max():.4f}' for c in d))
@@ -324,6 +355,7 @@ def wells(n_wells, out):
 def counted_solve(wp, bc):
     """The operating point's PBH (NaN if none), the time, and Ipopt's iterations over the search's starts."""
     from manywells.solvers import ipopt
+
     iterations, solve_ = [], ipopt.IpoptSolver.solve
 
     def counting(self, *args, **kwargs):
@@ -353,10 +385,14 @@ def interp_cases(well):
         cols = black_oil_columns(wp.fluid, p, T)
         fields = {f: getattr(wp.fluid, f) for f in wp.fluid.__dataclass_fields__}
         rec = dict(well=well, k=k)
-        for name, fluid in (('base', wp.fluid), ('linear', TableFluid(**fields, table=Table(p, T, cols))),
-                            ('bspline', TableFluid(**fields, table=Table(p, T, cols, 'bspline')))):
+        for name, fluid in (
+            ('base', wp.fluid),
+            ('linear', TableFluid(**fields, table=Table(p, T, cols))),
+            ('bspline', TableFluid(**fields, table=Table(p, T, cols, 'bspline'))),
+        ):
             rec[f'PBH_{name}'], rec[f'seconds_{name}'], rec[f'iterations_{name}'] = counted_solve(
-                replace(wp, fluid=fluid), bc)
+                replace(wp, fluid=fluid), bc
+            )
         rows.append(rec)
     return rows
 
@@ -368,16 +404,21 @@ def interp(n_wells, out):
     names = ('base', 'linear', 'bspline')
     print(f'{len(df)} cases; operating points: ' + ', '.join(f'{n} {df[f"PBH_{n}"].notna().sum()}' for n in names))
     print('Ipopt iterations, total: ' + ', '.join(f'{n} {df[f"iterations_{n}"].sum()}' for n in names))
-    print('Time (s), median / total: ' + ', '.join(f'{n} {df[f"seconds_{n}"].median():.2f} / '
-                                                  f'{df[f"seconds_{n}"].sum():.1f}' for n in names))
+    print(
+        'Time (s), median / total: '
+        + ', '.join(f'{n} {df[f"seconds_{n}"].median():.2f} / {df[f"seconds_{n}"].sum():.1f}' for n in names)
+    )
     ok = df[df.PBH_base.notna()]
-    print('Largest |PBH - base| (bar): ' + ', '.join(f'{n} {(ok[f"PBH_{n}"] - ok.PBH_base).abs().max():.5f}'
-                                                    for n in names[1:]))
+    print(
+        'Largest |PBH - base| (bar): '
+        + ', '.join(f'{n} {(ok[f"PBH_{n}"] - ok.PBH_base).abs().max():.5f}' for n in names[1:])
+    )
 
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Part 3: the example tables, and the equation-of-state table on sampled wells
 # ---------------------------------------------------------------------------------------------------------------------
+
 
 def read_table(path, columns=None):
     """A table in the proposed CSV format: '# key: value' lines, then one row per node. (Table, metadata)."""
@@ -392,8 +433,11 @@ def read_table(path, columns=None):
     p, T = np.unique(df.p), np.unique(df['T'])
     assert len(df) == len(p) * len(T), 'not a rectangular grid'
     df = df.sort_values(['T', 'p'])
-    cols = {c: df[c].to_numpy().reshape(len(T), len(p)).T for c in df.columns if c not in ('p', 'T')
-            and (columns is None or c in columns)}
+    cols = {
+        c: df[c].to_numpy().reshape(len(T), len(p)).T
+        for c in df.columns
+        if c not in ('p', 'T') and (columns is None or c in columns)
+    }
     return Table(p, T, cols), meta
 
 
@@ -418,6 +462,7 @@ VB_T_RES = 360.0
 def vb_example_fluid():
     """develop's black oil, API 35 and gas gravity 0.75, capped at the bubble point where R_so is the GOR at 360 K."""
     from scipy.optimize import brentq
+
     f = FluidModel(**VB_FLUID)
     p_b = brentq(lambda p: float(f.rs(p, VB_T_RES)) - f.gor, 10.0, 600.0, xtol=1e-10)
     return FluidModel(**VB_FLUID, p_bubble=round(p_b, 3))
@@ -427,29 +472,40 @@ def write(folder):
     f = vb_example_fluid()
     p, T = axis(P_MIN, 400.0, 10.0, (f.p_bubble,)), axis(280.0, 400.0, 10.0)
     p = p[p <= 400.0]
-    write_table(f'{folder}/vazquez_beggs.csv', Table(p, T, black_oil_columns(f, p, T)), [
-        'ManyWells PVT table (specs/features/018-pvt-tables.md, draft)',
-        'name: vazquez_beggs',
-        'source: plans/evidence/pvt_tables.py write; develop\'s black oil at 8b4f1e6: FluidModel(rho_o=850, '
-        f'rho_g=gas_density_from_sg(0.75), gor=120, p_bubble={f.p_bubble}), R_so capped at the bubble point '
-        f'(PVT-OIL-7), where R_so is the GOR at {VB_T_RES:.0f} K; Z from the DAK equation of state (PVT-GAS-11)',
-        'separation: standard conditions (FluidModel\'s p_sep and T_sep)',
-        f'rho_o: {f.rho_o}', f'rho_g: {f.rho_g:.10g}', f'gor: {f.gor}',
-        'columns: p (bar), T (K), R_so (Sm3/Sm3), B_o (-), Z (-, with R_s at standard conditions)'])
+    write_table(
+        f'{folder}/vazquez_beggs.csv',
+        Table(p, T, black_oil_columns(f, p, T)),
+        [
+            'ManyWells PVT table (specs/features/018-pvt-tables.md, draft)',
+            'name: vazquez_beggs',
+            "source: plans/evidence/pvt_tables.py write; develop's black oil at 8b4f1e6: FluidModel(rho_o=850, "
+            f'rho_g=gas_density_from_sg(0.75), gor=120, p_bubble={f.p_bubble}), R_so capped at the bubble point '
+            f'(PVT-OIL-7), where R_so is the GOR at {VB_T_RES:.0f} K; Z from the DAK equation of state (PVT-GAS-11)',
+            "separation: standard conditions (FluidModel's p_sep and T_sep)",
+            f'rho_o: {f.rho_o}',
+            f'rho_g: {f.rho_g:.10g}',
+            f'gor: {f.gor}',
+            'columns: p (bar), T (K), R_so (Sm3/Sm3), B_o (-), Z (-, with R_s at standard conditions)',
+        ],
+    )
     eos, meta = read_table(f'{folder}/synthetic_eos_oil.csv', ('R_so', 'B_o', 'Z'))
     k = int(np.argmin(np.abs(eos.T - 360.0)))
     p_b = bubble_points(meta)[360.0]
     lab = np.array([10, 30, 50, 70, 90, 110, 130, 150, 170, p_b, 200, 250, 300, 350, 400], float)
     idx = [int(np.argmin(np.abs(eos.p - x))) for x in lab]
     assert np.allclose(eos.p[idx], lab)
-    write_table(f'{folder}/synthetic_eos_oil_360K.csv',
-                Table(eos.p[idx], eos.T[k:k + 1], {c: v[idx, k:k + 1] for c, v in eos.cols.items()}), [
-        'ManyWells PVT table (specs/features/018-pvt-tables.md, draft)',
-        'name: synthetic_eos_oil_360K',
-        'source: plans/evidence/pvt_tables.py write; synthetic_eos_oil.csv at 360 K only, on 15 of its pressures '
-        '(a laboratory report\'s spacing), without the viscosities and the surface tension',
-        *(f'{key}: {meta[key]}' for key in ('separation', 'rho_o', 'rho_g', 'gor')),
-        'columns: p (bar), T (K), R_so (Sm3/Sm3), B_o (-), Z (-, with R_s at standard conditions)'])
+    write_table(
+        f'{folder}/synthetic_eos_oil_360K.csv',
+        Table(eos.p[idx], eos.T[k : k + 1], {c: v[idx, k : k + 1] for c, v in eos.cols.items()}),
+        [
+            'ManyWells PVT table (specs/features/018-pvt-tables.md, draft)',
+            'name: synthetic_eos_oil_360K',
+            'source: plans/evidence/pvt_tables.py write; synthetic_eos_oil.csv at 360 K only, on 15 of its pressures '
+            "(a laboratory report's spacing), without the viscosities and the surface tension",
+            *(f'{key}: {meta[key]}' for key in ('separation', 'rho_o', 'rho_g', 'gor')),
+            'columns: p (bar), T (K), R_so (Sm3/Sm3), B_o (-), Z (-, with R_s at standard conditions)',
+        ],
+    )
 
 
 def eos_cases(args):
@@ -466,15 +522,19 @@ def eos_cases(args):
             wp = well_properties(draw, fractions, DEVELOP)
         except ValueError:
             continue
-        if not (bc.p_r <= eos.p[-1] and bc.T_r <= eos.T[-1]):   # The bottom of the well on the grid; the rest is
-            continue                                            # checked on the operating point (summary)
+        if not (bc.p_r <= eos.p[-1] and bc.T_r <= eos.T[-1]):  # The bottom of the well on the grid; the rest is
+            continue  # checked on the operating point (summary)
         vb = replace(wp.fluid, **std)
         T_b = np.array(sorted(p_b))
         cap = float(np.interp(bc.T_r, T_b, [p_b[t] for t in T_b]))
-        variants = {'vb': vb, 'vb_cap': replace(vb, p_bubble=cap),
-                    'eos': TableFluid(**{f: getattr(vb, f) for f in vb.__dataclass_fields__}, table=eos),
-                    'eos_corr': TableFluid(**{f: getattr(vb, f) for f in vb.__dataclass_fields__},
-                                           table=read_table(path, ('R_so', 'B_o', 'Z'))[0])}
+        variants = {
+            'vb': vb,
+            'vb_cap': replace(vb, p_bubble=cap),
+            'eos': TableFluid(**{f: getattr(vb, f) for f in vb.__dataclass_fields__}, table=eos),
+            'eos_corr': TableFluid(
+                **{f: getattr(vb, f) for f in vb.__dataclass_fields__}, table=read_table(path, ('R_so', 'B_o', 'Z'))[0]
+            ),
+        }
         rec = dict(well=well, k=k, wlr=vb.wlr, p_r=bc.p_r, p_s=bc.p_s, T_r=bc.T_r, u=bc.u, w_lg=bc.w_lg, p_b=cap)
         for name, fluid in variants.items():
             _, out = solve(replace(wp, fluid=fluid), bc)
@@ -487,8 +547,10 @@ def eos_summary(df):
     names = ('vb', 'vb_cap', 'eos', 'eos_corr')
     print(f'{len(df)} cases; operating points: ' + ', '.join(f'{n} {df[f"PBH_{n}"].notna().sum()}' for n in names))
     out = (df.p_min_eos < 1.0) | (df.T_min_eos < 280.0)
-    print(f'eos operating points with a point off the grid (p < 1 bar or T < 280 K): {out.sum()}; '
-          f'lowest T {df.T_min_eos.min():.1f} K, lowest p {df.p_min_eos.min():.1f} bar')
+    print(
+        f'eos operating points with a point off the grid (p < 1 bar or T < 280 K): {out.sum()}; '
+        f'lowest T {df.T_min_eos.min():.1f} K, lowest p {df.p_min_eos.min():.1f} bar'
+    )
     for a, b in (('eos', 'vb'), ('eos', 'vb_cap'), ('eos', 'eos_corr')):
         ok = df.dropna(subset=[f'PBH_{a}', f'PBH_{b}'])
         d = pd.DataFrame({f'{x}': ok[f'{x}_{a}'] - ok[f'{x}_{b}'] for x in ('PBH', 'PWH', 'TWH')})
@@ -511,6 +573,7 @@ def choke_scan(wp, bc, n=80):
     zeroes every other row. A sign change brackets a root; a march that fails gives NaN.
     """
     from manywells.solvers.march import MarchFailed
+
     sim = SSDFSimulator(wp)
     system, march = sim._roots.system, sim._roots.march
     params, k = system.params(bc), system.row_ids.index('CHK-1')
@@ -540,15 +603,21 @@ def scan_case(args):
     for name, fluid in (('eos', table), ('vb_cap', replace(vb, p_bubble=cap))):
         r = choke_scan(replace(wp, fluid=fluid), bc)
         ok = r[np.isfinite(r)]
-        rec.update({f'finite_{name}': len(ok), f'sign_changes_{name}': int(np.sum(np.diff(np.sign(ok)) != 0)),
-                    f'min_{name}': ok.min() if len(ok) else np.nan, f'max_{name}': ok.max() if len(ok) else np.nan})
+        rec.update(
+            {
+                f'finite_{name}': len(ok),
+                f'sign_changes_{name}': int(np.sum(np.diff(np.sign(ok)) != 0)),
+                f'min_{name}': ok.min() if len(ok) else np.nan,
+                f'max_{name}': ok.max() if len(ok) else np.nan,
+            }
+        )
     # With a trace of lift gas, so that the bottomhole is never all liquid
     op, out = solve(replace(wp, fluid=table), replace(bc, w_lg=LIFT_GAS_TRACE))
     rec.update(p_b=cap, PBH_eos_trace=out.get('PBH', np.nan), PWH_eos_trace=out.get('PWH', np.nan))
     return rec
 
 
-LIFT_GAS_TRACE = 0.01       # kg/s
+LIFT_GAS_TRACE = 0.01  # kg/s
 
 
 def scan(path, cases_csv):
@@ -556,16 +625,21 @@ def scan(path, cases_csv):
     df = pd.read_csv(cases_csv)
     lost = df[df.PBH_vb_cap.notna() & df.PBH_eos.isna()]
     with Pool(14) as pool:
-        rows = pd.DataFrame(pool.map(scan_case, [(int(w), int(k), path) for w, k in zip(lost.well, lost.k)],
-                                     chunksize=1))
+        rows = pd.DataFrame(
+            pool.map(scan_case, [(int(w), int(k), path) for w, k in zip(lost.well, lost.k)], chunksize=1)
+        )
     rows = rows.merge(lost[['well', 'k', 'PBH_vb_cap']], on=['well', 'k'])
     pd.set_option('display.width', 220)
-    print(f'{len(rows)} cases where the black oil capped at p_b has an operating point and the table none; the CHK-1 '
-          'row after a march from 80 values of p_0 in (p_s, p_r), with the table and with that black oil; and the '
-          f'table with {LIFT_GAS_TRACE} kg/s of lift gas:')
+    print(
+        f'{len(rows)} cases where the black oil capped at p_b has an operating point and the table none; the CHK-1 '
+        'row after a march from 80 values of p_0 in (p_s, p_r), with the table and with that black oil; and the '
+        f'table with {LIFT_GAS_TRACE} kg/s of lift gas:'
+    )
     print(rows.round(3).to_string(index=False))
-    print(f'The capped black oil\'s PBH above the table\'s bubble point at T_r in {(rows.PBH_vb_cap > rows.p_b).sum()}; '
-          f'the table with the trace of lift gas has an operating point in {rows.PBH_eos_trace.notna().sum()}')
+    print(
+        f"The capped black oil's PBH above the table's bubble point at T_r in {(rows.PBH_vb_cap > rows.p_b).sum()}; "
+        f'the table with the trace of lift gas has an operating point in {rows.PBH_eos_trace.notna().sum()}'
+    )
 
 
 if __name__ == '__main__':

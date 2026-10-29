@@ -15,8 +15,19 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from manywells_verify.distributions import (FEATURES, MAX_CDF_GAP, MAX_CORR_GAP, PERCENTILES, REFERENCE, compare,
-                                            main, summarize, trickle_signature, weighted_spearman, well_weights)
+from manywells_verify.distributions import (
+    FEATURES,
+    MAX_CDF_GAP,
+    MAX_CORR_GAP,
+    PERCENTILES,
+    REFERENCE,
+    compare,
+    main,
+    summarize,
+    trickle_signature,
+    weighted_spearman,
+    well_weights,
+)
 
 
 @pytest.fixture(scope='module')
@@ -43,7 +54,7 @@ def test_trickle_spike_fails(data):
     ref = summarize(data)
     spiked = data.copy()
     rows = spiked.sample(frac=0.04, random_state=2).index
-    spiked.loc[rows, 'TWH'] = 280.0                       # a low-temperature spike, as on the trickle root
+    spiked.loc[rows, 'TWH'] = 280.0  # a low-temperature spike, as on the trickle root
     spiked.loc[rows, 'PWH'] = spiked.loc[rows, 'PDC'] + 1e-3
     result = compare(ref, spiked)
     assert not result['passed']
@@ -54,7 +65,7 @@ def test_trickle_spike_fails(data):
 def test_broken_correlation_fails(data):
     ref = summarize(data)
     shuffled = data.copy()
-    shuffled['PBH'] = shuffled['PBH'].sample(frac=1.0, random_state=3).to_numpy()   # same marginal, no correlation
+    shuffled['PBH'] = shuffled['PBH'].sample(frac=1.0, random_state=3).to_numpy()  # same marginal, no correlation
     result = compare(ref, shuffled)
     assert result['worst_cdf'][1] <= MAX_CDF_GAP
     assert not result['passed'] and 'PBH' in result['worst_corr'][:2]
@@ -76,7 +87,7 @@ def test_committed_reference():
 def test_cli_exit_status(data, tmp_path):
     path = tmp_path / 'candidate.parquet'
     data.assign(ID=np.arange(len(data)) % 2000).to_parquet(path)
-    assert main([str(path), '--dataset', 'sol-1']) == 1     # synthetic rows are not ManyWells data
+    assert main([str(path), '--dataset', 'sol-1']) == 1  # synthetic rows are not ManyWells data
 
 
 def test_cli_needs_well_ids(data, tmp_path):
@@ -110,14 +121,16 @@ def test_weights_mix_the_wells_as_the_reference():
     with the same number of rows per well: unweighted it fails, weighted to the reference's wells it passes."""
     rng = np.random.default_rng(5)
     n_wells, per_well = 400, 200
-    level = rng.normal(size=n_wells) + np.where(np.arange(n_wells) < 80, 3.0, 0.0)   # 80 wells unlike the rest
-    rows_kept = np.where(np.arange(n_wells) < 80, per_well // 10, per_well)           # which lost most of their rows
+    level = rng.normal(size=n_wells) + np.where(np.arange(n_wells) < 80, 3.0, 0.0)  # 80 wells unlike the rest
+    rows_kept = np.where(np.arange(n_wells) < 80, per_well // 10, per_well)  # which lost most of their rows
 
     def rows(counts, seed):
         r = np.random.default_rng(seed)
         ids = np.repeat(np.arange(n_wells), counts)
         base = level[ids] + r.normal(size=len(ids))
-        return pd.DataFrame({f: base * (k % 3) + r.normal(size=len(ids)) for k, f in enumerate(FEATURES)}).assign(ID=ids)
+        return pd.DataFrame({f: base * (k % 3) + r.normal(size=len(ids)) for k, f in enumerate(FEATURES)}).assign(
+            ID=ids
+        )
 
     ref = summarize(rows(rows_kept, 6))
     candidate = rows(np.full(n_wells, 25), 7)

@@ -61,8 +61,9 @@ def main():
     df = pd.read_csv(args.config, compression='zip')
     two = (df['bc.p_r'] - df['bc.p_s']) < df['wp.rho_l'] * 9.81 * df['wp.L'] / 1e5
     rng = np.random.default_rng(1)
-    ids = list(rng.choice(df.loc[two, 'ID'], args.n2, replace=False)) + \
-        list(rng.choice(df.loc[~two, 'ID'], args.n1, replace=False))
+    ids = list(rng.choice(df.loc[two, 'ID'], args.n2, replace=False)) + list(
+        rng.choice(df.loc[~two, 'ID'], args.n1, replace=False)
+    )
     print(f'two-root criterion true for {two.sum()} of {len(df)} configs; gas lift in {(df["bc.w_lg"] > 0).sum()}')
 
     rows = []
@@ -73,15 +74,21 @@ def main():
         roots, default = root_set(sim)
         stable = [p for p, r in roots.items() if r['d'] < 0]
         unstable = [p for p, r in roots.items() if r['d'] > 0]
-        rows.append(dict(
-            id=int(wid), crit_two=bool(two[df['ID'] == wid].iloc[0]), n_roots=len(roots),
-            n_stable=len(stable), n_unstable=len(unstable),
-            v1_default='failed' if default is None else ('unstable' if roots[default]['d'] > 0 else 'stable'),
-            twh_stable=roots[stable[0]]['twh'] if stable else np.nan,
-            twh_unstable=roots[unstable[0]]['twh'] if unstable else np.nan,
-            drawdown_unstable=roots[unstable[0]]['drawdown'] if unstable else np.nan,
-            unstable_above_stable=(min(unstable) > max(stable)) if (stable and unstable) else None,
-            secs=time.time() - t))
+        rows.append(
+            dict(
+                id=int(wid),
+                crit_two=bool(two[df['ID'] == wid].iloc[0]),
+                n_roots=len(roots),
+                n_stable=len(stable),
+                n_unstable=len(unstable),
+                v1_default='failed' if default is None else ('unstable' if roots[default]['d'] > 0 else 'stable'),
+                twh_stable=roots[stable[0]]['twh'] if stable else np.nan,
+                twh_unstable=roots[unstable[0]]['twh'] if unstable else np.nan,
+                drawdown_unstable=roots[unstable[0]]['drawdown'] if unstable else np.nan,
+                unstable_above_stable=(min(unstable) > max(stable)) if (stable and unstable) else None,
+                secs=time.time() - t,
+            )
+        )
         print(rows[-1], flush=True)
 
     out = pd.DataFrame(rows)

@@ -18,21 +18,6 @@ not in the repo. Its suspicions that it could not confirm are in section 6.
 
 ## 1. Bugs and corrections
 
-### 1.11 The QTOT variation filter uses a different standard deviation from v1.0.0
-
-**[needs sign-off]**
-
-- `sampling/generate.py:104` and `195` use pandas' `df['QTOT'].std()`, the
-  sample standard deviation (ddof = 1).
-- v1.0.0 used `well_data['QTOT'].values.std()`, numpy's population standard
-  deviation (ddof = 0). The CHK filter used pandas in v1.0.0 too, so it matches.
-- The port's coefficient of variation is therefore 1.001 times v1.0.0's, and a
-  well with a population value in [0.04995, 0.05) is kept where v1.0.0 discarded
-  it. `specs/sampling.md` (S-6) does not say which standard deviation applies.
-
-Fix: `std(ddof=0)`, and say so in the spec; or settle it in the sampling
-redesign.
-
 ## 2. Robustness and API quality
 
 ### 2.9 The root searches miss roots the other backend finds
@@ -83,6 +68,31 @@ is smooth with its minimum near the truth, so the minimum is in the joint space,
 as feature 017's well 3 was for `roughness` before CAL-9's start search. It is
 behind three of the four fits that miss 017's twin criteria. Options: more starts,
 or starts along pairs of parameters, each measured under principle 7.
+
+### 2.16 No top boundary that fixes the wellhead pressure
+
+**[after the plan]** *From the validation plan's Step V2, 2026-10-02.* ManyWells
+can fix the liquid rate (`FixedFlowRate`, INF-8), but its top boundary is always
+a choke. Running a well at a given rate and wellhead pressure, the
+tubing-performance calculation of nodal analysis, needs the wellhead pressure
+fixed instead. A feature spec, approved before implementation, would cover:
+
+- **The boundary.** A top boundary whose row is $p_N - p_\text{wh}$, in place of
+  the choke row: a new option in `choke.md`, or a top-boundary model beside
+  `ChokeModel`, as `specs/architecture.md` decides. With INF-8 at the bottom,
+  the case has one unknown left, $p_0$.
+- **The operating point.** With both the rate and $p_N$ fixed, SOL-3's label
+  (the sign of $dR/dp_0$ for the choke row) no longer describes stability. The
+  spec says what the root set and the operating point are for this boundary.
+- **The temperature.** Proposed: the energy balance as it is, from $T_r$ at the
+  bottom. A prescribed temperature profile would be a further option.
+- **The usual rules.** Off in the `v1.0.0` configuration; in both backends under
+  the same IDs, and in `tests/backend_cases.py`.
+
+Done when a synthetic round trip passes in both backends. A well solved with a
+choke and a reservoir inflow, then solved again with `FixedFlowRate` at the
+solved liquid rate and the wellhead pressure fixed at the solved $p_N$, gives the
+same solution to the solver's tolerance.
 
 ## 4. Performance and architecture
 
@@ -141,13 +151,6 @@ lowest-$p_0$ stable root of several.
 
 ## 5. Open-source friendliness
 
-- **[any time]** **Lint and format**: there is no ruff, black or mypy
-  configuration. `ruff` (format and lint) with a pre-commit hook keeps
-  contributions uniform at little cost. Measured on 2026-10-29 with ruff 0.14.0
-  at a line length of 120 with quotes preserved: `ruff format` would rewrite 128
-  of 138 Python files (about 4,500 changed lines), and the default lint rules
-  find 40 issues (16 unused imports). The style and when to reformat are
-  Bjarne's choice: a reformat rewrites most files under other sessions' branches.
 - **[after the plan]** **Docs site**: mkdocs-material with mkdocstrings on GitHub
   Pages would render the guides in `docs/` and the docstrings.
 - **[after the plan]** **License**: one of the decisions for v2.0.0
@@ -226,6 +229,7 @@ Numbers are not reused. Each removed item, and where it was handled:
 | 1.8 | `x_guess`: dropped by the deprecated `simulate()`, a `Root` refused, the docstring's promise | `a1e8da4` |
 | 1.9 | The Rust backend's debug log reported every search as failed | `Attempt.found`, `a1e8da4` |
 | 1.10 | `write_dataset` truncated a dotted name | `a1e8da4` |
+| 1.11 | The QTOT filter's standard deviation: pandas' sample one (ddof = 1) where v1.0.0 took numpy's population one (ddof = 0) | left to the sampling redesign (Bjarne, 2026-10-29); recorded in `specs/sampling.md`, SMP-28 |
 | 1.12 | Calibration's data handling: `WGL`'s default, the index, the rate source without noise, the backend check | `a1e8da4` |
 | 1.13 | The distribution check crashed with no candidate row in the reference | `a1e8da4` |
 | 1.14 | `scripts/ml_examples/noise.py` scaled the QTOT noise wrongly | `a1e8da4` |
@@ -247,6 +251,7 @@ Numbers are not reused. Each removed item, and where it was handled:
 | 4.4 | Vectorize the regime classification | Step 7 (`System.regime_probabilities`) |
 | 5 | CI, dependency ranges, `CHANGELOG.md`, the README's Documentation section | 2026-09-22 to 2026-10-02 |
 | 5 | Examples hygiene (the `slip.py` demo, removed), the `py.typed` marker | `a1e8da4` |
+| 5 | Lint and format: ruff 0.17.1, in CI (`lint`) and a pre-commit hook | `6594e7e` to `3a897df` (`docs/testing.md`) |
 | 6 | Suspicions confirmed and fixed: `solution_as_df` aliased `Root.x` under pandas 2.2; numeric strings in `CHK` or `PDC` failed late | `a1e8da4` |
 | — | The review of 2026-10-16: its High and Medium items | issues #11 to #22, all fixed; #13 and #16 by PR #29 |
 | — | The review's suspicion that the lower temperature bound cuts off roots | confirmed below a geothermal gradient of about 5 K/km; kept as a known limit (`specs/features/012-root-search.md`) |

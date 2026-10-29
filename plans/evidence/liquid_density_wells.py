@@ -57,8 +57,9 @@ def well_cases(well, backend):
         except ValueError:  # no oil to give a gas-oil ratio (SMP-43)
             continue
         fl = wp.fluid
-        rec = dict(well=well, k=k, wlr=fl.wlr, gor=fl.gor, api=fl.api, w_lg=bc.w_lg, p_r=bc.p_r, p_s=bc.p_s,
-                   T_r=bc.T_r, u=bc.u)
+        rec = dict(
+            well=well, k=k, wlr=fl.wlr, gor=fl.gor, api=fl.api, w_lg=bc.w_lg, p_r=bc.p_r, p_s=bc.p_s, T_r=bc.T_r, u=bc.u
+        )
         t0 = time.time()
         try:
             op = SSDFSimulator(wp, backend=backend).simulate(bc)
@@ -77,8 +78,10 @@ def run(n_wells, out, backend, processes):
         rows = [r for rs in pool.map(partial(well_cases, backend=backend), range(n_wells), chunksize=1) for r in rs]
     df = pd.DataFrame(rows)
     df.to_csv(out, index=False)
-    print(f'{len(df)} cases from {n_wells} wells ({backend}), operating point in {df.PBH.notna().sum()}, '
-          f'{df.seconds.sum():.0f} s in total')
+    print(
+        f'{len(df)} cases from {n_wells} wells ({backend}), operating point in {df.PBH.notna().sum()}, '
+        f'{df.seconds.sum():.0f} s in total'
+    )
 
 
 def compare(before, after):
@@ -86,22 +89,28 @@ def compare(before, after):
     b, a = pd.read_csv(before), pd.read_csv(after)
     df = b.merge(a, on=['well', 'k'], suffixes=('_b', '_a'))
     found_b, found_a = df.PBH_b.notna(), df.PBH_a.notna()
-    print(f'{len(df)} cases; operating point before {found_b.sum()}, after {found_a.sum()}; '
-          f'lost {(found_b & ~found_a).sum()}, gained {(~found_b & found_a).sum()}')
+    print(
+        f'{len(df)} cases; operating point before {found_b.sum()}, after {found_a.sum()}; '
+        f'lost {(found_b & ~found_a).sum()}, gained {(~found_b & found_a).sum()}'
+    )
     water = df[(df.wlr_b > 0) & found_b & found_a]
     print(f'{len(water)} cases with water and an operating point in both')
     ratio = water.rho_l_new_bh_b / water.rho_l_old_bh_b - 1
-    diff = pd.DataFrame({
-        'rho_l bh new/old - 1 (%)': 100 * ratio,
-        'PBH (bar)': water.PBH_a - water.PBH_b,
-        'PWH (bar)': water.PWH_a - water.PWH_b,
-        'TWH (K)': water.TWH_a - water.TWH_b,
-        'w_res (%)': 100 * (water.w_res_a / water.w_res_b - 1),
-    })
+    diff = pd.DataFrame(
+        {
+            'rho_l bh new/old - 1 (%)': 100 * ratio,
+            'PBH (bar)': water.PBH_a - water.PBH_b,
+            'PWH (bar)': water.PWH_a - water.PWH_b,
+            'TWH (K)': water.TWH_a - water.TWH_b,
+            'w_res (%)': 100 * (water.w_res_a / water.w_res_b - 1),
+        }
+    )
     print('Quantiles of the changes, after minus before:')
     print(diff.quantile(q).round(3).to_string())
-    print(f'wlr from {water.wlr_b.min():.3f} to {water.wlr_b.max():.3f}, median {water.wlr_b.median():.3f}; '
-          f'B_o at the bottomhole from {water.Bo_bh_b.min():.3f} to {water.Bo_bh_b.max():.3f}')
+    print(
+        f'wlr from {water.wlr_b.min():.3f} to {water.wlr_b.max():.3f}, median {water.wlr_b.median():.3f}; '
+        f'B_o at the bottomhole from {water.Bo_bh_b.min():.3f} to {water.Bo_bh_b.max():.3f}'
+    )
     print(f'Seconds per case, median: before {df.seconds_b.median():.3f}, after {df.seconds_a.median():.3f}')
 
 

@@ -69,8 +69,9 @@ axes[2].set_xlabel('Lift-gas rate (kg/s)')
 axes[0].legend(title='Lift gas injected at')
 for ax in axes:
     ax.grid(True, alpha=0.3)
-fig.suptitle(f'Gas lift through a valve (choke {bc.u * 100:.0f}%, $p_r$={bc.p_r:.0f} bar, '
-             f'$T_{{lg}}$={bc.T_lg - 273.15:.0f} °C)')
+fig.suptitle(
+    f'Gas lift through a valve (choke {bc.u * 100:.0f}%, $p_r$={bc.p_r:.0f} bar, $T_{{lg}}$={bc.T_lg - 273.15:.0f} °C)'
+)
 fig.tight_layout()
 plt.savefig('gl_valve.png', dpi=150, bbox_inches='tight')
 plt.show()

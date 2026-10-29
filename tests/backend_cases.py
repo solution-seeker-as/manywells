@@ -46,13 +46,29 @@ from manywells.simulator import BoundaryConditions, SSDFSimulator, WellPropertie
 from manywells.slip import SlipModel
 from manywells.solvers.roots import TOL_X, state_distance
 
-ROW_REL = 1e-10       # rows at the same state, relative to each row's scale: the same arithmetic, to rounding
-ROOT_ROW = 1e-8       # a core-only root zeroes every CasADi row but the choke row to this (bar, K, kg/(m² s), m/s)
+ROW_REL = 1e-10  # rows at the same state, relative to each row's scale: the same arithmetic, to rounding
+ROOT_ROW = 1e-8  # a core-only root zeroes every CasADi row but the choke row to this (bar, K, kg/(m² s), m/s)
 ROOT_CHOKE_REL = 1e-6  # and the choke row to this fraction of the wellhead rate, or to what p_0's resolution allows,
-ROOT_P0_ULPS = 8       # this many ulp of p_r times |dR/dp_0|, if more (steep at the trickle roots next to p_r)
-SEED = 20261002       # the comparison set's seed (SMP-31)
-FEATURES = ('001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011', '016', '018',
-            '019', '020', '021')
+ROOT_P0_ULPS = 8  # this many ulp of p_r times |dR/dp_0|, if more (steep at the trickle roots next to p_r)
+SEED = 20261002  # the comparison set's seed (SMP-31)
+FEATURES = (
+    '001',
+    '002',
+    '003',
+    '004',
+    '005',
+    '006',
+    '007',
+    '008',
+    '009',
+    '010',
+    '011',
+    '016',
+    '018',
+    '019',
+    '020',
+    '021',
+)
 
 
 def features(wp) -> frozenset:
@@ -63,8 +79,12 @@ def features(wp) -> frozenset:
     if not np.allclose(geo.cos_incl, 1.0, rtol=0, atol=1e-12):
         out |= {'001', '002'}
     slip, fitted = wp.slip, SlipModel(regime_model='fitted')
-    if (slip.C_0_annular, slip.C_0_slug, slip.C_0_bubbly, slip.v_inf_annular) != \
-            (fitted.C_0_annular, fitted.C_0_slug, fitted.C_0_bubbly, fitted.v_inf_annular):
+    if (slip.C_0_annular, slip.C_0_slug, slip.C_0_bubbly, slip.v_inf_annular) != (
+        fitted.C_0_annular,
+        fitted.C_0_slug,
+        fitted.C_0_bubbly,
+        fitted.v_inf_annular,
+    ):
         out.add('002')
     if slip.regime_model == 'hasan':
         out.add('019')
@@ -95,6 +115,7 @@ def features(wp) -> frozenset:
 
 # ---------------------------------------------------------------------------------------------
 # Overlays: one option each, as fn(wp, bc) -> (wp, bc)
+
 
 def _survey(md, tvd, wp):
     return WellGeometry.from_survey(md, tvd, n_cells=wp.geometry.n_cells, D=wp.geometry.D)
@@ -133,10 +154,13 @@ def with_pvt(wp, pvt):
 
 def gas_law(name):
     """The fluid's PVT model with another gas law; 'real' makes an ideal gas DAK's and leaves a real one as it is."""
+
     def overlay(wp, bc):
         law = wp.fluid.pvt.gas_law
-        return with_pvt(wp, replace(wp.fluid.pvt, gas_law=('dak' if law == 'ideal' else law) if name == 'real'
-                                    else name)), bc
+        return with_pvt(
+            wp, replace(wp.fluid.pvt, gas_law=('dak' if law == 'ideal' else law) if name == 'real' else name)
+        ), bc
+
     return overlay
 
 
@@ -166,14 +190,18 @@ def pvt_table(one_temperature=False):
     The fluid's own PVT as a table (018): its R_so, B_o and Z at the nodes of a grid from 1 bar to p_r by 10 and from
     260 K to T_r by 10, or at T_r alone.
     """
+
     def overlay(wp, bc):
         fl = wp.fluid
         p = np.unique(np.r_[1.0, np.arange(10.0, bc.p_r + 10.0, 10.0)])
         T = np.array([bc.T_r]) if one_temperature else np.arange(260.0, bc.T_r + 10.0, 10.0)
         P, TT = np.meshgrid(p, T, indexing='ij')
-        columns = {c: np.vectorize(lambda a, b, f=f: float(f(a, b)))(P, TT)
-                   for c, f in (('R_so', fl.rs), ('B_o', fl.bo), ('Z', fl.z_factor))}
+        columns = {
+            c: np.vectorize(lambda a, b, f=f: float(f(a, b)))(P, TT)
+            for c, f in (('R_so', fl.rs), ('B_o', fl.bo), ('Z', fl.z_factor))
+        }
         return with_pvt(wp, PVTTable(p=p, T=T, rho_o=fl.rho_o, rho_g=fl.rho_g, gor=fl.gor, **columns)), bc
+
     return overlay
 
 
@@ -215,7 +243,7 @@ def vogel(wp, bc):
     """Vogel inflow with the same rate as the inflow at half the drawdown."""
     p = bc.p_s + 0.5 * (bc.p_r - bc.p_s)
     r = p / bc.p_r
-    w_l_max = float(wp.inflow.liquid_mass_flow_rate(p, bc.p_r)) / (1 - 0.2 * r - 0.8 * r ** 2)
+    w_l_max = float(wp.inflow.liquid_mass_flow_rate(p, bc.p_r)) / (1 - 0.2 * r - 0.8 * r**2)
     return replace(wp, inflow=Vogel(w_l_max=w_l_max)), bc
 
 
@@ -227,8 +255,13 @@ OVERLAYS = {
     'non-uniform grid': non_uniform,
     'deviated': deviated,
     'L-shaped': l_shaped,
-    'slip constants': lambda wp, bc: (replace(wp, slip=SlipModel(regime_model='fitted', C_0_annular=1.02, C_0_slug=1.15,
-                                                                 C_0_bubbly=1.25, v_inf_annular=0.02)), bc),
+    'slip constants': lambda wp, bc: (
+        replace(
+            wp,
+            slip=SlipModel(regime_model='fitted', C_0_annular=1.02, C_0_slug=1.15, C_0_bubbly=1.25, v_inf_annular=0.02),
+        ),
+        bc,
+    ),
     'five regimes': lambda wp, bc: (replace(wp, slip=SlipModel(regime_model='hasan')), bc),
     'profile scale': lambda wp, bc: (replace(wp, slip=replace(wp.slip, profile_scale=0.5)), bc),
     'no profile slip': lambda wp, bc: (replace(wp, slip=replace(wp.slip, profile_scale=0.0)), bc),
@@ -270,35 +303,92 @@ OVERLAYS = {
 # ---------------------------------------------------------------------------------------------
 # The configuration matrix of the row comparison: small wells, built without the sampler
 
+
 def _row_vector_well(k, n_cells):
     """Well W1 or W2 of specs/model/vectors/v1_rows.json, the v1.0.0 wells of the row vectors, on n_cells."""
     from .spec_parse import row_vectors
+
     w = row_vectors()['wells'][k]['params']
     inflow = Vogel(w['w_l_max']) if w['inflow'] == 'vogel' else ProductivityIndex(w['k_l'])
     model = SimpsonChokeModel if w['choke'] == 'simpson' else BernoulliChokeModel
-    wp = v1_well(L=w['L'], D=w['D'], rho_l=w['rho_l'], R_s=w['R_s'], cp_g=w['cp_g'], cp_l=w['cp_l'], f_D=w['f_D'],
-                 h=w['h'], f_g=w['f_g'], inflow=inflow, choke=model(K_c=w['K_c'], chk_profile=w['profile']),
-                 n_cells=n_cells)
+    wp = v1_well(
+        L=w['L'],
+        D=w['D'],
+        rho_l=w['rho_l'],
+        R_s=w['R_s'],
+        cp_g=w['cp_g'],
+        cp_l=w['cp_l'],
+        f_D=w['f_D'],
+        h=w['h'],
+        f_g=w['f_g'],
+        inflow=inflow,
+        choke=model(K_c=w['K_c'], chk_profile=w['profile']),
+        n_cells=n_cells,
+    )
     return wp, BoundaryConditions(p_r=w['p_r'], p_s=w['p_s'], T_r=w['T_r'], T_s=w['T_s'], u=w['u'], w_lg=w['w_lg'])
 
 
 BASES = {
-    'W1': lambda n: _row_vector_well(0, n),   # Vogel, Simpson choke with the sigmoid profile, lift gas
-    'W2': lambda n: _row_vector_well(1, n),   # productivity index, Bernoulli choke, choked at its root
-    'develop': lambda n: (WellProperties(geometry=WellGeometry.vertical(length=2000.0, n_cells=n)),
-                          BoundaryConditions(p_r=200.0, p_s=20.0, u=0.6, w_lg=0.5)),
+    'W1': lambda n: _row_vector_well(0, n),  # Vogel, Simpson choke with the sigmoid profile, lift gas
+    'W2': lambda n: _row_vector_well(1, n),  # productivity index, Bernoulli choke, choked at its root
+    'develop': lambda n: (
+        WellProperties(geometry=WellGeometry.vertical(length=2000.0, n_cells=n)),
+        BoundaryConditions(p_r=200.0, p_s=20.0, u=0.6, w_lg=0.5),
+    ),
 }
 
-V1_OVERLAYS = ('non-uniform grid', 'deviated', 'L-shaped', 'slip constants', 'water', 'frictional heating',
-               'gravity term', 'energy terms', 'real gas', 'papay', 'joule-thomson', 'black oil', 'bubble point',
-               'oil surface tension', 'chen', 'haaland', 'lift-gas temperature', 'fixed rate', 'five regimes',
-               'valve at 50%', 'valve at 75%')
-DEVELOP_OVERLAYS = ('dead oil', 'ideal gas', 'liquid surface tension', 'fixed f_D', 'haaland', 'no frictional heating',
-                    'no gravity term', 'no lift-gas mixing', 'no joule-thomson', 'fitted', 'papay', 'deviated',
-                    'L-shaped', 'non-uniform grid',
-                    'slip constants', 'water', 'bubble point', 'lift-gas temperature', 'fixed rate', 'vogel', 'simpson',
-                    'pvt table', 'pvt table, one temperature', 'profile scale', 'no profile slip', 'valve at 50%',
-                    'valve at 75%')
+V1_OVERLAYS = (
+    'non-uniform grid',
+    'deviated',
+    'L-shaped',
+    'slip constants',
+    'water',
+    'frictional heating',
+    'gravity term',
+    'energy terms',
+    'real gas',
+    'papay',
+    'joule-thomson',
+    'black oil',
+    'bubble point',
+    'oil surface tension',
+    'chen',
+    'haaland',
+    'lift-gas temperature',
+    'fixed rate',
+    'five regimes',
+    'valve at 50%',
+    'valve at 75%',
+)
+DEVELOP_OVERLAYS = (
+    'dead oil',
+    'ideal gas',
+    'liquid surface tension',
+    'fixed f_D',
+    'haaland',
+    'no frictional heating',
+    'no gravity term',
+    'no lift-gas mixing',
+    'no joule-thomson',
+    'fitted',
+    'papay',
+    'deviated',
+    'L-shaped',
+    'non-uniform grid',
+    'slip constants',
+    'water',
+    'bubble point',
+    'lift-gas temperature',
+    'fixed rate',
+    'vogel',
+    'simpson',
+    'pvt table',
+    'pvt table, one temperature',
+    'profile scale',
+    'no profile slip',
+    'valve at 50%',
+    'valve at 75%',
+)
 
 
 @dataclass(frozen=True)
@@ -326,13 +416,17 @@ def matrix() -> list:
     out += [Configuration('develop', ('deviated', 'fixed rate')), Configuration('develop', ('L-shaped', 'haaland'))]
     out += [Configuration('W1', ('papay', 'joule-thomson')), Configuration('W2', ('energy terms', 'joule-thomson'))]
     out += [Configuration('W1', ('deviated', 'five regimes')), Configuration('W2', ('L-shaped', 'five regimes'))]
-    out += [Configuration('W1', ('deviated', 'five regimes', 'profile scale')),
-            Configuration('W2', ('L-shaped', 'no profile slip'))]
-    out += [Configuration('W1', ('lift-gas temperature', 'valve at 75%')),
-            Configuration('W2', ('energy terms', 'joule-thomson', 'lift-gas temperature', 'valve at 50%')),
-            Configuration('develop', ('lift-gas temperature', 'valve at 50%')),
-            Configuration('develop', ('deviated', 'valve at 75%')),
-            Configuration('develop', ('no lift-gas mixing', 'valve at 50%'))]
+    out += [
+        Configuration('W1', ('deviated', 'five regimes', 'profile scale')),
+        Configuration('W2', ('L-shaped', 'no profile slip')),
+    ]
+    out += [
+        Configuration('W1', ('lift-gas temperature', 'valve at 75%')),
+        Configuration('W2', ('energy terms', 'joule-thomson', 'lift-gas temperature', 'valve at 50%')),
+        Configuration('develop', ('lift-gas temperature', 'valve at 50%')),
+        Configuration('develop', ('deviated', 'valve at 75%')),
+        Configuration('develop', ('no lift-gas mixing', 'valve at 50%')),
+    ]
     return out
 
 
@@ -394,21 +488,58 @@ def row_difference(ids, rust, casadi) -> tuple:
 # The comparison set: sampled wells with overlays
 
 COMPARISON = {
-    V1: ('', 'deviated', 'L-shaped', 'real gas', 'papay', 'joule-thomson', 'black oil', 'bubble point',
-         'oil surface tension', 'chen', 'haaland', 'frictional heating', 'gravity term', 'lift-gas temperature',
-         'fixed rate', 'five regimes', 'valve at 50%'),
-    DEVELOP: ('', 'dead oil', 'ideal gas', 'papay', 'liquid surface tension', 'haaland', 'fixed f_D',
-              'no frictional heating', 'no gravity term', 'no joule-thomson', 'lift-gas temperature', 'fixed rate',
-              'productivity index', 'bernoulli', 'bubble point', 'fitted', 'pvt table', 'pvt table, one temperature',
-              'profile scale', 'no profile slip', 'valve at 50%', 'valve at 75%'),
+    V1: (
+        '',
+        'deviated',
+        'L-shaped',
+        'real gas',
+        'papay',
+        'joule-thomson',
+        'black oil',
+        'bubble point',
+        'oil surface tension',
+        'chen',
+        'haaland',
+        'frictional heating',
+        'gravity term',
+        'lift-gas temperature',
+        'fixed rate',
+        'five regimes',
+        'valve at 50%',
+    ),
+    DEVELOP: (
+        '',
+        'dead oil',
+        'ideal gas',
+        'papay',
+        'liquid surface tension',
+        'haaland',
+        'fixed f_D',
+        'no frictional heating',
+        'no gravity term',
+        'no joule-thomson',
+        'lift-gas temperature',
+        'fixed rate',
+        'productivity index',
+        'bernoulli',
+        'bubble point',
+        'fitted',
+        'pvt table',
+        'pvt table, one temperature',
+        'profile scale',
+        'no profile slip',
+        'valve at 50%',
+        'valve at 75%',
+    ),
 }
 
 
 @dataclass(frozen=True)
 class Case:
     """One sampled well and operating point of the comparison set, with an overlay (or none)."""
-    configuration: str      # V1 or DEVELOP, the sampler's configuration of the base well (SMP-40)
-    overlay: str            # one of COMPARISON[configuration]; '' for none
+
+    configuration: str  # V1 or DEVELOP, the sampler's configuration of the base well (SMP-40)
+    overlay: str  # one of COMPARISON[configuration]; '' for none
     well: int
     seed: int = SEED
     n_cells: int = 100
@@ -457,21 +588,22 @@ def comparison_set(per_configuration=2, seed=SEED, configurations=None) -> list:
 @dataclass
 class Comparison:
     """The comparison of the two backends' root sets for one case."""
+
     case: str
-    casadi: list = field(default_factory=list)       # p_0 and label of each CasADi root
-    rust: list = field(default_factory=list)         # p_0 and label of each core root
-    missed: list = field(default_factory=list)       # CasADi roots the core does not find, by p_0
-    labels: list = field(default_factory=list)       # matched roots whose labels differ, by p_0
-    core_only: list = field(default_factory=list)    # core roots no CasADi root matches: (p_0, zeroes the rows)
-    several_alpha: bool = False                      # the slip law has several void fractions at a root's point
+    casadi: list = field(default_factory=list)  # p_0 and label of each CasADi root
+    rust: list = field(default_factory=list)  # p_0 and label of each core root
+    missed: list = field(default_factory=list)  # CasADi roots the core does not find, by p_0
+    labels: list = field(default_factory=list)  # matched roots whose labels differ, by p_0
+    core_only: list = field(default_factory=list)  # core roots no CasADi root matches: (p_0, zeroes the rows)
+    several_alpha: bool = False  # the slip law has several void fractions at a root's point
     other_branch: list = field(default_factory=list)  # roots (p_0) on another branch of a point's rows
-    row_rel: float = 0.0                             # largest relative row difference at the perturbed roots
+    row_rel: float = 0.0  # largest relative row difference at the perturbed roots
     row_at: str = ''
-    seconds: dict = field(default_factory=dict)      # build + search per backend
-    marches: int = 0                                 # the core's marches
-    counts: dict = field(default_factory=dict)       # the core's work (march.rs, Counts)
-    choked_differs: int = 0                          # matched roots whose CHOKED flags differ (information)
-    error: str = ''                                  # a backend raised
+    seconds: dict = field(default_factory=dict)  # build + search per backend
+    marches: int = 0  # the core's marches
+    counts: dict = field(default_factory=dict)  # the core's work (march.rs, Counts)
+    choked_differs: int = 0  # matched roots whose CHOKED flags differ (information)
+    error: str = ''  # a backend raised
 
     @property
     def ok(self) -> bool:
@@ -482,8 +614,12 @@ class Comparison:
             return False
         if self.several_alpha or self.other_branch:
             return self.row_rel <= ROW_REL
-        return (self.row_rel <= ROW_REL and all(zeroes for _, zeroes in self.core_only) and not self.missed
-                and not self.labels)
+        return (
+            self.row_rel <= ROW_REL
+            and all(zeroes for _, zeroes in self.core_only)
+            and not self.missed
+            and not self.labels
+        )
 
 
 def void_fractions(slip, D):
@@ -503,16 +639,28 @@ def several_void_fractions(wp, x, grid=2001) -> bool:
     inputs = np.vstack([alpha * v_g, (1 - alpha) * v_l, rho_g, rho_l, sigma, cos])
     a = np.linspace(1e-9, 1 - 1e-9, grid)
     h = void_fractions(wp.slip, wp.geometry.D).map(grid * len(X))
-    values = np.asarray(h(np.repeat(a, len(X)).reshape(1, -1), *(np.tile(inputs, grid)[k].reshape(1, -1)
-                                                                  for k in range(6)))).reshape(grid, -1)
+    values = np.asarray(
+        h(np.repeat(a, len(X)).reshape(1, -1), *(np.tile(inputs, grid)[k].reshape(1, -1) for k in range(6)))
+    ).reshape(grid, -1)
     return bool(np.any(np.sum(np.diff(np.sign(values), axis=0) != 0, axis=0) > 1))
 
 
 def point_jacobians(system):
     """det(∂ rows of point i / ∂ x_i) for a point i > 0, as a CasADi function of point_rows' arguments."""
-    args = [ca.SX.sym(n, k) for n, k in (('x_i', DIM_X), ('x_prev', DIM_X), ('w_res', 1), ('params', 7),
-                                          ('delta_md', 1), ('cos_incl', 1), ('tvd_frac', 1), ('lift', 1),
-                                          ('lift_prev', 1))]
+    args = [
+        ca.SX.sym(n, k)
+        for n, k in (
+            ('x_i', DIM_X),
+            ('x_prev', DIM_X),
+            ('w_res', 1),
+            ('params', 7),
+            ('delta_md', 1),
+            ('cos_incl', 1),
+            ('tvd_frac', 1),
+            ('lift', 1),
+            ('lift_prev', 1),
+        )
+    ]
     return ca.Function('det', args, [ca.det(ca.jacobian(system.point_rows(*args), args[0]))])
 
 
@@ -555,7 +703,7 @@ def compare_root_sets(wp, bc, system, casadi_roots, rust_roots, rust_rows) -> Co
         w_m = wp.geometry.A * (alpha * rho_g * v_g + (1 - alpha) * rho_l * v_l)
         slope = abs(rr.slope) * max(w_m, 1e-3) / (bc.p_r - bc.p_s)  # dR/dp_0 (kg/s per bar), undoing normalized_slope
         choke_bound = max(ROOT_CHOKE_REL * w_m, ROOT_P0_ULPS * np.finfo(float).eps * bc.p_r * slope)
-        zeroes = (np.max(np.abs(rows[ids != 'CHK-1'])) < ROOT_ROW and abs(rows[ids == 'CHK-1'][0]) <= choke_bound)
+        zeroes = np.max(np.abs(rows[ids != 'CHK-1'])) < ROOT_ROW and abs(rows[ids == 'CHK-1'][0]) <= choke_bound
         c.core_only.append((rr.p_0, bool(zeroes)))
     roots = list(casadi_roots) + list(rust_roots)
     c.several_alpha = any(several_void_fractions(wp, r.x) for r in roots)
@@ -581,8 +729,7 @@ def compare_case(case: Case) -> Comparison:
         rust = SSDFSimulator(wp, backend='rust')
         rs = rust.root_set(bc)
         t2 = time.perf_counter()
-        c = compare_root_sets(wp, bc, casadi.system, casadi_roots, rs.roots,
-                              lambda x: rust._roots.rows(bc, x)[1])
+        c = compare_root_sets(wp, bc, casadi.system, casadi_roots, rs.roots, lambda x: rust._roots.rows(bc, x)[1])
         c.seconds = {'casadi': t1 - t0, 'rust': t2 - t1}
         c.marches, c.counts = rs.search[0].iterations, dict(rust._roots.counts)
     except Exception as e:
@@ -596,11 +743,16 @@ def report(comparisons) -> None:
     several void fractions."""
     for c in comparisons:
         if c.core_only:
-            warnings.warn(f'{c.case}: the core finds roots the CasADi search misses, at p_0 = '
-                          + ', '.join(f'{p:.4f} bar' + ('' if zeroes else ' (not a root of the CasADi rows)')
-                                      for p, zeroes in c.core_only))
+            warnings.warn(
+                f'{c.case}: the core finds roots the CasADi search misses, at p_0 = '
+                + ', '.join(
+                    f'{p:.4f} bar' + ('' if zeroes else ' (not a root of the CasADi rows)') for p, zeroes in c.core_only
+                )
+            )
         if c.several_alpha:
             warnings.warn(f'{c.case}: the slip law has several void fractions at a root; compared on rows only')
         if c.other_branch:
-            warnings.warn(f'{c.case}: roots on another branch of a point\'s rows, compared on rows only: '
-                          + ', '.join(f'{p:.4f} bar (points {pts})' for p, pts in c.other_branch))
+            warnings.warn(
+                f"{c.case}: roots on another branch of a point's rows, compared on rows only: "
+                + ', '.join(f'{p:.4f} bar (points {pts})' for p, pts in c.other_branch)
+            )

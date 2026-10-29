@@ -8,15 +8,15 @@ from manywells.geometry import WellGeometry
 
 def test_well_geometry_invalid_D():
     """WellGeometry rejects non-positive diameter."""
-    with pytest.raises(ValueError, match="diameter"):
+    with pytest.raises(ValueError, match='diameter'):
         WellGeometry.vertical(2000, 100, D=0)
-    with pytest.raises(ValueError, match="diameter"):  # as the Rust core refuses it
+    with pytest.raises(ValueError, match='diameter'):  # as the Rust core refuses it
         WellGeometry.vertical(2000, 100, D=float('nan'))
 
 
 def test_well_geometry_cos_incl_validation():
     """WellGeometry rejects cos_incl outside [0, 1] (TVD decreasing)."""
-    with pytest.raises(ValueError, match="cos_incl"):
+    with pytest.raises(ValueError, match='cos_incl'):
         WellGeometry(md_survey=[0, 100, 200], tvd_survey=[0, 100, 80])
 
 
@@ -41,19 +41,20 @@ def test_from_survey_accepts_vertical_sections_below_the_surface():
         WellGeometry.from_survey(md, md, n_cells=100)
     # A vertical section after a deviated one: kick off at 500 m, 300 m at 30°, then 1500 m vertical
     c = np.cos(np.radians(30))
-    WellGeometry.from_survey([0.0, 500.0, 800.0, 2300.0], [0.0, 500.0, 500.0 + 300.0 * c, 2000.0 + 300.0 * c],
-                             n_cells=100)
+    WellGeometry.from_survey(
+        [0.0, 500.0, 800.0, 2300.0], [0.0, 500.0, 500.0 + 300.0 * c, 2000.0 + 300.0 * c], n_cells=100
+    )
 
 
 def test_from_survey_checks_the_survey():
     """from_survey checks the survey's stations before it interpolates them: np.interp assumes an increasing MD."""
-    with pytest.raises(ValueError, match="strictly increasing"):
+    with pytest.raises(ValueError, match='strictly increasing'):
         WellGeometry.from_survey([0, 2000, 1000], [0, 1900, 1000], 10)  # was a 1000 m well, 950 m deep
-    with pytest.raises(ValueError, match="same length"):
+    with pytest.raises(ValueError, match='same length'):
         WellGeometry.from_survey([0, 1000, 2000], [0, 1000], 10)
-    with pytest.raises(ValueError, match="finite"):
+    with pytest.raises(ValueError, match='finite'):
         WellGeometry.from_survey([0, 1000, np.nan], [0, 1000, 1500], 10)
-    with pytest.raises(ValueError, match="MD must be >= TVD"):
+    with pytest.raises(ValueError, match='MD must be >= TVD'):
         WellGeometry.from_survey([0, 1000, 2000], [0, 1000, 2500], 10)
 
 
@@ -80,17 +81,17 @@ class TestWellGeometry:
 
     def test_md_geq_tvd_validation(self):
         """MD must be >= TVD at every survey station."""
-        with pytest.raises(ValueError, match="MD must be >= TVD"):
+        with pytest.raises(ValueError, match='MD must be >= TVD'):
             WellGeometry(md_survey=[0, 100], tvd_survey=[0, 200])
 
     def test_non_monotonic_md_rejected(self):
         """Non-monotonic MD is rejected."""
-        with pytest.raises(ValueError, match="strictly increasing"):
+        with pytest.raises(ValueError, match='strictly increasing'):
             WellGeometry(md_survey=[0, 100, 50], tvd_survey=[0, 100, 50])
 
     def test_origin_validation(self):
         """Survey must start at (0, 0)."""
-        with pytest.raises(ValueError, match="start at 0"):
+        with pytest.raises(ValueError, match='start at 0'):
             WellGeometry(md_survey=[10, 100], tvd_survey=[10, 100])
 
     def test_frozen(self):
@@ -159,6 +160,14 @@ class TestWellGeometry:
 
 def test_nearest_point_takes_the_deeper_of_two_equally_near():
     geo = WellGeometry.vertical(2000.0, 100)  # Points every 20 m; point 0 at 2000 m
-    assert [geo.nearest_point(md) for md in (2000.0, 1995.0, 1990.0, 1985.0, 1000.0, 1009.0, 1010.0, 0.0)] == \
-        [0, 0, 0, 1, 50, 50, 49, 100]  # 1010 m lies halfway between 1000 and 1020 m
+    assert [geo.nearest_point(md) for md in (2000.0, 1995.0, 1990.0, 1985.0, 1000.0, 1009.0, 1010.0, 0.0)] == [
+        0,
+        0,
+        0,
+        1,
+        50,
+        50,
+        49,
+        100,
+    ]  # 1010 m lies halfway between 1000 and 1020 m
     assert geo.nearest_point(1970.0) == 1  # Between points 1 and 2: the deeper

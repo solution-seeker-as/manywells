@@ -51,7 +51,10 @@ from .spec_parse import ROOT, row_vectors, vector_tables
 def _develop_vectors():
     """specs/tools/make_develop_vectors.py, whose tables' calls are the adapters of the develop vectors."""
     import importlib.util
-    spec = importlib.util.spec_from_file_location('make_develop_vectors', ROOT / 'specs' / 'tools' / 'make_develop_vectors.py')
+
+    spec = importlib.util.spec_from_file_location(
+        'make_develop_vectors', ROOT / 'specs' / 'tools' / 'make_develop_vectors.py'
+    )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -60,8 +63,8 @@ def _develop_vectors():
 DEVELOP = _develop_vectors()
 DEVELOP_ADAPTERS = {t.heading: t.fn for t in DEVELOP.TABLES}
 
-REL, ABS = 1e-12, 1e-15      # component vectors: the same arithmetic, so agreement to rounding
-ROW_REL = 1e-10              # row vectors: relative to the row's size, which is far from zero
+REL, ABS = 1e-12, 1e-15  # component vectors: the same arithmetic, so agreement to rounding
+ROW_REL = 1e-10  # row vectors: relative to the row's size, which is far from zero
 
 
 def num(x):
@@ -92,14 +95,17 @@ ADAPTERS = {
     'SMO-1': lambda x, y, eps: ca_max_approx(x, y, eps),
     'SMO-2': lambda x, y, eps: ca_min_approx(x, y, eps),
     'SMO-3': lambda y1, y2, y3: vec(ca_softmax(ca.DM([y1, y2, y3]))),
-    'CHK-2, CHK-3': lambda K_c, profile, u, p_in, p_out, rho, Phi:
-        choke(SimpsonChokeModel, K_c, profile).choke_equation(u, p_in, p_out, rho, Phi),
+    'CHK-2, CHK-3': lambda K_c, profile, u, p_in, p_out, rho, Phi: choke(
+        SimpsonChokeModel, K_c, profile
+    ).choke_equation(u, p_in, p_out, rho, Phi),
     'CHK-4': lambda gamma: SimpsonChokeModel.critical_pressure_ratio(gamma),
     'CHK-5 (multiplier)': SimpsonChokeModel.simpson_multiplier,
-    'CHK-5 (rate)': lambda K_c, profile, u, p_in, p_out, x_g, rho_g, rho_l:
-        choke(SimpsonChokeModel, K_c, profile).mass_flow_rate(u, p_out, choke_state(p_in, rho_g, rho_l, x_g=x_g), A),
-    'CHK-6': lambda K_c, profile, u, p_in, p_out, rho_m:
-        choke(BernoulliChokeModel, K_c, profile).mass_flow_rate(u, p_out, choke_state(p_in, rho_m=rho_m), A),
+    'CHK-5 (rate)': lambda K_c, profile, u, p_in, p_out, x_g, rho_g, rho_l: choke(
+        SimpsonChokeModel, K_c, profile
+    ).mass_flow_rate(u, p_out, choke_state(p_in, rho_g, rho_l, x_g=x_g), A),
+    'CHK-6': lambda K_c, profile, u, p_in, p_out, rho_m: choke(BernoulliChokeModel, K_c, profile).mass_flow_rate(
+        u, p_out, choke_state(p_in, rho_m=rho_m), A
+    ),
     'CHK-7': lambda u: choke(SimpsonChokeModel, 1.0, 'linear').choke_opening(u),
     'CHK-8': lambda u: choke(SimpsonChokeModel, 1.0, 'sigmoid').choke_opening(u),
     'CHK-9': lambda u: choke(SimpsonChokeModel, 1.0, 'convex').choke_opening(u),
@@ -107,21 +113,27 @@ ADAPTERS = {
     'CHK-12': lambda p_in, p_out: bool(choke(SimpsonChokeModel, 1.0, 'linear').is_choked(p_in, p_out)),
     'INF-1': lambda w_l_max, p, p_r: Vogel(w_l_max).liquid_mass_flow_rate(p, p_r),
     'INF-2': lambda k_l, p, p_r: ProductivityIndex(k_l).liquid_mass_flow_rate(p, p_r),
-    'INF-4': lambda f_g, w_l: v1_fluid(rho_l=850.0, R_s=420.0, cp_g=2225.0, cp_l=2000.0, f_g=f_g).reservoir_gas_rate(w_l),
-    'SLIP-2, SLIP-3': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, D, **_:
-        SlipModel(regime_model='fitted').identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl=1.0),
+    'INF-4': lambda f_g, w_l: v1_fluid(rho_l=850.0, R_s=420.0, cp_g=2225.0, cp_l=2000.0, f_g=f_g).reservoir_gas_rate(
+        w_l
+    ),
+    'SLIP-2, SLIP-3': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, D, **_: SlipModel(
+        regime_model='fitted'
+    ).identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl=1.0),
     'SLIP-4': lambda rho_g, rho_l, sigma, **_: SlipModel.harmathy_rise_velocity(rho_g, rho_l, sigma),
     'SLIP-5': SlipModel.taylor_rise_velocity,
-    'SLIP-6, SLIP-7': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, **_:
-        vec(classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl=1.0)),
-    'SLIP-8': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, **_:  # the fitted classifier does not use D
-        SlipModel(regime_model='fitted').flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, D=0.1, cos_incl=1.0),
+    'SLIP-6, SLIP-7': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, **_: vec(
+        classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl=1.0)
+    ),
+    'SLIP-8': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, **_: (  # the fitted classifier does not use D
+        SlipModel(regime_model='fitted').flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, D=0.1, cos_incl=1.0)
+    ),
     'PVT-GAS-1': lambda p, T, R_s: gas_density(R_s, p * 1e5, T),
     'PVT-GAS-2': lambda R_s: gas_density(R_s),
     'PVT-OIL-2': api_from_density,
     'PVT-OIL-3': dead_oil_surface_tension,
     'PVT-MIX-2, PVT-MIX-3, PVT-MIX-4': lambda rho_o, cp_o, rho_w, cp_w, x_o: (lambda m: (m.rho, m.cp))(
-        liquid_mix(LiquidProperties('oil', rho_o, cp_o), LiquidProperties('water', rho_w, cp_w), x_o)),
+        liquid_mix(LiquidProperties('oil', rho_o, cp_o), LiquidProperties('water', rho_w, cp_w), x_o)
+    ),
 }
 
 NOT_ON_DEVELOP = {
@@ -140,9 +152,14 @@ def marks(key, skips, deviations):
 
 
 def vector_params():
-    return [pytest.param(table, id=f'{table.source}: {table.heading}',
-                         marks=marks(table.heading, NOT_ON_DEVELOP, KNOWN_DEVIATIONS) if table.source == 'v1.0.0' else [])
-            for table in vector_tables()]
+    return [
+        pytest.param(
+            table,
+            id=f'{table.source}: {table.heading}',
+            marks=marks(table.heading, NOT_ON_DEVELOP, KNOWN_DEVIATIONS) if table.source == 'v1.0.0' else [],
+        )
+        for table in vector_tables()
+    ]
 
 
 def check_outputs(table, k, expected, got):
@@ -153,7 +170,9 @@ def check_outputs(table, k, expected, got):
         if isinstance(want, (bool, str)):
             assert value == want, f'row {k}, {name}: {value!r} != {want!r}'
         else:
-            assert math.isclose(num(value), want, rel_tol=REL, abs_tol=ABS), f'row {k}, {name}: {num(value)!r} != {want!r}'
+            assert math.isclose(num(value), want, rel_tol=REL, abs_tol=ABS), (
+                f'row {k}, {name}: {num(value)!r} != {want!r}'
+            )
 
 
 @pytest.mark.parametrize('table', vector_params())
@@ -189,6 +208,7 @@ def _base_well():
 def rust(name, *args, **components):
     """The core's function `name` at args, on the base well with the given components."""
     from manywells.solvers.rust import core_well
+
     out = core_well(replace(_base_well(), **components))._component(name, [float(a) for a in args])
     return out[0] if len(out) == 1 else tuple(out)
 
@@ -204,15 +224,21 @@ def choke_rates(s):
 
 def oil(api, sg_gas, gor=150.0, wlr=0.0, surface_tension_model='liquid', p_bubble=None):
     """Black oil as the develop tables' fluid, with an ideal gas and the 'liquid' surface tension unless given."""
-    return FluidModel(pvt=BlackOil(rho_o=density_from_api(api), rho_g=gas_density_from_sg(sg_gas), gas_law='ideal',
-                                   p_bubble=p_bubble),
-                      gor=gor, wlr=wlr, surface_tension_model=surface_tension_model)
+    return FluidModel(
+        pvt=BlackOil(
+            rho_o=density_from_api(api), rho_g=gas_density_from_sg(sg_gas), gas_law='ideal', p_bubble=p_bubble
+        ),
+        gor=gor,
+        wlr=wlr,
+        surface_tension_model=surface_tension_model,
+    )
 
 
 def dead_fluid(rho_o=DeadOil.rho_o, rho_g=DeadOil.rho_g, gas_law='ideal', **kw):
     """A dead oil, ideal gas and 'liquid' surface tension, as in v1.0.0, with the given gas and FluidModel fields."""
-    return FluidModel(pvt=DeadOil(rho_o=rho_o, rho_g=rho_g, gas_law=gas_law),
-                      **{'surface_tension_model': 'liquid', **kw})
+    return FluidModel(
+        pvt=DeadOil(rho_o=rho_o, rho_g=rho_g, gas_law=gas_law), **{'surface_tension_model': 'liquid', **kw}
+    )
 
 
 def table_fluid(table=None, **kw):
@@ -224,8 +250,11 @@ def table_fluid(table=None, **kw):
 def table_properties(table, p, T, rho_g):
     """PVT-TAB-5 in the core: the oil's and the gas's viscosity and the surface tension, which ignores rho_l."""
     fl = table_fluid(table)
-    return (rust('oil_viscosity', p, T, fluid=fl), rust('fluid_gas_viscosity', p, T, rho_g, fluid=fl),
-            rust('surface_tension', p, T, 0.0, fluid=fl))
+    return (
+        rust('oil_viscosity', p, T, fluid=fl),
+        rust('fluid_gas_viscosity', p, T, rho_g, fluid=fl),
+        rust('surface_tension', p, T, 0.0, fluid=fl),
+    )
 
 
 def papay_fluid(**kw):
@@ -234,15 +263,36 @@ def papay_fluid(**kw):
 
 
 def thermal(**on):
-    return ThermalModel(**{'h': 0.0, 'frictional_heating': False, 'gravity_term': False, 'lift_gas_mixing': False,
-                           'joule_thomson': False, **on})
+    return ThermalModel(
+        **{
+            'h': 0.0,
+            'frictional_heating': False,
+            'gravity_term': False,
+            'lift_gas_mixing': False,
+            'joule_thomson': False,
+            **on,
+        }
+    )
 
 
 def thermal_term(alpha, rho_g, v_g, rho_l, v_l, F, cos_incl, cp_g, cp_l, **on):
     """The temperature gradient with h = 0 and one term on, as make_develop_vectors.thermal_term."""
-    return rust('temperature_gradient', 100.0, v_g, v_l, alpha, rho_g, rho_l, 350.0, 350.0, F, cos_incl,
-                fluid=dead_fluid(cp_g=cp_g, cp_o=cp_l), thermal=thermal(**on),
-                geometry=WellGeometry.vertical(length=1000.0, n_cells=10, D=0.1))
+    return rust(
+        'temperature_gradient',
+        100.0,
+        v_g,
+        v_l,
+        alpha,
+        rho_g,
+        rho_l,
+        350.0,
+        350.0,
+        F,
+        cos_incl,
+        fluid=dead_fluid(cp_g=cp_g, cp_o=cp_l),
+        thermal=thermal(**on),
+        geometry=WellGeometry.vertical(length=1000.0, n_cells=10, D=0.1),
+    )
 
 
 RUST_ADAPTERS = {
@@ -250,16 +300,27 @@ RUST_ADAPTERS = {
     'SMO-1': lambda x, y, eps: rust('max_approx', x, y, eps),
     'SMO-2': lambda x, y, eps: rust('min_approx', x, y, eps),
     'SMO-3': lambda y1, y2, y3: rust('softmax', y1, y2, y3),
-    'CHK-2, CHK-3': lambda K_c, profile, u, p_in, p_out, rho, Phi:
-        rust('choke_equation', u, p_in, p_out, rho, Phi, **v1_choke(SimpsonChokeModel, K_c, profile)),
+    'CHK-2, CHK-3': lambda K_c, profile, u, p_in, p_out, rho, Phi: rust(
+        'choke_equation', u, p_in, p_out, rho, Phi, **v1_choke(SimpsonChokeModel, K_c, profile)
+    ),
     'CHK-4': lambda gamma: rust('critical_pressure_ratio', gamma),
     'CHK-5 (multiplier)': lambda x_g, rho_g, rho_l: rust('simpson_multiplier', x_g, rho_g, rho_l),
-    'CHK-5 (rate)': lambda K_c, profile, u, p_in, p_out, x_g, rho_g, rho_l:
-        rust('choke_rate', u, p_in, p_out, *choke_rates(choke_state(p_in, rho_g, rho_l, x_g=x_g)),
-             **v1_choke(SimpsonChokeModel, K_c, profile)),
-    'CHK-6': lambda K_c, profile, u, p_in, p_out, rho_m:
-        rust('choke_rate', u, p_in, p_out, *choke_rates(choke_state(p_in, rho_m=rho_m)),
-             **v1_choke(BernoulliChokeModel, K_c, profile)),
+    'CHK-5 (rate)': lambda K_c, profile, u, p_in, p_out, x_g, rho_g, rho_l: rust(
+        'choke_rate',
+        u,
+        p_in,
+        p_out,
+        *choke_rates(choke_state(p_in, rho_g, rho_l, x_g=x_g)),
+        **v1_choke(SimpsonChokeModel, K_c, profile),
+    ),
+    'CHK-6': lambda K_c, profile, u, p_in, p_out, rho_m: rust(
+        'choke_rate',
+        u,
+        p_in,
+        p_out,
+        *choke_rates(choke_state(p_in, rho_m=rho_m)),
+        **v1_choke(BernoulliChokeModel, K_c, profile),
+    ),
     'CHK-7': lambda u: rust('choke_opening', u, **v1_choke(SimpsonChokeModel, 1.0, 'linear')),
     'CHK-8': lambda u: rust('choke_opening', u, **v1_choke(SimpsonChokeModel, 1.0, 'sigmoid')),
     'CHK-9': lambda u: rust('choke_opening', u, **v1_choke(SimpsonChokeModel, 1.0, 'convex')),
@@ -267,105 +328,219 @@ RUST_ADAPTERS = {
     'CHK-12': lambda p_in, p_out: bool(rust('is_choked', p_in, p_out)),
     'INF-1': lambda w_l_max, p, p_r: rust('liquid_rate', p, p_r, inflow=Vogel(w_l_max)),
     'INF-2': lambda k_l, p, p_r: rust('liquid_rate', p, p_r, inflow=ProductivityIndex(k_l)),
-    'INF-4': lambda f_g, w_l: rust('reservoir_gas_rate', w_l,
-                                   fluid=v1_fluid(rho_l=850.0, R_s=420.0, cp_g=2225.0, cp_l=2000.0, f_g=f_g)),
-    'SLIP-2, SLIP-3': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, D, **_:
-        rust('slip_parameters', v_g, v_l, alpha, rho_g, rho_l, sigma, D, 1.0),
+    'INF-4': lambda f_g, w_l: rust(
+        'reservoir_gas_rate', w_l, fluid=v1_fluid(rho_l=850.0, R_s=420.0, cp_g=2225.0, cp_l=2000.0, f_g=f_g)
+    ),
+    'SLIP-2, SLIP-3': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, D, **_: rust(
+        'slip_parameters', v_g, v_l, alpha, rho_g, rho_l, sigma, D, 1.0
+    ),
     'SLIP-4': lambda rho_g, rho_l, sigma, **_: rust('harmathy_rise_velocity', rho_g, rho_l, sigma),
     'SLIP-5': lambda rho_g, rho_l, D: rust('taylor_rise_velocity', rho_g, rho_l, D),
-    'SLIP-6, SLIP-7': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, **_:
-        rust('regime_probabilities', v_g, v_l, alpha, rho_g, rho_l, sigma, 1.0),
-    'SLIP-8': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, **_:
-        REGIMES[int(rust('regime', v_g, v_l, alpha, rho_g, rho_l, sigma, 1.0))],
+    'SLIP-6, SLIP-7': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, **_: rust(
+        'regime_probabilities', v_g, v_l, alpha, rho_g, rho_l, sigma, 1.0
+    ),
+    'SLIP-8': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, **_: REGIMES[
+        int(rust('regime', v_g, v_l, alpha, rho_g, rho_l, sigma, 1.0))
+    ],
     'PVT-GAS-1': lambda p, T, R_s: rust('ideal_gas_density', p, T, R_s),
     'PVT-OIL-2': lambda rho: rust('api_from_density', rho),
     'PVT-OIL-3': lambda rho, T: rust('dead_oil_surface_tension', rho, T),
     # develop tables
-    'INF-9': lambda L, n_cells, exponent, z_inj:
-        rust('injection_point', geometry=DEVELOP.injection_grid(L, n_cells, exponent), injection_md=z_inj),
-    'INF-9 (phase rates)': lambda k, i, p, T, w_res, w_lg:
-        rust('point_phase_rates', i, p, T, w_res, w_lg, **{c: getattr(DEVELOP.injection_well(int(k)), c)
-                                                              for c in ('geometry', 'fluid', 'injection_md')}),
-    'THM-9': lambda T_tilde, w_g, w_l, w_lg, T_lg, cp_g, cp_l:
-        rust('injection_temperature', T_tilde, w_g, w_l, w_lg, T_lg,
-             fluid=v1_fluid(rho_l=850.0, R_s=420.0, cp_g=cp_g, cp_l=cp_l, f_g=0.1)),
-    'DISC-12': lambda T_prev, p, v_g, v_l, alpha, rho_g, rho_l, T, w_res, w_lg, T_lg:
-        rust('energy_row', 5, T_prev, p, v_g, v_l, alpha, rho_g, rho_l, T, w_res, DEVELOP.DISC12_T_R,
-             DEVELOP.DISC12_T_S, T_lg, w_lg, **DEVELOP.DISC12_COMPONENTS),
+    'INF-9': lambda L, n_cells, exponent, z_inj: rust(
+        'injection_point', geometry=DEVELOP.injection_grid(L, n_cells, exponent), injection_md=z_inj
+    ),
+    'INF-9 (phase rates)': lambda k, i, p, T, w_res, w_lg: rust(
+        'point_phase_rates',
+        i,
+        p,
+        T,
+        w_res,
+        w_lg,
+        **{c: getattr(DEVELOP.injection_well(int(k)), c) for c in ('geometry', 'fluid', 'injection_md')},
+    ),
+    'THM-9': lambda T_tilde, w_g, w_l, w_lg, T_lg, cp_g, cp_l: rust(
+        'injection_temperature',
+        T_tilde,
+        w_g,
+        w_l,
+        w_lg,
+        T_lg,
+        fluid=v1_fluid(rho_l=850.0, R_s=420.0, cp_g=cp_g, cp_l=cp_l, f_g=0.1),
+    ),
+    'DISC-12': lambda T_prev, p, v_g, v_l, alpha, rho_g, rho_l, T, w_res, w_lg, T_lg: rust(
+        'energy_row',
+        5,
+        T_prev,
+        p,
+        v_g,
+        v_l,
+        alpha,
+        rho_g,
+        rho_l,
+        T,
+        w_res,
+        DEVELOP.DISC12_T_R,
+        DEVELOP.DISC12_T_S,
+        T_lg,
+        w_lg,
+        **DEVELOP.DISC12_COMPONENTS,
+    ),
     'THM-4': lambda tvd_frac, T_r, T_s: rust('ambient_temperature', tvd_frac, T_r, T_s),
-    'THM-5': lambda w_res, w_lg, T_r, T_lg, f_g, cp_g, cp_l:
-        rust('inflow_temperature', w_res, w_lg, T_r, T_lg, thermal=thermal(lift_gas_mixing=True),
-             fluid=v1_fluid(rho_l=850.0, R_s=420.0, cp_g=cp_g, cp_l=cp_l, f_g=f_g)),
+    'THM-5': lambda w_res, w_lg, T_r, T_lg, f_g, cp_g, cp_l: rust(
+        'inflow_temperature',
+        w_res,
+        w_lg,
+        T_r,
+        T_lg,
+        thermal=thermal(lift_gas_mixing=True),
+        fluid=v1_fluid(rho_l=850.0, R_s=420.0, cp_g=cp_g, cp_l=cp_l, f_g=f_g),
+    ),
     'THM-6': lambda F, **kw: thermal_term(F=F, cos_incl=1.0, frictional_heating=True, **kw),
     'THM-7': lambda cos_incl, **kw: -thermal_term(F=0.0, cos_incl=cos_incl, gravity_term=True, **kw),
-    'THM-8': lambda alpha, rho_g, v_g, rho_l, v_l, F, cos_incl, T, sg_gas, cp_g, cp_l: -rust(
-        'temperature_gradient', 100.0, v_g, v_l, alpha, rho_g, rho_l, T, T, F, cos_incl,
-        fluid=dead_fluid(rho_g=gas_density_from_sg(sg_gas), gas_law='dak', cp_g=cp_g, cp_o=cp_l),
-        thermal=thermal(joule_thomson=True), geometry=WellGeometry.vertical(length=1000.0, n_cells=10, D=0.1)),
-    'SLIP-10, SLIP-11': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl:
-        rust('slip_parameters', v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl),
-    'SLIP-11 (classifier)': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl:
-        rust('regime_probabilities', v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl),
-    'SLIP-12': lambda v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl:
-        rust('hasan_rule_quantities', v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl, slip=SlipModel()),
-    'SLIP-13, SLIP-14': lambda v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl:
-        rust('hasan_probabilities', v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl, slip=SlipModel()),
-    'SLIP-15, SLIP-16': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl:
+    'THM-8': lambda alpha, rho_g, v_g, rho_l, v_l, F, cos_incl, T, sg_gas, cp_g, cp_l: (
+        -rust(
+            'temperature_gradient',
+            100.0,
+            v_g,
+            v_l,
+            alpha,
+            rho_g,
+            rho_l,
+            T,
+            T,
+            F,
+            cos_incl,
+            fluid=dead_fluid(rho_g=gas_density_from_sg(sg_gas), gas_law='dak', cp_g=cp_g, cp_o=cp_l),
+            thermal=thermal(joule_thomson=True),
+            geometry=WellGeometry.vertical(length=1000.0, n_cells=10, D=0.1),
+        )
+    ),
+    'SLIP-10, SLIP-11': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl: rust(
+        'slip_parameters', v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl
+    ),
+    'SLIP-11 (classifier)': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl: rust(
+        'regime_probabilities', v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl
+    ),
+    'SLIP-12': lambda v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl: rust(
+        'hasan_rule_quantities', v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl, slip=SlipModel()
+    ),
+    'SLIP-13, SLIP-14': lambda v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl: rust(
+        'hasan_probabilities', v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl, slip=SlipModel()
+    ),
+    'SLIP-15, SLIP-16': lambda v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl: (
         rust('slip_parameters', v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl, slip=SlipModel())
-        + (HASAN_REGIMES[int(rust('regime', v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl, slip=SlipModel(),
-                                  geometry=WellGeometry.vertical(length=1000.0, n_cells=10, D=D)))],),
-    'SLIP-18': lambda profile_scale, v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl:
-        rust('slip_parameters', v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl,
-             slip=SlipModel(profile_scale=profile_scale)),
-    'SLIP-18 (fitted)': lambda profile_scale, v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl:
-        rust('slip_parameters', v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl,
-             slip=SlipModel(regime_model='fitted', profile_scale=profile_scale)),
-    'FRIC-3': lambda p, T, alpha, v_g, v_l, rho_g, rho_l, D, roughness:
-        rust('friction', p, v_g, v_l, alpha, rho_g, rho_l, T, fluid=FluidModel(pvt=BlackOil(gas_law='ideal'),
-                                                                                surface_tension_model='liquid'),
-             friction=RoughnessFriction(roughness=roughness), geometry=WellGeometry.vertical(1000.0, 10, D=D)),
+        + (
+            HASAN_REGIMES[
+                int(
+                    rust(
+                        'regime',
+                        v_g,
+                        v_l,
+                        alpha,
+                        rho_g,
+                        rho_l,
+                        sigma,
+                        cos_incl,
+                        slip=SlipModel(),
+                        geometry=WellGeometry.vertical(length=1000.0, n_cells=10, D=D),
+                    )
+                )
+            ],
+        )
+    ),
+    'SLIP-18': lambda profile_scale, v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl: rust(
+        'slip_parameters',
+        v_g,
+        v_l,
+        alpha,
+        rho_g,
+        rho_l,
+        sigma,
+        D,
+        cos_incl,
+        slip=SlipModel(profile_scale=profile_scale),
+    ),
+    'SLIP-18 (fitted)': lambda profile_scale, v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl: rust(
+        'slip_parameters',
+        v_g,
+        v_l,
+        alpha,
+        rho_g,
+        rho_l,
+        sigma,
+        D,
+        cos_incl,
+        slip=SlipModel(regime_model='fitted', profile_scale=profile_scale),
+    ),
+    'FRIC-3': lambda p, T, alpha, v_g, v_l, rho_g, rho_l, D, roughness: rust(
+        'friction',
+        p,
+        v_g,
+        v_l,
+        alpha,
+        rho_g,
+        rho_l,
+        T,
+        fluid=FluidModel(pvt=BlackOil(gas_law='ideal'), surface_tension_model='liquid'),
+        friction=RoughnessFriction(roughness=roughness),
+        geometry=WellGeometry.vertical(1000.0, 10, D=D),
+    ),
     'FRIC-4': lambda Re, eps_D: rust('chen_friction_factor', Re, eps_D),
     'FRIC-5': lambda Re, eps_D: rust('haaland_friction_factor', Re, eps_D),
     'FRIC-6': lambda Re, eps_D: rust('friction_factor_of_re', Re, eps_D, friction=RoughnessFriction()),
     'PVT-GAS-3': lambda p, T, rho_g_sc: rust('gas_density', p, T, fluid=papay_fluid(rho_g=rho_g_sc)),
     'PVT-GAS-4, PVT-GAS-5': lambda p, T, sg_gas: (
-        rust('sutton_pseudo_critical', sg_gas)[0] / CF_BAR, rust('sutton_pseudo_critical', sg_gas)[1],
-        rust('z_factor', p, T, fluid=papay_fluid(rho_g=gas_density_from_sg(sg_gas)))),
+        rust('sutton_pseudo_critical', sg_gas)[0] / CF_BAR,
+        rust('sutton_pseudo_critical', sg_gas)[1],
+        rust('z_factor', p, T, fluid=papay_fluid(rho_g=gas_density_from_sg(sg_gas))),
+    ),
     'PVT-GAS-9': lambda r, t: rust('dak_z_factor', r, t),
     'PVT-GAS-10': lambda r, t: rust('dak_jt_factor', r, t),
-    'PVT-GAS-11': lambda p, T, rho_g_sc: (rust('gas_density', p, T, fluid=dead_fluid(rho_g=rho_g_sc, gas_law='dak')),
-                                          rust('z_factor', p, T, fluid=dead_fluid(rho_g=rho_g_sc, gas_law='dak'))),
+    'PVT-GAS-11': lambda p, T, rho_g_sc: (
+        rust('gas_density', p, T, fluid=dead_fluid(rho_g=rho_g_sc, gas_law='dak')),
+        rust('z_factor', p, T, fluid=dead_fluid(rho_g=rho_g_sc, gas_law='dak')),
+    ),
     'PVT-GAS-6': lambda rho_g_sc: rust('gas_parameters', fluid=dead_fluid(rho_g=rho_g_sc)),
     'PVT-GAS-7': lambda T, rho_g, M_g: rust('gas_viscosity', T, rho_g, M_g),
     'PVT-OIL-5': lambda api, sg_gas, p_sep, T_sep: rust('separator_gravity', api, sg_gas, p_sep, T_sep),
     'PVT-OIL-6, PVT-OIL-8': lambda api, sg_gas, p, T: rust('black_oil', p, T, fluid=oil(api, sg_gas)),
-    'PVT-OIL-7': lambda api, sg_gas, p_bubble, p, T: rust('black_oil', p, T, fluid=oil(api, sg_gas, p_bubble=p_bubble))[0],
+    'PVT-OIL-7': lambda api, sg_gas, p_bubble, p, T: rust('black_oil', p, T, fluid=oil(api, sg_gas, p_bubble=p_bubble))[
+        0
+    ],
     'PVT-OIL-9': lambda api, sg_gas, p, T: rust('liquid_density', p, T, fluid=oil(api, sg_gas)),
     'PVT-OIL-10': lambda api, T: rust('dead_oil_viscosity', api, T),
     'PVT-OIL-11': lambda mu_od, R_so_scf: rust('live_oil_viscosity', mu_od, R_so_scf),
     'PVT-OIL-12': lambda sigma_od, R_so_scf: rust('live_oil_surface_tension', sigma_od, R_so_scf),
-    'PVT-OIL-13': lambda api, sg_gas, gor, wlr, p, T, w_res, w_lg:
-        rust('phase_rates', p, T, w_res, w_lg, fluid=oil(api, sg_gas, gor, wlr)),
-    'PVT-OIL-15': lambda api, sg_gas, gor, p, T: (rust('rs', p, T, fluid=oil(api, sg_gas, gor)),
-                                                  rust('bo', p, T, fluid=oil(api, sg_gas, gor))),
+    'PVT-OIL-13': lambda api, sg_gas, gor, wlr, p, T, w_res, w_lg: rust(
+        'phase_rates', p, T, w_res, w_lg, fluid=oil(api, sg_gas, gor, wlr)
+    ),
+    'PVT-OIL-15': lambda api, sg_gas, gor, p, T: (
+        rust('rs', p, T, fluid=oil(api, sg_gas, gor)),
+        rust('bo', p, T, fluid=oil(api, sg_gas, gor)),
+    ),
     'PVT-WAT-3': lambda T: rust('water_viscosity', T),
     'PVT-TAB-2': lambda p, T: rust('table_columns', p, T, fluid=table_fluid()),
     'PVT-TAB-2 (one temperature)': lambda p, T: rust('table_columns', p, T, fluid=table_fluid(DEVELOP.TAB_350)),
     'PVT-TAB-3': lambda gor, wlr, p, T, w_res, w_lg: (
         *rust('phase_rates', p, T, w_res, w_lg, fluid=table_fluid(gor=gor, wlr=wlr)),
-        rust('liquid_density', p, T, fluid=table_fluid(gor=gor, wlr=wlr))),
-    'PVT-TAB-4': lambda p, T, rho_g: (rust('z_factor', p, T, fluid=table_fluid()),
-                                      rust('gas_law_row', p, T, rho_g, fluid=table_fluid())),
+        rust('liquid_density', p, T, fluid=table_fluid(gor=gor, wlr=wlr)),
+    ),
+    'PVT-TAB-4': lambda p, T, rho_g: (
+        rust('z_factor', p, T, fluid=table_fluid()),
+        rust('gas_law_row', p, T, rho_g, fluid=table_fluid()),
+    ),
     'PVT-TAB-5': lambda p, T, rho_g: table_properties(DEVELOP.TAB, p, T, rho_g),
     'PVT-TAB-5 (correlations)': lambda p, T, rho_g: table_properties(DEVELOP.TAB_350, p, T, rho_g),
     'PVT-MIX-6': lambda api, sg_gas, gor, wlr, p, T: rust('liquid_density', p, T, fluid=oil(api, sg_gas, gor, wlr)),
-    'PVT-MIX-7': lambda api, sg_gas, p, T, rho_l:
-        rust('surface_tension', p, T, rho_l, fluid=oil(api, sg_gas, surface_tension_model='oil')),
+    'PVT-MIX-7': lambda api, sg_gas, p, T, rho_l: rust(
+        'surface_tension', p, T, rho_l, fluid=oil(api, sg_gas, surface_tension_model='oil')
+    ),
     'PVT-MIX-8': lambda api, sg_gas, wlr, p, T: rust('liquid_viscosity', p, T, fluid=oil(api, sg_gas, wlr=wlr)),
     'PVT-MIX-9': lambda mu_l, mu_g, alpha, rho_l, rho_g: rust('mixture_viscosity', mu_l, mu_g, alpha, rho_l, rho_g),
-    'PVT-MIX-10': lambda rho_o, rho_g_sc, rho_w, gor, wlr, cp_o, cp_w:
-        rust('fluid_parameters', fluid=dead_fluid(rho_o=rho_o, rho_g=rho_g_sc, rho_w=rho_w, gor=gor, wlr=wlr,
-                                                  cp_o=cp_o, cp_w=cp_w)),
+    'PVT-MIX-10': lambda rho_o, rho_g_sc, rho_w, gor, wlr, cp_o, cp_w: rust(
+        'fluid_parameters',
+        fluid=dead_fluid(rho_o=rho_o, rho_g=rho_g_sc, rho_w=rho_w, gor=gor, wlr=wlr, cp_o=cp_o, cp_w=cp_w),
+    ),
 }
 
 # Equations no row of the system uses: the sampler's liquid mixing, conversions between the inputs, and water's
@@ -377,9 +552,13 @@ RUST_NOT_IN_CORE = {
     'INF-3': NOT_ON_DEVELOP['INF-3'],
 }
 
+
 def rust_vector_params():
-    return [pytest.param(table, id=f'{table.source}: {table.heading}') for table in vector_tables()
-            if table.heading not in RUST_NOT_IN_CORE]
+    return [
+        pytest.param(table, id=f'{table.source}: {table.heading}')
+        for table in vector_tables()
+        if table.heading not in RUST_NOT_IN_CORE
+    ]
 
 
 @pytest.mark.parametrize('table', rust_vector_params())
@@ -391,14 +570,20 @@ def test_rust_component_vectors(table):
 def test_every_table_has_a_rust_adapter():
     headings = {t.heading for t in vector_tables()}
     assert not set(RUST_ADAPTERS) & set(RUST_NOT_IN_CORE)
-    assert headings == set(RUST_ADAPTERS) | set(RUST_NOT_IN_CORE), headings ^ (set(RUST_ADAPTERS) | set(RUST_NOT_IN_CORE))
+    assert headings == set(RUST_ADAPTERS) | set(RUST_NOT_IN_CORE), headings ^ (
+        set(RUST_ADAPTERS) | set(RUST_NOT_IN_CORE)
+    )
 
 
 # Row vectors (specs/model/discretization.md), on develop's v1.0.0 configuration. develop's rows that generalize
 # v1.0.0's carry their own IDs (DISC-11); in this configuration they are v1.0.0's rows as functions of the state.
 
-ROW_IDS = {'first': ['INF-6', 'INF-7', 'THM-3'], 'cell': ['DISC-2', 'DISC-3', 'DISC-4', 'DISC-5'],
-           'last': ['CHK-1'], 'closure': ['SLIP-1', 'PVT-GAS-1', 'PVT-MIX-1']}
+ROW_IDS = {
+    'first': ['INF-6', 'INF-7', 'THM-3'],
+    'cell': ['DISC-2', 'DISC-3', 'DISC-4', 'DISC-5'],
+    'last': ['CHK-1'],
+    'closure': ['SLIP-1', 'PVT-GAS-1', 'PVT-MIX-1'],
+}
 
 DEVELOP_ROW = {'DISC-2': 'DISC-7', 'DISC-3': 'DISC-8', 'DISC-4': 'DISC-9', 'DISC-5': 'DISC-10'}
 
@@ -411,9 +596,20 @@ def v1_inputs(w):
     """develop's inputs in the v1.0.0 configuration for a well of v1_rows.json."""
     inflow = Vogel(w['w_l_max']) if w['inflow'] == 'vogel' else ProductivityIndex(w['k_l'])
     model = SimpsonChokeModel if w['choke'] == 'simpson' else BernoulliChokeModel
-    wp = v1_well(L=w['L'], D=w['D'], rho_l=w['rho_l'], R_s=w['R_s'], cp_g=w['cp_g'], cp_l=w['cp_l'], f_D=w['f_D'],
-                 h=w['h'], f_g=w['f_g'], inflow=inflow, choke=model(K_c=w['K_c'], chk_profile=w['profile']),
-                 n_cells=w['n_cells'])
+    wp = v1_well(
+        L=w['L'],
+        D=w['D'],
+        rho_l=w['rho_l'],
+        R_s=w['R_s'],
+        cp_g=w['cp_g'],
+        cp_l=w['cp_l'],
+        f_D=w['f_D'],
+        h=w['h'],
+        f_g=w['f_g'],
+        inflow=inflow,
+        choke=model(K_c=w['K_c'], chk_profile=w['profile']),
+        n_cells=w['n_cells'],
+    )
     bc = BoundaryConditions(p_r=w['p_r'], p_s=w['p_s'], T_r=w['T_r'], T_s=w['T_s'], u=w['u'], w_lg=w['w_lg'])
     return wp, bc
 
@@ -428,6 +624,7 @@ def v1_case(w):
 def rust_rows(w, X):
     """The Rust core's rows at every point, as {ID: [value per point]}, with develop's IDs (DISC-11)."""
     from manywells.solvers.rust import RustRootFinder
+
     wp, bc = v1_inputs(w)
     ids, values = RustRootFinder(wp).rows(bc, X)
     out = {}
@@ -452,9 +649,16 @@ def row_params():
         for point in well['rows']:
             for eq_id, value in point:
                 expected.setdefault(eq_id, []).append(value)
-        params += [pytest.param(well, eq_id, values, id=f'{well["name"]} {eq_id}',
-                                marks=marks(eq_id, ROWS_NOT_COMPARABLE, ROW_DEVIATIONS))
-                   for eq_id, values in expected.items()]
+        params += [
+            pytest.param(
+                well,
+                eq_id,
+                values,
+                id=f'{well["name"]} {eq_id}',
+                marks=marks(eq_id, ROWS_NOT_COMPARABLE, ROW_DEVIATIONS),
+            )
+            for eq_id, values in expected.items()
+        ]
     return params
 
 
@@ -475,6 +679,7 @@ def test_rust_rows_follow_the_v1_row_order():
     """In the v1.0.0 configuration, the Rust core's rows are v1.0.0's, point by point in DISC-6's order, with the IDs
     of the CasADi system (DISC-11)."""
     from manywells.solvers.rust import RustRootFinder
+
     for well in row_vectors()['wells']:
         wp, bc = v1_inputs(well['params'])
         ids, _ = RustRootFinder(wp).rows(bc, np.array(well['x']))

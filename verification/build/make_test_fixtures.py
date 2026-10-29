@@ -67,8 +67,11 @@ def main():
 
     # First well that fails the two-root criterion p_r - p_s < rho_l g L / 1e5
     one_root = int(df.loc[df['bc.p_r'] - df['bc.p_s'] >= df['wp.rho_l'] * 9.81 * df['wp.L'] / 1e5, 'ID'].iloc[0])
-    specs = [('sol1-977', 977, None, 100, ''), ('sol1-one-root', one_root, None, 100, ''),
-             ('sol1-977-past-fold', 977, FOLD_P_R, 100, '')]
+    specs = [
+        ('sol1-977', 977, None, 100, ''),
+        ('sol1-one-root', one_root, None, 100, ''),
+        ('sol1-977-past-fold', 977, FOLD_P_R, 100, ''),
+    ]
     specs += [(f'conv-one-root-N{n}', one_root, None, n, 'conv-one-root') for n in (50, 100, 200)]
 
     meta, arrays = [], {}
@@ -77,15 +80,24 @@ def main():
         if p_r is not None:
             well.bc.p_r = p_r
         roots = roots_of(well.wp, well.bc, n_cells)
-        entry = {'case_id': case_id, 'config_id': well_id, 'n_cells': n_cells, 'group': group,
-                 'params': params_of(well.wp, well.bc), 'variant': variant_of(well.wp), 'roots': []}
+        entry = {
+            'case_id': case_id,
+            'config_id': well_id,
+            'n_cells': n_cells,
+            'group': group,
+            'params': params_of(well.wp, well.bc),
+            'variant': variant_of(well.wp),
+            'roots': [],
+        }
         for k, root in enumerate(roots):
             key = f'{case_id}.root{k}'
             arrays[key] = root['x']
             entry['roots'].append({'key': key, 'label': root['label'], 'v1_slope': root['v1_slope']})
         meta.append(entry)
-        print(f'{case_id}: {len(roots)} roots, ' + ', '.join(f'p0 {arrays[r["key"]][0]:.3f} {r["label"]}'
-                                                            for r in entry['roots']))
+        print(
+            f'{case_id}: {len(roots)} roots, '
+            + ', '.join(f'p0 {arrays[r["key"]][0]:.3f} {r["label"]}' for r in entry['roots'])
+        )
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(OUT, meta=np.array(json.dumps(meta)), **arrays)

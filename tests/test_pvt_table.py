@@ -54,8 +54,11 @@ def table_kwargs(p=P4, T=T3, optional=True, gor=100.0, rho_o=850.0, rho_g=0.9):
     R_so = 100.0 * np.minimum(P / 200.0, 1.0) ** 0.8 * (1 + (TT - 350.0) / 1000.0)
     columns = dict(R_so=R_so, B_o=1 + 0.0025 * R_so + 2e-4 * (TT - 300.0), Z=1 - 0.3 * P / 300.0 * 350.0 / TT)
     if optional:
-        columns.update(mu_o=3e-3 * np.exp(-(TT - 300.0) / 50.0) / (1 + R_so / 100.0), mu_g=1.2e-5 + 3e-8 * P,
-                       sigma=0.025 * np.exp(-P / 150.0))
+        columns.update(
+            mu_o=3e-3 * np.exp(-(TT - 300.0) / 50.0) / (1 + R_so / 100.0),
+            mu_g=1.2e-5 + 3e-8 * P,
+            sigma=0.025 * np.exp(-P / 150.0),
+        )
     return dict(p=p, T=T, rho_o=rho_o, rho_g=rho_g, gor=gor, **columns)
 
 
@@ -66,8 +69,10 @@ def small(**kw):
 def tabulate(pvt, p, T, gor):
     """A PVT model's R_so, B_o and Z at the nodes of a grid, as a table."""
     P, TT = np.meshgrid(p, T, indexing='ij')
-    columns = {name: np.vectorize(lambda a, b, f=f: num(f(a, b)))(P, TT)
-               for name, f in (('R_so', pvt.rs), ('B_o', pvt.bo), ('Z', pvt.z_factor))}
+    columns = {
+        name: np.vectorize(lambda a, b, f=f: num(f(a, b)))(P, TT)
+        for name, f in (('R_so', pvt.rs), ('B_o', pvt.bo), ('Z', pvt.z_factor))
+    }
     return PVTTable(p=p, T=T, rho_o=pvt.rho_o, rho_g=pvt.rho_g, gor=gor, **columns)
 
 
@@ -95,26 +100,40 @@ def node(kw, column, value, j=1, k=1):
 # PVT-TAB-1: the checks
 # ---------------------------------------------------------------------------
 
-class TestChecks:
 
-    @pytest.mark.parametrize('change', [
-        pytest.param(lambda kw: {**kw, 'p': kw['p'][:1], 'R_so': kw['R_so'][:1], 'B_o': kw['B_o'][:1],
-                                 'Z': kw['Z'][:1], 'mu_o': None, 'mu_g': None, 'sigma': None}, id='one pressure'),
-        pytest.param(lambda kw: {**kw, 'p': (10.0, 10.0, 200.0, 300.0)}, id='p not increasing'),
-        pytest.param(lambda kw: {**kw, 'p': (-10.0, 100.0, 200.0, 300.0)}, id='p not positive'),
-        pytest.param(lambda kw: {**kw, 'T': (300.0, 290.0, 400.0)}, id='T not increasing'),
-        pytest.param(lambda kw: node(kw, 'Z', np.nan), id='not finite'),
-        pytest.param(lambda kw: node(kw, 'B_o', 0.0), id='B_o not positive'),
-        pytest.param(lambda kw: node(kw, 'Z', -0.1), id='Z not positive'),
-        pytest.param(lambda kw: node(kw, 'mu_g', 0.0), id='mu_g not positive'),
-        pytest.param(lambda kw: node(kw, 'R_so', 1000.0), id='R_so falls as p rises'),
-        pytest.param(lambda kw: {**node(kw, 'R_so', -1.0, j=0), 'mu_o': None}, id='R_so below 0 without mu_o'),
-        pytest.param(lambda kw: {**node(kw, 'R_so', -1.0, j=0), 'sigma': None}, id='R_so below 0 without sigma'),
-        pytest.param(lambda kw: {**kw, 'Z': np.ones((4, 2))}, id='a column of the wrong shape'),
-        pytest.param(lambda kw: {**kw, 'Z': None}, id='a column missing'),
-        pytest.param(lambda kw: {**kw, 'gor': -5.0}, id='gor negative'),
-        pytest.param(lambda kw: {**kw, 'rho_g': 0.0}, id='rho_g not positive'),
-    ])
+class TestChecks:
+    @pytest.mark.parametrize(
+        'change',
+        [
+            pytest.param(
+                lambda kw: {
+                    **kw,
+                    'p': kw['p'][:1],
+                    'R_so': kw['R_so'][:1],
+                    'B_o': kw['B_o'][:1],
+                    'Z': kw['Z'][:1],
+                    'mu_o': None,
+                    'mu_g': None,
+                    'sigma': None,
+                },
+                id='one pressure',
+            ),
+            pytest.param(lambda kw: {**kw, 'p': (10.0, 10.0, 200.0, 300.0)}, id='p not increasing'),
+            pytest.param(lambda kw: {**kw, 'p': (-10.0, 100.0, 200.0, 300.0)}, id='p not positive'),
+            pytest.param(lambda kw: {**kw, 'T': (300.0, 290.0, 400.0)}, id='T not increasing'),
+            pytest.param(lambda kw: node(kw, 'Z', np.nan), id='not finite'),
+            pytest.param(lambda kw: node(kw, 'B_o', 0.0), id='B_o not positive'),
+            pytest.param(lambda kw: node(kw, 'Z', -0.1), id='Z not positive'),
+            pytest.param(lambda kw: node(kw, 'mu_g', 0.0), id='mu_g not positive'),
+            pytest.param(lambda kw: node(kw, 'R_so', 1000.0), id='R_so falls as p rises'),
+            pytest.param(lambda kw: {**node(kw, 'R_so', -1.0, j=0), 'mu_o': None}, id='R_so below 0 without mu_o'),
+            pytest.param(lambda kw: {**node(kw, 'R_so', -1.0, j=0), 'sigma': None}, id='R_so below 0 without sigma'),
+            pytest.param(lambda kw: {**kw, 'Z': np.ones((4, 2))}, id='a column of the wrong shape'),
+            pytest.param(lambda kw: {**kw, 'Z': None}, id='a column missing'),
+            pytest.param(lambda kw: {**kw, 'gor': -5.0}, id='gor negative'),
+            pytest.param(lambda kw: {**kw, 'rho_g': 0.0}, id='rho_g not positive'),
+        ],
+    )
     def test_each_check_raises(self, change):
         with pytest.raises(ValueError):
             PVTTable(**change(table_kwargs()))
@@ -128,13 +147,16 @@ class TestChecks:
         t = small(T=(350.0,))
         assert len(t.T) == 1 and np.array(t.R_so).shape == (4, 1)
 
-    @pytest.mark.parametrize('tables', [
-        pytest.param(lambda: (small(),), id='one table'),
-        pytest.param(lambda: (small(gor=100.0), small(gor=100.0)), id='a GOR twice'),
-        pytest.param(lambda: (small(gor=None), small(gor=100.0)), id='a table without a GOR'),
-        pytest.param(lambda: (small(gor=80.0), small(gor=120.0, rho_o=860.0)), id='another stock-tank oil'),
-        pytest.param(lambda: (small(gor=80.0), BlackOil()), id='not a table'),
-    ])
+    @pytest.mark.parametrize(
+        'tables',
+        [
+            pytest.param(lambda: (small(),), id='one table'),
+            pytest.param(lambda: (small(gor=100.0), small(gor=100.0)), id='a GOR twice'),
+            pytest.param(lambda: (small(gor=None), small(gor=100.0)), id='a table without a GOR'),
+            pytest.param(lambda: (small(gor=80.0), small(gor=120.0, rho_o=860.0)), id='another stock-tank oil'),
+            pytest.param(lambda: (small(gor=80.0), BlackOil()), id='not a table'),
+        ],
+    )
     def test_each_check_of_a_gor_axis_raises(self, tables):
         with pytest.raises(ValueError):
             PVTTableSet(tables=tables())
@@ -144,8 +166,8 @@ class TestChecks:
 # PVT-TAB-2: interpolation
 # ---------------------------------------------------------------------------
 
-class TestInterpolation:
 
+class TestInterpolation:
     def test_exact_at_the_nodes(self):
         t = small()
         for c in t.columns:
@@ -160,10 +182,17 @@ class TestInterpolation:
             for c in t.columns:
                 assert num(t.interpolate(c, p, T)) == pytest.approx(bilinear(t, c, p, T), rel=1e-13, abs=1e-18)
 
-    @pytest.mark.parametrize('p, T, p_in, T_in', [
-        (1.0, 320.0, 10.0, 320.0), (450.0, 320.0, 300.0, 320.0), (150.0, 250.0, 150.0, 300.0),
-        (150.0, 500.0, 150.0, 400.0), (-50.0, 1000.0, 10.0, 400.0), (1e4, 1.0, 300.0, 300.0),
-    ])
+    @pytest.mark.parametrize(
+        'p, T, p_in, T_in',
+        [
+            (1.0, 320.0, 10.0, 320.0),
+            (450.0, 320.0, 300.0, 320.0),
+            (150.0, 250.0, 150.0, 300.0),
+            (150.0, 500.0, 150.0, 400.0),
+            (-50.0, 1000.0, 10.0, 400.0),
+            (1e4, 1.0, 300.0, 300.0),
+        ],
+    )
     def test_clamped_outside(self, p, T, p_in, T_in):
         """Off the grid, the value at the nearest point of the grid: finite and positive however far off."""
         t = small()
@@ -186,8 +215,11 @@ class TestInterpolation:
             for c in t.columns:
                 want = bilinear(t, c, p, 350.0)
                 assert num(t.interpolate(c, p, 350.0)) == pytest.approx(want, rel=1e-13, abs=1e-18)
-                assert num(t.interpolate(c, p, 250.0)) == num(t.interpolate(c, p, 500.0)) == num(
-                    t.interpolate(c, p, 350.0))
+                assert (
+                    num(t.interpolate(c, p, 250.0))
+                    == num(t.interpolate(c, p, 500.0))
+                    == num(t.interpolate(c, p, 350.0))
+                )
 
     def test_covers(self):
         t, t1 = small(), small(T=(350.0,))
@@ -206,7 +238,6 @@ POINTS = ((10.0, 300.0), (55.0, 330.0), (150.0, 375.0), (250.0, 390.0), (300.0, 
 
 
 class TestProperties:
-
     def test_the_oil_is_the_tables(self):
         t = small()
         fl = FluidModel(pvt=t, gor=100.0)
@@ -250,7 +281,8 @@ class TestProperties:
             assert num(t.oil_viscosity(p, T)) == num(live_oil_viscosity(dead_oil_viscosity(t.api, T), R_so / CF_RS))
             assert num(t.gas_viscosity(p, T, 80.0)) == num(bo.gas_viscosity(p, T, 80.0))
             assert num(t.oil_surface_tension(p, T)) == num(
-                live_oil_surface_tension(dead_oil_surface_tension(t.rho_o, T), R_so / CF_RS))
+                live_oil_surface_tension(dead_oil_surface_tension(t.rho_o, T), R_so / CF_RS)
+            )
 
     @pytest.mark.parametrize('wlr, w_lg', [(0.0, 0.0), (0.3, 0.7)])
     def test_mass_conservation(self, wlr, w_lg):
@@ -276,8 +308,8 @@ class TestProperties:
 # Files and the example tables
 # ---------------------------------------------------------------------------
 
-class TestFiles:
 
+class TestFiles:
     def test_csv_round_trip(self, tmp_path):
         t = PVTTable(**table_kwargs(), name='small', source='tests/test_pvt_table.py', separation='one stage')
         t.write_csv(tmp_path / 't.csv')
@@ -294,12 +326,15 @@ class TestFiles:
         assert PVTTable.read_csv(tmp_path / 'axis.csv') == axis
         assert axis.gors == (80.0, 120.0)
 
-    @pytest.mark.parametrize('edit, match', [
-        (lambda lines: [line.replace(',Z', ',W') for line in lines], 'missing'),
-        (lambda lines: [line.replace(',sigma', ',tau') for line in lines], 'unknown'),
-        (lambda lines: lines[:-1], 'rectangular'),
-        (lambda lines: [line for line in lines if not line.startswith('# rho_o')], 'rho_o and rho_g'),
-    ])
+    @pytest.mark.parametrize(
+        'edit, match',
+        [
+            (lambda lines: [line.replace(',Z', ',W') for line in lines], 'missing'),
+            (lambda lines: [line.replace(',sigma', ',tau') for line in lines], 'unknown'),
+            (lambda lines: lines[:-1], 'rectangular'),
+            (lambda lines: [line for line in lines if not line.startswith('# rho_o')], 'rho_o and rho_g'),
+        ],
+    )
     def test_read_csv_refuses(self, tmp_path, edit, match):
         small().write_csv(tmp_path / 't.csv')
         lines = (tmp_path / 't.csv').read_text().splitlines()
@@ -307,21 +342,27 @@ class TestFiles:
         with pytest.raises(ValueError, match=match):
             PVTTable.read_csv(tmp_path / 'bad.csv')
 
-    @pytest.mark.parametrize('name, kind, columns, n_T', [
-        ('vazquez_beggs', PVTTable, COLUMNS, 13),
-        ('synthetic_eos_oil', PVTTable, COLUMNS + OPTIONAL_COLUMNS, 13),
-        ('synthetic_eos_oil_360K', PVTTable, COLUMNS, 1),
-        ('synthetic_eos_oil_gor', PVTTableSet, COLUMNS + OPTIONAL_COLUMNS, 7),
-    ])
+    @pytest.mark.parametrize(
+        'name, kind, columns, n_T',
+        [
+            ('vazquez_beggs', PVTTable, COLUMNS, 13),
+            ('synthetic_eos_oil', PVTTable, COLUMNS + OPTIONAL_COLUMNS, 13),
+            ('synthetic_eos_oil_360K', PVTTable, COLUMNS, 1),
+            ('synthetic_eos_oil_gor', PVTTableSet, COLUMNS + OPTIONAL_COLUMNS, 7),
+        ],
+    )
     def test_the_example_tables_load(self, name, kind, columns, n_T):
         t = PVTTable.read_csv(DATA / f'{name}.csv')
         assert type(t) is kind
-        for table in (t.tables if kind is PVTTableSet else (t,)):
+        for table in t.tables if kind is PVTTableSet else (t,):
             assert table.columns == columns and len(table.T) == n_T and table.gor is not None
 
     def test_the_equation_of_state_tables_have_R_so_below_0(self):
         """The free gas carries components that are oil at standard conditions (PVT-TAB-6)."""
-        eos, axis = PVTTable.read_csv(DATA / 'synthetic_eos_oil.csv'), PVTTable.read_csv(DATA / 'synthetic_eos_oil_gor.csv')
+        eos, axis = (
+            PVTTable.read_csv(DATA / 'synthetic_eos_oil.csv'),
+            PVTTable.read_csv(DATA / 'synthetic_eos_oil_gor.csv'),
+        )
         assert np.min(eos.R_so) < 0 and all(np.min(t.R_so) < 0 for t in axis.tables)
 
     def test_the_tables_of_make_pvt_tables_are_fresh(self):
@@ -337,8 +378,11 @@ class TestFiles:
         """
         table = FluidModel(pvt=PVTTable.read_csv(DATA / 'vazquez_beggs.csv'), gor=MAKE.VB_GOR)
         vb = MAKE.VB
-        black_oil = {'bo': vb.bo, 'gas_density': vb.gas_density,
-                     'liquid_density': lambda p, T: (vb.rho_o + vb.rs(p, T) * vb.rho_g) / vb.bo(p, T)}  # PVT-OIL-9
+        black_oil = {
+            'bo': vb.bo,
+            'gas_density': vb.gas_density,
+            'liquid_density': lambda p, T: (vb.rho_o + vb.rs(p, T) * vb.rho_g) / vb.bo(p, T),
+        }  # PVT-OIL-9
         rng = np.random.default_rng(2026)
         for p, T in zip(rng.uniform(1.0, 400.0, 500), rng.uniform(280.0, 400.0, 500)):
             assert abs(num(table.rs(p, T)) - num(vb.rs(p, T))) < 0.45
@@ -350,6 +394,7 @@ class TestFiles:
 # ---------------------------------------------------------------------------
 # PVT-TAB-6: a table from a flash
 # ---------------------------------------------------------------------------
+
 
 class TestFromPhaseSplit:
     """A phase split made from develop's black oil, at its GOR: the flash's X, rho_L and rho_V at the nodes."""
@@ -391,8 +436,8 @@ class TestFromPhaseSplit:
 # PVT-TAB-7: a GOR axis
 # ---------------------------------------------------------------------------
 
-class TestGorAxis:
 
+class TestGorAxis:
     AXIS = PVTTable.read_csv(DATA / 'synthetic_eos_oil_gor.csv')
 
     def test_exact_at_the_axiss_gors(self):
@@ -417,7 +462,7 @@ class TestGorAxis:
 
     @pytest.mark.parametrize('k, step', [(0, -1.0), (-1, 1.0)])
     def test_refused_outside_them(self, k, step):
-        with pytest.raises(ValueError, match='outside the PVT table\'s GOR axis'):
+        with pytest.raises(ValueError, match="outside the PVT table's GOR axis"):
             FluidModel(pvt=self.AXIS, gor=self.AXIS.gors[k] + step)
 
     def test_replace_reads_the_axis_again(self):
@@ -441,12 +486,12 @@ class TestGorAxis:
 # The simulator: the reservoir on the grid, and roots off it
 # ---------------------------------------------------------------------------
 
+
 def vertical_well(pvt, gor=100.0, L=1000.0, n_cells=5):
     return WellProperties(geometry=WellGeometry.vertical(L, n_cells, D=0.1), fluid=FluidModel(pvt=pvt, gor=gor))
 
 
 class TestSimulator:
-
     @pytest.mark.parametrize('backend', ['casadi', 'rust'])
     @pytest.mark.parametrize('p_r, T_r', [(350.0, 360.0), (250.0, 420.0), (250.0, 290.0)])
     def test_the_reservoir_must_lie_on_the_grid(self, p_r, T_r, backend):
@@ -458,10 +503,14 @@ class TestSimulator:
         fl = FluidModel(pvt=small(T=(350.0,)), gor=100.0)
         assert fl.covers(250.0, 420.0) and fl.covers(250.0, 290.0) and not fl.covers(350.0, 350.0)
 
-    @pytest.mark.parametrize('pvt', [
-        pytest.param(lambda: small(), id='small'), pytest.param(lambda: small(T=(350.0,), optional=False), id='one T'),
-        pytest.param(lambda: TestGorAxis.AXIS, id='a GOR axis between its GORs'),
-    ])
+    @pytest.mark.parametrize(
+        'pvt',
+        [
+            pytest.param(lambda: small(), id='small'),
+            pytest.param(lambda: small(T=(350.0,), optional=False), id='one T'),
+            pytest.param(lambda: TestGorAxis.AXIS, id='a GOR axis between its GORs'),
+        ],
+    )
     def test_the_core_reads_the_table_as_casadi_does(self, pvt):
         """
         The core's columns (rust/src/pvt/table.rs) are CasADi's interpolant's to the bit, on the grid and off it, with
@@ -494,19 +543,19 @@ class TestSimulator:
         bc = BoundaryConditions(p_r=200.0, p_s=20.0, T_r=370.0, u=0.8)
         for p_min, off in ((1.0, False), (60.0, True)):
             p = np.unique(np.r_[p_min, np.arange(60.0, 400.0 + 1e-9, 10.0)])
-            sim = SSDFSimulator(vertical_well(tabulate(pvt, p, T, gor), gor=gor, L=2000.0, n_cells=10),
-                                backend=backend)
+            sim = SSDFSimulator(vertical_well(tabulate(pvt, p, T, gor), gor=gor, L=2000.0, n_cells=10), backend=backend)
             caplog.clear()
             with caplog.at_level(logging.WARNING, logger='manywells'):
                 op = sim.simulate(bc)
             assert op.off_table is off and op.state[-1, 0] < 60.0
-            assert any('off the fluid\'s PVT table' in r.message for r in caplog.records) is off
+            assert any("off the fluid's PVT table" in r.message for r in caplog.records) is off
             assert all(r.off_table is off for r in sim.root_set(bc).roots if r.state[-1, 0] < 60.0)
 
 
 # ---------------------------------------------------------------------------
 # Solved wells
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.slow
 @pytest.mark.parametrize('backend', ['casadi', 'rust'])
@@ -525,8 +574,9 @@ def test_a_table_of_the_wells_black_oil_gives_its_operating_point(well, backend)
     T = np.arange(270.0, np.ceil(bc.T_r / 10) * 10 + 1e-9, 10.0)
     table = tabulate(wp.fluid, p, T, wp.fluid.gor)
     base = SSDFSimulator(wp, backend=backend).simulate(bc)
-    op = SSDFSimulator(dataclasses.replace(wp, fluid=dataclasses.replace(wp.fluid, pvt=table)),
-                       backend=backend).simulate(bc)
+    op = SSDFSimulator(
+        dataclasses.replace(wp, fluid=dataclasses.replace(wp.fluid, pvt=table)), backend=backend
+    ).simulate(bc)
     assert abs(op.state[0, 0] - base.state[0, 0]) < 0.05
     assert abs(op.state[-1, 0] - base.state[-1, 0]) < 0.05
     assert not op.off_table
@@ -540,8 +590,10 @@ def test_the_equation_of_state_table_solves():
     """
     pvt = PVTTable.read_csv(DATA / 'synthetic_eos_oil.csv')
     bc = BoundaryConditions(p_r=250.0, p_s=20.0, T_r=360.0, u=0.8)
-    ops = [SSDFSimulator(vertical_well(pvt, gor=pvt.gor, L=2000.0, n_cells=20), backend=b).simulate(bc)
-           for b in ('casadi', 'rust')]
+    ops = [
+        SSDFSimulator(vertical_well(pvt, gor=pvt.gor, L=2000.0, n_cells=20), backend=b).simulate(bc)
+        for b in ('casadi', 'rust')
+    ]
     for op in ops:
         assert op.label == 'stable' and not op.off_table
         assert 20.0 < op.state[-1, 0] < op.state[0, 0] < 250.0

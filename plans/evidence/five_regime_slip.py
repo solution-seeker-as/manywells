@@ -37,9 +37,9 @@ import numpy as np
 from manywells.slip import SlipModel
 from manywells.units import STD_GRAVITY as g
 
-LAMBDA_CHURN = 1.08 / 2.08          # j_g > 1.08 j_l  <=>  lambda > 0.519
+LAMBDA_CHURN = 1.08 / 2.08  # j_g > 1.08 j_l  <=>  lambda > 0.519
 REGIMES = ('annular', 'churn', 'dispersed', 'slug', 'bubbly')
-C0 = {'annular': 1.0, 'churn': 1.15, 'dispersed': 1.2, 'slug': 1.2, 'bubbly': 1.2}   # Hasan et al., Table 1, upflow
+C0 = {'annular': 1.0, 'churn': 1.15, 'dispersed': 1.2, 'slug': 1.2, 'bubbly': 1.2}  # Hasan et al., Table 1, upflow
 MERGED = {'annular': 'annular', 'churn': 'slug-churn', 'slug': 'slug-churn', 'dispersed': 'bubbly', 'bubbly': 'bubbly'}
 
 
@@ -47,22 +47,27 @@ def terms(jg, jl, rho_g, rho_l, sigma, D, cos, f=0.02, floor=0.1, sqrt_eps=1e-6,
     """The rule quantities and thresholds, and the rise velocities; m is np or ca."""
     jm = jg + jl
     drho = rho_l - rho_g
-    vb = 1.53 * (g * sigma * drho / rho_l**2) ** 0.25                          # (A-8), SLIP-4
-    lam = jg / (jm + floor * vb)                                               # no-slip gas fraction, floored
+    vb = 1.53 * (g * sigma * drho / rho_l**2) ** 0.25  # (A-8), SLIP-4
+    lam = jg / (jm + floor * vb)  # no-slip gas fraction, floored
     sin = m.sqrt(1 - cos**2)
-    vT = 0.35 * m.sqrt(g * D * drho / rho_l) * m.sqrt(cos) * (1 + sin) ** 1.2   # (A-9), (A-10), SLIP-5, SLIP-10
-    vgc = 3.1 * (g * sigma * drho / rho_g**2) ** 0.25                          # (A-19)
+    vT = 0.35 * m.sqrt(g * D * drho / rho_l) * m.sqrt(cos) * (1 + sin) ** 1.2  # (A-9), (A-10), SLIP-5, SLIP-10
+    vgc = 3.1 * (g * sigma * drho / rho_g**2) ** 0.25  # (A-19)
     k = 2 * (f / (2 * D)) ** 0.4 * (rho_l / sigma) ** 0.6 * m.sqrt(0.4 * sigma / (g * drho))
-    vms = ((0.725 + 4.15 * m.sqrt(lam + sqrt_eps)) / k) ** (1 / 1.2)           # (A-17)
-    alpha_b = jg / (1.2 * jm + vb)                                             # alpha with bubbly parameters
-    alpha_t = cos / (2.8 + 1.2 * cos)                                          # (A-14) in alpha; 0.25 vertical
+    vms = ((0.725 + 4.15 * m.sqrt(lam + sqrt_eps)) / k) ** (1 / 1.2)  # (A-17)
+    alpha_b = jg / (1.2 * jm + vb)  # alpha with bubbly parameters
+    alpha_t = cos / (2.8 + 1.2 * cos)  # (A-14) in alpha; 0.25 vertical
     return dict(jm=jm, lam=lam, vb=vb, vT=vT, vgc=vgc, vms=vms, alpha_b=alpha_b, alpha_t=alpha_t)
 
 
 def margins(t, jg):
     """Signed dimensionless margin of each rule: positive where the rule holds."""
-    return dict(A1=jg / t['vgc'] - 1, A2=t['lam'] - 0.7, M=t['jm'] / t['vms'] - 1, G=t['lam'] - LAMBDA_CHURN,
-                S=t['alpha_b'] - t['alpha_t'])
+    return dict(
+        A1=jg / t['vgc'] - 1,
+        A2=t['lam'] - 0.7,
+        M=t['jm'] / t['vms'] - 1,
+        G=t['lam'] - LAMBDA_CHURN,
+        S=t['alpha_b'] - t['alpha_t'],
+    )
 
 
 def probabilities(mg, w, m=np):
@@ -73,8 +78,13 @@ def probabilities(mg, w, m=np):
         s = {k: 0.5 * (1 + m.tanh(v / (2 * w))) for k, v in mg.items()}
     A = s['A1'] * s['A2']
     M, G, S = s['M'], s['G'], s['S']
-    return dict(annular=A, churn=(1 - A) * M * G, dispersed=(1 - A) * M * (1 - G),
-                slug=(1 - A) * (1 - M) * S, bubbly=(1 - A) * (1 - M) * (1 - S))
+    return dict(
+        annular=A,
+        churn=(1 - A) * M * G,
+        dispersed=(1 - A) * M * (1 - G),
+        slug=(1 - A) * (1 - M) * S,
+        bubbly=(1 - A) * (1 - M) * (1 - S),
+    )
 
 
 def parameters(p, t):
@@ -101,11 +111,12 @@ def alpha_explicit(jg, jl, rho_g, rho_l, sigma, D, cos, w=0.02, **kw):
 @dataclass(frozen=True)
 class Hasan5SlipModel(SlipModel):
     """The prototype as a SlipModel. classify() merges the five regimes into SLIP-8's three labels."""
-    w: float = 0.02           # logistic width of every rule
-    f: float = 0.02           # friction factor in (A-17); None: the cell's f_D, passed by patch_closure_rows()
-    floor: float = 0.1        # lambda = j_g / (j_m + floor * v_inf_b)
-    sqrt_eps: float = 1e-6    # sqrt(lambda + sqrt_eps) in (A-17)
-    D: float = 0.1            # the well's diameter, for classify()
+
+    w: float = 0.02  # logistic width of every rule
+    f: float = 0.02  # friction factor in (A-17); None: the cell's f_D, passed by patch_closure_rows()
+    floor: float = 0.1  # lambda = j_g / (j_m + floor * v_inf_b)
+    sqrt_eps: float = 1e-6  # sqrt(lambda + sqrt_eps) in (A-17)
+    D: float = 0.1  # the well's diameter, for classify()
 
     def _probs(self, v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl, f_D=None):
         jg, jl = alpha * v_g, (1 - alpha) * v_l
@@ -126,6 +137,7 @@ class Hasan5SlipModel(SlipModel):
 def patch_closure_rows():
     """Make the discretization pass the cell's Darcy factor to a Hasan5SlipModel with f = None."""
     from manywells import discretization as disc
+
     original = disc.closure_rows
 
     def closure_rows(wp, s, cos_incl):
@@ -134,10 +146,14 @@ def patch_closure_rows():
         fluid = wp.fluid
         sigma = fluid.surface_tension(s.p, s.T, s.rho_l)
         f_D = wp.friction.friction_factor(s, fluid, wp.geometry.D)
-        C_0, v_inf = wp.slip.identify_parameters(s.v_g, s.v_l, s.alpha, s.rho_g, s.rho_l, sigma, wp.geometry.D,
-                                                 cos_incl, f_D=f_D)
-        return [s.v_g - C_0 * s.v_m - v_inf, fluid.gas_law_row(s.p, s.T, s.rho_g),
-                s.rho_l - fluid.liquid_density(s.p, s.T)]
+        C_0, v_inf = wp.slip.identify_parameters(
+            s.v_g, s.v_l, s.alpha, s.rho_g, s.rho_l, sigma, wp.geometry.D, cos_incl, f_D=f_D
+        )
+        return [
+            s.v_g - C_0 * s.v_m - v_inf,
+            fluid.gas_law_row(s.p, s.T, s.rho_g),
+            s.rho_l - fluid.liquid_density(s.p, s.T),
+        ]
 
     disc.closure_rows = closure_rows
 
@@ -163,12 +179,16 @@ def grid():
             mw = [all_roots(mw_params, a, b, *fl, cos) for a, b in zip(JG, JL)]
             uniq = np.array([len(r) == 1 for r in mw])
             a_mw = np.array([r[0] if len(r) == 1 else np.nan for r in mw])
-            print(f'   develop vs Hasan, {(~uniq).sum()} points with several roots left out: '
-                  f'{q(abs(a_mw[uniq] - a_h[uniq]))}')
+            print(
+                f'   develop vs Hasan, {(~uniq).sum()} points with several roots left out: '
+                f'{q(abs(a_mw[uniq] - a_h[uniq]))}'
+            )
             for w in [0.01, 0.02, 0.05]:
                 a_s, p_s, *_ = alpha_explicit(JG, JL, *fl, cos, w=w)
-                print(f'   w {w:<4}: labels as crisp {np.mean(label(p_s) == lab_c):.1%}; vs crisp {q(abs(a_s - a_c))}; '
-                      f'vs Hasan {q(abs(a_s - a_h))}')
+                print(
+                    f'   w {w:<4}: labels as crisp {np.mean(label(p_s) == lab_c):.1%}; vs crisp {q(abs(a_s - a_c))}; '
+                    f'vs Hasan {q(abs(a_s - a_h))}'
+                )
 
 
 def ranges(csv=None):
@@ -186,22 +206,28 @@ def ranges(csv=None):
         d = sample_well(2026, well)
         f_g, f_o, f_w = d.fractions
         rho_g = P_REF / (d.R_s * T_REF)
-        glr.append((f_g / rho_g) / (f_o / d.rho_o + f_w / d.rho_w) * 5.615)    # Sm3/Sm3 to scf/STB
+        glr.append((f_g / rho_g) / (f_o / d.rho_o + f_w / d.rho_w) * 5.615)  # Sm3/Sm3 to scf/STB
     glr = np.array(glr)
-    print(f'formation GLR of 2000 sampled wells (scf/STB): 5th percentile {np.percentile(glr, 5):.0f}, median '
-          f'{np.median(glr):.0f}, 95th {np.percentile(glr, 95):.0f}; inside Table 2 {np.mean((glr >= 104) & (glr <= 5615)):.0%}, '
-          f'above {np.mean(glr > 5615):.0%}, below {np.mean(glr < 104):.0%}')
+    print(
+        f'formation GLR of 2000 sampled wells (scf/STB): 5th percentile {np.percentile(glr, 5):.0f}, median '
+        f'{np.median(glr):.0f}, 95th {np.percentile(glr, 95):.0f}; inside Table 2 {np.mean((glr >= 104) & (glr <= 5615)):.0%}, '
+        f'above {np.mean(glr > 5615):.0%}, below {np.mean(glr < 104):.0%}'
+    )
     if csv:
         import pandas as pd
+
         df = pd.read_csv(csv)
         df = df[(df.variant == 'proposal') & df.op]
         q = [r.w_res / liquid_density(sample_well(2026, r.well)) * 86400 / 0.158987 for r in df.itertuples()]
-        print(f'liquid rate at the proposal\'s {len(q)} operating points (STB/D): {min(q):.0f} to {max(q):.0f}; '
-              f'bottomhole pressure {df.pbh.min():.0f} to {df.pbh.max():.0f} bar')
+        print(
+            f"liquid rate at the proposal's {len(q)} operating points (STB/D): {min(q):.0f} to {max(q):.0f}; "
+            f'bottomhole pressure {df.pbh.min():.0f} to {df.pbh.max():.0f} bar'
+        )
 
 
 if __name__ == '__main__':
     import sys
+
     if sys.argv[1:2] == ['ranges']:
         ranges(*sys.argv[2:3])
     else:

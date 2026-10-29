@@ -9,13 +9,13 @@ datasets like the published ones. [`scripts/sim_examples/`](../scripts/sim_examp
 ```python
 from manywells.simulator import WellProperties, BoundaryConditions, SSDFSimulator
 
-wp = WellProperties()                            # a 2000 m vertical well with develop's default model
-sim = SSDFSimulator(wp)                          # builds the well's system once
+wp = WellProperties()  # a 2000 m vertical well with develop's default model
+sim = SSDFSimulator(wp)  # builds the well's system once
 bc = BoundaryConditions(p_r=170, p_s=20, u=0.5)  # bar, and the choke opening in [0, 1]
 
-op = sim.simulate(bc)                            # the operating point, a Root
+op = sim.simulate(bc)  # the operating point, a Root
 print(f'p_0 = {op.p_0:.1f} bar, {op.label}, choked: {op.choked}')
-df = sim.solution_as_df(op)                      # one row per grid point, from the bottomhole
+df = sim.solution_as_df(op)  # one row per grid point, from the bottomhole
 ```
 
 `WellProperties` holds one object per part of the model, and each has a default:
@@ -80,7 +80,7 @@ point:
 rs = sim.root_set(BoundaryConditions(p_r=130, u=0.3))
 for r in rs.roots:
     print(f'p_0 = {r.p_0:.1f} bar, {r.label}')  # 106.8 bar, stable; 128.8 bar, unstable
-op = rs.operating_point                         # the stable root, or None
+op = rs.operating_point  # the stable root, or None
 ```
 
 The operating point is the stable root, or the one with the lowest bottomhole pressure if there are several.
@@ -126,8 +126,20 @@ from manywells.choke import SimpsonChokeModel
 from manywells.configurations import v1_well
 from manywells.inflow import Vogel
 
-wp = v1_well(L=2500, D=0.1554, rho_l=850, R_s=520, cp_g=2225, cp_l=4000, f_D=0.05, h=20, f_g=0.1,
-             inflow=Vogel(w_l_max=20), choke=SimpsonChokeModel(K_c=0.002), n_cells=100)
+wp = v1_well(
+    L=2500,
+    D=0.1554,
+    rho_l=850,
+    R_s=520,
+    cp_g=2225,
+    cp_l=4000,
+    f_D=0.05,
+    h=20,
+    f_g=0.1,
+    inflow=Vogel(w_l_max=20),
+    choke=SimpsonChokeModel(K_c=0.002),
+    n_cells=100,
+)
 ```
 
 `configurations.check(wp)` raises a `ValueError` that lists every difference from the configuration.
