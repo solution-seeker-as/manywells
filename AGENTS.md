@@ -9,12 +9,15 @@ ManyWells is a steady-state drift-flux simulator for multiphase (gas + liquid) f
 The environment is defined by `pyproject.toml` + `uv.lock`. Use [uv](https://docs.astral.sh/uv/). The package is built by maturin, which compiles the Rust core in `rust/` as the extension `manywells._core`, so `uv sync` needs a Rust toolchain (stable, at least 1.85, from [rustup](https://rustup.rs)). uv rebuilds the extension on the next `uv sync` or `uv run` after a file in `rust/src/` changes.
 
 ```console
-uv sync                                              # install the environment (the dev group adds pytest and the verifier)
+uv sync                                              # install the environment (the dev group adds pytest, the verifier and ruff)
 uv run pytest                                        # full test suite: tests/ and verification/tests/
 uv run pytest -m "not slow"                          # skip the slow tests (full solves, the examples)
 uv run pytest tests/test_simulator.py::test_name     # one test
 uv run python -m scripts.sim_examples.vertical_well  # run an example
 cargo test --manifest-path rust/Cargo.toml --no-default-features   # the Rust core's own tests, without Python
+uv run ruff check                                    # lint: pyflakes and pycodestyle's errors
+uv run ruff format                                   # format every Python file; CI checks both
+uvx pre-commit install                               # run both on the files of every commit
 ```
 
 Run the verifier from the project root (see The verifier below):
@@ -146,6 +149,7 @@ The specs, docs and plans are read on GitHub and in VS Code. VS Code's KaTeX see
 - A change to `verification/` keeps `uv run pytest verification/tests` passing and the verifier's baseline report unchanged, unless changing it was the point.
 - If the change adds a solver routine or path (a subroutine, a special-case path, a fallback, a tuning constant), state its measured gain in speed or robustness on the verifier's case set (constitution, principle 7). Bjarne decides whether the gain is large enough.
 - Your summary or PR description names every change that needs sign-off (next section).
+- `uv run ruff check` and `uv run ruff format --check` pass; the CI job `lint` runs both. The pre-commit hook fixes what it can and stops the commit, so stage its changes and commit again.
 - Commits use a short imperative subject line, matching the existing history.
 
 ## Needs Bjarne's sign-off
