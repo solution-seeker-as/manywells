@@ -141,20 +141,21 @@ def test_inclined_cell_moves_bubbly_flow_to_slug_flow():
 
 def test_slip_parameters_are_fields():
     """plans/improvements.md 2.7: the regime constants are fields, with v1.0.0's values as defaults; the five
-    regimes' constants too (SLIP-12, SLIP-13)."""
+    regimes' constants too (SLIP-12, SLIP-13), and the scale of the profile parameter (SLIP-18)."""
     model = SlipModel(C_0_slug=1.2)
     assert model.C_0_slug == 1.2 and SlipModel().C_0_slug == 1.175
     assert [f.name for f in dataclasses.fields(SlipModel)] == [
         'regime_model', 'C_0_annular', 'C_0_slug', 'C_0_bubbly', 'v_inf_annular', 'f_ms', 'transition_width',
-        'lambda_floor']
-    assert (SlipModel().regime_model, SlipModel().f_ms, SlipModel().transition_width, SlipModel().lambda_floor) == \
-        ('hasan', 0.02, 0.02, 0.1)
+        'lambda_floor', 'profile_scale']
+    assert (SlipModel().regime_model, SlipModel().f_ms, SlipModel().transition_width, SlipModel().lambda_floor,
+            SlipModel().profile_scale) == ('hasan', 0.02, 0.02, 0.1, 1.0)
     with pytest.raises(dataclasses.FrozenInstanceError):
         model.C_0_bubbly = 1.0
 
 
 @pytest.mark.parametrize('kw', [dict(regime_model='four'), dict(f_ms=0.0), dict(transition_width=0.0),
-                                dict(lambda_floor=-0.1)])
+                                dict(lambda_floor=-0.1), dict(profile_scale=-0.1), dict(profile_scale=float('nan')),
+                                dict(profile_scale=float('inf'))])
 def test_slip_model_validates_its_fields(kw):
     with pytest.raises(ValueError):
         SlipModel(**kw)
@@ -254,3 +255,43 @@ def test_dispersed_bubbly_flow_holds_less_gas_than_its_limit():  # SLIP-14: Hasa
     alpha = v_gs / (C_0 * (v_gs + v_ls) + v_inf)
     dispersed = np.argmax(P, axis=0) == HASAN_REGIMES.index('dispersed-bubbly')
     assert dispersed.any() and np.all(alpha[dispersed] < 0.52)
+
+
+# ---------------------------------------------------------------------------
+# The scaled profile parameter (SLIP-18)
+# ---------------------------------------------------------------------------
+
+def _parameters(model, states, alpha):
+    """C_0 and v_inf of a slip model at the states of _states, at void fraction alpha, as arrays."""
+    x = ca.SX.sym('x', 7)
+    v_gs, v_ls, rho_g, rho_l, sigma, D, cos_incl = (x[k] for k in range(7))
+    C_0, v_inf = model.identify_parameters(v_gs / alpha, v_ls / (1 - alpha), alpha, rho_g, rho_l, sigma, D, cos_incl)
+    out = ca.Function('f', [x], [C_0, v_inf]).map(len(states[0]))(np.vstack(states))
+    return tuple(np.asarray(o).ravel() for o in out)
+
+
+@pytest.mark.parametrize('regime_model', ['hasan', 'fitted'])
+def test_profile_scale_moves_c_0_towards_no_slip(regime_model):  # SLIP-18
+    """C_0* = 1 + k (C_0 - 1): the classifier's own C_0 at k = 1 (to the bit), no slip at k = 0, monotone in k and
+    between 1 and C_0 for k in [0, 1]; v_inf does not depend on k."""
+    states = _states(n=1000)
+    for alpha in (0.1, 0.5, 0.9):
+        C_0, v_inf = _parameters(SlipModel(regime_model=regime_model), states, alpha)
+        assert np.array_equal(_parameters(SlipModel(regime_model=regime_model, profile_scale=1.0), states, alpha)[0],
+                              C_0)
+        last = np.ones_like(C_0)
+        for k in (0.0, 0.25, 0.5, 1.0, 1.5):
+            C_0_k, v_inf_k = _parameters(SlipModel(regime_model=regime_model, profile_scale=k), states, alpha)
+            assert np.allclose(C_0_k, 1 + k * (C_0 - 1), rtol=0, atol=1e-14)
+            assert np.all(C_0_k >= last - 1e-14) and np.all(C_0_k >= 1 - 1e-12)
+            if k <= 1:
+                assert np.all(C_0_k <= C_0 + 1e-14)
+            assert np.array_equal(v_inf_k, v_inf)
+            last = C_0_k
+        assert np.all(_parameters(SlipModel(regime_model=regime_model, profile_scale=0.0), states, alpha)[0] == 1.0)
+
+
+def test_profile_scale_leaves_annular_flow_alone():  # SLIP-18: C_0 = 1 in annular flow, in both classifiers
+    for model in (SlipModel(profile_scale=0.3), SlipModel(regime_model='fitted', profile_scale=0.3)):
+        C_0, _ = model.identify_parameters(33.3, 0.43, 0.97, 40.0, 820.0, 0.02, 0.15, 1.0)
+        assert abs(float(C_0) - 1.0) < 1e-3

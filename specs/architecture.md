@@ -76,7 +76,7 @@ Every function of the state accepts CasADi symbols as well as floats in the CasA
 | | `reservoir_gas_rate(w_res)` | kg/s | $w_{g,\text{res}}$, kg/s | INF-4 |
 | | `phase_rates(p, T, w_res, w_lg)` | bar, K, kg/s, kg/s | $(w_g, w_l)$, kg/s | no mass transfer (BAL-3): constants, exactly · dissolved gas |
 | | `cp_g`, `cp_l` | – | J/(kg K) | constants |
-| `SlipModel` | `identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl)` | SI | $(C_0, v_\infty)$ | `regime_model`: five regimes after Hasan et al. (SLIP-12 to SLIP-16, default) · v1.0.0's fitted three (SLIP-1 to SLIP-8), with the inclination terms |
+| `SlipModel` | `identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl)` | SI | $(C_0, v_\infty)$ | `regime_model`: five regimes after Hasan et al. (SLIP-12 to SLIP-16, default) · v1.0.0's fitted three (SLIP-1 to SLIP-8), with the inclination terms; `profile_scale`, $C_0$ scaled about 1 with either (SLIP-18) |
 | | `classify(v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl)` | SI | the probabilities of `regimes` | |
 | | `flow_regime(...)`, `label(probs)` | floats | a regime of `regimes` | |
 | `FrictionModel` | `pressure_gradient(s, fluid, D)` | state, fluid, m | $F$, Pa/m (FRIC-1) | fixed $f_D$ (FRIC-2) · roughness with Chen or Haaland |

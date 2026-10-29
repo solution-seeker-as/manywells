@@ -91,6 +91,7 @@ Parameters and quantities of `develop`'s options, in addition (the dataclass fie
 | $\lambda_g$, $\alpha_b$, $\alpha_t$ | – | – | no-slip gas fraction (floored), void fraction with bubbly flow's parameters, and the bubbly–slug threshold (SLIP-12) |
 | $v_{gc}$, $v_{ms}$ | – | m/s | gas velocity for annular flow and mixture velocity of dispersed bubbly flow (SLIP-12) |
 | $f_{ms}$, $w$, $\epsilon_\lambda$ | `f_ms`, `transition_width`, `lambda_floor` | – | the five regimes' friction factor in (A-17), logistic width of their rules, and floor of $\lambda_g$ (SLIP-12, SLIP-13) |
+| $\kappa_0$, $C_0^\ast$ | `profile_scale` | – | the scale of $C_0 - 1$, with either classifier, and the scaled profile parameter (SLIP-18); a free parameter of a calibration (CAL-5) |
 
 Boundary conditions and controls (v1.0.0's `BoundaryConditions`):
 

@@ -174,6 +174,7 @@ each other: a smaller one makes the fit follow that sensor more closely.
 | `roughness` | `friction.roughness` (m) | 4.6·10⁻⁵, 1.15 | `RoughnessFriction` |
 | `f_D` | `friction.f_D` | 0.02, 0.5 | `FixedFrictionFactor` |
 | `h` | `thermal.h` (W/(m² K)) | 15, 0.5 | |
+| `profile_scale` | `slip.profile_scale` (–) | 0.5, 0.7 | any `SlipModel` |
 
 **How to read a prior.** Each prior is log-normal: the parameter's logarithm is normal, with that median and
 standard deviation (log-sd). About 95% of the prior lies within a factor of $e^{2s}$ of the median:
@@ -185,6 +186,11 @@ The defaults are physics-based (`specs/calibration.md`, CAL-6):
 - **`K_c`** is a discharge coefficient times the choke's throat area.
 - **`h`** is an effective heat-transfer coefficient to the undisturbed formation.
 - **`roughness`** spans drawn to corroded steel tubing.
+- **`profile_scale`** scales the slip law's profile parameter about 1: $C_0 \to 1 + \kappa_0(C_0 - 1)$ (SLIP-18).
+  - 1 is the slip model's own $C_0$, 1.2 in bubbly and slug flow, and 0 is no slip.
+  - Its median, 0.5, puts $C_0$ at 1.1, the middle of the published range for upward flow, and its 95% range is
+    1.025–1.39.
+  - Being log-normal, it never takes the flow past no slip.
 - **Productivity.** A well's productivity has no generic value, so its prior's median is whatever `wp` holds, and
   the wide log-sd lets the data decide.
 
@@ -226,6 +232,14 @@ result = calibrate(wp, data, bc, free=['K_c', 'w_l_max', 'h'], priors=priors)
 A parameter the data do not determine stays near its prior, which is what you want. A good first choice is
 `['K_c', 'w_l_max', 'h']` (or `k_l`), adding friction where the well has a downhole gauge. Section 7 shows how to
 check what your well's instruments determine before you trust a fit.
+
+**Friction or holdup?** The tubing's pressure drop is mostly gravity, which the holdup sets, and partly friction.
+- **The sign that holdup is wrong.** A calibrated `f_D` or `roughness` that lands far below its prior, below smooth
+  pipe, is usually absorbing a holdup error. It then fits the rates it was calibrated on, but not other rates.
+- **What to do.** Free `profile_scale` instead, with friction held at its prior. It moves the holdup towards or away
+  from no slip, which is where such an error usually lies.
+- **Freeing both** is allowed, but a pressure drop tells them apart poorly. Check with section 7 whether your
+  well's data separate them before you trust either value.
 
 ## 4. Run the calibration
 
@@ -387,8 +401,8 @@ A parameter that this check does not recover will not be recovered from real dat
   fitted.
 - **No uncertainty.** The result is the posterior mode, without a covariance.
 - **Measurement noise only.** The model's own error is not represented, so the parameters absorb it.
-- **Four parameters.** The choke profile, the critical pressure ratio, the slip parameters and the heat capacities
-  are not calibrated.
+- **The parameters of section 3 only.** The choke profile, the critical pressure ratio, the slip parameters other
+  than `profile_scale`, and the heat capacities are not calibrated.
 
 `plans/calibration-plan.md` lists what is planned after this version.
 

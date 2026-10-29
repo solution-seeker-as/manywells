@@ -19,6 +19,7 @@ v2.0.0 may break any part of the API; every break is listed here with an old→n
 ### Calibration
 
 - `manywells.calibration` calibrates a well to its production data (`specs/calibration.md`, `docs/calibration.md`): the MAP estimate of the choke coefficient, the inflow productivity, friction (`f_D` or the roughness) and the heat-transfer coefficient, any of them free, each with a physics-based log-normal prior, from rows with well-test or MPFM rates, pressures and temperatures, with missing values and whatever instruments the well has. Each row is solved for the well's operating point, on either backend (the Rust core by default). `calibration.synthetic_data` simulates a well's rows at known parameters, and the recovery tests check that the fit finds them (`specs/features/017-calibration.md`).
+- The slip law's profile parameter can be scaled towards no slip, $C_0 \to 1 + \kappa_0(C_0 - 1)$ with $\kappa_0 \ge 0$ (`SlipModel.profile_scale`, SLIP-18), and calibrated: `profile_scale` is a free parameter, with a prior centred on $C_0 = 1.1$. A holdup error then has a parameter of its own, rather than being absorbed by friction. The default, 1, leaves the model as it was (`specs/features/020-profile-scale.md`).
 - `scipy` is a declared dependency; it was installed before as scikit-learn's.
 
 ### API breaks

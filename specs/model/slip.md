@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The drift-flux slip law that sets the gas velocity relative to the mixture, with parameters that depend on the flow regime. A smooth classifier gives the probability of each regime, and the slip parameters are the probability-weighted averages of each regime's values, after Hasan, Kabir and Sayarpour (2010). There are two classifiers: v1.0.0's, fitted to a hierarchy of three regimes (bubbly, slug/churn, annular; paper §2.2 and Appendix A; SLIP-2 to SLIP-11), and `develop`'s default, five regimes (bubbly, dispersed bubbly, slug, churn, annular) from the rules of Hasan et al.'s hierarchy (SLIP-12 to SLIP-17; `specs/features/019-five-flow-regimes.md`).
+The drift-flux slip law that sets the gas velocity relative to the mixture, with parameters that depend on the flow regime. A smooth classifier gives the probability of each regime, and the slip parameters are the probability-weighted averages of each regime's values, after Hasan, Kabir and Sayarpour (2010). There are two classifiers: v1.0.0's, fitted to a hierarchy of three regimes (bubbly, slug/churn, annular; paper §2.2 and Appendix A; SLIP-2 to SLIP-11), and `develop`'s default, five regimes (bubbly, dispersed bubbly, slug, churn, annular) from the rules of Hasan et al.'s hierarchy (SLIP-12 to SLIP-17; `specs/features/019-five-flow-regimes.md`). With either, a scale on the profile parameter can move $C_0$ towards no slip, for calibration (SLIP-18; `specs/features/020-profile-scale.md`).
 
 ## Interface
 
@@ -15,7 +15,7 @@ The drift-flux slip law that sets the gas velocity relative to the mixture, with
 
 With the fitted classifier, `regime_model='fitted'`, the regimes are `('annular', 'slug-churn', 'bubbly')`, and $p_a$, $p_s$ and $p_b$ are their probabilities; it does not use $D$. With the five regimes, `regime_model='hasan'`, they are `('annular', 'churn', 'dispersed-bubbly', 'slug', 'bubbly')`, with the probabilities $p_a$, $p_c$, $p_d$, $p_s$ and $p_b$. $\sigma$ comes from PVT-MIX-5 (or PVT-MIX-7 in `develop`'s default) and is evaluated at the same point. v1.0.0's functions take $T$ and compute $\sigma$ themselves; `develop`'s take $\sigma$ and the inclination $\cos\theta$ of the point's cell (DISC-11). The vectors below give $\sigma$.
 
-In `develop` the four regime constants of SLIP-2 and SLIP-3 (1.0, 1.175 and 1.2 for $C_0$, and 0 for the annular drift velocity) are parameters of the fitted classifier, fields of `SlipModel` with these values as defaults (`plans/improvements.md` §2.7). The `v1.0.0` configuration uses the fitted classifier with the defaults. The five regimes' constants $f_{ms}$, $w$ and $\epsilon_\lambda$ of SLIP-12 and SLIP-13 are fields too (`f_ms`, `transition_width`, `lambda_floor`); Table 1's values in SLIP-15 are constants.
+In `develop` the four regime constants of SLIP-2 and SLIP-3 (1.0, 1.175 and 1.2 for $C_0$, and 0 for the annular drift velocity) are parameters of the fitted classifier, fields of `SlipModel` with these values as defaults (`plans/improvements.md` §2.7). The `v1.0.0` configuration uses the fitted classifier with the defaults. The five regimes' constants $f_{ms}$, $w$ and $\epsilon_\lambda$ of SLIP-12 and SLIP-13 are fields too (`f_ms`, `transition_width`, `lambda_floor`); Table 1's values in SLIP-15 are constants. The scale $\kappa_0$ of SLIP-18 is the field `profile_scale` of either classifier, 1 by default, which leaves $C_0$ as it is; it is a free parameter of a calibration (CAL-5).
 
 ## Equations
 
@@ -154,6 +154,18 @@ The regime with the highest probability: `annular`, `churn`, `dispersed-bubbly`,
 
 The limit of SLIP-13 and SLIP-14 as $w$ and $\epsilon_\lambda$ go to 0: Hasan et al.'s pattern-transition criteria at a point. The flow is annular if $v_{gs} > v_{gc}$ and $v_{gs}/v_m > 0.7$; else churn if $v_m > v_{ms}$ and $v_{gs} > 1.08 v_{ls}$; else dispersed bubbly if $v_m > v_{ms}$; else slug if $v_{gs} > v_{gb}$; else bubbly. The model never evaluates it. It is the reference of the tests, as SLIP-9 is the target of SLIP-7's fit.
 
+### SLIP-18 · Scaled profile parameter
+
+The profile parameter $C_0$ of SLIP-2 or SLIP-15 is scaled about 1:
+
+$$C_0^\ast = 1 + \kappa_0\thinspace(C_0 - 1), \qquad \kappa_0 \ge 0,$$
+
+and $C_0^\ast$ takes $C_0$'s place in SLIP-1; $v_\infty$ is unchanged.
+- **The ends.** $\kappa_0 = 1$, the default, is the classifier's own $C_0$, exactly. $\kappa_0 = 0$ gives $C_0^\ast = 1$, no slip in the profile.
+- **Between them.** For $0 \le \kappa_0 \le 1$, $C_0^\ast$ lies between 1 and $C_0$. Since the probabilities sum to 1, it scales every regime's $C_0 - 1$ by the same $\kappa_0$, and annular flow, with $C_0 = 1$ in both classifiers, does not move.
+- **The bound.** $C_0 \ge 1$ for every mix of the regimes, so $C_0^\ast \ge 1$ for every $\kappa_0 \ge 0$: the scale never takes the flow past no slip.
+- **One scale.** One scale for every regime, rather than one per regime, is a decision (`specs/features/020-profile-scale.md`, design choice).
+
 ## Options
 
 | Option | IDs | Used by |
@@ -161,6 +173,7 @@ The limit of SLIP-13 and SLIP-14 as $w$ and $\epsilon_\lambda$ go to 0: Hasan et
 | Three regimes, fitted, vertical pipe: `regime_model='fitted'` | SLIP-1 to SLIP-8 | `v1.0.0` |
 | Three regimes, fitted, with inclination: bubbly–slug threshold $0.25\cos\theta$, deviation factor on $v_{\infty T}$ | SLIP-10, SLIP-11, with SLIP-1 to SLIP-8 | `regime_model='fitted'` on any grid; on a vertical grid it is the `v1.0.0` option exactly |
 | Five regimes from Hasan et al.'s hierarchy: `regime_model='hasan'` | SLIP-1, SLIP-4, SLIP-5, SLIP-10, SLIP-12 to SLIP-16 | `develop`'s default |
+| Scaled profile parameter: `profile_scale` | SLIP-18, with either classifier | `develop` with $\kappa_0 \ne 1$; a free parameter of a calibration (CAL-5). At the default $\kappa_0 = 1$ it is the identity, and the `v1.0.0` configuration keeps that |
 
 ## Safeguards
 
@@ -171,7 +184,7 @@ The limit of SLIP-13 and SLIP-14 as $w$ and $\epsilon_\lambda$ go to 0: Hasan et
 
 ## Open question: several void fractions
 
-At fixed superficial velocities $j_g = \alpha v_g$ and $j_l = (1 - \alpha) v_l$, which the mass rows fix at a point, SLIP-1 is one equation in $\alpha$: $h(\alpha) = \alpha\thinspace(C_0 j_m + v_\infty) - j_g = 0$, which is $-\alpha$ times its row. The classifier sees $\alpha$ only through $c_2$ and $c_4$, and $C_0 \ge 1$ and $v_\infty \ge 0$ for every mix of the regimes. So $h(0) < 0 < h(1)$, and a root always exists, but it need not be unique.
+At fixed superficial velocities $j_g = \alpha v_g$ and $j_l = (1 - \alpha) v_l$, which the mass rows fix at a point, SLIP-1 is one equation in $\alpha$: $h(\alpha) = \alpha\thinspace(C_0 j_m + v_\infty) - j_g = 0$, which is $-\alpha$ times its row. The classifier sees $\alpha$ only through $c_2$ and $c_4$, and $C_0 \ge 1$ and $v_\infty \ge 0$ for every mix of the regimes, scaled or not (SLIP-18). So $h(0) < 0 < h(1)$, and a root always exists, but it need not be unique.
 - **Where it occurs.** Near the slug–annular transition with little liquid there can be three roots. In Step 8's regenerated `sol-1` samples, at well 44 (k = 4: $u$ = 0.056, 3.8 kg/s of lift gas, $j_l$ = 0.016 m/s), point 95 has $\alpha$ = 0.662, 0.915 and 0.920.
 - **Consequence for the root set.** SOL-2 then holds roots that differ only in the branch at some points, and which branch is physical is not specified (`solution.md`, informative section).
 - **The case set.** At every point of every reference root, the root is unique (`tests/test_rust_backend.py`).
@@ -186,7 +199,7 @@ At fixed superficial velocities $j_g = \alpha v_g$ and $j_l = (1 - \alpha) v_l$,
 - Hasan, Kabir and Sayarpour (2010): Table 1, Eqs. (A-8) to (A-10), (A-14) and (A-17) to (A-19), for SLIP-12 to SLIP-17.
 - Hasan and Kabir (2018), *Fluid flow and heat transfer in wellbores*, 2nd ed., Society of Petroleum Engineers, Ch. 3: dispersed bubbly flow, its limit of $\alpha = 0.52$ (which SLIP-14 meets without a rule, as dispersed flow has $\lambda_g < 0.519$), and the criterion (A-17) as Eq. 3.10.
 - Taitel, Barnea and Dukler (1980), "Modelling flow pattern transitions for steady upward gas–liquid flow in vertical tubes", *AIChE Journal* 26, 345–354: the source of (A-17) to (A-19). Not consulted.
-- Feature specs `specs/features/002-slip-inclination.md` and `specs/features/019-five-flow-regimes.md`.
+- Feature specs `specs/features/002-slip-inclination.md`, `specs/features/019-five-flow-regimes.md` and `specs/features/020-profile-scale.md` (SLIP-18, with the published range of $C_0$ that motivates it).
 - Harmathy (1960), "Velocity of large drops and bubbles in media of infinite or restricted extent", *AIChE Journal* 6, 281–288.
 
 ## Test vectors
@@ -354,6 +367,48 @@ Generated by `specs/tools/make_develop_vectors.py` from develop (casadi 3.8.1): 
 | 12.25 | 1.25 | 0.2 | 80.0 | 780.0 | 0.018 | 0.127 | 0.0 | 1.0841227226211358 | 3.834007122968883e-14 | annular |
 | 4.9 | 2.0 | 0.5 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.0841227226211358 | 0.15563786215011302 | annular |
 | 4.9 | 2.0 | 0.5 | 80.0 | 780.0 | 0.018 | 0.127 | 0.0 | 1.0841227226211358 | 3.834007122968883e-14 | annular |
+
+### SLIP-18
+
+| profile_scale | v_g | v_l | alpha | rho_g | rho_l | sigma | D | cos_incl | → C_0 | → v_inf |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0.0 | 0.16666666666666669 | 1.4285714285714286 | 0.3 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.0 | 0.18265279710346274 |
+| 0.5 | 0.16666666666666669 | 1.4285714285714286 | 0.3 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.1 | 0.18265279710346274 |
+| 1.0 | 0.16666666666666669 | 1.4285714285714286 | 0.3 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.2 | 0.18265279710346274 |
+| 1.5 | 0.16666666666666669 | 1.4285714285714286 | 0.3 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.2999999999999998 | 0.18265279710346274 |
+| 0.0 | 2.0 | 0.7142857142857143 | 0.3 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.0 | 0.3699184690097599 |
+| 0.5 | 2.0 | 0.7142857142857143 | 0.3 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.099999999999999 | 0.3699184690097599 |
+| 1.0 | 2.0 | 0.7142857142857143 | 0.3 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.199999999999998 | 0.3699184690097599 |
+| 1.5 | 2.0 | 0.7142857142857143 | 0.3 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.299999999999997 | 0.3699184690097599 |
+| 0.0 | 3.3333333333333335 | 5.714285714285714 | 0.3 | 15.0 | 820.0 | 0.025 | 0.1 | 1.0 | 1.0 | 0.2002622036733616 |
+| 0.5 | 3.3333333333333335 | 5.714285714285714 | 0.3 | 15.0 | 820.0 | 0.025 | 0.1 | 1.0 | 1.099999997190884 | 0.2002622036733616 |
+| 1.0 | 3.3333333333333335 | 5.714285714285714 | 0.3 | 15.0 | 820.0 | 0.025 | 0.1 | 1.0 | 1.1999999943817679 | 0.2002622036733616 |
+| 1.5 | 3.3333333333333335 | 5.714285714285714 | 0.3 | 15.0 | 820.0 | 0.025 | 0.1 | 1.0 | 1.2999999915726517 | 0.2002622036733616 |
+| 0.0 | 13.333333333333334 | 4.285714285714286 | 0.3 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.0 | 0.35574174573333633 |
+| 0.5 | 13.333333333333334 | 4.285714285714286 | 0.3 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.0767260634897506 | 0.35574174573333633 |
+| 1.0 | 13.333333333333334 | 4.285714285714286 | 0.3 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.153452126979501 | 0.35574174573333633 |
+| 1.5 | 13.333333333333334 | 4.285714285714286 | 0.3 | 80.0 | 780.0 | 0.018 | 0.127 | 1.0 | 1.2301781904692515 | 0.35574174573333633 |
+| 0.0 | 33.333333333333336 | 0.4285714285714286 | 0.3 | 40.0 | 820.0 | 0.02 | 0.15 | 1.0 | 1.0 | 5.935477205094346e-07 |
+| 0.5 | 33.333333333333336 | 0.4285714285714286 | 0.3 | 40.0 | 820.0 | 0.02 | 0.15 | 1.0 | 1.0000001075232898 | 5.935477205094346e-07 |
+| 1.0 | 33.333333333333336 | 0.4285714285714286 | 0.3 | 40.0 | 820.0 | 0.02 | 0.15 | 1.0 | 1.0000002150465794 | 5.935477205094346e-07 |
+| 1.5 | 33.333333333333336 | 0.4285714285714286 | 0.3 | 40.0 | 820.0 | 0.02 | 0.15 | 1.0 | 1.000000322569869 | 5.935477205094346e-07 |
+
+### SLIP-18 (fitted)
+
+| profile_scale | v_g | v_l | alpha | rho_g | rho_l | sigma | D | cos_incl | → C_0 | → v_inf |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0.0 | 1.2 | 1.0 | 0.15 | 60.0 | 780.0 | 0.022 | 0.1524 | 1.0 | 1.0 | 0.19340633028659143 |
+| 0.5 | 1.2 | 1.0 | 0.15 | 60.0 | 780.0 | 0.022 | 0.1524 | 1.0 | 1.0999998058609524 | 0.19340633028659143 |
+| 1.0 | 1.2 | 1.0 | 0.15 | 60.0 | 780.0 | 0.022 | 0.1524 | 1.0 | 1.1999996117219047 | 0.19340633028659143 |
+| 1.5 | 1.2 | 1.0 | 0.15 | 60.0 | 780.0 | 0.022 | 0.1524 | 1.0 | 1.299999417582857 | 0.19340633028659143 |
+| 0.0 | 6.0 | 2.0 | 0.4 | 80.0 | 800.0 | 0.02 | 0.1524 | 1.0 | 1.0 | 0.37388375219412906 |
+| 0.5 | 6.0 | 2.0 | 0.4 | 80.0 | 800.0 | 0.02 | 0.1524 | 1.0 | 1.0891630571407123 | 0.37388375219412906 |
+| 1.0 | 6.0 | 2.0 | 0.4 | 80.0 | 800.0 | 0.02 | 0.1524 | 1.0 | 1.1783261142814245 | 0.37388375219412906 |
+| 1.5 | 6.0 | 2.0 | 0.4 | 80.0 | 800.0 | 0.02 | 0.1524 | 1.0 | 1.2674891714221368 | 0.37388375219412906 |
+| 0.0 | 25.0 | 3.0 | 0.85 | 40.0 | 820.0 | 0.018 | 0.1524 | 1.0 | 1.0 | 0.01578881358848783 |
+| 0.5 | 25.0 | 3.0 | 0.85 | 40.0 | 820.0 | 0.018 | 0.1524 | 1.0 | 1.003312444869717 | 0.01578881358848783 |
+| 1.0 | 25.0 | 3.0 | 0.85 | 40.0 | 820.0 | 0.018 | 0.1524 | 1.0 | 1.006624889739434 | 0.01578881358848783 |
+| 1.5 | 25.0 | 3.0 | 0.85 | 40.0 | 820.0 | 0.018 | 0.1524 | 1.0 | 1.0099373346091511 | 0.01578881358848783 |
 <!-- vectors:end develop -->
 
 ## Coverage
@@ -377,3 +432,4 @@ Generated by `specs/tools/make_develop_vectors.py` from develop (casadi 3.8.1): 
 | SLIP-15 | — | — | vectors; property: tests/test_slip.py |
 | SLIP-16 | — | — | vectors |
 | SLIP-17 | — | — | spec-only: the crisp limit of SLIP-13 and SLIP-14, which the tests compare the labels with and the model never evaluates |
+| SLIP-18 | — | — | vectors; property: tests/test_slip.py |

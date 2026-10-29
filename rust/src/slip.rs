@@ -22,7 +22,7 @@ pub enum RegimeModel {
 
 /// SlipModel's fields: the classifier; the fitted classifier's profile parameter of each regime and annular drift
 /// velocity (m/s); the five-regime classifier's friction factor in (A-17), logistic width and floor of the no-slip
-/// gas fraction
+/// gas fraction; and either classifier's scale of C_0 - 1 (SLIP-18)
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Slip {
     pub regime_model: RegimeModel,
@@ -33,12 +33,13 @@ pub struct Slip {
     pub f_ms: f64,
     pub transition_width: f64,
     pub lambda_floor: f64,
+    pub profile_scale: f64,
 }
 
 impl Default for Slip {
     fn default() -> Self {
         Self { regime_model: RegimeModel::Hasan, c_0_annular: 1.0, c_0_slug: 1.175, c_0_bubbly: 1.2, v_inf_annular: 0.0,
-               f_ms: 0.02, transition_width: 0.02, lambda_floor: 0.1 }
+               f_ms: 0.02, transition_width: 0.02, lambda_floor: 0.1, profile_scale: 1.0 }
     }
 }
 
@@ -165,14 +166,14 @@ impl SlipTerms {
                 let s = &self.slip;
                 let c_0 = p_annular * s.c_0_annular + p_slug * s.c_0_slug + p_bubbly * s.c_0_bubbly; // spec: SLIP-2
                 let v_inf = p_annular * s.v_inf_annular + p_slug * self.v_inf_slug + p_bubbly * self.v_inf_bubbly; // spec: SLIP-3
-                (c_0, v_inf)
+                (self.slip.scaled_profile(c_0), v_inf)
             }
             RegimeModel::Hasan => {
                 // Table 1 of Hasan et al. (2010) for upward cocurrent flow; independent of alpha
                 let [p_annular, p_churn, p_dispersed, p_slug, p_bubbly] = self.hasan;
                 let c_0 = 1.0 * p_annular + 1.15 * p_churn + 1.2 * (p_dispersed + p_slug + p_bubbly); // spec: SLIP-15
                 let v_inf = self.v_inf_bubbly * (p_bubbly + p_dispersed) + self.v_inf_slug * (p_slug + p_churn); // spec: SLIP-15
-                (c_0, v_inf)
+                (self.slip.scaled_profile(c_0), v_inf)
             }
         }
     }
@@ -182,6 +183,11 @@ impl Slip {
     /// v1.0.0's fitted classifier with its constants, the slip model of the v1.0.0 configuration
     pub fn fitted() -> Self {
         Self { regime_model: RegimeModel::Fitted, ..Self::default() }
+    }
+
+    /// C_0 scaled about 1 by profile_scale; at the default, 1, C_0 as it is, to the bit
+    pub fn scaled_profile(&self, c_0: f64) -> f64 {  // spec: SLIP-18
+        if self.profile_scale == 1.0 { c_0 } else { 1.0 + self.profile_scale * (c_0 - 1.0) }
     }
 
     /// The classifier's regimes, in the order of its probabilities
@@ -256,6 +262,31 @@ mod tests {
                 assert_eq!(p.len(), s.regimes().len());
                 assert!((p.iter().sum::<f64>() - 1.0).abs() < 1e-12);
                 assert!(p.iter().all(|&v| (0.0..=1.0).contains(&v)));
+            }
+        }
+    }
+
+    #[test]
+    fn profile_scale_moves_c_0_towards_one_and_leaves_v_inf() {  // SLIP-18
+        for s in both() {
+            for alpha in [0.05, 0.3, 0.7, 0.95] {
+                for cos_incl in [1.0, 0.5, 0.0] {
+                    let args = (5.0, 2.0, alpha, 50.0, 700.0, SIGMA, 0.15, cos_incl);
+                    let at = |k: f64| Slip { profile_scale: k, ..s }
+                        .identify_parameters(args.0, args.1, args.2, args.3, args.4, args.5, args.6, args.7);
+                    let (c_0, v_inf) = at(1.0);
+                    assert_eq!(at(1.0), s.identify_parameters(args.0, args.1, args.2, args.3, args.4, args.5, args.6,
+                                                              args.7));
+                    assert_eq!(at(0.0).0, 1.0);
+                    let mut last = 1.0;
+                    for k in [0.0, 0.25, 0.5, 1.0, 1.5] {
+                        let (c, v) = at(k);
+                        assert!((c - (1.0 + k * (c_0 - 1.0))).abs() < 1e-15);
+                        assert!(c >= last - 1e-15 && c >= 1.0);
+                        assert_eq!(v, v_inf);
+                        last = c;
+                    }
+                }
             }
         }
     }

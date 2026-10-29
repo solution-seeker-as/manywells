@@ -303,6 +303,12 @@ RUST_ADAPTERS = {
         rust('slip_parameters', v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl, slip=SlipModel())
         + (HASAN_REGIMES[int(rust('regime', v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl, slip=SlipModel(),
                                   geometry=WellGeometry.vertical(length=1000.0, n_cells=10, D=D)))],),
+    'SLIP-18': lambda profile_scale, v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl:
+        rust('slip_parameters', v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl,
+             slip=SlipModel(profile_scale=profile_scale)),
+    'SLIP-18 (fitted)': lambda profile_scale, v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl:
+        rust('slip_parameters', v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl,
+             slip=SlipModel(regime_model='fitted', profile_scale=profile_scale)),
     'FRIC-3': lambda p, T, alpha, v_g, v_l, rho_g, rho_l, D, roughness:
         rust('friction', p, v_g, v_l, alpha, rho_g, rho_l, T, fluid=FluidModel(pvt=BlackOil(gas_law='ideal'),
                                                                                 surface_tension_model='liquid'),
