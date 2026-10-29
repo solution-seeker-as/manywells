@@ -52,6 +52,7 @@ These files cut across modules:
 |------|----------------|
 | `test_spec_vectors.py` | Both backends against the test vectors in `specs/model/`: the component tables of v1.0.0 and `develop`, and v1.0.0's residual rows in the `v1.0.0` configuration. A vector whose equation `develop` does not implement is skipped with the reason; one that `develop` is known not to reproduce is a strict expected failure, so it fails once `develop` does. |
 | `test_spec_traceability.py` | Equation IDs, coverage tables and `# spec:` tags (`specs/model/README.md`). `spec_parse.py` reads the spec files for both spec tests. |
+| `test_worked_examples.py` | Both backends against worked examples published with the correlations or in textbooks, at the precision printed, each with its source (`specs/model/README.md`, Test vectors, Independent checks). A value `develop` does not reproduce is an open finding and a strict expected failure. |
 | `test_model_properties.py` | `develop`'s full model, which has no reference root sets: invariants, inflow and choke rows, mass conservation, friction, heat flow, convergence and stability, on deviated, L-shaped, black-oil and cold-lift-gas wells, with both backends (`slow`). |
 | `test_rust_backend.py` | The Rust core as the simulator's backend on v1.0.0's wells, and what it refuses. |
 | `test_backend_comparison.py` | The Rust core against the CasADi backend in every configuration of the matrix in `backend_cases.py`: the rows at the same state, and, in the slow test, the root sets on the comparison set. |
