@@ -86,7 +86,7 @@ A state with a cell where $\tau_i \le 0$ is not a root of the model. With heat l
 
 Not part of the model; recorded because the verifier records which root v1.0.0 returns from its default guess (`specs/verification.md`, `v1_cold.parquet`).
 
-- v1.0.0 solves DISC-6 as a feasibility NLP with Ipopt (objective zero), with bounds $p \in [p_s, p_r]$, $\alpha \le 1$, $T \in [T_s, T_r + 1]$ and all other unknowns $\ge 0$. The temperature bounds are never active at a root (SOL-1).
+- v1.0.0 solves DISC-6 as a feasibility NLP with Ipopt (objective zero), with bounds $p \in [p_s, p_r]$, $\alpha \le 1$, $T \in [T_s, T_r + 1]$ and all other unknowns $\ge 0$. The temperature bounds are never active at a root of v1.0.0's model (SOL-1). They are of `develop`'s: frictional heating, lift gas hotter than the reservoir and a surface warmer than the reservoir put roots outside them, so `develop`'s CasADi backend bounds the temperature by $\min(T_r, T_s, T_{lg})$ and $\max(T_r, T_s, T_{lg}) + 50$ K (`specs/features/012-root-search.md`, issue #13).
 - Its default initial guess marches up the well: $p_0 = p_r - 0.05(p_r - p_s)$ and $T_0 = T_r$; the bottom point's $(v_g, v_l, \alpha)$ from INF-6, INF-7 and SLIP-1 by Ipopt, starting from $\alpha = 0.5$; then each point from DISC-2 to DISC-5 and the closures by Ipopt, starting from the previous point. A user-supplied `x_guess` replaces the march.
 - It returns whichever root Ipopt reaches, which is the unstable trickle root in some cases (20 of the 141 cases in the case set). The dataset generators' warm starts are described in `specs/sampling.md`.
 
