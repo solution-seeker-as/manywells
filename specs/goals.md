@@ -1,6 +1,6 @@
 # ManyWells v2 goals
 
-*2026-09-30, revised the same day (lean verification) and 2026-10-01 (the port of `develop`'s model to the Rust core moves into the plan; signed off by Bjarne). Owner: Bjarne Grimstad. Status: decided.*
+*2026-09-30, revised the same day (lean verification), 2026-10-01 (the port of `develop`'s model to the Rust core moves into the plan; signed off by Bjarne) and 2026-10-29 (v2.0's model scope, decided by Bjarne). Owner: Bjarne Grimstad. Status: decided.*
 
 This file records the goals of the v2 foundation plan (`plans/manywells-v2-plan.md`) and the direction for v2 that the plan prepares for. The v2 direction can be revised after the plan; any change needs Bjarne's sign-off. Terms such as *verifier*, *reference root set* and *v1-compatibility configuration* are defined in the plan.
 
@@ -34,7 +34,8 @@ The new flow-regime model comes after the plan; it is `specs/features/019-five-f
   4. Simplified thermal model: frictional heating, a gravity term in the energy balance, and lift-gas temperature (on `develop`).
   5. Unrealistic sampled wells: a sampling redesign, after the plan.
 
-  The other model changes on `develop` (fixed-rate inflow, inclination terms in the slip model) are in scope too. v2 also adds a flow-regime model with five regimes (bubbly, dispersed bubbly, slug, churn, annular) after Hasan et al., `develop`'s default (`specs/features/019-five-flow-regimes.md`); v1.0.0's fitted classifier, which merges slug and churn, stays as an option. Any other model change needs its own feature spec and Bjarne's approval. Which features ship in v2.0 and which wait for v2.x is decided later.
+  The other model changes on `develop` (fixed-rate inflow, inclination terms in the slip model) are in scope too. v2 also adds a flow-regime model with five regimes (bubbly, dispersed bubbly, slug, churn, annular) after Hasan et al., `develop`'s default (`specs/features/019-five-flow-regimes.md`); v1.0.0's fitted classifier, which merges slug and churn, stays as an option. Any other model change needs its own feature spec and Bjarne's approval.
+- **v2.0's model** (Bjarne, 2026-10-29; `plans/model-lock-plan.md`, Step L1). Before the model is locked for the new sampler, v2.0 adds the lift gas's injection depth: today it enters at the bottomhole, where real gas-lift wells inject through a valve above the packer (feature spec 021). The v2 configuration uses the five regimes, not the fitted classifier (Step L4). The black oil takes any gas–oil ratio, and a gas condensate whose dropout matters enters as a PVT table (`specs/model/validity.md`, decision 4). Left for v2.x, and documented in v2.0 as limits: a tubing diameter that changes along the well, heat capacities that depend on $(p, T)$, and a heat-transfer coefficient that varies with depth or time. A gas-rate inflow for gas wells, a well option that needs no change of configuration, is decided with the sampling distribution in the redesign, as are the well types the datasets draw and whether they draw horizontal sections.
 - **Solution.** The model's answer is a root set: every steady-state root, each labelled stable or unstable. The label is static (nodal-analysis) stability: at a stable root, a small increase in rate makes the flow fall back; at an unstable one it runs away. The unstable roots in v1's data are low-rate *trickle* roots. The operating point is the stable root; if there is none, the well cannot flow at those conditions. `simulate()` returns the operating point and raises if there is none; the full root set is available on request.
 - **Implementation.** Two backends behind one Python API, `SSDFSimulator(wp, backend=...)`: `develop`'s Python/CasADi simulator, and a Rust core with Python bindings. The Rust core covers the full model from the plan's Step 9 on.
   - **Developed together.** Both backends are kept and developed together (Bjarne, 2026-10-01). Each equation is implemented in both, under the same spec ID.
@@ -68,4 +69,5 @@ The new flow-regime model comes after the plan; it is `specs/features/019-five-f
 | Operating point when there are two stable roots | `specs/model/solution.md` (Step 4): the one with the lowest p0 (SOL-6) |
 | Rust performance target | none yet (Bjarne, 2026-10-02); `specs/features/015-rust-develop-model.md` records the measurements |
 | Calibration method with the Rust core | Calibration spec, after the plan |
-| v2.0 vs v2.x feature split; v2 dataset schema (every root or the operating point only); accuracy bound for the real-well check; license; wheel platforms | v2.0.0 release work |
+| v2.0's model scope | this file, Direction for v2 (2026-10-29) |
+| v2 dataset schema (every root or the operating point only); accuracy bound for the real-well check; license; wheel platforms | v2.0.0 release work |

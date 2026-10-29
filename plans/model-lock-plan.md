@@ -1,6 +1,6 @@
 # Lock the model for the new sampler — plan
 
-*Draft 2026-10-29. Owner: Bjarne Grimstad. Status: in progress; L4 done, L2 decided but for decision 5, L2 and L3 implemented on branches.*
+*Draft 2026-10-29. Owner: Bjarne Grimstad. Status: in progress; L1 decided (feature 021 to implement), L2 decided but for decision 5, L4 done; L2 and L3 implemented on branches.*
 
 The next step towards v2 is a new sampling procedure: synthetic wells and data that are more realistic than v1's (`specs/goals.md`, limitation 5). The sampler draws the inputs of a model, so the model should not move under it. This plan brings `develop` to the point where the sampler can be implemented:
 
@@ -38,7 +38,7 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
     - The Vazquez–Beggs black oil does not model the oil carried in a rich gas, which drops out as the pressure falls.
     - `validity.md`'s decision 4 recommends letting the black oil take any gas–oil ratio, as today. A gas condensate whose dropout matters then enters as a PVT table from a flash (018). The alternative is to refuse gas–oil ratios above a bound such as 3000 scf/STB. The sampler would then have to draw tables to have gas wells at all.
   - **Horizontal sections** (`validity.md`'s decision 5). The redesign keeps drawing L-shaped wells, with the known limit that no option has stratified flow, or it stops until a model with stratified flow exists, which would need its own feature spec.
-  - **Decided 2026-10-29.** The black oil takes any gas–oil ratio (`validity.md`, decision 4), so the model needs no change for gas-rich wells. Which well types the datasets draw, and whether they draw horizontal sections (decision 5), Bjarne decides with the sampling distribution in the redesign. What remains of this step is the inputs below.
+  - **Decided 2026-10-29.** The black oil takes any gas–oil ratio (`validity.md`, decision 4), so the model needs no change for gas-rich wells. Which well types the datasets draw, and whether they draw horizontal sections (decision 5), Bjarne decides with the sampling distribution in the redesign.
   - **Inputs the model lacks:**
     - *Lift-gas injection depth.* Lift gas enters at the bottomhole (`inflow.md`); real gas-lift wells inject through a valve above the perforations.
     - *A gas-rate inflow for gas wells.* The reservoir gas is a fixed fraction of the liquid inflow (INF-4), and every sampled well uses Vogel's inflow, which Vogel derived for solution-gas drive below the bubble point (`validity.md`, note 10).
@@ -47,6 +47,8 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
     - *A heat-transfer coefficient that depends on depth or time.*
 
   Each input taken into v2 becomes a feature spec and goes through `AGENTS.md`, Adding an equation, before Step L5. One left out is recorded as a non-goal or as v2.x work.
+
+  **Decided 2026-10-29** (`specs/goals.md`, v2.0's model). The injection depth is in v2.0: feature spec 021, approved the same day, to be implemented before L5. A gas-rate inflow is a well option, decided with the sampling distribution. The changing diameter, $c_p(p, T)$ and a varying $h$ wait for v2.x, documented as limits. What remains of this step is implementing 021.
 - **Output.**
   - The v2.0 feature split that `specs/goals.md` defers, recorded there (needs sign-off).
   - A feature spec per new input.
@@ -215,6 +217,5 @@ Steps L1 to L4 can run in parallel: L1, L2 and L4 are mostly Bjarne's decisions,
 
 ## Open decisions
 
-- **The inputs v2 adds** (L1): lift-gas injection depth, a gas-rate inflow, a tubing diameter that changes along the well, heat capacities that depend on $(p, T)$, a heat-transfer coefficient that varies.
 - **Which well types the datasets draw, and horizontal sections** (`validity.md`'s decision 5): with the sampling distribution, in the redesign.
 - **The configuration's name** (L5).

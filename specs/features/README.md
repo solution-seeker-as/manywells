@@ -26,3 +26,4 @@ Specs 001 to 013 were written after the fact in Step 7 of `plans/manywells-v2-pl
 | [018](018-pvt-tables.md) | PVT tables, and one interface for every PVT model | pvt/table (new), pvt/*, discretization, nomenclature, README, architecture, constitution |
 | [019](019-five-flow-regimes.md) | Five flow regimes after Hasan et al. (2010), from their hierarchy's rules | slip, solution, README, nomenclature, architecture, goals |
 | [020](020-profile-scale.md) | A scale on the profile parameter, free in calibration | slip, nomenclature, README, architecture (and `specs/calibration.md`, CAL-5 and CAL-6) |
+| [021](021-lift-gas-injection-depth.md) | The lift gas's injection depth | inflow, thermal, discretization, balances, nomenclature, README, architecture |
