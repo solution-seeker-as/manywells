@@ -131,3 +131,5 @@ def test_friction_models_are_validated():
         RoughnessFriction(roughness=0.0)
     with pytest.raises(ValueError, match="correlation"):
         RoughnessFriction(correlation='moody')
+    with pytest.raises(ValueError, match="'colebrook' is not one of"):
+        friction_factor(1e5, 1e-4, 'colebrook')

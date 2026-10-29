@@ -5,7 +5,7 @@ terms of the CC BY-NC 4.0 International Public License.
 
 Simulate an L-shaped well: vertical section → build section → horizontal section.
 
-Compares the L-shaped trajectory to a vertical well of the same TVD, showing
+Compares the L-shaped trajectory (1800 m TVD) to a 2000 m vertical well, showing
 how deviation affects pressure, temperature, void fraction, and flow regime.
 """
 
@@ -96,7 +96,7 @@ for ax, (name, unit) in zip(axes.flat, labels_units):
     ax.grid(True, alpha=0.3)
 
 fig.suptitle(
-    f"Vertical vs L-shaped well  (TVD ≈ {TVD:.0f} m, choke = {bc.u * 100:.0f}%)",
+    f"Vertical ({TVD:.0f} m TVD) vs L-shaped well ({tvd_survey[-1]:.0f} m TVD), choke = {bc.u * 100:.0f}%",
     fontsize=14,
     fontweight="bold",
 )

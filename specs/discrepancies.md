@@ -168,6 +168,7 @@ Model changes made on `develop` since v1.0.0 are not discrepancies; they are lis
 - `FixedFlowRate.__post_init__` checks `w_l_const >= 0` twice and never checks `w_g_const` (`inflow.py:143-144`).
 - The comment in `liquid_mix` calls the oil volume fraction the water fraction (D-2).
 - **Ruling.** None changes the `v1.0.0` model. Fix them on `develop` any time (`plans/improvements.md` §1.4 for the first).
+- **Status.** All three are fixed on `develop`: `cpr` is a property from CHK-4, not a constructor argument (2026-10-29), `FixedFlowRate` checks its one rate once, and the comment in `liquid_mix` names the volume fraction of the first liquid (2026-10-29).
 
 ### D-22 · Observations where the paper and the code agree
 

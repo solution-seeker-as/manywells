@@ -42,3 +42,14 @@ def test_a_dataset_round_trips_with_every_trajectory(tmp_path):
         others = [k for k in ('kickoff_fraction', 'inclination', 'horizontal_length') if k not in TRAJECTORY_PARAMETERS[kind]]
         assert np.all(np.isnan(row[others].astype(float)))
         assert row['L'] == draw.L and list(row['fractions']) == list(draw.fractions)
+
+
+def test_a_dotted_name_keeps_its_dot(tmp_path):
+    """The suffixes are appended: sol-v1.0 and sol-v1.1 are two datasets, not both sol-v1 (backlog §1.10)."""
+    draws = {0: sample_well(1, 0)}
+    for name, chk in (('sol-v1.0', 0.5), ('sol-v1.1', 0.6)):
+        write_dataset(tmp_path / name, pd.DataFrame({'ID': [0], 'CHK': [chk]}), draws, {'name': name})
+    assert sorted(p.name for p in tmp_path.iterdir()) == sorted(
+        f'sol-v1.{k}{suffix}' for k in (0, 1) for suffix in ('.parquet', '_config.parquet', '_meta.json'))
+    assert pd.read_parquet(tmp_path / 'sol-v1.1.parquet')['CHK'].item() == 0.6
+    assert json.loads((tmp_path / 'sol-v1.0_meta.json').read_text())['name'] == 'sol-v1.0'

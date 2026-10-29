@@ -47,6 +47,9 @@ class NoOperatingPoint(SimError):
         super().__init__(f'no stable root: the search found {n} root(s), none of them stable')
         self.root_set = root_set
 
+    def __reduce__(self):  # args holds the message, so pickle would call __init__(message)
+        return type(self), (self.root_set,)
+
 
 @dataclass(frozen=True)
 class WellProperties:
@@ -176,7 +179,8 @@ class SSDFSimulator:
         sorted by bottomhole pressure, and the operating point.
 
         :param bc: Boundary conditions
-        :param x_guess: An extra start for the search, such as the root of a nearby operating point
+        :param x_guess: An extra start for the search, such as the root of a nearby operating point: a Root or its
+            state as a flat list
         :return: The root set
         :raises ValueError: unless p_r > p_s, so that an admissible state (SOL-1) has a pressure range to lie in; and
             where the fluid's PVT table does not cover p_r and T_r (specs/model/pvt/table.md)
@@ -188,8 +192,10 @@ class SSDFSimulator:
         if not fluid.covers(bc.p_r, bc.T_r):
             raise ValueError(f'the fluid\'s PVT table, {fluid.table_range}, does not cover the reservoir: '
                              f'p_r = {bc.p_r} bar, T_r = {bc.T_r} K')
+        if isinstance(x_guess, Root):
+            x_guess = x_guess.x
         rs = self._roots.find(bc, x_guess=x_guess)
-        failed = [a for a in rs.search if not a.outcome.startswith('root')]
+        failed = [a for a in rs.search if not a.found]
         if failed:
             log.debug('%d of %d starts found no root: %s', len(failed), len(rs.search),
                       '; '.join(f'{a.start}: {a.outcome}' for a in failed))
@@ -201,7 +207,8 @@ class SSDFSimulator:
         several (SOL-4 to SOL-6).
 
         :param bc: Boundary conditions. Deprecated: None, with the boundary conditions given to the constructor
-        :param x_guess: An extra start for the search; it makes the search faster, not the answer different
+        :param x_guess: An extra start for the search, as in root_set. The search still runs all its own starts, so
+            the guess does not make it faster, and a root found only from the guess can change the operating point
         :return: The operating point (Root); a flat list of its state in the deprecated form
         :raises NoOperatingPoint: if there is no stable root. A closed choke (u = 0) has none: its only steady state
             is the zero flow of a shut-in well, which is not an admissible state (SOL-1)
@@ -211,7 +218,8 @@ class SSDFSimulator:
         if legacy:
             if self.bc is None:
                 raise TypeError('simulate() needs the boundary conditions')
-            bc, x_guess = self.bc, self.x_guess
+            bc = self.bc
+            x_guess = self.x_guess if x_guess is None else x_guess
         rs = self.root_set(bc, x_guess=x_guess)
         if rs.operating_point is None:
             raise NoOperatingPoint(rs)
@@ -237,7 +245,7 @@ class SSDFSimulator:
             X = np.asarray(x, dtype=float).reshape(-1, DIM_X)
             regimes = self._roots.flow_regimes(X.ravel())
 
-        df = pd.DataFrame(X, columns=self.variable_names)
+        df = pd.DataFrame(X, columns=self.variable_names, copy=True)  # Without copy-on-write (pandas < 3) it is a view
 
         # Add geometry columns (simulator order: bottom to top)
         df.insert(loc=1, column='md', value=np.array(self.geo.md))

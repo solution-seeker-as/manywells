@@ -51,8 +51,8 @@ def not_in_core(wp) -> list:
     # The core's void-fraction solve brackets the slip law on [0, 1], which needs C_0 >= 1 and v_inf >= 0 in every
     # regime (manywells._core, march.rs); the five regimes' values are fixed (SLIP-15), the fitted classifier's fields
     slip = wp.slip
-    if type(slip) is SlipModel and slip.regime_model == 'fitted' and (
-            min(slip.C_0_annular, slip.C_0_slug, slip.C_0_bubbly) < 1 or slip.v_inf_annular < 0):
+    if type(slip) is SlipModel and slip.regime_model == 'fitted' and not (
+            all(c >= 1 for c in (slip.C_0_annular, slip.C_0_slug, slip.C_0_bubbly)) and slip.v_inf_annular >= 0):
         out.append(f'slip: the core needs every C_0 >= 1 and v_inf_annular >= 0 ({slip})')
     if type(wp.fluid) is FluidModel and type(wp.fluid.pvt) not in PVT_CLASSES:
         out.append(f'fluid: pvt is {type(wp.fluid.pvt).__name__}, not one of the core\'s classes')
@@ -139,13 +139,12 @@ class RustRootFinder:
                 rejected += 1
                 continue
             slope = normalized_slope(r.slope, x, bc.p_r, bc.p_s, self.wp.geometry.A)
-            label = label_of(slope) if np.isfinite(slope) else 'indeterminate'
-            roots.append(Root(x=x, label=label, slope=slope, choked=r.choked, flow_regime=tuple(r.flow_regime),
+            roots.append(Root(x=x, label=label_of(slope), slope=slope, choked=r.choked, flow_regime=tuple(r.flow_regime),
                               w_res=r.w_res, w_g_res=r.w_g_res, off_table=self.wp.fluid.off_table(x)))
         unresolved = counts['rejected']
         outcome = (f'{len(roots)} roots' + (f', {rejected} not admissible' if rejected else '')
                    + (f', {unresolved} sign changes of R not accepted' if unresolved else ''))
-        search = [Attempt('shooting', np.nan, outcome, time.perf_counter() - t0, counts['marches'])]
+        search = [Attempt('shooting', np.nan, outcome, time.perf_counter() - t0, counts['marches'], found=len(roots))]
         return RootSet.of(roots, search=search)
 
     def flow_regimes(self, x) -> tuple:

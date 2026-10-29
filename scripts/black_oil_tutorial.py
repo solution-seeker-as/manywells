@@ -1,4 +1,8 @@
 """
+Copyright (C) 2024 Solution Seeker AS - All Rights Reserved
+You may use, distribute and modify this code under the
+terms of the CC BY-NC 4.0 International Public License.
+
 Visual tutorial: Solution Gas-Oil Ratio (Rs) and Oil Formation Volume Factor (Bo).
 
 Demonstrates how Rs and Bo vary with pressure and temperature using the
@@ -38,8 +42,9 @@ print()
 
 # At low pressure, little gas is dissolved (low Rs) and the oil barely
 # expands (Bo near 1).  As pressure rises, more gas dissolves and the
-# oil swells.  Above the bubble point, Rs and Bo are capped -- all
-# available gas is already in solution.
+# oil swells.  Above the bubble point, Rs and Bo are capped at their
+# bubble-point values.  Here Rs caps at about 115 Sm3/Sm3, below the
+# stream's GOR of 200, so the rest of the gas stays free.
 
 T_fixed = 273.15 + 80  # 80 degC
 p_bar = np.linspace(1, 350, 500)
@@ -63,7 +68,7 @@ ax.annotate('Below bubble point:\nRs increases with pressure\n(more gas dissolve
             xytext=(120, rs_vals.max() * 0.35),
             arrowprops=dict(arrowstyle='->', color='blue'),
             fontsize=9, color='blue')
-ax.annotate('Above bubble point:\nRs is capped\n(all gas dissolved)',
+ax.annotate('Above bubble point:\nRs is capped\nat Rs(p_bubble)',
             xy=(300, float(fl.rs(300, T_fixed))),
             xytext=(280, rs_vals.max() * 0.55),
             arrowprops=dict(arrowstyle='->', color='grey'),

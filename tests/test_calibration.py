@@ -19,10 +19,11 @@ import pytest
 
 from manywells.calibration import (CalibrationData, Noise, Parameter, apply, calibrate, darcy_productivity_index,
                                    default_prior, evaluate, vogel_maximum_rate)
-from manywells.calibration.fit import priors_for
+from manywells.calibration import synthetic
+from manywells.calibration.fit import priors_for, residual_table
 from manywells.calibration.objective import BARRIER, Objective, predicted, row_conditions, row_fluids
 from manywells.calibration.parameters import MILLIDARCY, CENTIPOISE
-from manywells.calibration.synthetic import INSTRUMENTATIONS, add_noise, instrument, operating_points
+from manywells.calibration.synthetic import INSTRUMENTATIONS, add_noise, instrument, operating_points, synthetic_data
 from manywells.datasets.rows import root_features
 from manywells.friction import FixedFrictionFactor
 from manywells.inflow import ProductivityIndex, Vogel
@@ -50,6 +51,17 @@ def test_data_keeps_a_copy():
     assert data.rows.loc[0, 'PBH'] == 150.0
 
 
+def test_data_keeps_an_index_as_a_column():
+    """A time stamp held in the index reaches the residual table; the default index adds no column."""
+    times = pd.date_range('2026-01-01', periods=2, freq='D', name='time')
+    data = CalibrationData(rows().set_index(times))
+    assert data.rows['time'].tolist() == list(times) and data.rows.index.tolist() == [0, 1]
+    obj = Objective(WP, data, BoundaryConditions(), priors_for(WP, ['K_c']))
+    assert residual_table(obj, obj.y)['time'].tolist() == list(times)
+    assert list(CalibrationData(rows()).rows.columns) == list(rows().columns)
+    assert CalibrationData(rows().iloc[[1]]).rows['index'].tolist() == [1]
+
+
 @pytest.mark.parametrize('change, match', [
     (lambda df: df.drop(columns='CHK'), 'input column CHK'),
     (lambda df: df.assign(CHK=[0.0, 0.5]), r'CHK must be in \(0, 1\]'),
@@ -66,11 +78,19 @@ def test_data_keeps_a_copy():
     (lambda df: df.assign(RATE_SOURCE=['test', 'meter']), 'RATE_SOURCE'),
     (lambda df: df.assign(PWH_SD=[0.0, 1.0]), 'PWH_SD must be positive'),
     (lambda df: df.assign(PWH=['40', 'x']), 'non-numeric'),
+    (lambda df: df.assign(CHK=['0.5', 'x']), 'non-numeric'),
 ])
 def test_data_rejects_malformed_rows(change, match):
     """CAL-1 to CAL-4: each malformed input is rejected with a ValueError that names it."""
     with pytest.raises(ValueError, match=match):
         CalibrationData(change(rows()))
+
+
+def test_data_converts_numeric_strings():
+    """Numeric strings, as from a CSV read as text, are numbers in the inputs as in the observations."""
+    data = CalibrationData(rows(CHK=['0.5', '0.8'], PDC=['20', '21'], PWH=['40', '35']))
+    assert data.rows['CHK'].tolist() == [0.5, 0.8] and data.rows['PDC'].tolist() == [20.0, 21.0]
+    assert data.rows['PWH'].tolist() == [40.0, 35.0]
 
 
 def test_data_rejects_empty_table_and_bad_noise():
@@ -192,6 +212,8 @@ def test_a_well_the_backend_cannot_solve_is_refused_before_any_solve():
         calibrate(wp, CalibrationData(rows()), BoundaryConditions(), ['K_c'])
     with pytest.raises(ValueError, match='Rust core cannot solve'):
         evaluate(wp, CalibrationData(rows()), BoundaryConditions())
+    with pytest.raises(ValueError, match='Rust core cannot solve'):
+        synthetic_data(wp, BoundaryConditions(), {}, 4, seed=0)
     with pytest.raises(ValueError, match='backend must be'):
         calibrate(WP, CalibrationData(rows()), BoundaryConditions(), ['K_c'], backend='fortran')
 
@@ -297,3 +319,11 @@ def test_noise_is_seeded_and_keeps_the_fractions():
     pd.testing.assert_frame_equal(a, b)
     assert np.allclose(a['QGAS'] / a['QOIL'], 200.0) and np.allclose(a['QWAT'] / a['QOIL'], 0.1)
     assert not np.allclose(a['PBH'], df['PBH']) and (a['RATE_SOURCE'] == 'test').all()
+
+
+def test_rows_without_noise_keep_their_rate_source(monkeypatch):
+    """noisy=False still weights the rows' rates with the noise of their source."""
+    monkeypatch.setattr(synthetic, 'simulate_rows', lambda wp, conditions, **kw: table(len(conditions)))
+    data = synthetic_data(WP, BoundaryConditions(), {}, 4, seed=0, noisy=False, rate_source='mpfm')
+    assert (data.rows['RATE_SOURCE'] == 'mpfm').all()
+    assert data.noise_sd()[:, 3].tolist() == [Noise().rate_mpfm] * 4

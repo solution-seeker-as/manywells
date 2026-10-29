@@ -93,7 +93,7 @@ One table per well, one row per steady period: a `pandas.DataFrame` that `Calibr
 |---|---|---|---|
 | `CHK` | input, required | choke position, in (0, 1] | – |
 | `PDC` | input, required | pressure downstream of the choke | bar |
-| `WGL` | input | lift-gas rate (0 if absent) | kg/s |
+| `WGL` | input | lift-gas rate (`bc`'s if absent) | kg/s |
 | `p_r`, `T_r`, `T_s`, `T_lg` | input | reservoir pressure; reservoir, surface and lift-gas temperatures (`bc`'s if absent) | bar, K |
 | `gor`, `wlr` | input | gas-oil and water-liquid ratios at standard conditions (the fluid's if absent) | Sm³/Sm³, – |
 | `PBH`, `PWH`, `TWH` | observation | bottomhole and wellhead pressure, wellhead temperature | bar, K |
@@ -111,7 +111,9 @@ Rules:
 - **The three phase rates are one observation.** The fit compares the reservoir's total mass rate, because the split
   between the phases is an input (`gor`, `wlr`). Give the row the ratios of the same test, so that they agree with
   its rates.
-- **Other columns, such as a time stamp, are kept**, and appear in the result's residual table.
+- **Other columns, such as a time stamp, are kept**, and appear in the result's residual table. So does a time stamp
+  held in the index: an index other than the default 0, 1, ... becomes a column, named after the index (`index` if it
+  has none).
 
 Converting a typical well-test export:
 

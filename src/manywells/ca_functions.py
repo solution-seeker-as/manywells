@@ -90,7 +90,8 @@ def ca_double_sigmoid(x, l1: float, l2: float, l3: float, a: float, b: float, k:
     :return: Double sigmoid function evaluated at x
     """
 
-    assert a < b, 'a must be less than b'
+    if not a < b:
+        raise ValueError(f'a must be less than b, got a = {a}, b = {b}')
 
     s1 = ca_sigmoid(x, a, k)
     s2 = ca_sigmoid(x, b, k)

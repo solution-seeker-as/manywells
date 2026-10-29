@@ -155,7 +155,9 @@ def test_slip_parameters_are_fields():
 
 @pytest.mark.parametrize('kw', [dict(regime_model='four'), dict(f_ms=0.0), dict(transition_width=0.0),
                                 dict(lambda_floor=-0.1), dict(profile_scale=-0.1), dict(profile_scale=float('nan')),
-                                dict(profile_scale=float('inf'))])
+                                dict(profile_scale=float('inf')), dict(C_0_annular=0.9),
+                                dict(C_0_slug=float('nan')), dict(C_0_bubbly=float('inf')),
+                                dict(v_inf_annular=float('nan'))])
 def test_slip_model_validates_its_fields(kw):
     with pytest.raises(ValueError):
         SlipModel(**kw)

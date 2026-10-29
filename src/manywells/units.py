@@ -5,10 +5,11 @@ terms of the CC BY-NC 4.0 International Public License.
 
 Units, physical constants, and conversion helpers.
 
-All public interfaces in the manywells package use SI units (Pa, K, kg/m3,
-m, s, J, ...).  Some correlations accept field-unit quantities such as API
-gravity where that is the natural parameterization; these cases are clearly
-documented at the call site.
+The simulator and its components take and return pressure in bar and
+temperature in K; other quantities are in SI units (kg/m3, m, s, J, ...).
+CF_BAR converts bar to Pa where SI is needed internally.  Some correlations
+accept field-unit quantities such as API gravity where that is the natural
+parameterization; these cases are clearly documented at the call site.
 
 Standard conditions are defined per ISO 13443: 15 degC (288.15 K) and
 1 atm (101 325 Pa).

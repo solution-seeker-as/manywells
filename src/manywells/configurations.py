@@ -102,10 +102,16 @@ def _fluid_options(fluid, pvt_class, gas_law, surface_tension_model) -> list:
 
 
 def differences(wp: WellProperties, configuration: str) -> list:
-    """Every option of wp that differs from the configuration, as readable strings (empty if wp is in it)."""
+    """
+    Every option of wp that differs from the configuration, as readable strings (empty if wp is in it). Each part's
+    class is checked exactly, as the Rust adapter does: a subclass may override any method, and so change the physics.
+    """
     if configuration not in CONFIGURATIONS:
         raise ValueError(f'unknown configuration {configuration!r}, expected one of {CONFIGURATIONS}')
-    geo, fluid, out = wp.geometry, wp.fluid, []
+    geo, fluid = wp.geometry, wp.fluid
+    out = [f'{name}: {type(getattr(wp, name)).__name__}, not {cls.__name__}'
+           for name, cls in (('geometry', WellGeometry), ('fluid', FluidModel), ('thermal', ThermalModel),
+                             ('slip', SlipModel)) if type(getattr(wp, name)) is not cls]
     thermal = _thermal_options(wp.thermal)
     if configuration == V1:
         if not np.allclose(geo.cos_incl, 1.0, rtol=0, atol=1e-12):
@@ -113,19 +119,19 @@ def differences(wp: WellProperties, configuration: str) -> list:
         if not np.allclose(geo.delta_md, geo.L / geo.n_cells, rtol=1e-9, atol=0):
             out.append('geometry: grid not uniform (DISC-1)')
         out += _fluid_options(fluid, DeadOil, 'ideal', 'liquid')
-        if not isinstance(wp.friction, FixedFrictionFactor):
+        if type(wp.friction) is not FixedFrictionFactor:
             out.append(f'friction: {type(wp.friction).__name__}, not FixedFrictionFactor (FRIC-2)')
         out += [f'thermal: {k} is on' for k, v in thermal.items() if v]
         if wp.slip != SlipModel(regime_model='fitted'):
             out.append(f'slip: not v1.0.0\'s fitted classifier with its parameters ({wp.slip})')
-        if not isinstance(wp.inflow, (Vogel, ProductivityIndex)):
+        if type(wp.inflow) not in (Vogel, ProductivityIndex):
             out.append(f'inflow: {type(wp.inflow).__name__}, not Vogel or ProductivityIndex (INF-1, INF-2)')
-        if not isinstance(wp.choke, (SimpsonChokeModel, BernoulliChokeModel)):
+        if type(wp.choke) not in (SimpsonChokeModel, BernoulliChokeModel):
             out.append(f'choke: {type(wp.choke).__name__}, not SimpsonChokeModel or BernoulliChokeModel')
     else:
         default = FluidModel()
         out += _fluid_options(fluid, type(default.pvt), default.pvt.gas_law, default.surface_tension_model)
-        if not isinstance(wp.friction, RoughnessFriction) or wp.friction.correlation != RoughnessFriction().correlation:
+        if type(wp.friction) is not RoughnessFriction or wp.friction.correlation != RoughnessFriction().correlation:
             out.append(f'friction: {wp.friction}, not RoughnessFriction with the default correlation')
         out += [f'thermal: {k} is off' for k, v in thermal.items() if not v]
         if wp.slip.regime_model != SlipModel().regime_model:

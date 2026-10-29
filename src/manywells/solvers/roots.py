@@ -68,7 +68,10 @@ def admissible(x, bc) -> bool:  # spec: SOL-1
 
 
 def label_of(slope: float) -> str:
-    return 'indeterminate' if abs(slope) <= LABEL_MIN else ('unstable' if slope > 0 else 'stable')
+    """The label of a normalized slope (SOL-3): indeterminate within LABEL_MIN of zero, or where it is not finite."""
+    if not np.isfinite(slope) or abs(slope) <= LABEL_MIN:
+        return 'indeterminate'
+    return 'unstable' if slope > 0 else 'stable'
 
 
 def normalized_slope(slope: float, x, p_r: float, p_s: float, A: float) -> float:
@@ -95,7 +98,10 @@ class StabilitySlope:  # spec: SOL-3
     def __call__(self, x, params) -> float:
         J = self._jac(x, params)
         c, rows, cols = self._choke, self._rows, self._cols
-        dy = -ca.solve(J[rows, cols], J[rows, 0], 'csparse')
+        try:
+            dy = -ca.solve(J[rows, cols], J[rows, 0], 'csparse')
+        except RuntimeError:  # A singular reduced Jacobian: y(p_0) is not defined there, and the label is indeterminate
+            return np.nan
         slope = float(J[c, 0] + ca.mtimes(J[c, cols], dy))
         return normalized_slope(slope, x, params[0], params[1], self._A)
 
@@ -108,6 +114,7 @@ class Attempt:
     outcome: str        # 'root at p_0 = ... bar', 'march failed', 'solve failed (<Ipopt status>)' or 'not admissible ...'
     seconds: float = 0.0  # Time taken by the march and the solve
     iterations: int = 0   # Ipopt iterations
+    found: int = 0        # Roots the start reached; 0 if it failed
 
 
 class RootFinder:
@@ -163,7 +170,7 @@ class RootFinder:
                 solutions.append(result.x)
             root = same[0] if same else result.x
             attempts.append(Attempt(name, np.nan if p_0 is None else p_0, f'root at p_0 = {root[0]:.4f} bar',
-                                    time.perf_counter() - t0, result.stats.get('iter_count', 0)))
+                                    time.perf_counter() - t0, result.stats.get('iter_count', 0), found=1))
 
         roots = []
         for x in solutions:

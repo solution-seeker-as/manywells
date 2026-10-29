@@ -1,6 +1,7 @@
 """Tests for manywells.simulator."""
 
 import dataclasses
+import pickle
 
 import pytest
 import numpy as np
@@ -234,6 +235,53 @@ def test_no_operating_point():
     assert isinstance(e.value, SimError)
     assert isinstance(e.value.root_set, RootSet)
     assert e.value.root_set.operating_point is None
+
+
+def test_no_operating_point_pickles():
+    """A worker's NoOperatingPoint reaches the parent process with its root set."""
+    e = pickle.loads(pickle.dumps(NoOperatingPoint(RootSet.of([]))))
+    assert isinstance(e, NoOperatingPoint) and e.root_set.roots == () and 'found 0 root(s)' in str(e)
+
+
+class GuessRecorder:
+    """A root finder that records the guess it is given and finds no root."""
+    x_guess = 'not called'
+
+    def find(self, bc, x_guess=None):
+        self.x_guess = x_guess
+        return RootSet.of([])
+
+
+def test_x_guess_reaches_the_search():
+    """The deprecated simulate() keeps an x_guess it is given, and a Root is a guess by its state."""
+    wp, bc = WellProperties(geometry=WellGeometry.vertical(100, 3, D=0.1)), BoundaryConditions()
+    with pytest.warns(DeprecationWarning):
+        sim = SSDFSimulator(wp, bc)
+    sim._roots = GuessRecorder()
+    with pytest.raises(NoOperatingPoint):
+        sim.simulate(x_guess=[1.0] * 28)
+    assert sim._roots.x_guess == [1.0] * 28
+    sim.x_guess = [2.0] * 28
+    with pytest.raises(NoOperatingPoint):
+        sim.simulate()
+    assert sim._roots.x_guess == [2.0] * 28
+
+    root = Root(x=np.arange(28.0), label='stable', slope=-1.0, choked=False, flow_regime=('slug',) * 4, w_res=1.0,
+                w_g_res=0.1)
+    sim.root_set(bc, x_guess=root)
+    assert sim._roots.x_guess is root.x
+
+
+def test_solution_as_df_copies_the_state():
+    """An edit of the frame leaves the frozen root as it was, with or without pandas' copy-on-write."""
+    sim = SSDFSimulator(WellProperties(geometry=WellGeometry.vertical(100, 3, D=0.1)))
+    root = Root(x=np.tile([50.0, 5.0, 2.0, 0.3, 50.0, 700.0, 300.0], 4), label='stable', slope=-1.0, choked=False,
+                flow_regime=('slug',) * 4, w_res=1.0, w_g_res=0.1)
+    for x in (root, root.x):
+        df = sim.solution_as_df(x)
+        df.loc[0, 'p'] = -1.0
+        df['T'] *= 2
+        assert root.x[0] == 50.0 and root.x[6] == 300.0
 
 
 def test_simulator_solution_as_df_shape():

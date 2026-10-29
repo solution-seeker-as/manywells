@@ -86,6 +86,16 @@ def test_cli_needs_well_ids(data, tmp_path):
         main([str(path), '--dataset', 'sol-1'])
 
 
+def test_cli_needs_rows_of_reference_wells(data, tmp_path):
+    """Wells from another dataset get weight 0: a ValueError, not an IndexError on no rows."""
+    path = tmp_path / 'candidate.parquet'
+    data.head(100).assign(ID=10**9).to_parquet(path)
+    with pytest.raises(ValueError, match='no candidate row belongs to a reference well'):
+        main([str(path), '--dataset', 'sol-1'])
+    with pytest.raises(ValueError, match='no rows'):
+        compare(summarize(data), data.head(0))
+
+
 def test_equal_weights_are_the_unweighted_check(data):
     ref = summarize(data)
     sub = data.sample(20_000, random_state=4)

@@ -94,7 +94,7 @@ class WellGeometry:
 
         # --- validation ---
         _check_stations(md_grid, tvd_grid)
-        if self.D <= 0:
+        if not self.D > 0:  # NaN too
             raise ValueError("Pipe diameter D must be positive")
 
         # store inputs as immutable tuples
