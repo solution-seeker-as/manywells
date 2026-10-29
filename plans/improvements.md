@@ -18,71 +18,6 @@ not in the repo. Its suspicions that it could not confirm are in section 6.
 
 ## 1. Bugs and corrections
 
-### 1.4 User-supplied `cpr` is silently overwritten
-
-**[any time]** `ChokeModel` has `cpr` as a constructor field, but `__post_init__`
-always sets it from CHK-4 (`choke.py:51,59`), so `ChokeModel(cpr=0.6)` gets 0.544
-without a warning. The field's comment says so, and `specs/discrepancies.md`
-(D-21) rules to fix it on `develop` any time. Taking `cpr` out of the constructor
-changes nothing else: the `v1.0.0` configuration and the Rust core both take the
-ratio from CHK-4. The class docstring calls the same ratio `cpm`.
-
-### 1.6 Smaller documentation and comment corrections
-
-**[any time]**
-
-- `units.py:8` says that all public interfaces use SI units (Pa, ...), but the
-  simulator and the components take bar (`AGENTS.md`, Contracts).
-- `pvt/black_oil.py:205` says that at $R_{so}$ = 500 scf/STB the surface tension
-  "drops to roughly 40%" of the dead-oil value; the code gives 19.5%.
-- The flow-regime feature list in `slip.py:57` and `59` omits the factor 2 in
-  `tanh(2 (alpha - 0.7))` and `tanh(2 (alpha - 0.25 cos))` that the code uses
-  (lines 100 and 102; the factor itself is D-1).
-- `scripts/sim_examples/L_shaped_well.py:8` and its suptitle (line 98) compare
-  the L-shaped well with "a vertical well of the same TVD". The L-shaped well
-  reaches 1800 m TVD and the vertical one 2000 m.
-- `scripts/black_oil_tutorial.py:66` annotates "Rs is capped (all gas
-  dissolved)". With `gor=200` and `p_bubble=250`, $R_{so}$ caps at
-  115.05 Sm³/Sm³ (PVT-OIL-7), so 85 Sm³/Sm³ stays free.
-- `verification/build/rust_roots.py:16-18` and `104` say it writes
-  `data/full/...`; it writes `verification/data/build/`. They also say
-  `label_cases.py` refines the roots with Newton; `make_cases.py solve` re-solves
-  them with v1.0.0's Ipopt.
-- Two scripts lack the CC BY-NC header: `scripts/black_oil_tutorial.py` and
-  `scripts/flow_regimes/plot_flow_regime_map.py`.
-
-### 1.8 `x_guess` in the search
-
-**[any time]** *From the review of 2026-10-16.*
-
-- The deprecated `simulate()` drops an `x_guess` argument: on the deprecated
-  path `simulator.py:214` replaces it with `self.x_guess`, so
-  `SSDFSimulator(wp, bc).simulate(x_guess=g)` searches without `g`. Fix:
-  `x_guess = self.x_guess if x_guess is None else x_guess`.
-- A `Root` as `x_guess` raises `TypeError`. The docstring at `simulator.py:179`
-  suggests "the root of a nearby operating point", but
-  `np.asarray(x_guess, dtype=float)` (`solvers/roots.py:139`) raises on a `Root`.
-  Fix: accept a `Root` and use its `.x`, or document `op.x`.
-- The `simulate()` docstring (`simulator.py:204`) says `x_guess` "makes the
-  search faster, not the answer different". Neither half holds: `find()` runs
-  every start anyway (7 against 8 attempts, 0.128 s either way), and an extra
-  start can add a root, which through SOL-6 can change the operating point. Fix:
-  reword it.
-
-### 1.9 With the Rust backend, the debug log reports every search as failed
-
-**[any time]** `simulator.py:192` filters on `outcome.startswith('root')`, but
-the core's outcome reads `'2 roots'`. Fix: decide failure from the attempt's
-kind, not its text.
-
-### 1.10 `write_dataset` truncates a dotted `--out` name
-
-**[any time]** `path.with_suffix` and `path.stem` in `write_dataset`
-(`datasets/io.py:67-70`) make `--out data/sol-v1.0` and `--out data/sol-v1.1`
-both write `data/sol-v1.parquet`, `sol-v1_config.parquet` and
-`sol-v1_meta.json`, so the second run overwrites the first. Fix:
-`path.parent / (path.name + '.parquet')`, and likewise for the other two files.
-
 ### 1.11 The QTOT variation filter uses a different standard deviation from v1.0.0
 
 **[needs sign-off]**
@@ -98,57 +33,7 @@ both write `data/sol-v1.parquet`, `sol-v1_config.parquet` and
 Fix: `std(ddof=0)`, and say so in the spec; or settle it in the sampling
 redesign.
 
-### 1.12 Calibration's data handling
-
-**[any time]**
-
-- The docs say a missing `WGL` means 0, but the code uses `bc.w_lg`, as CAL-1
-  says: `docs/calibration.md:96` and the `CalibrationData` docstring
-  (`calibration/data.py:58`) are wrong. A user who passes `bc` with `w_lg = 2`
-  and rows without `WGL` gets every row solved with 2 kg/s of lift gas. Fix:
-  correct both texts.
-- `CalibrationData` drops the index: `reset_index(drop=True)` (`data.py:75`)
-  loses a time stamp held there. `docs/calibration.md:114` and `data.py:69`
-  promise that other columns, such as a time stamp, are kept in the residual
-  table, and CAL-12 suggests plotting residuals against time. Fix:
-  `reset_index()` without `drop`, or carry the index into the residual table.
-- `synthetic_data(noisy=False, rate_source='mpfm')` ignores the rate source:
-  `RATE_SOURCE` is set only in `add_noise` (`synthetic.py:82`), which runs only
-  if `noisy` (`synthetic.py:130`). The rows are then weighted with the well-test
-  noise (2.5%) instead of the MPFM noise (10%). Fix: set `RATE_SOURCE` whatever
-  `noisy` is.
-- `synthetic_data` gives a misleading error for a well the core cannot solve.
-  Each row's `ValueError` ("Use backend='casadi'") is swallowed
-  (`synthetic.py:58`), and the user sees "the well has no operating point at any
-  of the operating points drawn". `calibrate` and `evaluate` call
-  `check_backend` (`fit.py:118`); `synthetic_data` does not. Fix: call it before
-  solving.
-
-### 1.13 The distribution check crashes when no candidate well is in the reference
-
-**[any time]** For example, a CSV whose IDs are strings or come from another
-dataset: `well_weights` gives every row weight 0, `compare`
-(`verification/src/manywells_verify/distributions.py:106`) filters them all
-out, and `weighted_cdf` indexes `cw[-1]` of an empty array (line 80), raising
-`IndexError`. Fix: raise `ValueError('no candidate row belongs to a reference
-well')` when nothing is kept.
-
-### 1.14 `scripts/ml_examples/noise.py` scales the QTOT noise wrongly
-
-**[any time]** Line 68 converts the WTOT noise at the gas density, but WTOT's
-noise includes the oil and water noise. QTOT's noise comes out with a standard
-deviation of 164.07 against 22.83 for the sum of its parts: 2.65% of QTOT
-instead of the intended 0.5%. QTOT is neither an input nor an output of the
-examples, but `add_noise_and_save` writes it. Fix: sum the QGL, QGAS, QOIL and
-QWAT noise.
-
 ## 2. Robustness and API quality
-
-### 2.1 Two asserts remain
-
-**[any time]** The inputs raise `ValueError` in `__post_init__` since Step 7, but
-two helpers still assert: `liquid_mix` (`pvt/__init__.py:77`) and
-`ca_double_sigmoid` (`ca_functions.py:93`).
 
 ### 2.9 The root searches miss roots the other backend finds
 
@@ -198,62 +83,6 @@ is smooth with its minimum near the truth, so the minimum is in the joint space,
 as feature 017's well 3 was for `roughness` before CAL-9's start search. It is
 behind three of the four fits that miss 017's twin criteria. Options: more starts,
 or starts along pairs of parameters, each measured under principle 7.
-
-### 2.11 The configuration check accepts subclasses that change the physics
-
-**[any time]** `configurations.differences` checks the friction, inflow and
-choke with `isinstance` (`configurations.py:116-128`). A `ProductivityIndex`
-subclass with a quadratic IPR gives `differences(wp, 'v1.0.0') == []`, and
-`v1_well` accepts it. The check of the PVT model (line 95) and the Rust adapter
-use exact types for this reason. Fix: `type(x) in (...)`.
-
-### 2.12 `NoOperatingPoint` cannot be unpickled
-
-**[any time]** In `simulator.py:42-48`, `args` holds the message, so unpickling
-calls `__init__(message)` and fails with
-`AttributeError: 'str' object has no attribute 'roots'`. The repo's workers catch
-it inside the worker, so only users' multiprocessing code is affected. Fix: a
-`__reduce__` returning `(type(self), (self.root_set,))`.
-
-### 2.13 A NaN stability slope is labelled stable, and a singular Jacobian loses the search
-
-**[any time]** Latent: neither was reproduced at a real root.
-
-- `label_of` (`solvers/roots.py:70-71`) returns `'stable'` for NaN. The Rust
-  adapter guards against it (`solvers/rust.py:142`); the CasADi search does not.
-- `ca.solve(..., 'csparse')` (`roots.py:98`) raises on a singular reduced
-  Jacobian. `find()` does not catch it, so every root found so far is lost.
-
-Fix: label a non-finite slope `indeterminate`, and catch the factorization error
-as `indeterminate`.
-
-### 2.14 Integer thermal switches crash the Rust backend
-
-**[any time]** `solvers/rust.py:76-77` passes the four switches of
-`ThermalModel` unconverted, and pyo3 rejects an `int` for a `bool`:
-`ThermalModel(frictional_heating=0)` gives
-`TypeError: 'int' object is not an instance of 'bool'` on the core, where the
-CasADi backend solves it. The `TypeError` also escapes calibration's
-`except (SimError, ValueError)`. Fix: pass `bool(...)`, or validate the switches
-in `ThermalModel`.
-
-### 2.15 Validation gaps in the components
-
-**[any time]**
-
-- NaN slip constants pass. `SlipModel.__post_init__` (`slip.py:205`) does not
-  check the regime constants, and `not_in_core` (`solvers/rust.py:55`) tests
-  `min(...) < 1`, which is False for NaN: `SlipModel(C_0_slug=nan)` gives
-  `not_in_core(wp) == []`. Fix: validate the constants as finite with
-  `C_0 >= 1` in `SlipModel`, and write the adapter's test as `not (C_0 >= 1)`.
-- A NaN diameter is accepted in Python: `geometry.py:97` checks `self.D <= 0`,
-  which lets NaN through, while the core's `from_grid` rejects it, so the
-  backends disagree. Fix: `if not self.D > 0`.
-- Unknown friction correlations fall back to Haaland: `friction_factor`
-  (`friction.py:77`) uses Haaland for any name but `'chen'`, so
-  `friction_factor(1e5, 1e-4, 'colebrook')` returns Haaland's 0.018265.
-  `RoughnessFriction` validates the name, so only direct callers are exposed.
-  Fix: `elif correlation == 'haaland'`, and raise otherwise.
 
 ## 4. Performance and architecture
 
@@ -314,20 +143,23 @@ lowest-$p_0$ stable root of several.
 
 - **[any time]** **Lint and format**: there is no ruff, black or mypy
   configuration. `ruff` (format and lint) with a pre-commit hook keeps
-  contributions uniform at little cost.
+  contributions uniform at little cost. Measured on 2026-10-29 with ruff 0.14.0
+  at a line length of 120 with quotes preserved: `ruff format` would rewrite 128
+  of 138 Python files (about 4,500 changed lines), and the default lint rules
+  find 40 issues (16 unused imports). The style and when to reformat are
+  Bjarne's choice: a reformat rewrites most files under other sessions' branches.
 - **[after the plan]** **Docs site**: mkdocs-material with mkdocstrings on GitHub
   Pages would render the guides in `docs/` and the docstrings.
-- **[any time]** **Examples hygiene**: `slip.py` still ends with a `__main__` demo
-  (line 383). Move it to `scripts/` or a test; library modules with executable
-  tails evade testing.
 - **[after the plan]** **License**: one of the decisions for v2.0.0
   (`specs/goals.md`). CC BY-NC 4.0 is unusual for code: Creative Commons
   recommends against CC licenses for software, mainly because they do not address
   source and binary distribution or patents. CC BY-NC for the datasets and a
   noncommercial software license (e.g. PolyForm Noncommercial) for the code would
   express the same intent with less ambiguity.
-- **[any time]** **Type checking**: a `py.typed` marker, and filling the gaps in
-  the annotations, lets users' type checkers see them.
+- **[any time]** **Type checking**: fill the gaps in the annotations, so that
+  users' type checkers see them (the package has a `py.typed` marker). The
+  physics methods take floats or CasADi symbols, so their annotations need a
+  type for both.
 
 ## 6. Suspicions not confirmed
 
@@ -375,15 +207,8 @@ From the review of 2026-10-16. Each needs a reproduction before a fix.
     be missed.
   - *Tiny drawdowns.* If `p_r - p_s < 1.001e-3` bar, `p_lo > p_hi`
     (`shoot.rs:65`) and the scan samples above `p_r`.
-- **`solution_as_df` may alias `Root.x` under pandas older than 3.0.**
-  `pyproject.toml` allows `pandas>=1.5`, and without copy-on-write an in-place
-  edit of the frame could change the frozen root. Under the locked pandas there
-  is no aliasing.
 - **`regenerate_distributions.py` skips SMP-28's row check** (`_valid`,
   `sampling/generate.py:61`). It should not trigger at the stable root.
-- **Numeric strings in `CHK` or `PDC` fail late.** `CalibrationData` checks them
-  with `pd.to_numeric` (`data.py:85` and `102`) but never converts them, so they
-  raise a `TypeError` later rather than a `ValueError` up front.
 
 ## Done and removed
 
@@ -395,9 +220,16 @@ Numbers are not reused. Each removed item, and where it was handled:
 | 1.2 | `water_fvf` had the wrong sign | Step 7 (PVT-WAT-2, Bjarne 2026-10-01) |
 | 1.3 | Data-generation scripts broken against the API | Step 7: `manywells.sampling`, frozen inputs |
 | 1.5 | Choke docstring did not match the code | `1811ae2` (D-13) |
-| 1.6 | The examples' run command, `p_sep`/`p_bubble` in bar, typos, the README tree | Step 5, Step 7, `d8f015f`, `661e36d`; the open bullets stay above |
+| 1.4 | User-supplied `cpr` silently overwritten | `cpr` is a property from CHK-4 (D-21), `a1e8da4` |
+| 1.6 | The examples' run command, `p_sep`/`p_bubble` in bar, typos, the README tree; then the units docstring, the surface tension, the slip features, the L-shaped and black-oil examples, `rust_roots.py`, two license headers | Step 5, Step 7, `d8f015f`, `661e36d`; the rest `a1e8da4` |
 | 1.7 | The CasADi search missed all-liquid bottomholes | issue #10, PR #23 (`specs/features/012-root-search.md`) |
-| 2.1 | `assert` validation of the inputs | Step 7; the open part stays above |
+| 1.8 | `x_guess`: dropped by the deprecated `simulate()`, a `Root` refused, the docstring's promise | `a1e8da4` |
+| 1.9 | The Rust backend's debug log reported every search as failed | `Attempt.found`, `a1e8da4` |
+| 1.10 | `write_dataset` truncated a dotted name | `a1e8da4` |
+| 1.12 | Calibration's data handling: `WGL`'s default, the index, the rate source without noise, the backend check | `a1e8da4` |
+| 1.13 | The distribution check crashed with no candidate row in the reference | `a1e8da4` |
+| 1.14 | `scripts/ml_examples/noise.py` scaled the QTOT noise wrongly | `a1e8da4` |
+| 2.1 | `assert` validation of the inputs | Step 7; `liquid_mix` and `ca_double_sigmoid` `a1e8da4` |
 | 2.2 | `print` instead of `logging` and exception payloads | Step 7 |
 | 2.3 | `isinstance` choke dispatch | Step 7 (`specs/architecture.md`) |
 | 2.4 | Hidden state `self._w_l_inflow` | Step 7 (DISC-11) |
@@ -405,9 +237,16 @@ Numbers are not reused. Each removed item, and where it was handled:
 | 2.6 | `ClosedLoopWellSimulator` cleanups | lapsed: `closed_loop/` retired 2026-10-01 |
 | 2.7 | `SlipModel` parameters not configurable | Step 7 (`specs/model/slip.md`) |
 | 2.8 | Calibration module consistency | feature 017, `e96053b` |
+| 2.11 | The configuration check accepted subclasses | exact classes for every part, `a1e8da4` |
+| 2.12 | `NoOperatingPoint` could not be unpickled | `a1e8da4` |
+| 2.13 | A NaN slope was labelled stable, and a singular Jacobian lost the search | both `indeterminate`, `a1e8da4` |
+| 2.14 | Integer thermal switches crashed the Rust backend | `ThermalModel` stores bools, `a1e8da4` |
+| 2.15 | NaN slip constants, NaN diameter, unknown friction correlations | `a1e8da4` |
 | 3 | Testing: the gas-lift, examples, water FVF and energy-vector tests; `--doctest-modules` dropped | Steps 5 and 7 |
 | 4.1 | Build the NLP once | Step 7 (`plans/evidence/build_once.py`) |
 | 4.4 | Vectorize the regime classification | Step 7 (`System.regime_probabilities`) |
 | 5 | CI, dependency ranges, `CHANGELOG.md`, the README's Documentation section | 2026-09-22 to 2026-10-02 |
+| 5 | Examples hygiene (the `slip.py` demo, removed), the `py.typed` marker | `a1e8da4` |
+| 6 | Suspicions confirmed and fixed: `solution_as_df` aliased `Root.x` under pandas 2.2; numeric strings in `CHK` or `PDC` failed late | `a1e8da4` |
 | — | The review of 2026-10-16: its High and Medium items | issues #11 to #22, all fixed; #13 and #16 by PR #29 |
 | — | The review's suspicion that the lower temperature bound cuts off roots | confirmed below a geothermal gradient of about 5 K/km; kept as a known limit (`specs/features/012-root-search.md`) |

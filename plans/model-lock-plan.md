@@ -168,6 +168,7 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
   - §2.15, NaN slip constants, NaN diameter and unknown friction correlations.
 - **Done when.** The PR is merged with the full suite and both verifier candidates passing.
 - **Who.** An agent.
+- **Status (2026-10-29).** Done but for §1.11, which waits for Bjarne's ruling: §1.4, §1.10, §2.11, §2.14 and §2.15 are fixed, with the backlog's other any-time items (`a1e8da4`).
 
 ### Step L8 — Housekeeping
 
