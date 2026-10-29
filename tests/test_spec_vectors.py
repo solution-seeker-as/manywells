@@ -290,8 +290,8 @@ RUST_ADAPTERS = {
         rust('injection_temperature', T_tilde, w_g, w_l, w_lg, T_lg,
              fluid=v1_fluid(rho_l=850.0, R_s=420.0, cp_g=cp_g, cp_l=cp_l, f_g=0.1)),
     'DISC-12': lambda T_prev, p, v_g, v_l, alpha, rho_g, rho_l, T, w_res, w_lg, T_lg:
-        rust('energy_row', 5, T_prev, p, v_g, v_l, alpha, rho_g, rho_l, T, w_res, DEVELOP.DISC12_T_R, DEVELOP.DISC12_T_S,
-             T_lg, w_lg, **DEVELOP.DISC12_COMPONENTS),
+        rust('energy_row', 5, T_prev, p, v_g, v_l, alpha, rho_g, rho_l, T, w_res, DEVELOP.DISC12_T_R,
+             DEVELOP.DISC12_T_S, T_lg, w_lg, **DEVELOP.DISC12_COMPONENTS),
     'THM-4': lambda tvd_frac, T_r, T_s: rust('ambient_temperature', tvd_frac, T_r, T_s),
     'THM-5': lambda w_res, w_lg, T_r, T_lg, f_g, cp_g, cp_l:
         rust('inflow_temperature', w_res, w_lg, T_r, T_lg, thermal=thermal(lift_gas_mixing=True),

@@ -232,6 +232,7 @@ Every planned v2 feature, from `specs/goals.md` and the plan's "After this plan"
 | Friction from roughness (Chen, Haaland); the Step 10 correlation | `friction` |
 | Frictional heating, gravity term in the energy balance | `thermal` |
 | Lift-gas temperature | `thermal` |
+| Lift-gas injection depth (021) | `discretization`, with the depth on `WellProperties` and THM-9 in `thermal` |
 | Fixed-rate inflow | `inflow` |
 | v1-compatibility configuration | `configurations` |
 | Root set with stability labels, and the operating point, as `simulate` returns them | `solution` |
