@@ -141,13 +141,6 @@ lowest-$p_0$ stable root of several.
 
 ## 5. Open-source friendliness
 
-- **[any time]** **Lint and format**: there is no ruff, black or mypy
-  configuration. `ruff` (format and lint) with a pre-commit hook keeps
-  contributions uniform at little cost. Measured on 2026-10-29 with ruff 0.14.0
-  at a line length of 120 with quotes preserved: `ruff format` would rewrite 128
-  of 138 Python files (about 4,500 changed lines), and the default lint rules
-  find 40 issues (16 unused imports). The style and when to reformat are
-  Bjarne's choice: a reformat rewrites most files under other sessions' branches.
 - **[after the plan]** **Docs site**: mkdocs-material with mkdocstrings on GitHub
   Pages would render the guides in `docs/` and the docstrings.
 - **[after the plan]** **License**: one of the decisions for v2.0.0
@@ -247,6 +240,7 @@ Numbers are not reused. Each removed item, and where it was handled:
 | 4.4 | Vectorize the regime classification | Step 7 (`System.regime_probabilities`) |
 | 5 | CI, dependency ranges, `CHANGELOG.md`, the README's Documentation section | 2026-09-22 to 2026-10-02 |
 | 5 | Examples hygiene (the `slip.py` demo, removed), the `py.typed` marker | `a1e8da4` |
+| 5 | Lint and format: ruff 0.17.1, in CI (`lint`) and a pre-commit hook | `6594e7e` to `3a897df` (`docs/testing.md`) |
 | 6 | Suspicions confirmed and fixed: `solution_as_df` aliased `Root.x` under pandas 2.2; numeric strings in `CHK` or `PDC` failed late | `a1e8da4` |
 | — | The review of 2026-10-16: its High and Medium items | issues #11 to #22, all fixed; #13 and #16 by PR #29 |
 | — | The review's suspicion that the lower temperature bound cuts off roots | confirmed below a geothermal gradient of about 5 K/km; kept as a known limit (`specs/features/012-root-search.md`) |
