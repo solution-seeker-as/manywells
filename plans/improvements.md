@@ -47,11 +47,18 @@ set does not show this: both backends pass it at 100%.
   - Issue #10 found one cause, an all-liquid bottomhole, and fixed it (PR #23).
     The CasADi search still misses 9 of 636 operating points with gas-rich
     bottomholes on develop's sampled wells.
+  - Feature 021, with the lift gas through a valve at half the depth: in the
+    `v1.0.0` configuration the CasADi search misses the operating point in 3 of
+    60 comparison wells (`v1.0.0+valve at 50%` #17, #22, #27), each a root of
+    every CasADi row; two have several void fractions under the fitted
+    classifier. With `develop`'s model it missed none of 210.
 - **Roots only the CasADi search finds.** Where the slip law has several void
   fractions, the core misses roots on other branches (`develop#17`, 015 Finding
   2). With the profile scale at $\kappa_0 \le 0.5$ (020), it misses a second
   stable root in 1 of 90 sampled cases, and the backends pick different
-  operating points, 0.77 bar apart.
+  operating points, 0.77 bar apart. With a valve at half the depth (021), it misses
+  an unstable root at `develop+valve at 50%` #22, on a second solution of the
+  wellhead point's rows; the operating point is the same.
 - An option, in the `v1.0.0` configuration and later in every configuration the
   core covers: use the core's roots as extra starts for Ipopt, and record which
   roots only one backend finds. That is a comparison between the backends, not

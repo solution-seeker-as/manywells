@@ -1,6 +1,6 @@
 # 021 · Lift-gas injection depth
 
-*Feature spec, 2026-10-29. Status: approved by Bjarne on 2026-10-29, with each design choice as proposed (Approval, at the end); implemented on the branch `lift-gas-injection-depth`. The measurements and the implementation's choices await Bjarne's sign-off (Sign-off, at the end). Step L1 of `plans/model-lock-plan.md`: Bjarne put the injection depth in v2.0's model on 2026-10-29 (`specs/goals.md`).*
+*Feature spec, 2026-10-29. Status: approved by Bjarne on 2026-10-29, with each design choice as proposed (Approval, at the end); implemented on the branch `lift-gas-injection-depth`. Bjarne signed off the implemented feature on 2026-10-29 (Sign-off, at the end). Step L1 of `plans/model-lock-plan.md`: Bjarne put the injection depth in v2.0's model on 2026-10-29 (`specs/goals.md`).*
 
 ## Motivation
 
@@ -200,13 +200,13 @@ The core is 25 times faster than the CasADi backend at the median on the first r
 
 The implemented feature's measurements (Acceptance, item 7), and any solver machinery the implementation needs, come back for sign-off, as in 016, 019 and 020.
 
-## Sign-off (pending)
+## Sign-off (Bjarne, 2026-10-29)
 
-These come back to Bjarne with the implemented feature:
+On the implemented feature, each item signed off:
 
 - **The changed results** where the lift gas enters above the bottomhole (Measurements, Sampled wells): the column below the valve is heavier, PBH rises and the rate falls in vertical and deviated wells, and L-shaped wells gain where the valve leaves the horizontal section. 1 and 4 of 287 cases lose their operating point with the valve at 75% and 50%, where the model has no root. Nothing changes where the lift gas enters at the bottomhole, `develop`'s default (Acceptance, item 2).
 - **The implementation's differences from the Delta** (Implementation): point 0's temperature row is THM-3 where the injection point is above the bottomhole, stated in INF-9 and DISC-11; `System.params` became an instance method and `solvers.rust.operating_point` takes the well; `point_rows`, `cell_slope` and `energy_slope` take `lift` and `lift_prev`; `configurations.check` refuses any `injection_md` in the `v1.0.0` configuration, the bottomhole's too.
-- **The core's temperature solve at the injection cell**, with its measured effect (principle 7): the general solve in place of the closed-form step, the bracket widened to take in $T_{lg}$, and the chord iteration's slope $(1 - \lambda)$ times the heat loss's plus $\lambda$, which saves 2 to 3% of the chord fallbacks and no measurable time. The slope could be the heat loss's alone, with the same results; the widened bracket is what keeps design point 4's proof.
+- **The core's temperature solve at the injection cell**, with its measured effect (principle 7): the general solve in place of the closed-form step, the bracket widened to take in $T_{lg}$, and the chord iteration's slope $(1 - \lambda)$ times the heat loss's plus $\lambda$, which saves 2 to 3% of the chord fallbacks and no measurable time. The slope could be the heat loss's alone, with the same results; the widened bracket is what keeps design point 4's proof. Both kept: they are the existing chord iteration and bracket applied to DISC-12's row.
 - **The CasADi backend's cost**: 6 and 11% more time per case at the median, 19 and 22% in total, with the valve at 75% and 50%.
-- **The solver findings** (Measurements, The backends): the CasADi search misses 3 of 60 operating points in `v1.0.0+valve at 50%`, none in `develop`'s configuration; the core misses one unstable root, at `develop+valve at 50%` #22, of a kind known at `develop#17`. Neither is changed.
+- **The solver findings** (Measurements, The backends): the CasADi search misses 3 of 60 operating points in `v1.0.0+valve at 50%`, none in `develop`'s configuration; the core misses one unstable root, at `develop+valve at 50%` #22, of a kind known at `develop#17`. Neither is changed; both are recorded in `plans/improvements.md` §2.9.
 

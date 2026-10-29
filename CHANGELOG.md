@@ -15,6 +15,7 @@ v2.0.0 may break any part of the API; every break is listed here with an old→n
 - A state with a supersonic cell is not a root (SOL-8): each cell's momentum row must rise with its pressure along the point's other rows, on the subsonic side of its sonic point. The CasADi search rejects such states, as the Rust core's cell solve never reaches them; none of the verifier's reference roots has one (`specs/features/015-rust-develop-model.md`, Finding 1).
 - A fluid's PVT may come from a table: `FluidModel(pvt=PVTTable.read_csv('fluid.csv'), gor=...)`, with $R_{so}$, $B_o$ and $Z$ (and optionally $\mu_o$, $\mu_g$, $\sigma_{go}$) on a $(p, T)$ grid, interpolated bilinearly (`specs/model/pvt/table.md`). A fluid from an equation of state enters as a table, made from its flash's phase split by `PVTTable.from_phase_split`; tables of one stream at several GORs (`PVTTableSet`) are read at the fluid's GOR. The simulator refuses a reservoir off the table's grid, and a `Root` flags points off it (`off_table`). Both backends, which interpolate to the same bits (`specs/features/018-pvt-tables.md`).
 - Each correlation's range, and what the model does outside it, is in `specs/model/validity.md`. Two inputs are refused with `ValueError`, in both backends: a `BlackOil` of API gravity outside 16 to 58, Beggs and Robinson's range (it refused 10 to 40, a range no source gives; a heavier oil needs a PVT table), and a well with `RoughnessFriction` whose relative roughness exceeds 0.05, beyond which the friction correlations have a pole and a spurious valley. The other correlations extrapolate outside their ranges, and a PVT table clamps to its grid. The `v1.0.0` configuration refuses neither.
+- The lift gas can enter through a valve above the bottomhole: `WellProperties(injection_md=...)`, the valve's measured depth, at the nearest grid point. Below it the tubing carries the reservoir fluid alone; the lift gas mixes in by heat-capacity rates there, at the ambient temperature of that depth unless `T_lg` is given. `injection_md=None`, the default, keeps the bottomhole, and every result is as before (`specs/features/021-lift-gas-injection-depth.md`).
 - Installing from source needs a Rust toolchain: the package is built by maturin instead of setuptools.
 
 ### Calibration
@@ -157,6 +158,17 @@ from manywells.calibration import CalibrationData, calibrate
 
 result = calibrate(wp, CalibrationData(df_with_CHK_PDC_PWH_TWH_QOIL_QGAS_QWAT), bc, free=['K_c'])
 K_c = result.values['K_c']  # result.well is the calibrated WellProperties
+```
+
+**Lift gas at a depth** (021). `System.params(bc)` is an instance method, since the lift gas's default temperature depends on the well, and `solvers.rust.operating_point(bc)` became `operating_point(wp, bc)`.
+
+```python
+# old
+params = System.params(bc)
+op = operating_point(bc)
+# new
+params = system.params(bc)
+op = operating_point(wp, bc)
 ```
 
 ### Breaks since v1.0.0 that predate this list
