@@ -112,7 +112,7 @@ The `develop` vectors pin `develop`, and the Rust core implements the same spec,
 - **Worked examples**, from the sources or from textbooks, compared at the precision printed: `tests/test_worked_examples.py`, on both backends, in every run of the test suite. A value that its own example's equation does not give at the example's inputs is the example's error; the test lists those and does not use them.
 - **`fluids`** 1.3.1 (Caleb Bell, MIT licence), and **the sources' equations, transcribed**, where no worked example is in hand: `plans/evidence/independent_checks.py`, run once by hand (`plans/evidence/README.md`, Independent checks). From then on the vectors carry the check: a change that alters a checked value fails `tests/test_spec_vectors.py`, and the vectors change only with Bjarne's sign-off, which reruns the script.
 
-A value `develop` does not reproduce, after checking units and inputs, is a finding. It stays open until Bjarne rules on it, and is a strict expected failure in the test. Two are open: PVT-GAS-5's coefficient 131.07 where Sutton prints 131.0 (`pvt/gas.md`), and PVT-MIX-9's in-situ mass fraction where Hasan et al. take the flowing one (`pvt/mixture.md`). Each component file's Test vectors section has the details.
+A value `develop` does not reproduce, after checking units and inputs, is a finding. It stays open until Bjarne rules on it, and is a strict expected failure in the test. The checks found two. Bjarne ruled on PVT-GAS-5's on 2026-10-29 to follow the source: its coefficient of $\gamma_g$ in $p_{pc}$ is Sutton's 131.0, where `develop` had 131.07 (`pvt/gas.md`). One is open: PVT-MIX-9's in-situ mass fraction where Hasan et al. take the flowing one (`pvt/mixture.md`). Each component file's Test vectors section has the details.
 
 Every ID of `develop`'s configuration, of the options Papay, Haaland and the fitted classifier, and of the well options, with its independent check:
 
@@ -124,7 +124,7 @@ Every ID of `develop`'s configuration, of the options Papay, Haaland and the fit
 | SOL-1 to SOL-6 | None: ManyWells' definitions of the root set, the stability label and the operating point |
 | SMO-1 to SMO-4 | None: ManyWells' smoothing |
 | PVT-GAS-2, PVT-GAS-6 | None: definitions, of standard conditions and of the gas's gravity and gas constant |
-| PVT-GAS-5 | Whitson and Brulé (2000), Appendix B, Problem 6, a worked example; Sutton (1985), Eqs. (14) and (15), transcribed. Open finding: 131.07 for Sutton's 131.0 |
+| PVT-GAS-5 | Whitson and Brulé (2000), Appendix B, Problem 6, a worked example; Sutton (1985), Eqs. (14) and (15), transcribed. Ruled 2026-10-29: Sutton's 131.0 for 131.07 |
 | PVT-GAS-7 | Ahmed (2006), Example 2-14, a worked example |
 | PVT-GAS-9, PVT-GAS-11 | Dranchuk and Abou-Kassem (1975), Eqs. (2) and (3), transcribed; no worked example in hand |
 | PVT-GAS-10 | A central difference of that transcription along an isobar |

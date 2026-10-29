@@ -185,10 +185,11 @@ def sutton():
         ppc, tpc = sutton_pseudo_critical(g)
         p_eq14 = 756.8 - 131.0 * g - 3.6 * g ** 2            # psia
         t_eq15 = 169.2 + 349.5 * g - 74.0 * g ** 2           # deg R
-        dp.append((ppc / CF_PSI - p_eq14) / p_eq14)
+        dp.append(rel(ppc / CF_PSI, p_eq14))
         dt.append(rel(tpc * 1.8, t_eq15))
     report('T_pc, largest relative difference', max(dt))
-    report('p_pc, relative difference (develop has 131.07 where Eq. (14) has 131.0)', min(dp), f' to {max(dp):.3g}')
+    # Until Bjarne's ruling of 2026-10-29, develop had 131.07 for Eq. (14)'s 131.0: p_pc lower by 5.9e-5 to 2.2e-4
+    report('p_pc, largest relative difference', max(dp))
 
 
 # Abdul-Majeed and Abu Al-Soof (2000), Table 1: dead-oil surface tension (dyn/cm) by API gravity, at 54.44, 37.78

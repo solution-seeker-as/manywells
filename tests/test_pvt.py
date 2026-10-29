@@ -315,7 +315,7 @@ class TestSuttonPseudoCritical:
         """Pseudo-critical pressure for near-methane gas (sg=0.554)."""
         from manywells.units import CF_PSI
         ppc, _ = sutton_pseudo_critical(0.554)
-        ppc_psia = 756.8 - 131.07 * 0.554 - 3.6 * 0.554 ** 2
+        ppc_psia = 756.8 - 131.0 * 0.554 - 3.6 * 0.554 ** 2
         assert ppc == pytest.approx(ppc_psia * CF_PSI)
 
     def test_methane_tpc(self):

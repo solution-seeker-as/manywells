@@ -212,14 +212,12 @@ def gas_examples():
                     lambda: rust('sutton_pseudo_critical', 0.65)[1] * 1.8),
             Example('PVT-GAS-5', src, 'p_pc (psia)', '670', lambda: sutton_pseudo_critical(0.65)[0] / CF_PSI,
                     lambda: rust('sutton_pseudo_critical', 0.65)[0] / CF_PSI)]
-    # Sutton (1985), Eq. (14), p. 3: p_pc = 756.8 - 131.0 gamma_g - 3.6 gamma_g^2. develop's coefficient of gamma_g,
-    # (p_pc(-1) - p_pc(1)) / 2 in psia, is 131.07
+    # Sutton (1985), Eq. (14), p. 3: p_pc = 756.8 - 131.0 gamma_g - 3.6 gamma_g^2. develop's coefficient of gamma_g is
+    # (p_pc(-1) - p_pc(1)) / 2 in psia: 131.07 until Bjarne's ruling of 2026-10-29 (pvt/gas.md, PVT-GAS-5)
     out.append(Example(
         'PVT-GAS-5', 'Sutton (1985), SPE 14265, Eq. (14), p. 3', 'coefficient of gamma_g in p_pc (psia)', '131.0',
         lambda: (sutton_pseudo_critical(-1.0)[0] - sutton_pseudo_critical(1.0)[0]) / 2 / CF_PSI,
-        lambda: (rust('sutton_pseudo_critical', -1.0)[0] - rust('sutton_pseudo_critical', 1.0)[0]) / 2 / CF_PSI,
-        finding='PVT-GAS-5 has 131.07 where Sutton (1985), Eq. (14), prints 131.0 (pvt/gas.md, Test vectors, '
-                'Independent checks: open finding)'))
+        lambda: (rust('sutton_pseudo_critical', -1.0)[0] - rust('sutton_pseudo_critical', 1.0)[0]) / 2 / CF_PSI))
     return out
 
 

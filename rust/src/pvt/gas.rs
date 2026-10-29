@@ -25,9 +25,10 @@ pub fn ideal_gas_density(p: f64, t: f64, r_s: f64) -> f64 {  // spec: PVT-GAS-1
     gas_density(p, t, 1.0, r_s)
 }
 
-/// Pseudo-critical pressure (Pa) and temperature (K) of a gas of specific gravity sg_gas, Sutton (1985)
+/// Pseudo-critical pressure (Pa) and temperature (K) of a gas of specific gravity sg_gas, Sutton (1985), Eqs. (14)
+/// and (15), with the coefficients as printed
 pub fn sutton_pseudo_critical(sg_gas: f64) -> (f64, f64) {  // spec: PVT-GAS-5
-    let ppc_psia = 756.8 - 131.07 * sg_gas - 3.6 * (sg_gas * sg_gas);
+    let ppc_psia = 756.8 - 131.0 * sg_gas - 3.6 * (sg_gas * sg_gas);
     let tpc_r = 169.2 + 349.5 * sg_gas - 74.0 * (sg_gas * sg_gas);
     (ppc_psia * CF_PSI, tpc_r / 1.8)
 }
