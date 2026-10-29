@@ -305,15 +305,16 @@ def slip_examples():
 
 def other_examples():
     # Hasan and Kabir (2018), §3.4, Field Example 3.1, Eq. 2.25: mu_m = x mu_g + (1 - x) mu_L with x the flowing mass
-    # fraction v_sg rho_g / (v_sg rho_g + v_sL rho_L) = 0.066, as Hasan et al. (2010) define it for (A-3); develop
-    # takes the in-situ mass fraction, at the example's gas volume fraction f_g = 0.457 (Eq. 3.27)
+    # fraction v_sg rho_g / (v_sg rho_g + v_sL rho_L), as Hasan et al. (2010) define it for (A-3), and as PVT-MIX-9
+    # takes it since Bjarne's ruling of 2026-10-29 (it took the in-situ one, which gives 12.67 cP). The state carries
+    # the superficial velocities at the example's gas volume fraction f_g = 0.457 (Eq. 3.27), with v_sg = 2.845 ft/s
+    # as the solution carries it (x = 0.0655; it prints 0.066)
     mu_l, mu_g, alpha, rho_l, rho_g = 13.09, 0.019, 0.457, 55.042, 2.17     # cP, lbm/ft3
+    v_g, v_l = 2.845 / alpha, 1.601 / (1 - alpha)                           # ft/s
     out = [Example(
         'PVT-MIX-9', f'{HK}, §3.4, Field Example 3.1, Eq. 2.25', 'mu_m (cP)', '12.2',
-        lambda: num(mixture_viscosity(mu_l, mu_g, alpha, rho_l, rho_g)),
-        lambda: rust('mixture_viscosity', mu_l, mu_g, alpha, rho_l, rho_g),
-        finding='PVT-MIX-9 weights by the in-situ mass fraction of gas, Hasan et al. (2010) by the flowing one '
-                '(pvt/mixture.md, Test vectors, Independent checks: open finding)')]
+        lambda: num(mixture_viscosity(mu_l, mu_g, alpha, rho_l, rho_g, v_g, v_l)),
+        lambda: rust('mixture_viscosity', mu_l, mu_g, alpha, rho_l, rho_g, v_g, v_l))]
     # Guo, Lyons and Ghalambor (2007), Example Problem 3.2, p. 3/34: Vogel's IPR at a reservoir pressure of 5,651 psia,
     # with q_max = J p / 1.8 (Eq. 3.21). The example prints J as 0.1968 stb/d-psi and q_max as 618 stb/d, and its table
     # carries both unrounded (with 618, two of its rows round the other way). Rates in stb/d at p_wf in psia: INF-1

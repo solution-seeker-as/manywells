@@ -119,16 +119,17 @@ def choke():
 
 def mixture():
     print("PVT-MIX-9 against fluids.two_phase_voidage.gas_liquid_viscosity(x, mu_l, mu_g, Method='Cicchitti')")
-    print('  fluids takes x, the mass fraction; develop computes it from the state as the in-situ mass fraction')
-    print('  alpha rho_g / (alpha rho_g + (1 - alpha) rho_l), which is given to fluids: the comparison checks the')
-    print("  mixing rule, not which mass fraction it takes (tests/test_worked_examples.py, PVT-MIX-9's finding)")
+    print('  fluids takes x, the mass fraction; develop computes it from the state as the gas mass fraction of the')
+    print('  flow, alpha rho_g v_g / (alpha rho_g v_g + (1 - alpha) rho_l v_l), which is given to fluids: this checks')
+    print('  the mixing rule; tests/test_worked_examples.py checks the fraction (Hasan and Kabir, Field Example 3.1)')
     d = 0.0
     for alpha in np.linspace(0.0, 1.0, 21):
         for rho_g in (1.0, 20.0, 100.0, 300.0):
             for rho_l, mu_l, mu_g in ((700.0, 5e-4, 1.2e-5), (850.0, 5e-3, 1.5e-5), (1000.0, 1e-3, 2.5e-5)):
-                x = alpha * rho_g / (alpha * rho_g + (1 - alpha) * rho_l)
-                ours = num(mixture_viscosity(mu_l, mu_g, alpha, rho_l, rho_g))
-                d = max(d, rel(ours, gas_liquid_viscosity(x, mu_l, mu_g, Method='Cicchitti')))
+                for v_g, v_l in ((1.0, 1.0), (3.0, 1.0), (20.0, 0.5)):
+                    x = alpha * rho_g * v_g / (alpha * rho_g * v_g + (1 - alpha) * rho_l * v_l)
+                    ours = num(mixture_viscosity(mu_l, mu_g, alpha, rho_l, rho_g, v_g, v_l))
+                    d = max(d, rel(ours, gas_liquid_viscosity(x, mu_l, mu_g, Method='Cicchitti')))
     report('largest relative difference', d)
 
 

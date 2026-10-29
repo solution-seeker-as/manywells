@@ -19,13 +19,13 @@ Two constraints hold for every row:
 
 ## The table
 
-Published ranges are in the source's units, with the spec's units in brackets. *Sampler* is `develop`'s sampler today (`specs/sampling.md`) on 500 wells (seed 2026), each at its nominal operating point and at two sampled ones: 1494 cases, of which 1453 have an operating point. It gives the range of an input over those cases, and the range of a state quantity over every grid point of their operating points. *Outside* is the share of the 1453 cases with the input, or any point of the operating point, outside the published range. `plans/evidence/validity_ranges.py` measures both. The notes are below the table.
+Published ranges are in the source's units, with the spec's units in brackets. *Sampler* is `develop`'s sampler today (`specs/sampling.md`) on 500 wells (seed 2026), each at its nominal operating point and at two sampled ones: 1494 cases, of which 1453 have an operating point. It gives the range of an input over those cases, and the range of a state quantity over every grid point of their operating points. *Outside* is the share of the 1453 cases with the input, or any point of the operating point, outside the published range. `plans/evidence/validity_ranges.py` measures both; rerun after the rulings on PVT-GAS-5 and PVT-MIX-9 of 2026-10-29 (`plans/evidence/README.md`, Validity ranges). The notes are below the table.
 
 | Correlation | IDs | Input | Published range | Sampler | Outside | Rule |
 |---|---|---|---|---|---|---|
 | Vazquez–Beggs $R_{so}$ and $B_o$ | PVT-OIL-5, PVT-OIL-6, PVT-OIL-8 | API gravity, $\gamma_g$, $p$, $T$, $R_{so}$ | not stated in the source; Beggs–Robinson's below until it is checked (note 1) | as below | as below | API gravity: Refuse outside 16 to 58 (note 2). The rest: Extrapolate |
 | Beggs–Robinson oil viscosity | PVT-OIL-10, PVT-OIL-11 | API gravity | 16 to 58 | 21.4 to 39.8 | 0% | Refuse, with black oil (note 2) |
-| | | $p$ | 0 to 5250 psig [1.0 to 363 bar] | 12 to 439 bar | 7.0% | Extrapolate |
+| | | $p$ | 0 to 5250 psig [1.0 to 363 bar] | 12 to 439 bar | 6.9% | Extrapolate |
 | | | $T$ | 70 to 295 °F [294 to 419 K] | 278 to 423 K | 6.3% | Extrapolate |
 | | | $R_{so}$ | 20 to 2070 scf/STB [3.6 to 369 Sm³/Sm³] | 1.6 to 232 Sm³/Sm³ | 0.4% | Extrapolate |
 | Black oil, no oil in the gas | PVT-OIL-4, PVT-OIL-15 | gas–oil ratio $R_{go}$ | black and volatile oils; gas condensates have 3000 to 150,000 scf/STB [534 to 26,700 Sm³/Sm³] and 40 to 60 °API (Whitson and Brulé 2000, §2) | 1.6 to 356,000 Sm³/Sm³, median 1149 | 69% above 534 | Extrapolate (decision 4) |
@@ -43,9 +43,9 @@ Published ranges are in the source's units, with the spec's units in brackets. *
 | | | water cut | 0 to 98% | 0 to 99.4% | 0.8% | Extrapolate |
 | | | bottomhole pressure, measured depth | 108 to 13,755 psig [8.5 to 949 bar]; 1635 to 30,650 ft [498 to 9342 m] | 55 to 439 bar; 1513 to 6490 m | 0% | – |
 | | | inclination | vertical and deviated, no range stated; no horizontal or stratified flow | 0 to 60°, and 90° in the horizontal sections of L-shaped wells | 24% with horizontal cells | Extrapolate (note 9) |
-| Chen friction factor | FRIC-4 | Reynolds number | 4000 to $4\cdot10^{8}$ | 17 to $1.6\cdot10^{7}$ | 1.2% | Extrapolate (note 11) |
+| Chen friction factor | FRIC-4 | Reynolds number | 4000 to $4\cdot10^{8}$ | 17 to $1.6\cdot10^{7}$ | 1.1% | Extrapolate (note 11) |
 | | | $\varepsilon/D$ | $5\cdot10^{-7}$ to 0.05 | $9.1\cdot10^{-6}$ to $1.8\cdot10^{-3}$ | 0% | Refuse above 0.05 (note 3) |
-| Haaland friction factor (option) | FRIC-5 | Reynolds number | 4000 to $10^{8}$ | as Chen | 1.2% | Extrapolate |
+| Haaland friction factor (option) | FRIC-5 | Reynolds number | 4000 to $10^{8}$ | as Chen | 1.1% | Extrapolate |
 | | | $\varepsilon/D$ | 0 to 0.05 | as Chen | 0% | Refuse above 0.05 (note 3) |
 | Vogel inflow | INF-1 | the reservoir | solution-gas drive below the bubble point; not where oil, gas and water all flow | every sampled well, with water cuts up to 99% and gas–oil ratios up to 356,000 Sm³/Sm³ | – | Extrapolate (note 10) |
 | Simpson choke multiplier | CHK-5 | $x_g$, $\rho_l/\rho_g$ | not in hand | – | – | Extrapolate |

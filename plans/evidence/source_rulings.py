@@ -20,6 +20,10 @@ change, each in its own tree, and join the runs here:
             PWH, TWH and the reservoir liquid rate over the cases with an operating point in both
   backends  join a Rust core run and a CasADi backend run of the same tree: whether they find an operating point in
             the same cases, and how far apart their operating points are
+  zero_flow PVT-MIX-9's fraction where nothing flows (pvt/mixture.md, Safeguards), with three forms of it, the
+            in-situ fraction, the flowing fraction, and the flowing fraction with a guard (0 where w_m <= 0): which
+            rows of a sampled well's CasADi system are not finite at states through which nothing flows, and the
+            outcome of each start of the CasADi search at v1.0.0+chen#6 of the comparison set (tests/backend_cases.py)
 
 From the repository root, one BLAS thread per process:
 
@@ -28,6 +32,7 @@ From the repository root, one BLAS thread per process:
     uv run python plans/evidence/gor_cap_wells.py run 88 casadi.csv --backend casadi
     uv run python plans/evidence/source_rulings.py compare before.csv after.csv
     uv run python plans/evidence/source_rulings.py backends rust.csv casadi.csv
+    PYTHONPATH=. uv run python plans/evidence/source_rulings.py zero_flow
 """
 
 import argparse
@@ -75,6 +80,50 @@ def backends(rust, casadi):
     print(f'{len(both)} cases solved by both: largest |PBH difference| {d_pbh:.3g} bar, |PWH| {d_pwh:.3g} bar')
 
 
+def zero_flow():
+    import casadi as ca
+    import numpy as np
+
+    import manywells.pvt.fluid as fluid_module
+    from manywells.configurations import DEVELOP
+    from manywells.discretization import build_system
+    from manywells.sampling.conditions import nominal_conditions
+    from manywells.sampling.wells import sample_well, well_properties
+    from manywells.simulator import SSDFSimulator
+    from tests.backend_cases import Case
+
+    def in_situ(mu_l, mu_g, alpha, rho_l, rho_g, v_g, v_l):
+        x = alpha * rho_g / (alpha * rho_g + (1 - alpha) * rho_l)
+        return mu_g * x + mu_l * (1 - x)
+
+    def guarded(mu_l, mu_g, alpha, rho_l, rho_g, v_g, v_l):
+        w_g, w_l = alpha * rho_g * v_g, (1 - alpha) * rho_l * v_l
+        x = ca.if_else(w_g + w_l > 0, w_g, 0) / ca.if_else(w_g + w_l > 0, w_g + w_l, 1)
+        return mu_g * x + mu_l * (1 - x)
+
+    draw = sample_well(2026, 0)
+    bc = nominal_conditions(draw)
+    wp = well_properties(draw, draw.fractions, DEVELOP)
+    forms = (('in-situ', in_situ), ('flowing', fluid_module.mixture_viscosity), ('flowing, guarded', guarded))
+    for name, form in forms:
+        fluid_module.mixture_viscosity = form
+        system = build_system(wp)
+        params, ids = system.params(bc), system.row_ids
+        xs = ca.SX.sym('x', system.n_x)
+        jacobian = ca.Function('J', [xs], [ca.jacobian(system.residual(xs, params), xs)])
+        print(f'{name}: the rows of well 0 (seed 2026), at its nominal point, not finite at a state of every point')
+        for alpha, v_g, v_l in ((0.3, 0.0, 0.0), (0.0, 3.0, 0.0), (1.0, 0.0, 2.0), (0.3, 3.0, 2.0)):
+            x = np.tile([(bc.p_r + bc.p_s) / 2, v_g, v_l, alpha, 50.0, 750.0, bc.T_r], wp.geometry.n_cells + 1)
+            r, J = np.asarray(system.residual(x, params)).ravel(), np.asarray(jacobian(x).full())
+            rows = sorted({ids[i] for i in np.flatnonzero(~np.isfinite(r))})
+            rows_J = sorted({ids[i] for i in np.flatnonzero(~np.all(np.isfinite(J), axis=1))})
+            print(f'  alpha {alpha}, v_g {v_g}, v_l {v_l}: rows {rows}, Jacobian {rows_J}')
+        case_wp, case_bc = Case('v1.0.0', 'chen', 6).inputs()
+        rs = SSDFSimulator(case_wp).root_set(case_bc)
+        print(f'  v1.0.0+chen#6: roots {[round(r.p_0, 4) for r in rs.roots]}; starts: '
+              + '; '.join(f'{a.start}: {a.outcome}' for a in rs.search))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[1])
     sub = parser.add_subparsers(dest='cmd', required=True)
@@ -84,12 +133,15 @@ def main():
     b = sub.add_parser('backends')
     b.add_argument('rust')
     b.add_argument('casadi')
+    sub.add_parser('zero_flow')
     args = parser.parse_args()
     pd.set_option('display.width', 200)
     if args.cmd == 'compare':
         compare(args.before, args.after)
-    else:
+    elif args.cmd == 'backends':
         backends(args.rust, args.casadi)
+    else:
+        zero_flow()
 
 
 if __name__ == '__main__':

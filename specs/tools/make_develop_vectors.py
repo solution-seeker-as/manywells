@@ -347,8 +347,10 @@ TABLES = [
     Table('pvt/mixture.md', 'PVT-MIX-8', ('api', 'sg_gas', 'wlr', 'p', 'T'), ('mu_l',),
           ((35.0, 0.65, 0.0, 100.0, 350.0), (35.0, 0.65, 0.5, 250.0, 380.0)),
           lambda api, sg_gas, wlr, p, T: fluid(api, sg_gas, wlr=wlr).liquid_viscosity(p, T)),
-    Table('pvt/mixture.md', 'PVT-MIX-9', ('mu_l', 'mu_g', 'alpha', 'rho_l', 'rho_g'), ('mu_m',),
-          ((1e-3, 1.5e-5, 0.0, 800.0, 50.0), (1e-3, 1.5e-5, 0.5, 800.0, 50.0), (2e-3, 2e-5, 0.9, 850.0, 100.0)),
+    # The gas mass fraction of the flow: no gas, slip, much slip, and no slip, where it is the in-situ mass fraction
+    Table('pvt/mixture.md', 'PVT-MIX-9', ('mu_l', 'mu_g', 'alpha', 'rho_l', 'rho_g', 'v_g', 'v_l'), ('mu_m',),
+          ((1e-3, 1.5e-5, 0.0, 800.0, 50.0, 0.0, 2.0), (1e-3, 1.5e-5, 0.5, 800.0, 50.0, 6.0, 2.0),
+           (2e-3, 2e-5, 0.9, 850.0, 100.0, 20.0, 3.0), (1e-3, 1.5e-5, 0.5, 800.0, 50.0, 2.0, 2.0)),
           mixture_viscosity),
     Table('pvt/mixture.md', 'PVT-MIX-10', ('rho_o', 'rho_g_sc', 'rho_w', 'gor', 'wlr', 'cp_o', 'cp_w'),
           ('f_g', 'rho_l_sc', 'cp_l', 'x_o'),

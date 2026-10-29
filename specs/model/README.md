@@ -107,12 +107,12 @@ A vector whose equation has no implementation on `develop` is skipped with the r
 
 ### Independent checks
 
-The `develop` vectors pin `develop`, and the Rust core implements the same spec, so neither shows that a correlation is implemented as published. The independent checks compare `develop`'s values with sources independent of it (2026-10-29, on `develop` at `f7f1218`; `plans/model-lock-plan.md`, Step L3):
+The `develop` vectors pin `develop`, and the Rust core implements the same spec, so neither shows that a correlation is implemented as published. The independent checks compare `develop`'s values with sources independent of it (2026-10-29, on `develop` at `f7f1218`, and rerun after the rulings below; `plans/model-lock-plan.md`, Step L3). Bjarne signed off the record of these checks, this section and the notes in the component files, on 2026-10-29.
 
 - **Worked examples**, from the sources or from textbooks, compared at the precision printed: `tests/test_worked_examples.py`, on both backends, in every run of the test suite. A value that its own example's equation does not give at the example's inputs is the example's error; the test lists those and does not use them.
-- **`fluids`** 1.3.1 (Caleb Bell, MIT licence), and **the sources' equations, transcribed**, where no worked example is in hand: `plans/evidence/independent_checks.py`, run once by hand (`plans/evidence/README.md`, Independent checks). From then on the vectors carry the check: a change that alters a checked value fails `tests/test_spec_vectors.py`, and the vectors change only with Bjarne's sign-off, which reruns the script.
+- **`fluids`** 1.3.1 (Caleb Bell, MIT licence), and **the sources' equations, transcribed**, where no worked example is in hand: `plans/evidence/independent_checks.py`, run by hand (`plans/evidence/README.md`, Independent checks). From then on the vectors carry the check: a change that alters a checked value fails `tests/test_spec_vectors.py`, and the vectors change only with Bjarne's sign-off, which reruns the script.
 
-A value `develop` does not reproduce, after checking units and inputs, is a finding. It stays open until Bjarne rules on it, and is a strict expected failure in the test. The checks found two. Bjarne ruled on PVT-GAS-5's on 2026-10-29 to follow the source: its coefficient of $\gamma_g$ in $p_{pc}$ is Sutton's 131.0, where `develop` had 131.07 (`pvt/gas.md`). One is open: PVT-MIX-9's in-situ mass fraction where Hasan et al. take the flowing one (`pvt/mixture.md`). Each component file's Test vectors section has the details.
+A value `develop` does not reproduce, after checking units and inputs, is a finding. It stays open until Bjarne rules on it, and is a strict expected failure in the test. The checks found two, and Bjarne ruled on both on 2026-10-29 to follow the source: PVT-GAS-5's coefficient of $\gamma_g$ in $p_{pc}$ is Sutton's 131.0, where `develop` had 131.07 (`pvt/gas.md`), and PVT-MIX-9 weights by the flowing mass fraction of gas, as Hasan et al. do, where `develop` took the in-situ one (`pvt/mixture.md`). Both backends now reproduce every example, and none is open. Each component file's Test vectors section has the details.
 
 Every ID of `develop`'s configuration, of the options Papay, Haaland and the fitted classifier, and of the well options, with its independent check:
 
@@ -140,7 +140,7 @@ Every ID of `develop`'s configuration, of the options Papay, Haaland and the fit
 | PVT-WAT-1 | None: constants |
 | PVT-WAT-3 | None: no source in hand (`validity.md`, note 5) |
 | PVT-MIX-6, PVT-MIX-7, PVT-MIX-8, PVT-MIX-10 | None: mixing rules and definitions |
-| PVT-MIX-9 | `fluids`' `gas_liquid_viscosity`, for the mixing rule; Hasan and Kabir (2018), Field Example 3.1, a worked example. Open finding: the in-situ mass fraction |
+| PVT-MIX-9 | `fluids`' `gas_liquid_viscosity`, for the mixing rule; Hasan and Kabir (2018), Field Example 3.1, a worked example. Ruled 2026-10-29: the flowing mass fraction for the in-situ one |
 | SLIP-1 | None: the drift-flux law |
 | SLIP-4 | Hasan and Kabir (2018), Field Examples 3.1 and 4.1, worked examples |
 | SLIP-5 | Hasan and Kabir (2018), Field Example 3.1, a worked example |

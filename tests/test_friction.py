@@ -2,8 +2,10 @@
 
 import pytest
 import casadi as ca
+import numpy as np
 
 from manywells.friction import haaland_friction_factor, chen_friction_factor, friction_factor
+from manywells.thermal import ThermalModel
 
 
 def _eval(expr):
@@ -116,12 +118,28 @@ def test_fixed_friction_factor_pressure_gradient():
 def test_roughness_friction_uses_the_mixture_reynolds_number():
     """FRIC-3: f_D from Re = rho_m |v_m| D / mu_m and the relative roughness, through FRIC-6."""
     D, eps, fl = 0.15, 4.5e-5, FluidModel()
-    mu_m = float(fl.mixture_viscosity(STATE.p, STATE.T, STATE.alpha, STATE.rho_g, STATE.rho_l))
+    mu_m = float(fl.mixture_viscosity(STATE.p, STATE.T, STATE.alpha, STATE.rho_g, STATE.rho_l, STATE.v_g, STATE.v_l))
     Re = STATE.rho_m * abs(STATE.v_m) * D / mu_m
     got = _eval(RoughnessFriction(roughness=eps).friction_factor(STATE, fl, D))
     assert got == pytest.approx(_eval(friction_factor(Re, eps / D)), rel=1e-12)
     assert _eval(RoughnessFriction(roughness=eps, correlation='haaland').friction_factor(STATE, fl, D)) == \
         pytest.approx(_eval(friction_factor(Re, eps / D, 'haaland')), rel=1e-12)
+
+
+def test_the_mixture_viscosity_is_undefined_only_where_the_energy_row_is():
+    """PVT-MIX-9's x_g is 0/0 at a point through which nothing flows (pvt/mixture.md, Safeguards). So is THM-1, the
+    heat loss over the flow's heat capacity, in the energy row of the same point: the flowing fraction adds no state at
+    which the rows are not finite. Where anything flows, both are finite."""
+    x = ca.SX.sym('x', 7)
+    s = PointState(*(x[k] for k in range(7)))
+    fl = FluidModel()
+    F = RoughnessFriction().pressure_gradient(s, fl, 0.1)
+    dT = ThermalModel(h=20.0).temperature_gradient(s, fl, T_a=300.0, F=F, dp_dmd=0.0, cos_incl=1.0, D=0.1)
+    f = ca.Function('f', [x], [F, dT])
+    for alpha, v_g, v_l in ((0.3, 0.0, 0.0), (0.0, 3.0, 0.0), (1.0, 0.0, 2.0)):
+        F_0, dT_0 = (float(v) for v in f([150.0, v_g, v_l, alpha, 120.0, 780.0, 360.0]))
+        assert not np.isfinite(F_0) and not np.isfinite(dT_0)
+    assert all(np.isfinite(float(v)) for v in f([150.0, 0.0, 1e-9, 0.3, 120.0, 780.0, 360.0]))
 
 
 def test_friction_models_are_validated():

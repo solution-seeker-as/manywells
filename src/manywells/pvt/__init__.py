@@ -148,18 +148,21 @@ def sg_from_gas_density(rho_g):  # spec: PVT-GAS-6
 # MIXTURE VISCOSITY
 ################################################
 
-def mixture_viscosity(mu_l, mu_g, alpha, rho_l, rho_g):  # spec: PVT-MIX-9
+def mixture_viscosity(mu_l, mu_g, alpha, rho_l, rho_g, v_g, v_l):  # spec: PVT-MIX-9
     """
-    Mass-weighted gas-liquid mixture viscosity (CasADi-compatible).
+    Gas-liquid mixture viscosity, weighted by the gas mass fraction of the flow (CasADi-compatible).
 
-    Reference: Hasan, Kabir & Sayarpour (2010), Eq. A-3.
+    Reference: Hasan, Kabir & Sayarpour (2010), Eq. A-3, with x the flowing mass fraction of gas (their Nomenclature).
 
     :param mu_l: Liquid viscosity (Pa-s)
     :param mu_g: Gas viscosity (Pa-s)
     :param alpha: Gas void fraction in [0, 1]
     :param rho_l: Liquid density (kg/m3)
     :param rho_g: Gas density (kg/m3)
+    :param v_g: Gas velocity (m/s)
+    :param v_l: Liquid velocity (m/s)
     :return: Mixture viscosity (Pa-s)
     """
-    x = alpha * rho_g / (alpha * rho_g + (1 - alpha) * rho_l)
-    return mu_g * x + mu_l * (1 - x)
+    w_g, w_l = alpha * rho_g * v_g, (1 - alpha) * rho_l * v_l  # The phase mass rates per unit area (kg/(m² s))
+    x_g = w_g / (w_g + w_l)  # Gas mass fraction of the flow: 0/0 where nothing flows (pvt/mixture.md, Safeguards)
+    return mu_g * x_g + mu_l * (1 - x_g)

@@ -258,9 +258,11 @@ impl Fluid {
         }.unwrap_or_else(|| gas::gas_viscosity(t, rho_g, self.m_g))
     }
 
-    /// Gas-liquid mixture viscosity (Pa s) at a point
-    pub fn mixture_viscosity(&self, p: f64, t: f64, alpha: f64, rho_g: f64, rho_l: f64) -> f64 {
-        mixture::mixture_viscosity(self.liquid_viscosity(p, t), self.gas_viscosity(p, t, rho_g), alpha, rho_l, rho_g)
+    /// Gas-liquid mixture viscosity (Pa s) at a point, weighted by the gas mass fraction of the flow
+    #[allow(clippy::too_many_arguments)]
+    pub fn mixture_viscosity(&self, p: f64, t: f64, alpha: f64, rho_g: f64, rho_l: f64, v_g: f64, v_l: f64) -> f64 {
+        mixture::mixture_viscosity(self.liquid_viscosity(p, t), self.gas_viscosity(p, t, rho_g), alpha, rho_l, rho_g,
+                                   v_g, v_l)
     }
 
     /// Gas-liquid surface tension (J/m²) at p (bar), T (K) and the point's liquid density rho_l (kg/m³)

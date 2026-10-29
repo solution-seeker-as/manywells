@@ -238,20 +238,22 @@ class FluidModel:
         """Gas viscosity at (p, T) and gas density rho_g (Pa s) (CasADi-compatible)."""
         return self._hc.gas_viscosity(p, T, rho_g)
 
-    def mixture_viscosity(self, p, T, alpha, rho_g, rho_l):
+    def mixture_viscosity(self, p, T, alpha, rho_g, rho_l, v_g, v_l):
         """
-        Gas-liquid mixture viscosity at a point (CasADi-compatible), mass-weighted.
+        Gas-liquid mixture viscosity at a point (CasADi-compatible), weighted by the gas mass fraction of the flow.
 
         :param p: Pressure (bar), may be CasADi symbolic
         :param T: Temperature (K), may be CasADi symbolic
         :param alpha: Void fraction, may be CasADi symbolic
         :param rho_g: Gas density (kg/m3), may be CasADi symbolic
         :param rho_l: Liquid density (kg/m3), may be CasADi symbolic
+        :param v_g: Gas velocity (m/s), may be CasADi symbolic
+        :param v_l: Liquid velocity (m/s), may be CasADi symbolic
         :return: Mixture viscosity (Pa-s)
         """
         mu_l = self.liquid_viscosity(p, T)
         mu_g = self.gas_viscosity(p, T, rho_g)
-        return mixture_viscosity(mu_l, mu_g, alpha, rho_l=rho_l, rho_g=rho_g)
+        return mixture_viscosity(mu_l, mu_g, alpha, rho_l=rho_l, rho_g=rho_g, v_g=v_g, v_l=v_l)
 
     def surface_tension(self, p, T, rho_l):
         """
