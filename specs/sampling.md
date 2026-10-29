@@ -155,7 +155,7 @@ On `develop` (`sampling.generate`), every solve returns the well's operating poi
 
 1. Solve the well at $u = 0.5$ with its nominal conditions; if that fails, discard the well. The root is the initial guess of every sample.
 2. Draw samples (SMP-18 to SMP-22) and solve each. A failed solve, negative rates or fractions outside [0, 1] count as failures; a sample with $w_m < 0.1$ kg/s is dropped without counting. The well is discarded after $5 \cdot 500$ attempts or 100 failures.
-3. Discard the well if the standard deviation of $u$ over its samples is below a fifth of $U(0.05, 1)$'s, $0.95/\sqrt{12}$; if more than 80% of its samples are choked (CHK-12); or if the coefficient of variation of its total standard volumetric rate (`QTOT`) is below 0.05.
+3. Discard the well if the standard deviation of $u$ over its samples is below a fifth of $U(0.05, 1)$'s, $0.95/\sqrt{12}$; if more than 80% of its samples are choked (CHK-12); or if the coefficient of variation of its total standard volumetric rate (`QTOT`) is below 0.05. The port takes the sample standard deviation (ddof = 1) of `QTOT` where v1.0.0 took the population one (ddof = 0), so its coefficient of variation is 1.001 times v1.0.0's, and a well within 0.1% of the threshold is kept where v1.0.0 dropped it; left to the sampling redesign (Bjarne, 2026-10-29).
 
 ### SMP-29 · Non-stationary generation (`nsol-1`)
 
