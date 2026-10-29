@@ -137,7 +137,7 @@ def times(df, names):
         ratio = t[f'{names[1]} {b}'] / t[f'{names[0]} {b}']
         print(f'{names[1]} / {names[0]} on {b}: median ratio {ratio.median():.2f}, total ratio '
               f'{t[f"{names[1]} {b}"].sum() / t[f"{names[0]} {b}"].sum():.2f}')
-    print(f'casadi / rust: ' + ', '.join(f'{n} {t[f"{n} casadi"].sum() / t[f"{n} rust"].sum():.1f}' for n in names))
+    print('casadi / rust: ' + ', '.join(f'{n} {t[f"{n} casadi"].sum() / t[f"{n} rust"].sum():.1f}' for n in names))
 
 
 def operating_points(df, names):
