@@ -3,7 +3,6 @@
 import pytest
 
 from manywells.inflow import (
-    InflowModel,
     ProductivityIndex,
     Vogel,
     FixedFlowRate,

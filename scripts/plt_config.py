@@ -10,7 +10,6 @@ Default configuration of Matplotlib and Seaborn
 """
 
 import matplotlib as mpl
-import matplotlib.pyplot as plt
 import seaborn as sns
 
 

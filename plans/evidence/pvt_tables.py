@@ -305,7 +305,7 @@ def summary(df):
                           for x in ('PBH', 'PWH', 'TWH')})
         print(f'\n{g}: quantiles of the change against the black oil, over {len(ok)} cases')
         print(d.quantile(q).round(4).to_string())
-        print(f'largest |change|: ' + ', '.join(f'{c} {d[c].abs().max():.4f}' for c in d))
+        print('largest |change|: ' + ', '.join(f'{c} {d[c].abs().max():.4f}' for c in d))
     t = pd.DataFrame({g: base[f'build_{g}'] + base[f'search_{g}'] for g in ('base',) + tuple(GRIDS)})
     print('\nTime to build the well and find its roots, one process (s): median / total')
     print(pd.DataFrame({'median': t.median(), 'total': t.sum()}).round(2).to_string())

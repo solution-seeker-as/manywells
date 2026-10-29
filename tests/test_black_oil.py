@@ -1,14 +1,16 @@
 """Tests for the black oil PVT model and its simulator integration."""
 
 import pytest
-import numpy as np
 
-from manywells.pvt import P_REF, T_REF, WATER, density_from_api, api_from_density, gas_density_from_sg
+from manywells.pvt import P_REF, T_REF, density_from_api, gas_density_from_sg
 from manywells.pvt.black_oil import BlackOil, BlackOilPVT
-from manywells.pvt.dead_oil import DeadOil
-from manywells.units import CF_PSI, CF_RS, M_AIR, CF_BAR
+from manywells.units import CF_PSI, CF_RS, CF_BAR
 from manywells.pvt.gas import gas_fvf, gas_density_std
 from manywells.pvt.water import water_fvf
+from manywells.geometry import WellGeometry
+from manywells.pvt.dead_oil import DeadOil
+from manywells.pvt.fluid import FluidModel
+from manywells.simulator import WellProperties, BoundaryConditions, SSDFSimulator
 
 
 # ---------------------------------------------------------------------------
@@ -314,12 +316,6 @@ class TestFluidModelMixing:
 # =========================================================================
 # Simulator integration tests
 # =========================================================================
-
-from manywells.geometry import WellGeometry
-from manywells.pvt.dead_oil import DeadOil
-from manywells.pvt.fluid import FluidModel
-from manywells.simulator import WellProperties, BoundaryConditions, SSDFSimulator, SimError
-
 
 @pytest.mark.slow
 class TestDeadOilRegression:

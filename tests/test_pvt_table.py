@@ -295,10 +295,10 @@ class TestFiles:
         assert axis.gors == (80.0, 120.0)
 
     @pytest.mark.parametrize('edit, match', [
-        (lambda lines: [l.replace(',Z', ',W') for l in lines], 'missing'),
-        (lambda lines: [l.replace(',sigma', ',tau') for l in lines], 'unknown'),
+        (lambda lines: [line.replace(',Z', ',W') for line in lines], 'missing'),
+        (lambda lines: [line.replace(',sigma', ',tau') for line in lines], 'unknown'),
         (lambda lines: lines[:-1], 'rectangular'),
-        (lambda lines: [l for l in lines if not l.startswith('# rho_o')], 'rho_o and rho_g'),
+        (lambda lines: [line for line in lines if not line.startswith('# rho_o')], 'rho_o and rho_g'),
     ])
     def test_read_csv_refuses(self, tmp_path, edit, match):
         small().write_csv(tmp_path / 't.csv')
@@ -360,7 +360,10 @@ class TestFromPhaseSplit:
     def split(self):
         pvt, gor = MAKE.VB, MAKE.VB_GOR
         P, TT = np.meshgrid(self.P, self.T, indexing='ij')
-        at = lambda f: np.vectorize(lambda a, b: num(f(a, b)))(P, TT)
+
+        def at(f):
+            return np.vectorize(lambda a, b: num(f(a, b)))(P, TT)
+
         R_so, B_o, Z, rho_V = np.minimum(at(pvt.rs), gor), at(pvt.bo), at(pvt.z_factor), at(pvt.gas_density)
         m = pvt.rho_o + gor * pvt.rho_g
         X = (gor - R_so) * pvt.rho_g / m

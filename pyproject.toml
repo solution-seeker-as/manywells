@@ -41,7 +41,10 @@ Repository = "https://github.com/solution-seeker-as/manywells.git"
 dev = [
     "pytest>=7.0.0",
     "manywells-verify",
+    { include-group = "lint" },
 ]
+# Pinned, so that every contributor and CI format alike; the pre-commit hook runs this version
+lint = ["ruff==0.17.1"]
 
 [tool.uv]
 # Rebuild the extension when the Rust core changes
@@ -55,6 +58,16 @@ members = ["verification"]
 
 [tool.uv.sources]
 manywells-verify = { workspace = true }
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.ruff.lint]
+# Pyflakes and pycodestyle's errors, ruff's defaults before 0.15; listed, so that a newer ruff does not change the check
+select = ["E4", "E7", "E9", "F"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "verification/tests"]

@@ -10,7 +10,6 @@ pressure adjusts to sustain the prescribed liquid rate.  This is useful for
 calibration or for studying wellbore hydraulics at a known production rate.
 """
 
-import numpy as np
 import matplotlib.pyplot as plt
 
 from manywells.simulator import WellProperties, BoundaryConditions, SSDFSimulator
