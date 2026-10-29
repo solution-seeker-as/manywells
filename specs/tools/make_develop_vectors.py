@@ -26,8 +26,9 @@ import casadi as ca
 import numpy as np
 
 from manywells.configurations import v1_fluid
-from manywells.discretization import PointState
+from manywells.discretization import OperatingPoint, PointState, cell_rows, lift_gas_rate, lifts
 from manywells.friction import RoughnessFriction, chen_friction_factor, friction_factor, haaland_friction_factor
+from manywells.geometry import WellGeometry
 from manywells.pvt import density_from_api, gas_density_from_sg, mixture_viscosity
 from manywells.pvt.black_oil import BlackOil, BlackOilPVT, live_oil_surface_tension, live_oil_viscosity
 from manywells.pvt.dead_oil import DeadOil, dead_oil_viscosity
@@ -35,6 +36,7 @@ from manywells.pvt.fluid import FluidModel
 from manywells.pvt.gas import dak_jt_factor, dak_z_factor, gas_viscosity, sutton_pseudo_critical
 from manywells.pvt.table import PVTTable
 from manywells.pvt.water import water_fvf, water_viscosity
+from manywells.simulator import WellProperties
 from manywells.slip import SlipModel, classify_flow_regime, hasan_probabilities, hasan_rule_quantities
 from manywells.thermal import ThermalModel
 from manywells.units import CF_BAR, CF_RS, P_REF, T_REF
@@ -95,6 +97,52 @@ def joule_thomson_term(alpha, rho_g, v_g, rho_l, v_l, F, cos_incl, T, sg_gas, cp
 def lift_gas_mixing(w_res, w_lg, T_r, T_lg, f_g, cp_g, cp_l):
     fl = v1_fluid(rho_l=850.0, R_s=420.0, cp_g=cp_g, cp_l=cp_l, f_g=f_g)
     return ThermalModel().inflow_temperature(w_res, w_lg, T_r, T_lg, fl)
+
+
+def injection_mixing(T_tilde, w_g, w_l, w_lg, T_lg, cp_g, cp_l):
+    fl = v1_fluid(rho_l=850.0, R_s=420.0, cp_g=cp_g, cp_l=cp_l, f_g=0.1)
+    return ThermalModel.injection_temperature(T_tilde, w_g, w_l, w_lg, T_lg, fl)
+
+
+def injection_grid(L, n_cells, exponent):
+    """A vertical grid of n_cells to L (m): uniform, as WellGeometry.vertical, or with points at L x^exponent for x
+    uniform on [0, 1], so that the cells grow towards the bottomhole."""
+    if exponent == 1.0:
+        return WellGeometry.vertical(L, int(n_cells))
+    s = L * np.linspace(0.0, 1.0, int(n_cells) + 1) ** exponent
+    return WellGeometry(md_survey=s, tvd_survey=s)
+
+
+def injection_point(L, n_cells, exponent, z_inj):
+    return WellProperties(geometry=injection_grid(L, n_cells, exponent), injection_md=z_inj).injection_point
+
+
+# INF-9's phase rates: a vertical well of 1000 m on 10 cells with the black oil of fluid(), the injection point k at
+# 1000 - 100 k m of measured depth
+def injection_well(k):
+    return WellProperties(geometry=WellGeometry.vertical(1000.0, 10), fluid=fluid(), injection_md=1000.0 - 100.0 * k)
+
+
+def point_phase_rates(k, i, p, T, w_res, w_lg):
+    wp = injection_well(int(k))
+    return wp.fluid.phase_rates(p, T, w_res, lift_gas_rate(w_lg, lifts(wp)[int(i)]))
+
+
+# DISC-12's well: vertical, 1000 m on 10 cells of D = 0.1 m, the black oil of fluid() with DAK's gas law, develop's
+# thermal model and friction, and the lift gas injected at 500 m, point 5; T_r = 370 K, T_s = 280 K
+DISC12_COMPONENTS = dict(geometry=WellGeometry.vertical(1000.0, 10, D=0.1), fluid=fluid(), friction=RoughnessFriction(),
+                         thermal=ThermalModel(), injection_md=500.0)
+DISC12_T_R, DISC12_T_S = 370.0, 280.0
+
+
+def injection_energy_row(T_prev, p, v_g, v_l, alpha, rho_g, rho_l, T, w_res, w_lg, T_lg):
+    """Cell k's energy row (DISC-12) at the state of point k, with T_prev at point k - 1."""
+    wp = WellProperties(**DISC12_COMPONENTS)
+    k, geo, nan = wp.injection_point, wp.geometry, float('nan')
+    op = OperatingPoint(p_r=nan, p_s=nan, T_r=DISC12_T_R, T_s=DISC12_T_S, T_lg=T_lg, u=nan, w_lg=w_lg)
+    s = state(alpha, v_g, v_l, rho_g, rho_l, p, T)
+    s_prev = PointState(p=p, v_g=v_g, v_l=v_l, alpha=alpha, rho_g=rho_g, rho_l=rho_l, T=T_prev)
+    return cell_rows(wp, s, s_prev, w_res, op, geo.delta_md[k - 1], geo.cos_incl[k - 1], geo.tvd_frac[k], 1, 0)[3]
 
 
 def rough_pipe(p, T, alpha, v_g, v_l, rho_g, rho_l, D, roughness):
@@ -194,6 +242,16 @@ def scaled_slip(regime_model):
         SlipModel(regime_model=regime_model, profile_scale=profile_scale).identify_parameters(**kw))
 
 TABLES = [
+    # inflow.md
+    Table('inflow.md', 'INF-9', ('L', 'n_cells', 'exponent', 'z_inj'), ('k',),
+          ((2000.0, 100.0, 1.0, 1000.0), (2000.0, 100.0, 1.0, 1234.5), (2000.0, 100.0, 1.0, 1990.0),
+           (2000.0, 100.0, 1.0, 1970.0), (2000.0, 100.0, 1.0, 2000.0), (2000.0, 100.0, 1.0, 0.0),
+           (3000.0, 20.0, 1.3, 1500.0), (3000.0, 20.0, 1.3, 2900.0), (3000.0, 20.0, 1.3, 50.0)),
+          injection_point),
+    Table('inflow.md', 'INF-9 (phase rates)', ('k', 'i', 'p', 'T', 'w_res', 'w_lg'), ('w_g', 'w_l'),
+          ((5.0, 4.0, 150.0, 350.0, 20.0, 2.0), (5.0, 5.0, 150.0, 350.0, 20.0, 2.0), (5.0, 9.0, 60.0, 320.0, 20.0, 2.0),
+           (0.0, 0.0, 200.0, 360.0, 15.0, 1.0), (8.0, 3.0, 250.0, 370.0, 10.0, 3.0), (8.0, 8.0, 100.0, 340.0, 10.0, 3.0)),
+          point_phase_rates),
     # thermal.md
     Table('thermal.md', 'THM-4', ('tvd_frac', 'T_r', 'T_s'), ('T_a',),
           ((1.0, 370.0, 277.15), (0.0, 370.0, 277.15), (0.37, 360.0, 280.0), (0.9, 400.0, 270.0)),
@@ -202,6 +260,11 @@ TABLES = [
           ((10.0, 1.0, 373.15, 300.0, 0.1, 2225.0, 3000.0), (10.0, 0.0, 373.15, 300.0, 0.1, 2225.0, 3000.0),
            (2.0, 3.0, 380.0, 290.0, 0.3, 2225.0, 2500.0), (30.0, 0.5, 350.0, 360.0, 0.05, 2225.0, 4000.0)),
           lift_gas_mixing),
+    Table('thermal.md', 'THM-9', ('T_tilde', 'w_g', 'w_l', 'w_lg', 'T_lg', 'cp_g', 'cp_l'), ('T_k',),
+          ((350.0, 3.0, 20.0, 1.0, 300.0, 2225.0, 3000.0), (350.0, 3.0, 20.0, 0.0, 300.0, 2225.0, 3000.0),
+           (330.0, 2.5, 5.0, 2.0, 360.0, 2225.0, 2500.0), (360.0, 10.0, 30.0, 5.0, 290.0, 2225.0, 4000.0),
+           (340.0, 1.0, 0.0, 1.0, 300.0, 2225.0, 3000.0)),
+          injection_mixing),
     Table('thermal.md', 'THM-6', ('alpha', 'rho_g', 'v_g', 'rho_l', 'v_l', 'F', 'cp_g', 'cp_l'), ('Phi_f',),
           ((0.0, 50.0, 10.0, 850.0, 2.0, 500.0, 2225.0, 4180.0), (0.4, 80.0, 6.0, 800.0, 2.5, 900.0, 2225.0, 3000.0),
            (0.9, 30.0, 20.0, 820.0, 4.0, 2000.0, 2225.0, 2500.0)),
@@ -218,6 +281,14 @@ TABLES = [
            (0.9, 300.0, 3.0, 820.0, 1.0, 1500.0, 1.0, 300.0, 0.65, 2225.0, 2500.0),
            (0.0, 50.0, 10.0, 850.0, 2.0, 500.0, 1.0, 350.0, 0.65, 2225.0, 4180.0)),
           joule_thomson_term),
+    # discretization.md
+    Table('discretization.md', 'DISC-12',
+          ('T_prev', 'p', 'v_g', 'v_l', 'alpha', 'rho_g', 'rho_l', 'T', 'w_res', 'w_lg', 'T_lg'), ('r',),
+          ((350.0, 120.0, 3.0, 1.5, 0.3, 90.0, 780.0, 345.0, 20.0, 2.0, 300.0),
+           (350.0, 120.0, 3.0, 1.5, 0.3, 90.0, 780.0, 345.0, 20.0, 0.0, 300.0),
+           (340.0, 60.0, 8.0, 2.5, 0.6, 45.0, 790.0, 338.0, 15.0, 4.0, 360.0),
+           (355.0, 180.0, 1.0, 1.2, 0.1, 140.0, 760.0, 352.0, 25.0, 1.0, 330.0)),
+          injection_energy_row),
     # slip.md
     Table('slip.md', 'SLIP-10, SLIP-11', ('v_g', 'v_l', 'alpha', 'rho_g', 'rho_l', 'sigma', 'D', 'cos_incl'),
           ('C_0', 'v_inf'),

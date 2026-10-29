@@ -76,6 +76,9 @@ class WellProperties:
     # Choke model. None means a Bernoulli choke with K_c = 10% of the pipe's cross-section.
     choke: ChokeModel = None
 
+    # Measured depth (m) from the surface of the lift gas's injection point. None means the bottomhole (INF-9).
+    injection_md: float = None
+
     def __post_init__(self):
         for name, cls in (('geometry', WellGeometry), ('fluid', FluidModel), ('friction', FrictionModel),
                           ('thermal', ThermalModel), ('slip', SlipModel), ('inflow', InflowModel)):
@@ -85,12 +88,25 @@ class WellProperties:
             object.__setattr__(self, 'choke', BernoulliChokeModel(K_c=0.1 * self.geometry.A))
         elif not isinstance(self.choke, ChokeModel):
             raise ValueError(f'choke must be a ChokeModel, got {type(self.choke).__name__}')
+        if self.injection_md is not None:
+            md = self.injection_md
+            if isinstance(md, bool) or not isinstance(md, (int, float, np.integer, np.floating)) \
+                    or not 0 <= md <= self.geometry.L:  # NaN too
+                raise ValueError(f'injection_md must be a measured depth from 0 to the well\'s {self.geometry.L} m, '
+                                 f'or None for the bottomhole, got {md!r}')
+            object.__setattr__(self, 'injection_md', float(md))
         # Checked here, where both the roughness and the diameter are (specs/model/validity.md, note 3)
         D = self.geometry.D
         if isinstance(self.friction, RoughnessFriction) and not self.friction.roughness <= MAX_RELATIVE_ROUGHNESS * D:
             raise ValueError(f'the relative roughness {self.friction.roughness / D:.4g} (roughness '
                              f'{self.friction.roughness} m, D = {D} m) exceeds {MAX_RELATIVE_ROUGHNESS}, the upper end '
                              'of the friction correlations\' range (specs/model/validity.md)')
+
+    @property
+    def injection_point(self) -> int:  # spec: INF-9
+        """The grid point k at which the lift gas enters: the one nearest injection_md, the deeper of two equally
+        near, and 0, the bottomhole, without an injection depth."""
+        return 0 if self.injection_md is None else self.geometry.nearest_point(self.injection_md)
 
 
 @dataclass(frozen=True)
@@ -102,11 +118,14 @@ class BoundaryConditions:
     # Temperatures
     T_r: float = 373.15       # Reservoir temperature (K). Default value corresponds to 100 decC.
     T_s: float = 277.15       # Ambient temperature (K) at the surface z=L. Default value corresponds to 4 degC.
-    T_lg: float = None        # Lift gas temperature (K) at injection point. None means T_r (no mixing effect).
+    T_lg: float = None        # Lift gas temperature (K) at the injection point. None means the ambient temperature
+                              # there (THM-4, THM-9): T_r at the bottomhole, where the lift gas then changes no
+                              # temperature
 
     # Controls
     u: float = 1.             # Choke position (dimensionless). Must be in [0,1].
-    w_lg: float = 0.          # Lift gas mass flow rate (kg/s). Default value is 0. Assumed injected at z=0.
+    w_lg: float = 0.          # Lift gas mass flow rate (kg/s). Default value is 0. Injected at the well's injection
+                              # point (WellProperties.injection_md), the bottomhole by default
 
     def __post_init__(self):
         values = (self.p_r, self.p_s, self.T_r, self.T_s, self.u, self.w_lg) + (() if self.T_lg is None else (self.T_lg,))

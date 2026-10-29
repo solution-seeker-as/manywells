@@ -10,7 +10,9 @@
 //!
 //! The state holds seven values at each of the N + 1 points, from the bottomhole (point 0) to the wellhead (point N):
 //! [p, v_g, v_l, alpha, rho_g, rho_l, T] (bar, m/s, m/s, -, kg/m³, kg/m³, K). Cell i lies between points i - 1 and i.
-//! The reservoir liquid rate w_res, from the inflow at p_0, enters every point's rows through the phase rates.
+//! The reservoir liquid rate w_res, from the inflow at p_0, enters every point's rows through the phase rates. The lift
+//! gas enters the phase rates from the well's injection point k up (INF-9), and above the bottomhole cell k's energy
+//! row mixes it in (DISC-12); where k = 0 the rows are those without an injection depth.
 
 use crate::geometry::Cell;
 use crate::input::{OperatingPoint, WellSpec};
@@ -77,14 +79,29 @@ pub fn reservoir_rate(spec: &WellSpec, op: &OperatingPoint, p_0: f64) -> f64 {
     spec.inflow.liquid_rate(p_0, op.p_r)
 }
 
+/// The lift-gas rate (kg/s) in the phase rates at point i, for a lift-gas rate w_lg: w_lg from the injection point
+/// up, 0 below it
+pub fn lift_gas_rate(spec: &WellSpec, w_lg: f64, i: usize) -> f64 {  // spec: INF-9
+    if i >= spec.injection_point { w_lg } else { 0.0 }
+}
+
+/// The temperature (K) of the fluid entering at the bottomhole, for the reservoir liquid rate w_res (kg/s): THM-3 or
+/// THM-5, and THM-3 where the lift gas enters above the bottomhole (INF-9), so that none mixes in there
+pub fn inflow_temperature(spec: &WellSpec, op: &OperatingPoint, w_res: f64) -> f64 {
+    if spec.injection_point > 0 {
+        return op.t_r; // spec: THM-3
+    }
+    spec.thermal.inflow_temperature(w_res, op.w_lg, op.t_r, op.t_lg, &spec.fluid)
+}
+
 /// Rows at the bottomhole, point 0: the gas and liquid inflow (kg/s) and the inflow temperature (K)
 pub fn bottom_rows(spec: &WellSpec, op: &OperatingPoint, s: &State, w_res: f64) -> [f64; 3] {
     let a = spec.a();
-    let (w_g, w_l) = spec.fluid.phase_rates(s.p, s.t, w_res, op.w_lg);
+    let (w_g, w_l) = spec.fluid.phase_rates(s.p, s.t, w_res, lift_gas_rate(spec, op.w_lg, 0));
     [
         a * s.alpha * s.rho_g * s.v_g - w_g,         // spec: INF-6
         a * (1.0 - s.alpha) * s.rho_l * s.v_l - w_l, // spec: INF-7
-        s.t - spec.thermal.inflow_temperature(w_res, op.w_lg, op.t_r, op.t_lg, &spec.fluid), // THM-3 or THM-5
+        s.t - inflow_temperature(spec, op, w_res),   // THM-3 or THM-5
     ]
 }
 
@@ -102,25 +119,40 @@ pub fn momentum_row(spec: &WellSpec, cell: Cell, s: &State, s_prev: &State) -> f
         + cell.delta_md * (f + cell.cos_incl * g) / CF_BAR // spec: DISC-9
 }
 
-/// The energy row of cell i (K): implicit Euler, with the temperature gradient at point i
-pub fn energy_row(spec: &WellSpec, op: &OperatingPoint, cell: Cell, s: &State, s_prev: &State) -> f64 {
+/// Whether cell i's energy row mixes the lift gas in (DISC-12): at the injection point above the bottomhole, with the
+/// thermal model's lift-gas mixing on
+pub fn mixes_lift_gas(spec: &WellSpec, cell: Cell) -> bool {
+    cell.index == spec.injection_point && spec.thermal.lift_gas_mixing
+}
+
+/// The energy row of cell i (K): implicit Euler, with the temperature gradient at point i; at the injection point,
+/// that step followed by the mix with the lift gas, with the phase rates at point i for the reservoir liquid rate w_res
+pub fn energy_row(spec: &WellSpec, op: &OperatingPoint, cell: Cell, s: &State, s_prev: &State, w_res: f64) -> f64 {
     let t_a = thermal::ambient_temperature(cell.tvd_frac, op.t_r, op.t_s);
     let dt = spec.thermal.temperature_gradient(s, &spec.fluid, t_a, friction_gradient(spec, s), cell.cos_incl,
                                                spec.geometry.d);
+    if mixes_lift_gas(spec, cell) {
+        let (w_g, w_l) = spec.fluid.phase_rates(s.p, s.t, w_res, op.w_lg);
+        let t_tilde = s_prev.t + cell.delta_md * dt;
+        let t_k = thermal::injection_temperature(t_tilde, w_g, w_l, op.w_lg, op.t_lg, &spec.fluid);
+        return s.t - t_k; // spec: DISC-12
+    }
     s.t - s_prev.t - cell.delta_md * dt // spec: DISC-10
 }
 
 /// Balance rows of cell i: gas and liquid mass (kg/(m² s)), momentum (bar) and energy (K). The change in each mass
-/// flux equals the change in the phase rate, which is zero without mass transfer.
+/// flux equals the change in the phase rate, which is zero without mass transfer; over the injection cell it holds the
+/// lift gas's source.
 pub fn cell_rows(spec: &WellSpec, op: &OperatingPoint, cell: Cell, s: &State, s_prev: &State, w_res: f64) -> [f64; 4] {
     let a = spec.a();
-    let (w_g, w_l) = spec.fluid.phase_rates(s.p, s.t, w_res, op.w_lg);
-    let (w_g_prev, w_l_prev) = spec.fluid.phase_rates(s_prev.p, s_prev.t, w_res, op.w_lg);
+    let (w_g, w_l) = spec.fluid.phase_rates(s.p, s.t, w_res, lift_gas_rate(spec, op.w_lg, cell.index));
+    let (w_g_prev, w_l_prev) =
+        spec.fluid.phase_rates(s_prev.p, s_prev.t, w_res, lift_gas_rate(spec, op.w_lg, cell.index - 1));
     [
         s.gas_flux() - s_prev.gas_flux() - (w_g - w_g_prev) / a,          // spec: DISC-7
         s.liquid_flux() - s_prev.liquid_flux() - (w_l - w_l_prev) / a,    // spec: DISC-8
         momentum_row(spec, cell, s, s_prev),
-        energy_row(spec, op, cell, s, s_prev),
+        energy_row(spec, op, cell, s, s_prev, w_res),
     ]
 }
 
@@ -146,9 +178,10 @@ pub fn closure_rows(spec: &WellSpec, s: &State, cos_incl: f64) -> [f64; 3] {
 
 /// The spec ID of every row of the system, in order: the rows of each point depend on the well's options
 pub fn row_ids(spec: &WellSpec) -> Vec<&'static str> {  // spec: DISC-11
-    let n = spec.n_cells();
-    let bottom = ["INF-6", "INF-7", if spec.thermal.lift_gas_mixing { "THM-5" } else { "THM-3" }];
+    let (n, k, mixing) = (spec.n_cells(), spec.injection_point, spec.thermal.lift_gas_mixing);
+    let bottom = ["INF-6", "INF-7", if mixing && k == 0 { "THM-5" } else { "THM-3" }];
     let cell = ["DISC-7", "DISC-8", "DISC-9", "DISC-10"];
+    let injection = ["DISC-7", "DISC-8", "DISC-9", if mixing { "DISC-12" } else { "DISC-10" }];
     let gas_law = match spec.fluid.gas_law() {
         Some(GasLaw::Ideal) => "PVT-GAS-1",
         Some(GasLaw::Dak { .. }) => "PVT-GAS-11",
@@ -161,7 +194,7 @@ pub fn row_ids(spec: &WellSpec) -> Vec<&'static str> {  // spec: DISC-11
     ids.extend(bottom);
     ids.extend(closures);
     for i in 1..=n {
-        ids.extend(cell);
+        ids.extend(if i == k { injection } else { cell });
         if i == n {
             ids.push("CHK-1");
         }

@@ -24,7 +24,7 @@ import numpy as np
 
 from manywells import _core
 from manywells.choke import BernoulliChokeModel, SimpsonChokeModel
-from manywells.discretization import System
+from manywells.discretization import lift_gas_temperature
 from manywells.friction import FixedFrictionFactor, RoughnessFriction
 from manywells.geometry import WellGeometry
 from manywells.inflow import FixedFlowRate, ProductivityIndex, Vogel
@@ -89,7 +89,7 @@ def core_inputs(wp) -> dict:
                 profile_scale=slip.profile_scale,
                 **_inflow(wp.inflow),
                 choke='simpson' if type(choke) is SimpsonChokeModel else 'bernoulli', K_c=choke.K_c,
-                profile=choke.chk_profile)
+                profile=choke.chk_profile, injection_point=wp.injection_point)
 
 
 def _pvt(fluid) -> dict:
@@ -122,9 +122,10 @@ def _friction(friction) -> dict:
     return {'friction': 'roughness', 'roughness': friction.roughness, 'correlation': friction.correlation}
 
 
-def operating_point(bc) -> tuple:
-    """The core's operating point: the parameters of the CasADi system, (p_r, p_s, T_r, T_s, T_lg, u, w_lg)."""
-    return tuple(float(v) for v in System.params(bc))
+def operating_point(wp, bc) -> tuple:
+    """The core's operating point for the well wp: the parameters of the CasADi system, (p_r, p_s, T_r, T_s, T_lg, u,
+    w_lg), with T_lg, when it is None, the ambient temperature at the injection point (THM-9)."""
+    return tuple(float(v) for v in (bc.p_r, bc.p_s, bc.T_r, bc.T_s, lift_gas_temperature(wp, bc), bc.u, bc.w_lg))
 
 
 class RustRootFinder:
@@ -138,7 +139,7 @@ class RustRootFinder:
     def find(self, bc, x_guess=None) -> RootSet:  # spec: SOL-2
         """Every root the core finds, labelled, with the operating point."""
         t0 = time.perf_counter()
-        found, counts = self.core.root_set(operating_point(bc))
+        found, counts = self.core.root_set(operating_point(self.wp, bc))
         self.counts = counts
         roots, rejected = [], 0
         for r in found:
@@ -161,10 +162,10 @@ class RustRootFinder:
 
     def rows(self, bc, x) -> tuple:
         """Every row of the core's system at state x, as (IDs, values), in the order of DISC-11."""
-        ids, values = self.core.rows(operating_point(bc), np.ravel(x).tolist())
+        ids, values = self.core.rows(operating_point(self.wp, bc), np.ravel(x).tolist())
         return tuple(ids), np.asarray(values)
 
     def march(self, bc, p_0) -> tuple:
         """The core's march from p_0: (x of the points reached, failed, below_separator)."""
-        x, failed, below = self.core.march(operating_point(bc), float(p_0))
+        x, failed, below = self.core.march(operating_point(self.wp, bc), float(p_0))
         return np.asarray(x), failed, below

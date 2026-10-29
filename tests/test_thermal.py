@@ -138,3 +138,26 @@ def test_inflow_temperature():
     assert m.inflow_temperature(w_res, 3.0, T_r, T_lg, FLUID) < T_mix          # more lift gas, colder
     H_res = w_res * FLUID.cp_l + FLUID.reservoir_gas_rate(w_res) * FLUID.cp_g
     assert T_mix == pytest.approx((H_res * T_r + 1.0 * FLUID.cp_g * T_lg) / (H_res + FLUID.cp_g), rel=1e-15)
+
+
+def test_injection_temperature():
+    """THM-9: the flow from below at T_tilde mixes with the lift gas at T_lg by their heat-capacity rates."""
+    T_tilde, T_lg, w_lg, w_l = 350.0, 300.0, 1.0, 20.0
+    w_g = 3.0 + w_lg  # The free gas at the injection point, with the lift gas
+    mix = ThermalModel.injection_temperature
+    assert mix(T_tilde, w_g, w_l, w_lg, T_tilde, FLUID) == T_tilde        # T_lg = T_tilde: exactly T_tilde
+    assert mix(T_tilde, w_g - w_lg, w_l, 0.0, T_lg, FLUID) == T_tilde     # no lift gas: exactly T_tilde
+    assert mix(T_tilde, w_lg, 0.0, w_lg, T_lg, FLUID) == T_lg              # no flow from below: the lift gas's
+    T_k = mix(T_tilde, w_g, w_l, w_lg, T_lg, FLUID)
+    assert T_lg < T_k < T_tilde
+    assert mix(T_tilde, w_g + 2.0, w_l, w_lg + 2.0, T_lg, FLUID) < T_k    # more lift gas, colder
+    H_k = (w_g - w_lg) * FLUID.cp_g + w_l * FLUID.cp_l
+    assert T_k == pytest.approx((H_k * T_tilde + w_lg * FLUID.cp_g * T_lg) / (H_k + w_lg * FLUID.cp_g), rel=1e-15)
+
+
+def test_injection_temperature_at_the_bottomhole_is_the_inflow_temperature():
+    """THM-9 at the bottomhole, with the reservoir fluid at T_r and the phase rates of INF-5, is THM-5."""
+    m, T_r, T_lg, w_res, w_lg = ThermalModel(), 373.15, 300.0, 10.0, 1.5
+    w_g, w_l = FLUID.phase_rates(100.0, T_r, w_res, w_lg)
+    assert ThermalModel.injection_temperature(T_r, w_g, w_l, w_lg, T_lg, FLUID) == pytest.approx(
+        m.inflow_temperature(w_res, w_lg, T_r, T_lg, FLUID), rel=1e-15)

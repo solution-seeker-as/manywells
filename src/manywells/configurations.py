@@ -79,7 +79,8 @@ def v1_well(*, L, D, rho_l, R_s, cp_g, cp_l, f_D, h, f_g, inflow, choke, n_cells
                         friction=FixedFrictionFactor(f_D=f_D),
                         thermal=ThermalModel(h=h, frictional_heating=False, gravity_term=False, lift_gas_mixing=False,
                                              joule_thomson=False),
-                        slip=SlipModel(regime_model='fitted'), inflow=inflow, choke=choke)
+                        slip=SlipModel(regime_model='fitted'), inflow=inflow, choke=choke,
+                        injection_md=None)  # The lift gas enters at the bottomhole (INF-5)
     check(wp, V1)
     return wp
 
@@ -128,6 +129,9 @@ def differences(wp: WellProperties, configuration: str) -> list:
             out.append(f'inflow: {type(wp.inflow).__name__}, not Vogel or ProductivityIndex (INF-1, INF-2)')
         if type(wp.choke) not in (SimpsonChokeModel, BernoulliChokeModel):
             out.append(f'choke: {type(wp.choke).__name__}, not SimpsonChokeModel or BernoulliChokeModel')
+        if wp.injection_md is not None:
+            out.append(f'injection_md is {wp.injection_md}, not None: v1.0.0 injects the lift gas at the bottomhole '
+                       '(INF-5)')
     else:
         default = FluidModel()
         out += _fluid_options(fluid, type(default.pvt), default.pvt.gas_law, default.surface_tension_model)

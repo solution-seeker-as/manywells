@@ -155,3 +155,10 @@ class TestWellGeometry:
 
         # All inclinations are physically valid
         assert all(0 - 1e-9 <= c <= 1 + 1e-9 for c in geo.cos_incl)
+
+
+def test_nearest_point_takes_the_deeper_of_two_equally_near():
+    geo = WellGeometry.vertical(2000.0, 100)  # Points every 20 m; point 0 at 2000 m
+    assert [geo.nearest_point(md) for md in (2000.0, 1995.0, 1990.0, 1985.0, 1000.0, 1009.0, 1010.0, 0.0)] == \
+        [0, 0, 0, 1, 50, 50, 49, 100]  # 1010 m lies halfway between 1000 and 1020 m
+    assert geo.nearest_point(1970.0) == 1  # Between points 1 and 2: the deeper

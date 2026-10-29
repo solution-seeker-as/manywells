@@ -145,7 +145,7 @@ def test_the_energy_slope_with_heat_loss_alone():
     X[1, 0] -= 5.0                                  # any state of the next point: the slope holds along the curve
     geo = wp.geometry
     tau = float(system.energy_slope(X[1], X[0], float(system.reservoir_rate(X[0, 0], params)), params,
-                                    geo.delta_md[0], geo.cos_incl[0], geo.tvd_frac[1]))
+                                    geo.delta_md[0], geo.cos_incl[0], geo.tvd_frac[1], 1.0, 1.0))
     p, v_g, v_l, alpha, rho_g, rho_l, T = X[0]
     C = wp.fluid.cp_g * alpha * rho_g * v_g + wp.fluid.cp_l * (1 - alpha) * rho_l * v_l
     assert tau == pytest.approx(1 + geo.delta_md[0] * 4 * wp.thermal.h / (geo.D * C), rel=1e-10)
