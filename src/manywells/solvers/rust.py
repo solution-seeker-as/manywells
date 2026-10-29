@@ -76,11 +76,19 @@ def not_in_core(wp) -> list:
 
 def core_well(wp) -> '_core.Well':
     """The core's well for WellProperties; raises ValueError for a well the core cannot solve."""
+    return _core.Well(**core_inputs(wp))
+
+
+def core_inputs(wp) -> dict:
+    """
+    The core's parameters for WellProperties, as _core.Well takes them; raises ValueError for a well the core cannot
+    solve. The core checks the refusals of specs/model/validity.md again on them (WellSpec::check).
+    """
     missing = not_in_core(wp)
     if missing:
         raise ValueError('the Rust core cannot solve this well: ' + '; '.join(missing) + '. Use backend="casadi".')
     geo, fluid, thermal, slip, choke = wp.geometry, wp.fluid, wp.thermal, wp.slip, wp.choke
-    return _core.Well(
+    return dict(
         md=list(geo.md),
         tvd=list(geo.tvd),
         D=geo.D,

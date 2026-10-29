@@ -44,14 +44,14 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from common import (
+from common import (  # noqa: E402
     DATA,
     interpolate_state,
     params_of,
     quiet,
     read_json,
     seed_for,
-    variant_of,  # noqa: E402
+    variant_of,
     well_of,
     write_json,
 )

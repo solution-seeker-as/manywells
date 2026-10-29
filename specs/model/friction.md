@@ -67,6 +67,8 @@ with $\text{Re}_ 1 = \mathop{\mathrm{smax}}(\text{Re}, 1)$, $\text{Re}_ 2 = \mat
 
 None for FRIC-2. FRIC-6's smooth maxima keep Re above about 1 in the laminar branch and above about 1000 in the turbulent one. `FixedFrictionFactor` raises `ValueError` unless $f_D > 0$, and `RoughnessFriction` unless $\varepsilon > 0$ and the correlation is one of the two.
 
+`WellProperties`, which holds both $\varepsilon$ and $D$, raises `ValueError` for a `RoughnessFriction` with $\varepsilon/D > 0.05$, the upper end of Chen's and Haaland's range, and the Rust core refuses it again (`validity.md`, note 3; signed off by Bjarne, 2026-10-29). Beyond it, $(\varepsilon/D)/3.7$ comes to dominate the logarithm of FRIC-4 and FRIC-5, so $f_t$ has a pole near $\varepsilon/D = 3.7$ and falls past it to plausible values at impossible roughnesses, a valley in which a calibration stopped (`specs/features/017-calibration.md`, Findings 4). Nothing checks the Reynolds number: below 4000 FRIC-6 blends into the laminar factor, and above the correlations' upper end they extrapolate (`validity.md`, note 11).
+
 ## Sources
 
 - Paper (5) and §4.1 (the sampled range of $f_D$).

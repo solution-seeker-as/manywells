@@ -22,6 +22,10 @@ from manywells.pvt.model import CorrelationPVT
 from manywells.units import CF_BAR, CF_PSI, CF_RS, CF_CP, M_AIR, kelvin_to_fahrenheit
 from manywells.ca_functions import ca_min_approx, ca_max_approx, ca_sigmoid
 
+# The API gravities the black oil takes: Beggs and Robinson's data (1975, Table 1), which the Vazquez-Beggs
+# correlations take too until Vazquez's own range is checked. Refused outside (specs/model/validity.md, note 2)
+API_RANGE = (16.0, 58.0)
+
 
 @dataclass
 class BlackOilPVT:
@@ -32,11 +36,15 @@ class BlackOilPVT:
     Methods rs(), bo(), live_oil_density() accept CasADi symbolic pressure
     and temperature for use inside the NLP solver.
 
+    It evaluates the correlations at any API gravity, as the correlation
+    functions do; BlackOil, the PVT model a fluid takes, refuses API gravities
+    outside API_RANGE.
+
     Inputs and outputs use SI units. Internally, the correlations are evaluated
     in field units (psia, degF, scf/STB) with conversions at the boundaries.
     """
 
-    api: float  # Oil API gravity (degrees, valid range 10-40)
+    api: float  # Oil API gravity (degrees)
     sg_gas: float  # Gas specific gravity relative to air (dimensionless)
     p_sep: float  # Separator pressure (Pa)
     T_sep: float  # Separator temperature (K)
@@ -44,8 +52,6 @@ class BlackOilPVT:
     gor: float = None  # The stream's gas-oil ratio (Sm3/Sm3), which caps Rs (PVT-OIL-15). None = no cap.
 
     def __post_init__(self):
-        if not (10 <= self.api <= 40):
-            raise ValueError(f'Oil API {self.api} outside valid range 10-40')
         if self.sg_gas <= 0:
             raise ValueError(f'Gas specific gravity must be positive, got {self.sg_gas}')
         if self.gor is not None and not (math.isfinite(self.gor) and self.gor >= 0):
@@ -229,7 +235,7 @@ class BlackOil(CorrelationPVT):
     Its own methods give the correlations. A fluid uses it at its gas-oil ratio (at_gor), which caps the solution
     gas-oil ratio there too (PVT-OIL-15), so that the oil holds no more gas than the stream carries.
 
-    :param rho_o: Stock-tank oil density (kg/m3), API gravity 10 to 40
+    :param rho_o: Stock-tank oil density (kg/m3), of API gravity 16 to 58 (API_RANGE; refused outside)
     :param rho_g: Gas density at standard conditions (kg/m3)
     :param gas_law: 'ideal', 'dak' or 'papay'
     :param p_sep: Separator pressure (bar)
@@ -252,6 +258,13 @@ class BlackOil(CorrelationPVT):
         if self.p_bubble is not None and not (math.isfinite(self.p_bubble) and self.p_bubble > 0):
             raise ValueError(f'p_bubble must be None, or positive and finite, got {self.p_bubble}')
         self._derive()
+        low, high = API_RANGE
+        if not low <= self._api <= high:
+            raise ValueError(
+                f'the black oil takes API gravities from {low:g} to {high:g} (specs/model/validity.md), '
+                f'got {self._api:.4g} from rho_o = {self.rho_o} kg/m3; a heavier or lighter oil needs a '
+                'PVT table'
+            )
         object.__setattr__(
             self,
             '_black_oil',

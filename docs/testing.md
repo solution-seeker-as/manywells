@@ -88,6 +88,9 @@ uvx pre-commit install             # run both on the files of every commit (.pre
 The hook runs the locked ruff through `uv run --only-group lint`, which does not build the Rust core. Where it
 reformats or fixes a file, the commit stops: stage the changes and commit again.
 
+The repository was reformatted in one commit, which `.git-blame-ignore-revs` lists: GitHub's blame skips it, and
+`git config blame.ignoreRevsFile .git-blame-ignore-revs` makes a local `git blame` skip it too.
+
 ## CI
 
 `.github/workflows/tests.yml` runs on every push to `main` and `develop` and on every pull request. The `lint` job
