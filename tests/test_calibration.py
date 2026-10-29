@@ -317,6 +317,24 @@ def test_scaled_residuals_masks_and_barrier():
     assert obj.values([1.0]) == {'K_c': pytest.approx(obj.parameters[0].median * np.exp(0.35))}
 
 
+def test_a_step_into_a_refused_roughness_gives_rows_without_an_operating_point():
+    """
+    specs/model/validity.md, the second constraint: a relative roughness above 0.05 is refused when the well is
+    built, so a step there gives rows without an operating point, which the barrier rejects (CAL-9), with no
+    exception and no solve; before the refusal, 017's fit stopped in the friction factor's valley at 143 m.
+    """
+    data = CalibrationData(rows())
+    obj = Objective(WP, data, BoundaryConditions(), priors_for(WP, ['roughness']))
+    for roughness in (0.051 * WP.geometry.D, 143.0):
+        z = [obj.parameters[0].z(roughness)]
+        assert obj.wells(z) == [None, None]
+        ((pred, roots),) = obj.predict([z])
+        assert np.isnan(pred).all() and roots == [None, None]
+        assert obj.residuals(z).tolist() == [BARRIER] * int(obj.mask.sum()) + z
+    with pytest.raises(ValueError, match='needs friction to be a FixedFrictionFactor'):
+        Objective(WP, data, BoundaryConditions(), [Parameter('f_D', 0.02, 0.5)])
+
+
 # --- Synthetic data (CAL-13) ------------------------------------------------------------------------------------
 
 

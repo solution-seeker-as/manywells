@@ -22,7 +22,7 @@ import pandas as pd
 
 from manywells.choke import ChokeModel, BernoulliChokeModel
 from manywells.discretization import STATE, DIM_X, build_system
-from manywells.friction import FrictionModel, RoughnessFriction
+from manywells.friction import MAX_RELATIVE_ROUGHNESS, FrictionModel, RoughnessFriction
 from manywells.geometry import WellGeometry
 from manywells.inflow import InflowModel, ProductivityIndex
 from manywells.pvt.fluid import FluidModel
@@ -92,6 +92,14 @@ class WellProperties:
             object.__setattr__(self, 'choke', BernoulliChokeModel(K_c=0.1 * self.geometry.A))
         elif not isinstance(self.choke, ChokeModel):
             raise ValueError(f'choke must be a ChokeModel, got {type(self.choke).__name__}')
+        # Checked here, where both the roughness and the diameter are (specs/model/validity.md, note 3)
+        D = self.geometry.D
+        if isinstance(self.friction, RoughnessFriction) and not self.friction.roughness <= MAX_RELATIVE_ROUGHNESS * D:
+            raise ValueError(
+                f'the relative roughness {self.friction.roughness / D:.4g} (roughness '
+                f'{self.friction.roughness} m, D = {D} m) exceeds {MAX_RELATIVE_ROUGHNESS}, the upper end '
+                "of the friction correlations' range (specs/model/validity.md)"
+            )
 
 
 @dataclass(frozen=True)

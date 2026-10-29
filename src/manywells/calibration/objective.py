@@ -18,7 +18,7 @@ from dataclasses import replace
 import numpy as np
 
 from manywells.calibration.data import OBSERVATIONS
-from manywells.calibration.parameters import apply
+from manywells.calibration.parameters import apply, check_applies
 from manywells.datasets.rows import root_features
 from manywells.simulator import BoundaryConditions, SimError, SSDFSimulator
 
@@ -73,6 +73,8 @@ class Objective:
 
     def __init__(self, wp, data, bc, parameters, backend='rust', workers=None):
         self.wp, self.data, self.parameters, self.backend = wp, data, tuple(parameters), backend
+        for p in self.parameters:
+            check_applies(wp, p.name)  # So that a ValueError of apply in wells is the well refusing the values
         self.conditions = row_conditions(data, bc)
         self.fluids = row_fluids(data, wp.fluid)
         self.y = data.observations(self.fluids)
@@ -92,13 +94,22 @@ class Objective:
         return {p.name: p.value(zi) for p, zi in zip(self.parameters, np.atleast_1d(z))}
 
     def wells(self, z) -> list:
-        """The well of each row at z: the parameters applied, with the row's fluid."""
-        base = apply(self.wp, self.values(z))
+        """
+        The well of each row at z: the parameters applied, with the row's fluid. None for every row where the well
+        refuses the parameters, such as a relative roughness above 0.05 (specs/model/validity.md), so that no row has
+        an operating point there and the barrier rejects the step (CAL-9).
+        """
+        try:
+            base = apply(self.wp, self.values(z))
+        except ValueError:  # Each parameter applies to the well (__init__), so the well refuses the values
+            return [None] * self.n_rows
         cache = {}
         return [cache.setdefault(id(f), replace(base, fluid=f)) for f in self.fluids]
 
     def _solve(self, task):
         k, wp, bc = task
+        if wp is None:  # The well refuses the parameters
+            return k, None, None
         try:
             root = SSDFSimulator(wp, backend=self.backend).simulate(bc, x_guess=self._guess.get(k))
         except (SimError, ValueError):
