@@ -11,7 +11,7 @@ Property Prediction", J Pet Technol 32 (1980): 968-970.
 """
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from math import log10
 
 import casadi as ca
@@ -40,12 +40,15 @@ class BlackOilPVT:
     p_sep: float            # Separator pressure (Pa)
     T_sep: float            # Separator temperature (K)
     p_bubble: float = None  # Bubble point pressure (Pa). None = no Rs cap.
+    gor: float = None       # The stream's gas-oil ratio (Sm3/Sm3), which caps Rs (PVT-OIL-15). None = no cap.
 
     def __post_init__(self):
         if not (10 <= self.api <= 40):
             raise ValueError(f"Oil API {self.api} outside valid range 10-40")
         if self.sg_gas <= 0:
             raise ValueError(f"Gas specific gravity must be positive, got {self.sg_gas}")
+        if self.gor is not None and not (math.isfinite(self.gor) and self.gor >= 0):
+            raise ValueError(f"gor must be None, or non-negative and finite, got {self.gor}")
 
         # Separator conditions in field units (float constants)
         p_sep_psia = self.p_sep / CF_PSI
@@ -99,12 +102,14 @@ class BlackOilPVT:
         return p / CF_PSI, kelvin_to_fahrenheit(T)
 
     def _rs_field_capped(self, p_psia, T_F):  # spec: PVT-OIL-7
-        """Rs in scf/STB, capped at bubble point if set."""
+        """Rs in scf/STB, capped at bubble point if set, and at the stream's gas-oil ratio if set."""
         rs = self._rs_field(p_psia, T_F)
         if self.p_bubble is not None:
             p_b_psia = self.p_bubble / CF_PSI
             rs_max = self._rs_field(p_b_psia, T_F)
             rs = ca_min_approx(rs, rs_max)
+        if self.gor is not None:
+            rs = ca_min_approx(rs, self.gor / CF_RS)  # spec: PVT-OIL-15
         return rs
 
     # ------------------------------------------------------------------
@@ -229,6 +234,9 @@ class BlackOil(CorrelationPVT):
     viscosity and surface tension are corrected for the dissolved gas. The gas law is one of the correlations'
     (CorrelationPVT). All pressures are in bar.
 
+    Its own methods give the correlations. A fluid uses it at its gas-oil ratio (at_gor), which caps the solution
+    gas-oil ratio there too (PVT-OIL-15), so that the oil holds no more gas than the stream carries.
+
     :param rho_o: Stock-tank oil density (kg/m3), API gravity 10 to 40
     :param rho_g: Gas density at standard conditions (kg/m3)
     :param gas_law: 'ideal', 'dak' or 'papay'
@@ -258,6 +266,13 @@ class BlackOil(CorrelationPVT):
             T_sep=self.T_sep,
             p_bubble=None if self.p_bubble is None else self.p_bubble * CF_BAR,
         ))
+
+    def at_gor(self, gor) -> 'BlackOil':  # spec: PVT-OIL-15
+        """The black oil of a fluid of gas-oil ratio gor (Sm3/Sm3): its solution gas-oil ratio is capped at gor, and
+        B_o, the viscosity and the surface tension follow it."""
+        oil = replace(self)
+        object.__setattr__(oil, '_black_oil', replace(self._black_oil, gor=gor))
+        return oil
 
     def rs(self, p, T):  # spec: PVT-OIL-4
         """

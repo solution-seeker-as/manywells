@@ -26,6 +26,9 @@ from manywells.units import CF_BAR, STD_GRAVITY
 JT_T_PR_MIN = 1.05
 """The pseudo-reduced temperature of the solver's lower temperature bound with the Joule-Thomson term (System.bounds)."""
 
+T_MARGIN = 50.0
+"""How far the solver's upper temperature bound lies above the warmest of T_r, T_s and T_lg (K) (System.bounds)."""
+
 DIM_X = 7
 STATE = ('p', 'v_g', 'v_l', 'alpha', 'rho_g', 'rho_l', 'T')  # Order is important
 PARAMS = ('p_r', 'p_s', 'T_r', 'T_s', 'T_lg', 'u', 'w_lg')   # The operating point, as the system's parameters
@@ -244,17 +247,26 @@ class System:
     def bounds(self, bc):
         """
         Bounds on the state for the solver: p in [p_s, p_r], alpha in [0, 1], velocities and densities
-        non-negative, and T in [min(T_s, T_lg), T_r + 1]. A root must also be admissible (SOL-1).
+        non-negative, and T in [min(T_r, T_s, T_lg), max(T_r, T_s, T_lg) + T_MARGIN]. A root must also be admissible
+        (SOL-1).
+
+        The temperature bounds are safeguards for the solver, not part of the model (SOL-1): the fluid enters at T_r,
+        or mixed with the lift gas at T_lg, and heat loss draws it towards the ambient, between T_s and T_r.
+        Frictional heating (THM-6) warms the liquid by at most its frictional pressure drop over rho_l c_pl, about
+        20 K for 300 bar, which the margin of 50 K covers. Without an upper bound Ipopt needs 38% more iterations on
+        the verifier's case set, where v1.0.0's T_r + 1 cut off roots of develop's model (issue #13;
+        specs/features/012-root-search.md).
 
         With the Joule-Thomson term (THM-8) on a real gas the fluid can be colder than its surroundings, and the
         lower bound is 1.05 T_pc where that is lower: the lower end of the Dranchuk-Abou-Kassem equation of state's
         range, below which the Joule-Thomson factor has a pole (PVT-GAS-10; specs/features/016-joule-thomson.md).
         """
-        T_low = bc.T_s if bc.T_lg is None else min(bc.T_s, bc.T_lg)
+        T_low = min(bc.T_r, bc.T_s) if bc.T_lg is None else min(bc.T_r, bc.T_s, bc.T_lg)
         if self.wp.thermal.joule_thomson and self.wp.fluid.pvt.gas_law != 'ideal':
             T_low = min(T_low, JT_T_PR_MIN * self.wp.fluid.pseudo_critical[1])
         lb = np.array([bc.p_s, 0, 0, 0, 0, 0, T_low], dtype=float)
-        ub = np.array([bc.p_r, np.inf, np.inf, 1, np.inf, np.inf, bc.T_r + 1], dtype=float)
+        T_high = max(bc.T_r, bc.T_s) if bc.T_lg is None else max(bc.T_r, bc.T_s, bc.T_lg)
+        ub = np.array([bc.p_r, np.inf, np.inf, 1, np.inf, np.inf, T_high + T_MARGIN], dtype=float)
         n = self.n_cells + 1
         return np.tile(lb, n), np.tile(ub, n)
 

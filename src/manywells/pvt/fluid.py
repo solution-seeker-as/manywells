@@ -17,6 +17,7 @@ from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.dead_oil import dead_oil_surface_tension
 from manywells.pvt.model import PVTModel
 from manywells.pvt.water import water_viscosity
+from manywells.units import CF_RS
 
 
 SURFACE_TENSION_MODELS = ('oil', 'liquid')
@@ -271,8 +272,11 @@ class FluidModel:
         return self._hc.oil_surface_tension(p, T)  # spec: PVT-MIX-7
 
     def dissolved_gas(self, p, T, w_o):  # spec: PVT-OIL-13
-        """Dissolved gas mass at (p, T) for a given oil mass flow rate w_o (kg/s)."""
-        Rs = self.rs(p, T)  # Solution gas-oil ratio (Sm3/Sm3) - returns 0 for dead oil
+        """
+        Dissolved gas mass rate at (p, T) for an oil mass flow rate w_o (kg/s): the oil's solution gas-oil ratio, at
+        most the stream's gas-oil ratio, by a smooth min in scf/STB, so that the smoothing does not scale with the rate.
+        """
+        Rs = ca_min_approx(self.rs(p, T) / CF_RS, self.gor / CF_RS) * CF_RS  # Sm3/Sm3; 0 for dead oil
         return Rs * self.rho_g / self.rho_o * w_o
 
     # ------------------------------------------------------------------
@@ -293,7 +297,8 @@ class FluidModel:
         Gas and liquid mass flow rates at (p, T), given the reservoir liquid rate and the lift gas rate.
 
         Where the PVT model dissolves no gas (dead oil) there is no mass transfer: the rates are the same at every
-        point, exactly.  Otherwise gas dissolves into the oil up to the solution gas-oil ratio at (p, T).
+        point, exactly.  Otherwise gas dissolves into the oil up to the solution gas-oil ratio at (p, T), and at most
+        the reservoir gas.
 
         :param p: Pressure (bar), may be CasADi symbolic
         :param T: Temperature (K), may be CasADi symbolic
@@ -304,6 +309,5 @@ class FluidModel:
         w_g_res = self.reservoir_gas_rate(w_res)
         if not self._hc.dissolves_gas:
             return w_g_res + w_lg, w_res  # spec: INF-5
-        w_o = w_res * self.f_o_in_liquid  # Oil mass flow rate
-        w_d = ca_min_approx(self.dissolved_gas(p, T, w_o), w_g_res)  # Dissolved gas mass flow rate
+        w_d = self.dissolved_gas(p, T, w_res * self.f_o_in_liquid)  # At most w_g_res, as Rs is at most the GOR
         return ca_max_approx(w_g_res + w_lg - w_d, 0.0), w_res + w_d  # spec: PVT-OIL-13

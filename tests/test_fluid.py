@@ -402,6 +402,57 @@ class TestLiquidVolume:
         assert mu_l == pytest.approx(0.5 * mu_w + 0.5 * mu_od, rel=1e-12)  # dead oil: by the water-liquid ratio
 
 
+class TestGasOilRatioCap:
+    """PVT-OIL-15: the oil holds no more dissolved gas than the stream carries (issue #16), and PVT-OIL-13 dissolves
+    the reservoir gas in full where the oil is undersaturated."""
+
+    P, T, GOR = 250.0, 360.0, 50.0  # Vazquez-Beggs gives 95 Sm3/Sm3 here: undersaturated
+
+    @staticmethod
+    def _fluid(gor, wlr=0.0):
+        return FluidModel(pvt=BlackOil(rho_o=850.0), gor=gor, wlr=wlr)
+
+    def test_rs_is_capped_at_the_gas_oil_ratio(self):
+        fl = self._fluid(self.GOR)
+        assert float(fl.pvt.rs(self.P, self.T)) > 90.0  # the correlation, uncapped
+        assert float(fl.rs(self.P, self.T)) == pytest.approx(self.GOR, abs=1e-6)
+        assert float(fl.bo(self.P, self.T)) == pytest.approx(float(fl.bo(400.0, self.T)), rel=1e-9)
+        assert float(fl.rs(30.0, self.T)) == pytest.approx(float(fl.pvt.rs(30.0, self.T)), rel=1e-9)  # saturated
+
+    def test_density_is_the_oil_with_the_gas_it_carries(self):
+        """Issue #16's example: 716.3 kg/m3, where R_so(p, T) uncapped gave 674.8."""
+        fl = self._fluid(self.GOR)
+        assert float(fl.liquid_density(self.P, self.T)) == pytest.approx(716.3, abs=0.05)
+        assert float(fl.liquid_density(self.P, self.T)) == pytest.approx(
+            float(fl.liquid_density(400.0, self.T)), rel=1e-9)  # no more gas dissolves above the bubble point
+
+    def test_viscosity_and_surface_tension_follow_the_cap(self):
+        """PVT-OIL-11 and PVT-OIL-12 see the gas dissolved, not the gas the oil could dissolve."""
+        capped, saturated = self._fluid(self.GOR), self._fluid(200.0)
+        assert float(saturated.rs(self.P, self.T)) > 90.0
+        for f in ('oil_viscosity', 'oil_surface_tension'):
+            at_cap = float(getattr(capped._hc, f)(self.P, self.T))
+            assert at_cap == pytest.approx(float(getattr(capped._hc, f)(400.0, self.T)), rel=1e-9)
+            assert at_cap > float(getattr(saturated._hc, f)(self.P, self.T))  # less gas: more viscous, higher tension
+
+    @pytest.mark.parametrize('wlr', (0.0, 0.4))
+    def test_undersaturated_oil_dissolves_all_reservoir_gas(self, wlr):
+        """PVT-OIL-13 dissolves the reservoir gas in full, up to a smoothing in proportion to the rate, and the
+        liquid's volume rate is the in-situ one (PVT-MIX-6)."""
+        fl = self._fluid(self.GOR, wlr)
+        for w_res in (0.5, 20.0):
+            w_g_res = fl.reservoir_gas_rate(w_res)
+            w_g, w_l = (float(v) for v in fl.phase_rates(self.P, self.T, w_res, 0.0))
+            assert 0 <= w_g_res - (w_l - w_res) < 1e-5 * w_g_res  # 8e-4 of 281 scf/STB
+            assert w_g == pytest.approx(5e-4, rel=1e-2)  # SMO-1's floor on the free gas
+            in_situ = w_res / fl.rho_l * float(fl.liquid_fvf(self.P, self.T))
+            assert w_l / float(fl.liquid_density(self.P, self.T)) == pytest.approx(in_situ, rel=1e-6)
+
+    def test_no_dissolved_gas_without_flow(self):
+        w_g, w_l = (float(v) for v in self._fluid(self.GOR).phase_rates(self.P, self.T, 0.0, 1.0))
+        assert w_l == 0.0 and w_g == pytest.approx(1.0, rel=1e-6)
+
+
 class TestPressuresInBar:
 
     def test_bubble_point_in_bar_caps_rs(self):

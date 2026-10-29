@@ -20,6 +20,6 @@ v1.0.0 injects the lift gas at the reservoir temperature (THM-3). Lift gas comes
 
 The THM-3 row vectors in the `v1.0.0` configuration; the develop vectors of THM-5; `tests/test_thermal.py` (bounded by $T_{lg}$ and $T_r$, colder with more lift gas, exactly $T_r$ without it); `tests/test_model_properties.py` (cold lift gas).
 
-## Open
+## Temperature bounds (issue #13)
 
-The upper temperature bound of the solver is $T_r + 1$ K, so lift gas hotter than that cannot be simulated; no sampler draws it (SMP-44). Issue #13.
+The CasADi backend bounded the temperature to $[\min(T_s, T_{lg}), T_r + 1\ \text{K}]$, so it found no root where lift gas hotter than $T_r + 1$ K warms the flow; no sampler draws such lift gas (SMP-44). Since 2026-10-29 the bounds are $\min(T_r, T_s, T_{lg})$ and $\max(T_r, T_s, T_{lg}) + 50$ K (Bjarne; `012-root-search.md`).

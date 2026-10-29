@@ -135,6 +135,57 @@ def test_the_energy_slope_with_heat_loss_alone():
     assert tau == pytest.approx(1 + geo.delta_md[0] * 4 * wp.thermal.h / (geo.D * C), rel=1e-10)
 
 
+@pytest.mark.parametrize('T_r, T_s, T_lg', ((370.0, 280.0, None), (300.0, 310.0, None), (340.0, 277.15, 380.0),
+                                             (340.0, 277.15, 260.0)))
+def test_the_temperature_bound(T_r, T_s, T_lg):
+    """The CasADi backend bounds T below by min(T_r, T_s, T_lg), or by the Joule-Thomson floor where that is lower,
+    and above by max(T_r, T_s, T_lg) + 50 K: frictional heating, hot lift gas and a warm surface put roots above
+    T_r + 1 (issue #13)."""
+    from dataclasses import replace
+    from manywells.discretization import JT_T_PR_MIN, T_MARGIN, build_system
+    from manywells.geometry import WellGeometry
+    from manywells.simulator import WellProperties
+    from manywells.thermal import ThermalModel
+    bc = BoundaryConditions(p_r=250.0, p_s=30.0, T_r=T_r, T_s=T_s, T_lg=T_lg, w_lg=1.0)
+    wp = WellProperties(geometry=WellGeometry.vertical(length=2000.0, n_cells=4, D=0.1),
+                        thermal=ThermalModel(joule_thomson=False))
+    for well, floor in ((wp, min(T for T in (T_r, T_s, T_lg) if T is not None)),
+                        (replace(wp, thermal=ThermalModel()), JT_T_PR_MIN * wp.fluid.pseudo_critical[1])):
+        lb, ub = build_system(well).bounds(bc)
+        assert T_MARGIN == 50.0
+        assert np.all(ub[6::7] == max(T for T in (T_r, T_s, T_lg) if T is not None) + T_MARGIN)
+        assert np.all(lb[6::7] == min(floor, min(T for T in (T_r, T_s, T_lg) if T is not None)))
+
+
+def _hot_well(case):
+    """The Rust core's operating point lies above T_r + 1 K, the CasADi backend's old upper temperature bound: from
+    frictional heating in 3 inch tubing at a high rate (issue #13's example), or from lift gas at 380 K."""
+    from dataclasses import replace
+    from manywells.inflow import ProductivityIndex
+    from manywells.pvt.fluid import FluidModel
+    from manywells.simulator import WellProperties
+    from manywells.thermal import ThermalModel
+    wp = WellProperties()
+    if case == 'frictional heating':
+        return (replace(wp, fluid=FluidModel(gor=50.0), thermal=ThermalModel(h=10.0), inflow=ProductivityIndex(k_l=2.0),
+                        geometry=replace(wp.geometry, D=3 * 0.0254)),
+                BoundaryConditions(p_r=300.0, p_s=20.0, u=1.0))
+    return wp, BoundaryConditions(p_r=200.0, p_s=20.0, T_r=340.0, T_lg=380.0, w_lg=2.0)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize('case', ('frictional heating', 'hot lift gas'))
+def test_the_search_finds_operating_points_warmer_than_the_reservoir(case):
+    """Both backends find the operating point, warmer than T_r + 1 K somewhere; with that upper bound the CasADi
+    search found no root (issue #13)."""
+    from manywells.simulator import SSDFSimulator
+    wp, bc = _hot_well(case)
+    core = SSDFSimulator(wp, backend='rust').simulate(bc)
+    op = SSDFSimulator(wp).simulate(bc)
+    assert op.state[:, 6].max() > bc.T_r + 1
+    assert op.state[0, 0] == pytest.approx(core.state[0, 0], abs=1e-6)
+
+
 def _all_liquid_well(n_cells):
     """Well 87 of develop's sampler (seed 2026) at its nominal point, with gor = 40: R_so at (p_r, T_r) is 141 Sm³/Sm³,
     so all the gas is dissolved at the bottomhole (issue #10). With the fitted classifier, develop's default when the

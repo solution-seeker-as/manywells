@@ -112,7 +112,7 @@ impl Fluid {
         let pvt = match (&inputs.table, black_oil) {
             (Some(table), _) => Pvt::Table { table: Arc::clone(table), ppc, tpc },
             (None, true) => Pvt::BlackOil {
-                oil: BlackOil::new(api, sg_gas, p_sep * CF_BAR, t_sep, p_bubble.map(|p_b| p_b * CF_BAR)),
+                oil: BlackOil::new(api, sg_gas, p_sep * CF_BAR, t_sep, p_bubble.map(|p_b| p_b * CF_BAR), Some(gor)),
                 gas_law,
             },
             (None, false) => Pvt::DeadOil { gas_law },
@@ -298,7 +298,9 @@ impl Fluid {
             return (w_g_res + w_lg, w_res); // spec: INF-5
         }
         let w_o = w_res * self.x_o;
-        let w_d = min_approx(self.rs(p, t) * self.inputs.rho_g / self.inputs.rho_o * w_o, w_g_res, 1e-6);
+        // The solution gas-oil ratio, at most the stream's, by a smooth min in scf/STB: then w_d is at most w_g_res
+        let rs = min_approx(self.rs(p, t) / CF_RS, self.inputs.gor / CF_RS, 1e-6) * CF_RS;
+        let w_d = rs * self.inputs.rho_g / self.inputs.rho_o * w_o;
         (max_approx(w_g_res + w_lg - w_d, 0.0, 1e-6), w_res + w_d) // spec: PVT-OIL-13
     }
 }

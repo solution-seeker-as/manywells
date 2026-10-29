@@ -332,15 +332,18 @@ class TestFiles:
     def test_vazquez_beggs_is_within_the_medium_grids_bounds(self):
         """
         At random points, the table of develop's black oil on a 10 bar by 10 K grid differs from the black oil by
-        less than the largest error measured on such grids (specs/features/018-pvt-tables.md, Measurements).
+        less than the largest error measured on such grids (specs/features/018-pvt-tables.md, Measurements). The
+        black oil is its correlations, as tabulated, without the cap at a fluid's gas-oil ratio (PVT-OIL-15).
         """
         table = FluidModel(pvt=PVTTable.read_csv(DATA / 'vazquez_beggs.csv'), gor=MAKE.VB_GOR)
-        black_oil = FluidModel(pvt=MAKE.VB, gor=MAKE.VB_GOR)
+        vb = MAKE.VB
+        black_oil = {'bo': vb.bo, 'gas_density': vb.gas_density,
+                     'liquid_density': lambda p, T: (vb.rho_o + vb.rs(p, T) * vb.rho_g) / vb.bo(p, T)}  # PVT-OIL-9
         rng = np.random.default_rng(2026)
         for p, T in zip(rng.uniform(1.0, 400.0, 500), rng.uniform(280.0, 400.0, 500)):
-            assert abs(num(table.rs(p, T)) - num(black_oil.rs(p, T))) < 0.45
+            assert abs(num(table.rs(p, T)) - num(vb.rs(p, T))) < 0.45
             for f, bound in (('bo', 6e-4), ('liquid_density', 3e-4), ('gas_density', 2.1e-3)):
-                want = num(getattr(black_oil, f)(p, T))
+                want = num(black_oil[f](p, T))
                 assert abs(num(getattr(table, f)(p, T)) / want - 1) < bound, (f, p, T)
 
 
@@ -507,16 +510,17 @@ class TestSimulator:
 @pytest.mark.parametrize('well', [0, 5, 8])
 def test_a_table_of_the_wells_black_oil_gives_its_operating_point(well, backend):
     """
-    A sampled well (seed 2026, develop's configuration), with its own black oil tabulated on a 10 bar by 10 K grid
-    over its pressures and temperatures: the operating point within 0.05 bar at the bottomhole and the wellhead
-    (specs/features/018-pvt-tables.md, acceptance 6), and on the grid. Wells 0 (deviated), 5 and 8 flow at their
-    nominal point with develop's five flow regimes (019); well 11, which did with the fitted three, does not.
+    A sampled well (seed 2026, develop's configuration), with its own black oil, capped at its GOR (PVT-OIL-15),
+    tabulated on a 10 bar by 10 K grid over its pressures and temperatures: the operating point within 0.05 bar at the
+    bottomhole and the wellhead (specs/features/018-pvt-tables.md, acceptance 6), and on the grid. Wells 0 (deviated),
+    5 and 8 flow at their nominal point with develop's five flow regimes (019); well 11, which did with the fitted
+    three, does not.
     """
     draw = sample_well(2026, well)
     wp, bc = well_properties(draw, configuration='develop', n_cells=30), nominal_conditions(draw)
     p = np.unique(np.r_[1.0, np.arange(10.0, np.ceil(bc.p_r / 10) * 10 + 1e-9, 10.0)])
     T = np.arange(270.0, np.ceil(bc.T_r / 10) * 10 + 1e-9, 10.0)
-    table = tabulate(wp.fluid.pvt, p, T, wp.fluid.gor)
+    table = tabulate(wp.fluid, p, T, wp.fluid.gor)
     base = SSDFSimulator(wp, backend=backend).simulate(bc)
     op = SSDFSimulator(dataclasses.replace(wp, fluid=dataclasses.replace(wp.fluid, pvt=table)),
                        backend=backend).simulate(bc)

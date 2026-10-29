@@ -85,6 +85,17 @@ Measurements behind the ruling on PVT-MIX-6 and PVT-MIX-8 in `../../specs/featur
 
 In 117 of the 1456 cases with water that both runs solve, $R_{so}$ at the bottomhole exceeds the gas–oil ratio, so the density assumes more dissolved gas than PVT-OIL-13 carries (007, open items). There PBH falls by 0.2 bar at the median.
 
+## Issue #16: the black oil capped at the gas–oil ratio
+
+Measurements behind PVT-OIL-15 and the cap of PVT-OIL-13 in Sm³/Sm³ (`../../specs/features/007-black-oil.md`), run on 2026-10-29. `gor_cap_wells.py` solves wells of `develop`'s sampler (seed 2026) at their nominal operating point and two sampled ones; it was run with `develop` at `0112290` (before) and on the branch `fix/temperature-bounds-live-oil` with the change (after), each in its own environment, and `compare` joins the two runs. Both runs shared the machine with other work, so their times compare only roughly.
+
+| Run | What it shows | Result |
+|---|---|---|
+| `run 500 OUT.csv --backend rust` | 1492 cases, Rust core | Operating point in 1448 cases before and 1444 after; none gained. The lost cases, (1, 0) and well 442 at all three points, have no root after the change: the core's $R(p_0)$ is positive on 4000 samples from $p_s$ to $p_r$, and the CasADi backend finds none either. In the 109 cases undersaturated at the bottomhole, the bottomhole liquid density rises by 2.4% at the median and up to 14.3%, PBH by 0.33 bar at the median and up to 10.8 bar, and the reservoir liquid rate falls by 1.3% at the median and up to 23%. In the other 1335 cases, PBH changes by at most $10^{-4}$ bar and the rate by at most 0.013%. |
+| `run 88 OUT.csv --backend casadi` | 263 of the same cases, CasADi backend | Operating point in 254 cases before and 253 after: (1, 0) lost, as on the core. In the 20 undersaturated cases PBH rises by up to 10.7 bar. Joined with the core's runs, the two backends find an operating point in the same cases before and after, and agree within $2.8\cdot10^{-8}$ bar in PBH before and $1.7\cdot10^{-7}$ bar after. |
+
+The same script measures the CasADi backend's new temperature bounds (issue #13, `../../specs/features/012-root-search.md`): `run 88 OUT.csv --backend casadi` on the branch with the bounds, joined with the run with the cap alone, finds the same 253 operating points within $6\cdot10^{-7}$ bar, in 2% more time in total. On the verifier's case set, `scripts.verification.develop_candidate --log` gives Ipopt's iterations per start for v1.0.0's bounds, no upper bound, and margins of 10 and 50 K (012).
+
 ## Issue #10: the march with an all-liquid bottomhole
 
 Measurements behind the retry of point 0 in `../../specs/features/012-root-search.md`, run on 2026-10-28 on `develop` at `ae754d8` with the retry added (Python 3.14, casadi 3.8.1), with 24 CPUs shared with other work. `all_liquid_bottomhole.py` compares the variants of the search: the Rust core, the CasADi search with the retry, without it (`old`), and with the rejected no-slip guess at every start (`guess`). The problem was found with the prototype of feature 018 (PVT tables, a draft on the branch `pvt-tables`).

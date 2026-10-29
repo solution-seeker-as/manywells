@@ -347,6 +347,14 @@ mod _core {
                 vec![oil::live_oil_surface_tension(sigma_od, rs_scf)]
             }
             "surface_tension" => { let [p, t, rho_l] = take(name, a)?; vec![spec.fluid.surface_tension(p, t, rho_l)] }
+            "black_oil" => {
+                let [p, t] = take(name, a)?;
+                let Pvt::BlackOil { oil, .. } = &spec.fluid.pvt else {
+                    return Err("the well's fluid is not a black oil".into());
+                };
+                let (oil, p) = (oil.correlation(), p * crate::units::CF_BAR);
+                vec![oil.rs(p, t), oil.bo(p, t)]
+            }
             "rs" => { let [p, t] = take(name, a)?; vec![spec.fluid.rs(p, t)] }
             "bo" => { let [p, t] = take(name, a)?; vec![spec.fluid.bo(p, t)] }
             "liquid_density" => { let [p, t] = take(name, a)?; vec![spec.fluid.liquid_density(p, t)] }
