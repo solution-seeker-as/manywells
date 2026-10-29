@@ -44,7 +44,7 @@ Papay (1968):
 
 $$Z = 1 - \frac{3.52 p_{pr}}{10^{0.9813 T_{pr}}} + \frac{0.274 p_{pr}^2}{10^{0.8157 T_{pr}}}, \qquad p_{pr} = \frac{p}{p_{pc}}, \quad T_{pr} = \frac{T}{T_{pc}},$$
 
-explicit and smooth, with the pseudo-critical properties of PVT-GAS-5. Valid for $p_{pr} < 6$ and $T_{pr} > 1.05$.
+explicit and smooth, with the pseudo-critical properties of PVT-GAS-5. No range is given for it: Papay (1968) is not in hand, and no source in hand states one (`validity.md`, note 7). Until 2026-10-29 this file said it was valid for $p_{pr} < 6$ and $T_{pr} > 1.05$, without a source; finding one is an open follow-up.
 
 ### PVT-GAS-5 · Sutton pseudo-critical properties
 
@@ -123,7 +123,7 @@ The heat capacity $c_{pg}$ is a constant parameter (THM-1). The lift gas is the 
 
 ## Safeguards
 
-None in the equations. Nothing checks that $p_{pr}$ and $T_{pr}$ are in PVT-GAS-4's range; at high $p_{pr}$ its $Z$ has a minimum and then rises steeply, and at 460 bar it is 11% (methane) to 29% (gravity 0.80) above the reference equations of state (`specs/features/016-joule-thomson.md`). Nothing checks PVT-GAS-9's range either: below $T_{pr} = 1.05$, near the critical point, $Z + \rho_r Z_\rho$ (proportional to $(\partial p/\partial \rho_g)_ T$) can change sign, which gives PVT-GAS-10 a pole and can stop PVT-GAS-11's Newton iteration from converging; the Rust core then returns NaN, which fails the state.
+None in the equations. Nothing checks $p_{pr}$ and $T_{pr}$ for PVT-GAS-4, which has no sourced range (`validity.md`, note 7); at high $p_{pr}$ its $Z$ has a minimum and then rises steeply, and at 460 bar it is 11% (methane) to 29% (gravity 0.80) above the reference equations of state (`specs/features/016-joule-thomson.md`). Nothing checks PVT-GAS-9's range either: below $T_{pr} = 1.05$, near the critical point, $Z + \rho_r Z_\rho$ (proportional to $(\partial p/\partial \rho_g)_ T$) can change sign, which gives PVT-GAS-10 a pole and can stop PVT-GAS-11's Newton iteration from converging; the Rust core then returns NaN, which fails the state.
 
 ## Sources
 

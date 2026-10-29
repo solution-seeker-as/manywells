@@ -24,7 +24,7 @@ constant compressibility to first order: water shrinks under pressure, so $B_w <
 
 $$\mu_w = 2.414\cdot10^{-5}\cdot 10^{247.8/(T - 140)}\ \text{Pa s},$$
 
-with $T$ in K, a Vogel–Fulcher–Tammann form (about $1.0\cdot10^{-3}$ Pa s at 20 °C). Used by friction (PVT-MIX-8).
+with $T$ in K, a Vogel–Fulcher–Tammann form (about $1.0\cdot10^{-3}$ Pa s at 20 °C). Used by friction (PVT-MIX-8). No source in hand gives these constants, or a range for them; finding one is an open follow-up (`validity.md`, note 5).
 
 ## Options
 
@@ -41,7 +41,7 @@ None.
 
 ## Sources
 
-Paper §4.2. Feature spec `specs/features/005-fluid-model.md`.
+Paper §4.2. Feature spec `specs/features/005-fluid-model.md`. PVT-WAT-3: none in hand (open, `validity.md`, note 5).
 
 ## Test vectors
 

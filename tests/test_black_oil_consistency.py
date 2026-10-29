@@ -57,12 +57,13 @@ def _make_fluid(params):
 P_GRID = np.linspace(10, 400, 40)    # bar
 T_GRID = np.linspace(300, 420, 7)     # K
 
-# Papay Z-factor is documented for p_pr < 6; use conservative bound.
+# The gas checks stay below p_pr = 5. They were written for Papay's z-factor, for which no source in hand states a
+# range (specs/model/validity.md, note 7); these fluids have the default gas law, DAK.
 _PPR_MAX = 5.0
 
 
 def _max_valid_pressure(sg_gas):
-    """Max pressure (bar) where the Papay Z-factor correlation is reliable."""
+    """The pressure (bar) at p_pr = _PPR_MAX."""
     ppc, _ = sutton_pseudo_critical(sg_gas)      # Pa
     return _PPR_MAX * ppc / CF_BAR
 
@@ -114,7 +115,7 @@ def test_gas_viscosity_less_than_oil_viscosity(params):
 def test_gas_fvf_decreases_with_pressure(params):
     """dB_gd/dp < 0: gas FVF must decrease with increasing pressure.
 
-    Restricted to p_pr < 5 where the Papay Z-factor correlation is reliable.
+    Restricted to p_pr < 5 (_PPR_MAX).
     """
     fl = _make_fluid(params)
     dp = 0.1  # bar

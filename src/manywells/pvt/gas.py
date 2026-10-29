@@ -196,7 +196,9 @@ def gas_z_factor(p, T, sg_gas):  # spec: PVT-GAS-4
     Reference: Papay, J., "A Termelestechnologiai Parameterek Valtozasa
     a Gaztelepek Muvelese Soran", OGIL MUSZ Tud Kozl (1968): 267-273.
 
-    Accurate for p_pr < 6, T_pr > 1.05 (covers most wellbore conditions).
+    No source in hand states its range (specs/model/validity.md, note 7). At high p_pr its Z has a minimum and
+    then rises steeply: at 460 bar it is 11% to 29% above the reference equations of state
+    (specs/model/pvt/gas.md, Safeguards).
 
     :param p: Pressure (Pa), may be CasADi symbolic
     :param T: Temperature (K), may be CasADi symbolic
