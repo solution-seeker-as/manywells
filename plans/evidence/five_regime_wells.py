@@ -36,7 +36,7 @@ import casadi as ca
 import numpy as np
 import pandas as pd
 
-from five_regime_slip import (MERGED, REGIMES, Hasan5SlipModel, label, margins, parameters, patch_closure_rows,
+from five_regime_slip import (MERGED, Hasan5SlipModel, label, margins, parameters, patch_closure_rows,
                               probabilities, terms)
 from manywells.configurations import DEVELOP
 from manywells.discretization import DIM_X, PointState

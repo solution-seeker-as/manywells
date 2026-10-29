@@ -144,9 +144,9 @@ def main():
     sm = SlipModel(regime_model='fitted')  # develop's closure before feature 019, now an option
     err = 0.0
     for _ in range(200):
-        a = rng.uniform(0.01, 0.99); vg = rng.uniform(0.1, 30); vl = rng.uniform(0.01, 5)
-        rg = rng.uniform(1, 200); rl = rng.uniform(600, 1050); s = rng.uniform(0.005, 0.07)
-        D = rng.uniform(0.07, 0.17); c = rng.uniform(0, 1)
+        a, vg, vl = rng.uniform(0.01, 0.99), rng.uniform(0.1, 30), rng.uniform(0.01, 5)
+        rg, rl, s = rng.uniform(1, 200), rng.uniform(600, 1050), rng.uniform(0.005, 0.07)
+        D, c = rng.uniform(0.07, 0.17), rng.uniform(0, 1)
         C0, v = sm.identify_parameters(vg, vl, a, rg, rl, s, D, c)
         C0n, vn = mw_params(a, a * vg, (1 - a) * vl, rg, rl, s, D, c)
         err = max(err, abs(float(C0) - C0n), abs(float(v) - vn))
@@ -175,7 +175,7 @@ def main():
 
     # 2. non-unique void fractions over a grid of superficial velocities
     print('== points with more than one root, over j_g in [0.02, 30], j_l in [0.01, 5] (40 x 40 log grid)')
-    jgs = np.geomspace(0.02, 30, 40); jls = np.geomspace(0.01, 5, 40)
+    jgs, jls = np.geomspace(0.02, 30, 40), np.geomspace(0.01, 5, 40)
     for fname, fl in FLUIDS.items():
         for cos in [1.0, 0.5, 0.0]:
             counts = {}

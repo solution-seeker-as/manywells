@@ -26,7 +26,7 @@ from manywells.choke import BernoulliChokeModel, SimpsonChokeModel
 from manywells.configurations import v1_well
 from manywells.inflow import InflowModel, ProductivityIndex, Vogel
 from manywells.pvt.dead_oil import dead_oil_surface_tension
-from manywells.simulator import BoundaryConditions, NoOperatingPoint, SSDFSimulator, WellProperties
+from manywells.simulator import BoundaryConditions, NoOperatingPoint, SSDFSimulator
 from manywells.slip import SlipModel
 from manywells.thermal import ThermalModel
 from manywells.solvers.roots import TOL_X, state_distance
@@ -156,7 +156,10 @@ def test_the_slip_law_brackets_the_void_fraction(regime_model):
     sigma, D = rng.uniform(0.005, 0.04, n), rng.uniform(0.05, 0.2, n)
     cos_incl = np.concatenate([[0.0, 1.0], rng.uniform(0, 1, n - 2)])
     args = [j_g, j_l, rho_g, rho_l, sigma, D, cos_incl]
-    at = lambda alpha: np.asarray(h.map(n)(np.full((1, n), alpha), *(a.reshape(1, -1) for a in args))).ravel()
+
+    def at(alpha):
+        return np.asarray(h.map(n)(np.full((1, n), alpha), *(a.reshape(1, -1) for a in args))).ravel()
+
     assert np.all(at(1e-12) < 0) and np.all(at(1 - 1e-12) > 0)  # α = 0 and 1 divide by zero in v_g or v_l
 
 

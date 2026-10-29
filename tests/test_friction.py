@@ -4,7 +4,10 @@ import pytest
 import casadi as ca
 import numpy as np
 
-from manywells.friction import haaland_friction_factor, chen_friction_factor, friction_factor
+from manywells.discretization import PointState
+from manywells.friction import (FixedFrictionFactor, RoughnessFriction, chen_friction_factor, friction_factor,
+                                haaland_friction_factor)
+from manywells.pvt.fluid import FluidModel
 from manywells.thermal import ThermalModel
 
 
@@ -100,10 +103,6 @@ class TestFrictionFactor:
 # ---------------------------------------------------------------------------
 # The friction model components
 # ---------------------------------------------------------------------------
-
-from manywells.discretization import PointState
-from manywells.friction import FixedFrictionFactor, RoughnessFriction
-from manywells.pvt.fluid import FluidModel
 
 STATE = PointState(p=150.0, v_g=3.0, v_l=2.0, alpha=0.2, rho_g=120.0, rho_l=780.0, T=360.0)
 

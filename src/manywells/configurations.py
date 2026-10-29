@@ -26,7 +26,6 @@ from manywells.choke import BernoulliChokeModel, SimpsonChokeModel
 from manywells.friction import FixedFrictionFactor, RoughnessFriction
 from manywells.geometry import WellGeometry
 from manywells.inflow import ProductivityIndex, Vogel
-from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.dead_oil import DeadOil
 from manywells.pvt.fluid import FluidModel
 from manywells.simulator import WellProperties

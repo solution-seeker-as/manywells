@@ -13,7 +13,6 @@ random walk (SMP-23 to SMP-27).
 
 from dataclasses import dataclass
 
-import numpy as np
 
 from manywells.simulator import BoundaryConditions
 

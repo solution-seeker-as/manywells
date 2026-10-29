@@ -7,8 +7,6 @@ from manywells.pvt import (
     P_REF,
     T_REF,
     R_UNIVERSAL,
-    LiquidProperties,
-    GasProperties,
     WATER,
     SEAWATER,
     NORTH_SEA_BRENT_CRUDE,
@@ -21,7 +19,7 @@ from manywells.pvt import (
 from manywells.pvt.dead_oil import dead_oil_viscosity, dead_oil_surface_tension
 from manywells.pvt.black_oil import BlackOil, live_oil_surface_tension, live_oil_viscosity
 from manywells.pvt.gas import specific_gas_constant, gas_density, gas_viscosity, gas_z_factor, sutton_pseudo_critical, molecular_weight
-from manywells.pvt.gas import DAK_ZC, dak_jt_factor, dak_reduced_density, dak_z_factor
+from manywells.pvt.gas import DAK_ZC, dak_reduced_density, dak_z_factor
 from manywells.pvt.fluid import FluidModel
 from manywells.pvt import gas_density_from_sg
 from manywells.pvt.water import water_viscosity

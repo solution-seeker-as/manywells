@@ -16,7 +16,7 @@ from math import log10
 
 import casadi as ca
 
-from manywells.pvt import P_REF, T_REF, R_UNIVERSAL, api_from_density, density_from_api, gas_density_from_sg
+from manywells.pvt import P_REF, T_REF, R_UNIVERSAL, density_from_api, gas_density_from_sg
 from manywells.pvt.dead_oil import dead_oil_surface_tension, dead_oil_viscosity
 from manywells.pvt.model import CorrelationPVT
 from manywells.units import CF_BAR, CF_PSI, CF_RS, CF_CP, M_AIR, kelvin_to_fahrenheit

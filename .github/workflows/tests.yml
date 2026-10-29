@@ -25,6 +25,17 @@ jobs:
       - run: uv sync --locked
       - run: uv run pytest
 
+  # Ruff, at the version uv.lock pins; the group "lint" alone, so the Rust core is not built
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.11"
+      - run: uv run --locked --only-group lint ruff check
+      - run: uv run --locked --only-group lint ruff format --check
+
   # The verifier on the committed case set (specs/verification.md): v1.0.0's own solutions, with its
   # expected failures, and develop in its v1.0.0 configuration with each backend, CasADi and the Rust
   # core, with none.

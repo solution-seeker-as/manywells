@@ -128,7 +128,6 @@ class MultiTaskClassificationModel(LearningAlgorithm):
         df_tasks_ohe.columns = self.ohe_tasks.get_feature_names_out()
         df_train = pd.concat([df[self.input_cols + self.output_cols], df_tasks_ohe.set_index(df.index)], axis=1)
         #df_train = pd.concat([df[self.input_cols + self.output_cols], task_dummies], axis=1)
-        a = self.input_cols + self.ohe_cols
         input_data = df_train[self.input_cols + self.ohe_cols]
         output_data = df_train[self.output_cols].values.ravel()
 
