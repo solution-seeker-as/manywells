@@ -94,6 +94,11 @@ Signed off by Bjarne, 2026-10-29, but for decision 5.
 4. **The black oil's gas–oil ratio**: extrapolate, as before. The black oil takes any gas–oil ratio. As the ratio rises, the liquid's share of the flow, and with it the oil's effect on the pressure drop, falls, and the ratio takes no correlation out of its range (finding 1). A gas condensate whose dropout matters enters as a PVT table from a flash, which carries the oil in the gas as $R_{so} < 0$ (PVT-TAB-6). The alternative, to refuse above a bound such as 3000 scf/STB, would make every gas condensate and gas well need a table, and the sampler draw tables to have gas wells at all.
 5. **Horizontal sections. Open.** Bjarne decides it with the sampling distribution, in the sampling redesign; until then the model extrapolates in them (note 9). The redesign either keeps drawing L-shaped wells with this known limit, or stops until a model with stratified flow exists, which would need its own feature spec.
 
+Bjarne also signed off the implementation the same day:
+- the checks' places: the API gravity in `BlackOil`, the PVT model a fluid takes, so that `BlackOilPVT` evaluates the correlations at any API gravity; the relative roughness in `WellProperties`; and both again in the Rust core's `WellSpec::check`;
+- the develop vectors of PVT-OIL-6 and PVT-OIL-8, whose API 15 row moved to API 16, with a new row at API 58;
+- the edits that follow from decisions 2 and 3 in the component files, `specs/sampling.md` (SMP-43), `specs/architecture.md` (design point 1) and `specs/calibration.md` (CAL-9, where a refused step gives rows without an operating point).
+
 ## Follow-ups
 
 Done on 2026-10-29, with the sign-off:
