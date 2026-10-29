@@ -25,6 +25,7 @@ One file per model part, mirroring `src/manywells/`:
 | `inflow.md` | Inflow models and the bottomhole boundary rows |
 | `choke.md` | Choke models, critical flow, the wellhead boundary row |
 | `smoothing.md` | Smooth max, min and softmax, which are part of the model |
+| `validity.md` | Each correlation's published range, the range the sampler reaches, and what the model does outside it |
 | `vectors/v1_rows.json` | Residual-row test vectors from v1.0.0 (`discretization.md`) |
 
 Sampling of wells and operating points is not physics and has its own spec, `specs/sampling.md`.

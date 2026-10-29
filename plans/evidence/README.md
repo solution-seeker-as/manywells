@@ -126,3 +126,12 @@ Scripts behind `../../specs/features/020-profile-scale.md`, run on 2026-10-29 on
 |---|---|---|
 | `profile_scale_wells.py OUT.csv --casadi-wells 30` | The cases of `five_regime_default.py` with $\kappa_0$ = 1, 0.5 and 0: 263 on the Rust core, the 90 of the first 30 wells on the CasADi backend too | No operating point lost; 2 and 4 gained on the core at $\kappa_0$ = 0.5 and 0. At $\kappa_0 = 0$, PBH changes by −0.19 bar at the median and up to −15.3 bar, the rate by +0.6% and up to +75%. In one case (well 14, its second sampled point) the CasADi search finds a second stable root at $\kappa_0 \le 0.5$ that the core misses. About 20 minutes on one process. |
 | `profile_scale_twins.py OUT.json --wells 20 --detail 8 --workers 12` | The twin study's wells 0 to 19 with `profile_scale` free besides `K_c`, `w_l_max`, `roughness` and `h`, in every instrumentation; and on wells 0 to 7, data with `profile_scale` drawn calibrated with friction alone, the scale alone or both, held out at higher rates | Every fit converges. `profile_scale` is recovered where the data depend on it, and stays at its prior on the six wells where they do not. Its errors correlate with `roughness`'s by −0.22 to +0.28. 017's twin criteria hold in 89% to 100% of the fits, below 95% in `no_downhole` from well 1's false minimum and well 6. With the slip fixed, friction absorbs the holdup error and errs at higher rates (well 6: roughness −3.8 sd, held-out RMS 1.87 against 1.04). About 40 minutes on 12 threads. |
+
+## Validity ranges
+
+The measurements behind `../../specs/model/validity.md`, run on 2026-10-29 on `develop` at `8874b7f` (Python 3.14), on the Rust core with 8 processes. `validity_ranges.py run` solves wells of `develop`'s sampler (seed 2026) at their nominal operating point and two sampled ones, as `gor_cap_wells.py` does, and records each correlation's inputs at every grid point of each operating point; `summary` compares them with the published ranges in its `RANGES`.
+
+| Run | What it shows | Result |
+|---|---|---|
+| `run 500 OUT --backend rust` | 1494 cases of 500 wells: the wells' inputs, and the state and each correlation's inputs along the 1453 operating points (146,753 grid points) | The solves take 436 s in total, a few minutes on 8 processes |
+| `summary OUT` | Per row of the table: the sampler's range, and the share of cases outside the published range | See the table in `validity.md` |
