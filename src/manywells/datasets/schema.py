@@ -9,9 +9,31 @@ Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 The features of the v1 datasets (docs/datasets.md), in their order.
 """
 
-FEATURES = ('CHK', 'PBH', 'PWH', 'PDC', 'TBH', 'TWH',
-            'WGL', 'WGAS', 'WLIQ', 'WOIL', 'WWAT', 'WTOT',
-            'QGL', 'QGAS', 'QLIQ', 'QOIL', 'QWAT', 'QTOT',
-            'FGAS', 'FOIL', 'FWAT', 'CHOKED', 'FRBH', 'FRWH')
+FEATURES = (
+    'CHK',
+    'PBH',
+    'PWH',
+    'PDC',
+    'TBH',
+    'TWH',
+    'WGL',
+    'WGAS',
+    'WLIQ',
+    'WOIL',
+    'WWAT',
+    'WTOT',
+    'QGL',
+    'QGAS',
+    'QLIQ',
+    'QOIL',
+    'QWAT',
+    'QTOT',
+    'FGAS',
+    'FOIL',
+    'FWAT',
+    'CHOKED',
+    'FRBH',
+    'FRWH',
+)
 NONSTATIONARY = ('WEEKS',)
 SECONDS_PER_HOUR = 3600

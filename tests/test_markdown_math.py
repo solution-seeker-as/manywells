@@ -27,14 +27,17 @@ SEGMENT = re.compile(
     r'|(?P<code>(?P<ticks>`+).+?(?P=ticks))'
     r'|(?P<display>\$\$.+?\$\$)'
     r'|(?P<inline>(?<![\\$])\$(?!\$)(?:[^$\n]|\n(?!\s*\n))+?(?<!\\)\$)',
-    re.M | re.S)
+    re.M | re.S,
+)
 TOKEN = re.compile(r'\\([A-Za-z]+|.)', re.S)
 TEXT = re.compile(r'\\text\{[^{}]*\}')
 # Markdown hazards in math, besides escapes: an asterisk; a `<` that can open an HTML tag; and, in inline math, an
 # underscore that can open emphasis (after a character that is not a letter or digit, and before one that is not a
 # space).
-HAZARD = {True: re.compile(r'(?<!\\)\*|<(?=[A-Za-z/!?])'),
-          False: re.compile(r'(?<!\\)\*|<(?=[A-Za-z/!?])|(?<![^\W_])(?<!\\)_(?=\S)')}
+HAZARD = {
+    True: re.compile(r'(?<!\\)\*|<(?=[A-Za-z/!?])'),
+    False: re.compile(r'(?<!\\)\*|<(?=[A-Za-z/!?])|(?<![^\W_])(?<!\\)_(?=\S)'),
+}
 
 
 def markdown_files():
@@ -62,24 +65,34 @@ def problems(text):
             if (name in string.punctuation and not (display and name == '\\')) or name == 'operatorname':
                 yield offset + m.start(), m.group(0)
         for m in HAZARD[display].finditer(body):
-            yield offset + m.start(), body[max(0, m.start() - 1):m.end() + 1]
-        line = text[text.rfind('\n', 0, offset) + 1:text.find('\n', offset)]
+            yield offset + m.start(), body[max(0, m.start() - 1) : m.end() + 1]
+        line = text[text.rfind('\n', 0, offset) + 1 : text.find('\n', offset)]
         if line.lstrip().startswith('|') and '|' in body:
             yield offset, '| in a table cell'
         end = offset + len(raw) + (2 if display else 1)
-        if text[end:end + 1].isalnum():
+        if text[end : end + 1].isalnum():
             yield end, 'a letter or digit after the closing $'
 
 
 def test_problems_finds_hazards_in_math_only():
-    text = ('$a\\,b$ and $$\\operatorname{smax}(x)$$ but `$c\\,d$` and $\\text{cp\\_flux}$\n'
-            '```\n$e\\,f$\n```\n'
-            '$$\n\\begin{aligned}a &= (x)_i\\\\\nb &= c_{p}\\end{aligned}\n$$\n\n'
-            '$p^*$, $$q^*$$, $(x)_i + c_{p}$, $a\\\\b$ and $a<b$ but $p^\\ast$, $(x)_ i$ and $a < b$; $k\\cdot$step\n\n'
-            '| $\\lvert x\\rvert$ | $|y|$ |\n')
+    text = (
+        '$a\\,b$ and $$\\operatorname{smax}(x)$$ but `$c\\,d$` and $\\text{cp\\_flux}$\n'
+        '```\n$e\\,f$\n```\n'
+        '$$\n\\begin{aligned}a &= (x)_i\\\\\nb &= c_{p}\\end{aligned}\n$$\n\n'
+        '$p^*$, $$q^*$$, $(x)_i + c_{p}$, $a\\\\b$ and $a<b$ but $p^\\ast$, $(x)_ i$ and $a < b$; $k\\cdot$step\n\n'
+        '| $\\lvert x\\rvert$ | $|y|$ |\n'
+    )
     assert [what for _, what in problems(text)] == [
-        '\\,', '\\operatorname', '^*', '^*', ')_i', '\\\\', 'a<b', 'a letter or digit after the closing $',
-        '| in a table cell']
+        '\\,',
+        '\\operatorname',
+        '^*',
+        '^*',
+        ')_i',
+        '\\\\',
+        'a<b',
+        'a letter or digit after the closing $',
+        '| in a table cell',
+    ]
 
 
 def test_markdown_math_renders_on_github():
@@ -89,5 +102,6 @@ def test_markdown_math_renders_on_github():
         for offset, what in problems(text):
             line = text.count('\n', 0, offset) + 1
             found.append(f'{path.relative_to(ROOT)}:{line}: {what}')
-    assert not found, 'math that GitHub renders differently from VS Code (AGENTS.md, Math in markdown):\n' + \
-        '\n'.join(found)
+    assert not found, 'math that GitHub renders differently from VS Code (AGENTS.md, Math in markdown):\n' + '\n'.join(
+        found
+    )

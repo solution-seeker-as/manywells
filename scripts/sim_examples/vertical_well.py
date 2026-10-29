@@ -35,7 +35,6 @@ panels = [
     ('w_g', 'Gas mass flow (kg/s)'),
     ('v_g', 'Gas velocity (m/s)'),
     ('rho_g', 'Gas density (kg/m³)'),
-    
     ('alpha', 'Void fraction'),
     ('T', 'Temperature (K)'),
     ('w_l', 'Liquid mass flow (kg/s)'),
@@ -48,7 +47,7 @@ for ax, (col, ylabel) in zip(axes.flat, panels):
     if col == 'tvd':
         md_arr = np.array(well_properties.geometry.md_survey)
         tvd_arr = np.array(well_properties.geometry.tvd_survey)
-        d_h = np.sqrt(np.maximum(np.diff(md_arr)**2 - np.diff(tvd_arr)**2, 0.0))
+        d_h = np.sqrt(np.maximum(np.diff(md_arr) ** 2 - np.diff(tvd_arr) ** 2, 0.0))
         horiz = np.concatenate(([0.0], np.cumsum(d_h)))
         ax.plot(horiz, tvd_arr, 'k-', lw=2)
         ax.invert_yaxis()

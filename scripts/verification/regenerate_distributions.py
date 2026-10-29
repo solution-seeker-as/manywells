@@ -75,8 +75,9 @@ def main():
     config = args.config
     if config is None:
         from huggingface_hub import hf_hub_download
+
         config = hf_hub_download('solution-seeker-as/manywells', 'data/manywells-sol-1_config.zip', repo_type='dataset')
-    wells = pd.read_csv(config, compression='zip').to_dict('records')[:args.wells]
+    wells = pd.read_csv(config, compression='zip').to_dict('records')[: args.wells]
     settings = Settings(seed=SEED, backend=args.backend)
 
     t0 = time.perf_counter()
@@ -86,11 +87,14 @@ def main():
     counts = pd.DataFrame([c for _, c in results])
     args.out.parent.mkdir(parents=True, exist_ok=True)
     rows.to_parquet(args.out, index=False)
-    print(f'{len(rows)} rows from {len(wells)} wells in {time.perf_counter() - t0:.0f} s; '
-          f'{(~counts["first"]).sum()} wells without an operating point at u = 0.5, '
-          f'{counts["failed"].sum()} failed and {counts["dropped"].sum()} dropped samples')
+    print(
+        f'{len(rows)} rows from {len(wells)} wells in {time.perf_counter() - t0:.0f} s; '
+        f'{(~counts["first"]).sum()} wells without an operating point at u = 0.5, '
+        f'{counts["failed"].sum()} failed and {counts["dropped"].sum()} dropped samples'
+    )
 
     import json
+
     reference = json.loads(REFERENCE.read_text())['datasets']['sol-1']
     print(report(compare(reference, rows, well_weights(reference, rows)), 'sol-1', len(rows)))
 

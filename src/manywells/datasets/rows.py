@@ -32,12 +32,27 @@ def root_features(root, bc, rho_o, rho_w, rho_g, x_w) -> dict:  # spec: SMP-30
     q_g, q_lg = w_g / rho_g, bc.w_lg / rho_g
     h = SECONDS_PER_HOUR
     return {
-        'CHK': bc.u, 'PBH': float(X[0, 0]), 'PWH': float(X[-1, 0]), 'PDC': bc.p_s,
-        'TBH': float(X[0, 6]), 'TWH': float(X[-1, 6]),
-        'WGL': bc.w_lg, 'WGAS': w_g, 'WLIQ': w_l, 'WOIL': w_o, 'WWAT': w_w, 'WTOT': w_g + bc.w_lg + w_l,
-        'QGL': h * q_lg, 'QGAS': h * q_g, 'QLIQ': h * (q_o + q_w), 'QOIL': h * q_o, 'QWAT': h * q_w,
+        'CHK': bc.u,
+        'PBH': float(X[0, 0]),
+        'PWH': float(X[-1, 0]),
+        'PDC': bc.p_s,
+        'TBH': float(X[0, 6]),
+        'TWH': float(X[-1, 6]),
+        'WGL': bc.w_lg,
+        'WGAS': w_g,
+        'WLIQ': w_l,
+        'WOIL': w_o,
+        'WWAT': w_w,
+        'WTOT': w_g + bc.w_lg + w_l,
+        'QGL': h * q_lg,
+        'QGAS': h * q_g,
+        'QLIQ': h * (q_o + q_w),
+        'QOIL': h * q_o,
+        'QWAT': h * q_w,
         'QTOT': h * (q_g + q_lg + q_o + q_w),
-        'CHOKED': bool(root.choked), 'FRBH': root.flow_regime[0], 'FRWH': root.flow_regime[-1],
+        'CHOKED': bool(root.choked),
+        'FRBH': root.flow_regime[0],
+        'FRWH': root.flow_regime[-1],
     }
 
 

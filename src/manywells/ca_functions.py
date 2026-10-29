@@ -25,6 +25,7 @@ def ca_max_approx(x, y, eps: float = 1e-6):  # spec: SMO-1
     """
     return 0.5 * (x + y + ca.sqrt((x - y) ** 2 + eps))
 
+
 def ca_min_approx(x, y, eps: float = 1e-6):  # spec: SMO-2
     """
     A differential approximation of the min function: min(x, y)

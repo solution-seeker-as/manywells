@@ -48,7 +48,7 @@ class ChokeModel(abc.ABC):
 
     # Choke properties
     K_c: float = 0.1 * np.pi * (0.1554 / 2) ** 2  # Choke coefficient (m²). Defaults to 10% of area of 6.11 inch pipe.
-    chk_profile: str = 'linear'    # Choke profile, one of CHOKE_PROFILES
+    chk_profile: str = 'linear'  # Choke profile, one of CHOKE_PROFILES
 
     def __post_init__(self):
         if not self.K_c > 0:
@@ -72,14 +72,14 @@ class ChokeModel(abc.ABC):
             return u
         elif self.chk_profile == 'sigmoid':  # spec: CHK-8
             b = 1.5
-            return (u**b)/(u**b + (1-u)**b)
+            return (u**b) / (u**b + (1 - u) ** b)
         elif self.chk_profile == 'convex':  # spec: CHK-9
             b = 0.25  # Number in [0, 1]
-            return b * u + (1 - b) * u ** 2
+            return b * u + (1 - b) * u**2
         elif self.chk_profile == 'concave':  # spec: CHK-10
             # This is also known as a quick open valve characteristics
             b = 0.75  # Number in (0, 1], changed from 0.5 to 0.75
-            return u ** b
+            return u**b
         else:
             raise NotImplementedError('Choke profile not supported')
 
@@ -155,7 +155,6 @@ class ChokeModel(abc.ABC):
 
 
 class BernoulliChokeModel(ChokeModel):
-
     def density_and_multiplier(self, s, A):  # spec: CHK-6
         """
         Bernoulli model: the mixture density, and no two-phase correction (Phi = 1).
@@ -164,7 +163,6 @@ class BernoulliChokeModel(ChokeModel):
 
 
 class SimpsonChokeModel(ChokeModel):
-
     def density_and_multiplier(self, s, A):  # spec: CHK-5
         """
         Two-phase correction of Simpson et al.: the liquid density, and Simpson's multiplier at the gas mass

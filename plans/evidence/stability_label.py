@@ -44,7 +44,7 @@ class Graph(SSDFSimulator):
             if i == 0:
                 g_i += self._left_boundary_eqs(x_i)
             else:
-                g_i += self._differential_equations(x_i, x[self.dim_x * (i - 1):self.dim_x * i], i)
+                g_i += self._differential_equations(x_i, x[self.dim_x * (i - 1) : self.dim_x * i], i)
             if i == self.n_cells:
                 self.choke_row = len(g) + len(g_i)
                 g_i += self._right_boundary_eqs(x_i)
@@ -83,9 +83,11 @@ def describe(sim, xs, tag):
     r = np.array(sim.g_fun(xs)).ravel()
     d, cond = sim.dR_dp0(xs)
     w_l = sim.wp.A * (1 - X[0, 3]) * X[0, 5] * X[0, 2]
-    print(f'{tag}: p0={X[0, 0]:.4f} pL-ps={X[-1, 0] - sim.bc.p_s:.2e} bar TWH={X[-1, 6]:.1f} K '
-          f'w_l={w_l:.3f} kg/s |g|inf={np.abs(r).max():.1e} min v={X[:, 1:3].min():.2e} '
-          f'dR/dp0={d:+.3e} -> {"UNSTABLE" if d > 0 else "stable"}  cond={cond:.1e}')
+    print(
+        f'{tag}: p0={X[0, 0]:.4f} pL-ps={X[-1, 0] - sim.bc.p_s:.2e} bar TWH={X[-1, 6]:.1f} K '
+        f'w_l={w_l:.3f} kg/s |g|inf={np.abs(r).max():.1e} min v={X[:, 1:3].min():.2e} '
+        f'dR/dp0={d:+.3e} -> {"UNSTABLE" if d > 0 else "stable"}  cond={cond:.1e}'
+    )
     return d
 
 
@@ -97,8 +99,10 @@ def main():
 
     sim = load_graph(args.config, args.well_id)
     wp, bc = sim.wp, sim.bc
-    print(f'well {args.well_id}: p_r={bc.p_r:.2f} p_s={bc.p_s:.2f} '
-          f'rho_l g L/1e5={wp.rho_l * 9.81 * wp.L / 1e5:.2f} w_lg={bc.w_lg}')
+    print(
+        f'well {args.well_id}: p_r={bc.p_r:.2f} p_s={bc.p_s:.2f} '
+        f'rho_l g L/1e5={wp.rho_l * 9.81 * wp.L / 1e5:.2f} w_lg={bc.w_lg}'
+    )
 
     # v1 from its default guess (as the generators call it), then from cellwise guesses at
     # other p0 values, to reach the other root

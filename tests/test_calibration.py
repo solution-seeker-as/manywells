@@ -17,8 +17,17 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from manywells.calibration import (CalibrationData, Noise, Parameter, apply, calibrate, darcy_productivity_index,
-                                   default_prior, evaluate, vogel_maximum_rate)
+from manywells.calibration import (
+    CalibrationData,
+    Noise,
+    Parameter,
+    apply,
+    calibrate,
+    darcy_productivity_index,
+    default_prior,
+    evaluate,
+    vogel_maximum_rate,
+)
 from manywells.calibration import synthetic
 from manywells.calibration.fit import priors_for, residual_table
 from manywells.calibration.objective import BARRIER, Objective, predicted, row_conditions, row_fluids
@@ -34,8 +43,16 @@ from manywells.solvers.rust import _friction, _inflow
 
 
 def rows(**extra):
-    base = {'CHK': [0.5, 0.8], 'PDC': [20.0, 21.0], 'PBH': [150.0, 140.0], 'PWH': [40.0, 35.0],
-            'TWH': [330.0, 332.0], 'QOIL': [30.0, 36.0], 'QGAS': [6000.0, 7200.0], 'QWAT': [3.0, 4.0]}
+    base = {
+        'CHK': [0.5, 0.8],
+        'PDC': [20.0, 21.0],
+        'PBH': [150.0, 140.0],
+        'PWH': [40.0, 35.0],
+        'TWH': [330.0, 332.0],
+        'QOIL': [30.0, 36.0],
+        'QGAS': [6000.0, 7200.0],
+        'QWAT': [3.0, 4.0],
+    }
     return pd.DataFrame(base | extra)
 
 
@@ -43,6 +60,7 @@ WP = WellProperties(inflow=Vogel(w_l_max=50.0))
 
 
 # --- Data (CAL-1 to CAL-4) ---------------------------------------------------------------------------------------
+
 
 def test_data_keeps_a_copy():
     df = rows()
@@ -62,24 +80,29 @@ def test_data_keeps_an_index_as_a_column():
     assert CalibrationData(rows().iloc[[1]]).rows['index'].tolist() == [1]
 
 
-@pytest.mark.parametrize('change, match', [
-    (lambda df: df.drop(columns='CHK'), 'input column CHK'),
-    (lambda df: df.assign(CHK=[0.0, 0.5]), r'CHK must be in \(0, 1\]'),
-    (lambda df: df.assign(PDC=[20.0, np.nan]), 'missing or non-numeric'),
-    (lambda df: df.assign(p_r=[-1.0, 100.0]), 'p_r must be positive'),
-    (lambda df: df.assign(WGL=[-0.1, 0.0]), 'WGL must be non-negative'),
-    (lambda df: df.assign(wlr=[1.0, 0.1]), r'wlr must be in \[0, 1\)'),
-    (lambda df: df.drop(columns='QWAT'), 'together'),
-    (lambda df: df.assign(QWAT=[np.nan, 4.0]), 'some phase rates'),
-    (lambda df: df.assign(QOIL=[-1.0, 36.0]), 'non-negative'),
-    (lambda df: df.assign(PBH=[0.0, 140.0]), 'PBH must be positive'),
-    (lambda df: df.assign(PBH=np.nan, PWH=np.nan, TWH=np.nan, QOIL=np.nan, QGAS=np.nan, QWAT=np.nan),
-     'at least one observation'),
-    (lambda df: df.assign(RATE_SOURCE=['test', 'meter']), 'RATE_SOURCE'),
-    (lambda df: df.assign(PWH_SD=[0.0, 1.0]), 'PWH_SD must be positive'),
-    (lambda df: df.assign(PWH=['40', 'x']), 'non-numeric'),
-    (lambda df: df.assign(CHK=['0.5', 'x']), 'non-numeric'),
-])
+@pytest.mark.parametrize(
+    'change, match',
+    [
+        (lambda df: df.drop(columns='CHK'), 'input column CHK'),
+        (lambda df: df.assign(CHK=[0.0, 0.5]), r'CHK must be in \(0, 1\]'),
+        (lambda df: df.assign(PDC=[20.0, np.nan]), 'missing or non-numeric'),
+        (lambda df: df.assign(p_r=[-1.0, 100.0]), 'p_r must be positive'),
+        (lambda df: df.assign(WGL=[-0.1, 0.0]), 'WGL must be non-negative'),
+        (lambda df: df.assign(wlr=[1.0, 0.1]), r'wlr must be in \[0, 1\)'),
+        (lambda df: df.drop(columns='QWAT'), 'together'),
+        (lambda df: df.assign(QWAT=[np.nan, 4.0]), 'some phase rates'),
+        (lambda df: df.assign(QOIL=[-1.0, 36.0]), 'non-negative'),
+        (lambda df: df.assign(PBH=[0.0, 140.0]), 'PBH must be positive'),
+        (
+            lambda df: df.assign(PBH=np.nan, PWH=np.nan, TWH=np.nan, QOIL=np.nan, QGAS=np.nan, QWAT=np.nan),
+            'at least one observation',
+        ),
+        (lambda df: df.assign(RATE_SOURCE=['test', 'meter']), 'RATE_SOURCE'),
+        (lambda df: df.assign(PWH_SD=[0.0, 1.0]), 'PWH_SD must be positive'),
+        (lambda df: df.assign(PWH=['40', 'x']), 'non-numeric'),
+        (lambda df: df.assign(CHK=['0.5', 'x']), 'non-numeric'),
+    ],
+)
 def test_data_rejects_malformed_rows(change, match):
     """CAL-1 to CAL-4: each malformed input is rejected with a ValueError that names it."""
     with pytest.raises(ValueError, match=match):
@@ -134,8 +157,10 @@ def test_row_inputs():
     bc = BoundaryConditions(p_r=200.0, T_r=360.0, w_lg=1.0)
     data = CalibrationData(rows(WGL=[0.0, 2.0], p_r=[190.0, 185.0], gor=[150.0, 150.0]))
     conditions = row_conditions(data, bc)
-    assert [(c.u, c.p_s, c.w_lg, c.p_r, c.T_r) for c in conditions] == [(0.5, 20.0, 0.0, 190.0, 360.0),
-                                                                       (0.8, 21.0, 2.0, 185.0, 360.0)]
+    assert [(c.u, c.p_s, c.w_lg, c.p_r, c.T_r) for c in conditions] == [
+        (0.5, 20.0, 0.0, 190.0, 360.0),
+        (0.8, 21.0, 2.0, 185.0, 360.0),
+    ]
     fluids = row_fluids(data, WP.fluid)
     assert fluids[0] is fluids[1] and fluids[0].gor == 150.0 and fluids[0].wlr == WP.fluid.wlr
     assert row_fluids(CalibrationData(rows()), WP.fluid) == [WP.fluid, WP.fluid]
@@ -143,13 +168,17 @@ def test_row_inputs():
 
 # --- Parameters and priors (CAL-5 to CAL-7) ----------------------------------------------------------------------
 
+
 def test_parameter_transform():
     """CAL-5: z is the standardized log, so z = 0 is the median and z = 1 one prior standard deviation above it."""
     p = Parameter('h', 15.0, 0.5)
     assert p.value(0.0) == 15.0 and p.value(1.0) == pytest.approx(15.0 * np.exp(0.5))
     assert p.z(p.value(-1.3)) == pytest.approx(-1.3)
-    for bad in (dict(name='U', median=1.0, log_sd=1.0), dict(name='h', median=0.0, log_sd=1.0),
-                dict(name='h', median=1.0, log_sd=0.0)):
+    for bad in (
+        dict(name='U', median=1.0, log_sd=1.0),
+        dict(name='h', median=0.0, log_sd=1.0),
+        dict(name='h', median=1.0, log_sd=0.0),
+    ):
         with pytest.raises(ValueError):
             Parameter(**bad)
 
@@ -204,6 +233,7 @@ def test_default_priors():
 
 def test_a_well_the_backend_cannot_solve_is_refused_before_any_solve():
     """A component the Rust core lacks is a ValueError, not rows taken for ones that cannot flow."""
+
     class MyInflow(Vogel):
         pass
 
@@ -221,9 +251,12 @@ def test_a_well_the_backend_cannot_solve_is_refused_before_any_solve():
 def test_priors_for():
     ps = priors_for(WP, ['K_c', 'h'], priors={'h': Parameter('h', 30.0, 0.2)})
     assert [p.name for p in ps] == ['K_c', 'h'] and ps[1].median == 30.0
-    for free, priors, match in ((['K_c', 'K_c'], None, 'once'), ([], None, 'at least one'),
-                                (['K_c'], {'h': Parameter('h', 1.0, 1.0)}, 'not free'),
-                                (['h'], {'h': Parameter('K_c', 1.0, 1.0)}, 'named')):
+    for free, priors, match in (
+        (['K_c', 'K_c'], None, 'once'),
+        ([], None, 'at least one'),
+        (['K_c'], {'h': Parameter('h', 1.0, 1.0)}, 'not free'),
+        (['h'], {'h': Parameter('K_c', 1.0, 1.0)}, 'named'),
+    ):
         with pytest.raises(ValueError, match=match):
             priors_for(WP, free, priors)
 
@@ -232,7 +265,7 @@ def test_darcy_productivity_index():
     """CAL-7: 100 mD, 20 m, 1 cP, B = 1.2, r_e = 500 m, r_w = 0.1 m, no skin, 850 kg/Sm³."""
     k_l = darcy_productivity_index(100 * MILLIDARCY, 20.0, 1 * CENTIPOISE, 1.2, 500.0, 0.1, 0.0, 850.0)
     expected = 850.0 * 2 * np.pi * 100 * 9.869233e-16 * 20.0 / (1e-3 * 1.2 * (np.log(5000.0) - 0.75)) * 1e5
-    assert k_l == pytest.approx(expected) and 0.1 < k_l < 0.12   # About 11.5 Sm³/d per bar
+    assert k_l == pytest.approx(expected) and 0.1 < k_l < 0.12  # About 11.5 Sm³/d per bar
     with pytest.raises(ValueError):
         darcy_productivity_index(100 * MILLIDARCY, 20.0, 1e-3, 1.2, 0.05, 0.1, 0.0, 850.0)
 
@@ -248,11 +281,13 @@ def test_vogel_maximum_rate_matches_the_productivity_index_at_p_r():
 
 # --- Predicted observations and residuals (CAL-8 to CAL-10) -----------------------------------------------------
 
+
 def fake_root(n=4, w_res=10.0, w_g_res=1.5):
     X = np.tile([100.0, 2.0, 1.0, 0.3, 80.0, 800.0, 340.0], (n, 1))
     X[0, 0], X[-1, 0], X[0, 6], X[-1, 6] = 160.0, 40.0, 360.0, 330.0
-    return Root(x=X.ravel(), label='stable', slope=-1.0, choked=False, flow_regime=('slug',) * n, w_res=w_res,
-                w_g_res=w_g_res)
+    return Root(
+        x=X.ravel(), label='stable', slope=-1.0, choked=False, flow_regime=('slug',) * n, w_res=w_res, w_g_res=w_g_res
+    )
 
 
 def test_predicted_observations_are_the_dataset_features():
@@ -293,7 +328,7 @@ def test_a_step_into_a_refused_roughness_gives_rows_without_an_operating_point()
     for roughness in (0.051 * WP.geometry.D, 143.0):
         z = [obj.parameters[0].z(roughness)]
         assert obj.wells(z) == [None, None]
-        (pred, roots), = obj.predict([z])
+        ((pred, roots),) = obj.predict([z])
         assert np.isnan(pred).all() and roots == [None, None]
         assert obj.residuals(z).tolist() == [BARRIER] * int(obj.mask.sum()) + z
     with pytest.raises(ValueError, match='needs friction to be a FixedFrictionFactor'):
@@ -302,10 +337,22 @@ def test_a_step_into_a_refused_roughness_gives_rows_without_an_operating_point()
 
 # --- Synthetic data (CAL-13) ------------------------------------------------------------------------------------
 
+
 def table(n=10):
     rng = np.random.default_rng(0)
-    return pd.DataFrame({'CHK': np.linspace(0.2, 1.0, n), 'PDC': 20.0, 'WGL': 0.0, 'PBH': 150.0 + rng.random(n),
-                         'PWH': 40.0, 'TWH': 330.0, 'QOIL': 30.0, 'QGAS': 6000.0, 'QWAT': 3.0})
+    return pd.DataFrame(
+        {
+            'CHK': np.linspace(0.2, 1.0, n),
+            'PDC': 20.0,
+            'WGL': 0.0,
+            'PBH': 150.0 + rng.random(n),
+            'PWH': 40.0,
+            'TWH': 330.0,
+            'QOIL': 30.0,
+            'QGAS': 6000.0,
+            'QWAT': 3.0,
+        }
+    )
 
 
 def test_operating_points_spread():

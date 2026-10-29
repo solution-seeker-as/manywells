@@ -91,8 +91,13 @@ def solve(wp, bc, variant):
     t0 = time.perf_counter()
     try:
         op = simulator(wp, variant).simulate(bc)
-        return dict(PBH=op.state[0, 0], PWH=op.state[-1, 0], alpha_0=op.state[0, 3], T_0=op.state[0, 6],
-                    seconds=time.perf_counter() - t0)
+        return dict(
+            PBH=op.state[0, 0],
+            PWH=op.state[-1, 0],
+            alpha_0=op.state[0, 3],
+            T_0=op.state[0, 6],
+            seconds=time.perf_counter() - t0,
+        )
     except SimError as e:
         return dict(err=type(e).__name__, seconds=time.perf_counter() - t0)
 
@@ -105,21 +110,27 @@ def all_liquid_well():
 
 def repro():
     wp, bc = all_liquid_well()
-    print(f'well 87, seed {SEED}, nominal point: p_r {bc.p_r:.2f}, p_s {bc.p_s:.2f} bar, T_r {bc.T_r:.2f} K; gor 40, '
-          f'R_so at (p_r, T_r) {float(wp.fluid.rs(bc.p_r, bc.T_r)):.1f} Sm3/Sm3')
+    print(
+        f'well 87, seed {SEED}, nominal point: p_r {bc.p_r:.2f}, p_s {bc.p_s:.2f} bar, T_r {bc.T_r:.2f} K; gor 40, '
+        f'R_so at (p_r, T_r) {float(wp.fluid.rs(bc.p_r, bc.T_r)):.1f} Sm3/Sm3'
+    )
     core = SSDFSimulator(wp, backend='rust').simulate(bc)
     X = core.state
-    print(f'Rust core: operating point at p_0 {X[0, 0]:.2f} bar, alpha_0 {X[0, 3]:.1e}, '
-          f'max T - T_r {X[:, 6].max() - bc.T_r:.2f} K')
+    print(
+        f'Rust core: operating point at p_0 {X[0, 0]:.2f} bar, alpha_0 {X[0, 3]:.1e}, '
+        f'max T - T_r {X[:, 6].max() - bc.T_r:.2f} K'
+    )
     for variant in ('old', 'casadi', 'guess'):
         out = solve(wp, bc, variant)
-        print(f'CasADi backend, variant {variant}: ' +
-              (f'operating point at p_0 {out["PBH"]:.2f} bar' if 'PBH' in out else out['err']))
+        print(
+            f'CasADi backend, variant {variant}: '
+            + (f'operating point at p_0 {out["PBH"]:.2f} bar' if 'PBH' in out else out['err'])
+        )
     sim = simulator(wp, 'old')
     system, march = sim._roots.system, sim._roots.march
     params = system.params(bc)
     rows = np.asarray(system.residual(core.x, params)).ravel()
-    print(f'The core\'s root in the CasADi rows: largest |row| {np.abs(rows).max():.1e}')
+    print(f"The core's root in the CasADi rows: largest |row| {np.abs(rows).max():.1e}")
     print('The starts of the old search, and point 0 from four void-fraction guesses:')
     for name, p_0 in RootFinder.starts(bc):
         try:
@@ -176,23 +187,30 @@ def summary(df):
     g = df.groupby(['gor_factor', 'all_liquid'], dropna=False)
     table = pd.DataFrame({'cases': g.size(), **{n: g[f'PBH_{n}'].apply(lambda s: s.notna().sum()) for n in names}})
     for n in names[1:]:
-        table[f'rust, not {n}'] = g.apply(lambda d: (d.PBH_rust.notna() & d[f'PBH_{n}'].isna()).sum(),
-                                          include_groups=False)
-        table[f'{n}, not rust'] = g.apply(lambda d: (d[f'PBH_{n}'].notna() & d.PBH_rust.isna()).sum(),
-                                          include_groups=False)
+        table[f'rust, not {n}'] = g.apply(
+            lambda d: (d.PBH_rust.notna() & d[f'PBH_{n}'].isna()).sum(), include_groups=False
+        )
+        table[f'{n}, not rust'] = g.apply(
+            lambda d: (d[f'PBH_{n}'].notna() & d.PBH_rust.isna()).sum(), include_groups=False
+        )
     print(table.to_string())
     for n in names[1:]:
         both = df.dropna(subset=['PBH_rust', f'PBH_{n}'])
-        print(f'{n} against the core, {len(both)} cases with both: largest |dPBH| '
-              f'{(both[f"PBH_{n}"] - both.PBH_rust).abs().max():.2e} bar')
-    print('Time on one of 14 processes (s), median / total: ' + ', '.join(
-        f'{n} {df[f"seconds_{n}"].median():.2f} / {df[f"seconds_{n}"].sum():.0f}' for n in names))
+        print(
+            f'{n} against the core, {len(both)} cases with both: largest |dPBH| '
+            f'{(both[f"PBH_{n}"] - both.PBH_rust).abs().max():.2e} bar'
+        )
+    print(
+        'Time on one of 14 processes (s), median / total: '
+        + ', '.join(f'{n} {df[f"seconds_{n}"].median():.2f} / {df[f"seconds_{n}"].sum():.0f}' for n in names)
+    )
 
 
 def cases(n_wells, out, variants=VARIANTS):
     with Pool(14) as pool:
-        df = pd.DataFrame([r for rs in pool.map(partial(well_cases, variants=variants), range(n_wells), chunksize=1)
-                           for r in rs])
+        df = pd.DataFrame(
+            [r for rs in pool.map(partial(well_cases, variants=variants), range(n_wells), chunksize=1) for r in rs]
+        )
     df.to_csv(out, index=False)
     pd.set_option('display.width', 220)
     summary(df)
@@ -204,12 +222,22 @@ def attempts(n_wells, out):
         for k, _, wp, bc in sampled_cases(well, factors=(1.0,)):
             for variant in ('casadi', 'old', 'guess'):
                 for a in simulator(wp, variant).root_set(bc).search:
-                    rows.append(dict(well=well, k=k, variant=variant, start=a.start,
-                                     outcome=a.outcome.split(' at ')[0], iterations=a.iterations, seconds=a.seconds))
+                    rows.append(
+                        dict(
+                            well=well,
+                            k=k,
+                            variant=variant,
+                            start=a.start,
+                            outcome=a.outcome.split(' at ')[0],
+                            iterations=a.iterations,
+                            seconds=a.seconds,
+                        )
+                    )
     df = pd.DataFrame(rows)
     df.to_csv(out, index=False)
-    pv = df.pivot_table(index=['well', 'k', 'start'], columns='variant', values=['outcome', 'iterations', 'seconds'],
-                        aggfunc='first')
+    pv = df.pivot_table(
+        index=['well', 'k', 'start'], columns='variant', values=['outcome', 'iterations', 'seconds'], aggfunc='first'
+    )
     pd.set_option('display.width', 220)
     print(f'{len(pv)} starts in {df.groupby(["well", "k"]).ngroups} cases')
     for v in ('casadi', 'guess'):
@@ -217,8 +245,10 @@ def attempts(n_wells, out):
         print(f'\n{v} against old: outcomes changed at {len(changed)} starts:')
         print(pd.crosstab(changed[('outcome', 'old')], changed[('outcome', v)]).to_string())
         for c in ('iterations', 'seconds'):
-            print(f'{c}: {v} {pv[(c, v)].sum():.1f}, old {pv[(c, "old")].sum():.1f}; at the starts whose outcome '
-                  f'changed: {v} {changed[(c, v)].sum():.1f}, old {changed[(c, "old")].sum():.1f}')
+            print(
+                f'{c}: {v} {pv[(c, v)].sum():.1f}, old {pv[(c, "old")].sum():.1f}; at the starts whose outcome '
+                f'changed: {v} {changed[(c, v)].sum():.1f}, old {changed[(c, "old")].sum():.1f}'
+            )
 
 
 def verify(variant, out):
@@ -226,7 +256,8 @@ def verify(variant, out):
     import multiprocessing
     import scripts.verification.develop_candidate as candidate
     from manywells.solvers import march as march_module
-    multiprocessing.set_start_method('fork', force=True)    # Python 3.14's forkserver would lose the patch
+
+    multiprocessing.set_start_method('fork', force=True)  # Python 3.14's forkserver would lose the patch
     march_module.Marcher._bottom_point = MARCHES[variant]
     sys.argv = ['develop_candidate', out]
     candidate.main()

@@ -31,6 +31,6 @@ def set_mpl_config():
 
 def set_seaborn_config():
     sns.set_theme(
-        style="whitegrid",  # white or whitegrid
-        rc=default_mpl_config
+        style='whitegrid',  # white or whitegrid
+        rc=default_mpl_config,
     )

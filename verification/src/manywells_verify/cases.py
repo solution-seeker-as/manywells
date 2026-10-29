@@ -33,6 +33,7 @@ PROFILES = ('linear', 'sigmoid', 'convex', 'concave')
 @dataclass(frozen=True)
 class Variant:
     """The discrete model choices of a well: inflow model, choke model and choke profile."""
+
     inflow: str = 'vogel'
     choke: str = 'simpson'
     profile: str = 'linear'
@@ -58,16 +59,16 @@ class Case:
     variant: Variant = Variant()
     model: str = 'v1.0.0'
     source: str = ''
-    group: str = ''                        # links the N, 2N and 4N cases of a convergence group
+    group: str = ''  # links the N, 2N and 4N cases of a convergence group
     meta: Mapping = field(default_factory=dict)
 
 
 @dataclass
 class Root:
     x: np.ndarray
-    label: str | None = None               # 'stable', 'unstable' or 'indeterminate', if reported
+    label: str | None = None  # 'stable', 'unstable' or 'indeterminate', if reported
     operating_point: bool = False
-    choked: bool | None = None             # the candidate's CHOKED flag, if reported
+    choked: bool | None = None  # the candidate's CHOKED flag, if reported
     info: Mapping = field(default_factory=dict)
 
     def __post_init__(self):
@@ -79,9 +80,17 @@ class Root:
 def write_cases(cases, path: Path):
     rows = []
     for c in cases:
-        row = {'schema_version': SCHEMA_VERSION, 'case_id': c.case_id, 'model': c.model, 'source': c.source,
-               'inflow': c.variant.inflow, 'choke': c.variant.choke, 'profile': c.variant.profile,
-               'n_cells': int(c.n_cells), 'group': c.group}
+        row = {
+            'schema_version': SCHEMA_VERSION,
+            'case_id': c.case_id,
+            'model': c.model,
+            'source': c.source,
+            'inflow': c.variant.inflow,
+            'choke': c.variant.choke,
+            'profile': c.variant.profile,
+            'n_cells': int(c.n_cells),
+            'group': c.group,
+        }
         row |= {k: float(v) for k, v in c.params.items()}
         row |= {k: c.meta.get(k) for k in META_COLUMNS}
         rows.append(row)
@@ -97,10 +106,15 @@ def read_cases(path: Path) -> dict[str, Case]:
     cases = {}
     for row in df.to_dict('records'):
         cases[row['case_id']] = Case(
-            case_id=row['case_id'], params={k: float(row[k]) for k in params}, n_cells=int(row['n_cells']),
-            variant=Variant(row['inflow'], row['choke'], row['profile']), model=row['model'],
-            source=row['source'], group=row['group'] if isinstance(row['group'], str) else '',
-            meta={k: row.get(k) for k in META_COLUMNS})
+            case_id=row['case_id'],
+            params={k: float(row[k]) for k in params},
+            n_cells=int(row['n_cells']),
+            variant=Variant(row['inflow'], row['choke'], row['profile']),
+            model=row['model'],
+            source=row['source'],
+            group=row['group'] if isinstance(row['group'], str) else '',
+            meta={k: row.get(k) for k in META_COLUMNS},
+        )
     return cases
 
 
@@ -108,8 +122,17 @@ def write_roots(roots: Mapping[str, list[Root]], path: Path):
     rows = []
     for case_id, case_roots in roots.items():
         for k, r in enumerate(case_roots):
-            rows.append({'case_id': case_id, 'root': k, 'x': r.x.tolist(), 'label': r.label or '',
-                         'operating_point': bool(r.operating_point), 'choked': r.choked, **r.info})
+            rows.append(
+                {
+                    'case_id': case_id,
+                    'root': k,
+                    'x': r.x.tolist(),
+                    'label': r.label or '',
+                    'operating_point': bool(r.operating_point),
+                    'choked': r.choked,
+                    **r.info,
+                }
+            )
     df = pd.DataFrame(rows, columns=list(ROOT_COLUMNS) if not rows else None)
     df['choked'] = df['choked'].astype('boolean')
     df.to_parquet(path, index=False)
@@ -121,9 +144,13 @@ def read_roots(path: Path) -> dict[str, list[Root]]:
     roots = {}
     for row in df.to_dict('records'):
         choked, label = row.get('choked'), row['label']
-        roots.setdefault(row['case_id'], []).append(Root(
-            x=np.asarray(row['x'], dtype=float), label=None if pd.isna(label) or label == '' else label,  # null or ''
-            operating_point=bool(row['operating_point']),
-            choked=None if choked is None or pd.isna(choked) else bool(choked),
-            info={k: row[k] for k in extra}))
+        roots.setdefault(row['case_id'], []).append(
+            Root(
+                x=np.asarray(row['x'], dtype=float),
+                label=None if pd.isna(label) or label == '' else label,  # null or ''
+                operating_point=bool(row['operating_point']),
+                choked=None if choked is None or pd.isna(choked) else bool(choked),
+                info={k: row[k] for k in extra},
+            )
+        )
     return roots

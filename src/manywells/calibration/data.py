@@ -35,11 +35,12 @@ class Noise:  # spec: CAL-4
     The default standard deviation of each observation's measurement noise: absolute for the pressures (bar) and the
     temperature (K), relative for the rate, by the source of the row's rates. A row's *_SD columns override them.
     """
-    PBH: float = 0.3            # Downhole gauge (bar)
-    PWH: float = 0.3            # Wellhead pressure transmitter (bar)
-    TWH: float = 1.0            # Wellhead temperature (K), installed bias included
-    rate_test: float = 0.025    # Test separator, relative
-    rate_mpfm: float = 0.10     # Multiphase flow meter, relative
+
+    PBH: float = 0.3  # Downhole gauge (bar)
+    PWH: float = 0.3  # Wellhead pressure transmitter (bar)
+    TWH: float = 1.0  # Wellhead temperature (K), installed bias included
+    rate_test: float = 0.025  # Test separator, relative
+    rate_mpfm: float = 0.10  # Multiphase flow meter, relative
 
     def __post_init__(self):
         for name in ('PBH', 'PWH', 'TWH', 'rate_test', 'rate_mpfm'):
@@ -69,6 +70,7 @@ class CalibrationData:
     Other columns, such as a time stamp, are kept and appear in the result's residual table. So does an index other
     than the default 0, 1, ..., as a column named after it ('index' if it has no name).
     """
+
     rows: pd.DataFrame
     noise: Noise = field(default_factory=Noise)
 
@@ -134,8 +136,7 @@ class CalibrationData:
     def observed(self) -> pd.DataFrame:
         """Which observations each row has, as booleans in the columns OBSERVATIONS."""
         df = self.rows
-        out = pd.DataFrame({c: df[c].notna() if c in df else False for c in PRESSURES_AND_TEMPERATURES},
-                           index=df.index)
+        out = pd.DataFrame({c: df[c].notna() if c in df else False for c in PRESSURES_AND_TEMPERATURES}, index=df.index)
         out['WRES'] = df[list(PHASE_RATES)].notna().all(axis=1) if PHASE_RATES[0] in df else False
         return out[list(OBSERVATIONS)]
 
@@ -161,8 +162,12 @@ class CalibrationData:
         """The standard deviation of each observation, an (n, 4) array in the order OBSERVATIONS."""
         df, noise = self.rows, self.noise
         source = df['RATE_SOURCE'].fillna('test') if 'RATE_SOURCE' in df else pd.Series('test', index=df.index)
-        defaults = {'PBH': noise.PBH, 'PWH': noise.PWH, 'TWH': noise.TWH,
-                    'WRES': np.where(source == 'mpfm', noise.rate_mpfm, noise.rate_test)}
+        defaults = {
+            'PBH': noise.PBH,
+            'PWH': noise.PWH,
+            'TWH': noise.TWH,
+            'WRES': np.where(source == 'mpfm', noise.rate_mpfm, noise.rate_test),
+        }
         sd = np.empty((len(df), len(OBSERVATIONS)))
         for j, obs in enumerate(OBSERVATIONS):
             col = SD_COLUMNS[obs]

@@ -41,12 +41,27 @@ def well_new(case):
     from manywells.configurations import v1_well
     from manywells.inflow import ProductivityIndex, Vogel
     from manywells.simulator import BoundaryConditions
+
     prm, v = case.params, case.variant
     inflow = Vogel(w_l_max=prm['w_l_max']) if v.inflow == 'vogel' else ProductivityIndex(k_l=prm['k_l'])
     choke = (SimpsonChokeModel if v.choke == 'simpson' else BernoulliChokeModel)(K_c=prm['K_c'], chk_profile=v.profile)
-    wp = v1_well(L=prm['L'], D=prm['D'], rho_l=prm['rho_l'], R_s=prm['R_s'], cp_g=prm['cp_g'], cp_l=prm['cp_l'],
-                 f_D=prm['f_D'], h=prm['h'], f_g=prm['f_g'], inflow=inflow, choke=choke, n_cells=case.n_cells)
-    bc = BoundaryConditions(p_r=prm['p_r'], p_s=prm['p_s'], T_r=prm['T_r'], T_s=prm['T_s'], u=prm['u'], w_lg=prm['w_lg'])
+    wp = v1_well(
+        L=prm['L'],
+        D=prm['D'],
+        rho_l=prm['rho_l'],
+        R_s=prm['R_s'],
+        cp_g=prm['cp_g'],
+        cp_l=prm['cp_l'],
+        f_D=prm['f_D'],
+        h=prm['h'],
+        f_g=prm['f_g'],
+        inflow=inflow,
+        choke=choke,
+        n_cells=case.n_cells,
+    )
+    bc = BoundaryConditions(
+        p_r=prm['p_r'], p_s=prm['p_s'], T_r=prm['T_r'], T_s=prm['T_s'], u=prm['u'], w_lg=prm['w_lg']
+    )
     return wp, bc
 
 
@@ -58,21 +73,39 @@ def well_old(case):
     from manywells.pvt.fluid import FluidModel
     from manywells.simulator import BoundaryConditions, WellProperties
     from manywells.units import P_REF, T_REF
+
     prm, v = case.params, case.variant
     rho_g = P_REF / (prm['R_s'] * T_REF)
-    fluid = FluidModel(rho_o=prm['rho_l'], rho_g=rho_g, wlr=0.0, gor=prm['f_g'] * prm['rho_l'] / ((1 - prm['f_g']) * rho_g),
-                       oil_model='dead_oil', ideal_gas=True, cp_g=prm['cp_g'], cp_o=prm['cp_l'])
+    fluid = FluidModel(
+        rho_o=prm['rho_l'],
+        rho_g=rho_g,
+        wlr=0.0,
+        gor=prm['f_g'] * prm['rho_l'] / ((1 - prm['f_g']) * rho_g),
+        oil_model='dead_oil',
+        ideal_gas=True,
+        cp_g=prm['cp_g'],
+        cp_o=prm['cp_l'],
+    )
     inflow = Vogel(prm['w_l_max']) if v.inflow == 'vogel' else ProductivityIndex(prm['k_l'])
     choke = (SimpsonChokeModel if v.choke == 'simpson' else BernoulliChokeModel)(K_c=prm['K_c'], chk_profile=v.profile)
-    wp = WellProperties(geometry=WellGeometry.vertical(length=prm['L'], n_cells=case.n_cells, D=prm['D']), fluid=fluid,
-                        f_D=prm['f_D'], h=prm['h'], inflow=inflow, choke=choke)
-    bc = BoundaryConditions(p_r=prm['p_r'], p_s=prm['p_s'], T_r=prm['T_r'], T_s=prm['T_s'], u=prm['u'], w_lg=prm['w_lg'])
+    wp = WellProperties(
+        geometry=WellGeometry.vertical(length=prm['L'], n_cells=case.n_cells, D=prm['D']),
+        fluid=fluid,
+        f_D=prm['f_D'],
+        h=prm['h'],
+        inflow=inflow,
+        choke=choke,
+    )
+    bc = BoundaryConditions(
+        p_r=prm['p_r'], p_s=prm['p_s'], T_r=prm['T_r'], T_s=prm['T_s'], u=prm['u'], w_lg=prm['w_lg']
+    )
     return wp, bc
 
 
 def measure_old(task):
     case, x_root = task
     from manywells.simulator import SimError, SSDFSimulator
+
     wp, bc = well_old(case)
     out = {}
     for name, guess in (('cold', None), ('warm', list(x_root))):
@@ -95,6 +128,7 @@ def measure_new(task):
     from manywells.solvers.ipopt import IpoptSolver
     from manywells.solvers.march import MarchFailed, Marcher
     from manywells.solvers.roots import DEFAULT_DRAWDOWN
+
     wp, bc = well_new(case)
     t = time.perf_counter()
     system = build_system(wp)
@@ -120,8 +154,10 @@ def compare(old_path, new_path):
     for kind in ('warm', 'cold'):
         o = np.array([old[c][kind][0] for c in ids])
         n = np.array([new[c][kind][0] for c in ids])
-        print(f'{kind}: before {np.median(o):.3f} s, after {np.median(n):.4f} s (medians); '
-              f'speed-up median {np.median(o / n):.0f}x, total {o.sum() / n.sum():.0f}x over {len(ids)} cases')
+        print(
+            f'{kind}: before {np.median(o):.3f} s, after {np.median(n):.4f} s (medians); '
+            f'speed-up median {np.median(o / n):.0f}x, total {o.sum() / n.sum():.0f}x over {len(ids)} cases'
+        )
     b = np.array([new[c]['build'][0] for c in ids])
     print(f'build, once per well: median {np.median(b):.2f} s, max {b.max():.2f} s')
 
@@ -136,6 +172,7 @@ def main():
     if args.compare:
         return compare(*args.out)
     from manywells_verify.cases import read_cases, read_roots
+
     cases, roots = read_cases(CASES), read_roots(ROOTS)
     tasks = [(c, roots[k][0].x) for k, c in cases.items() if roots.get(k)]
     warnings.simplefilter('ignore')

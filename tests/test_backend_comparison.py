@@ -27,8 +27,21 @@ import pytest
 from manywells.discretization import build_system
 from manywells.solvers.rust import RustRootFinder
 
-from .backend_cases import (COMPARISON, FEATURES, OVERLAYS, ROOT_ROW, ROW_REL, casadi_rows, compare_case,
-                            comparison_set, features, matrix, report, row_difference, trial_state)
+from .backend_cases import (
+    COMPARISON,
+    FEATURES,
+    OVERLAYS,
+    ROOT_ROW,
+    ROW_REL,
+    casadi_rows,
+    compare_case,
+    comparison_set,
+    features,
+    matrix,
+    report,
+    row_difference,
+    trial_state,
+)
 
 MATRIX = matrix()
 
@@ -58,8 +71,8 @@ def test_the_cores_march_zeroes_the_casadi_rows(configuration):
         ids, rows = casadi_rows(system, bc, x)
         rows = rows[np.array(ids) != 'CHK-1']
         assert np.max(np.abs(rows)) < ROOT_ROW, f'p_0 at {fraction} of the drawdown: {np.max(np.abs(rows))}'
-        assert system.subsonic(x, system.params(bc)), 'the core takes each cell\'s subsonic root (SOL-8)'
-        assert system.energy_rows_rise(x, system.params(bc)), 'the core takes each energy row\'s rising root (SOL-9)'
+        assert system.subsonic(x, system.params(bc)), "the core takes each cell's subsonic root (SOL-8)"
+        assert system.energy_rows_rise(x, system.params(bc)), "the core takes each energy row's rising root (SOL-9)"
         return
     pytest.fail('no march reached the wellhead')
 
@@ -88,6 +101,8 @@ def test_the_backends_agree_on_the_comparison_set(comparisons):
     failed = [c for c in comparisons if not c.ok]
     assert not failed, '\n'.join(
         f'{c.case}: missed {c.missed}, labels differ at {c.labels}, core-only {c.core_only}, rows {c.row_rel:.1e} '
-        f'({c.row_at}){" " + c.error if c.error else ""}' for c in failed)
+        f'({c.row_at}){" " + c.error if c.error else ""}'
+        for c in failed
+    )
     with_roots = sum(bool(c.casadi) for c in comparisons)
     assert with_roots >= 0.8 * len(comparisons), f'only {with_roots} of {len(comparisons)} cases have a CasADi root'

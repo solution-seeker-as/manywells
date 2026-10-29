@@ -13,8 +13,15 @@ import math
 from abc import ABC, abstractmethod
 
 from manywells.pvt import R_UNIVERSAL, api_from_density, sg_from_gas_density
-from manywells.pvt.gas import (DAK_ZC, dak_jt_factor, dak_reduced_density, dak_z_factor, gas_z_factor,
-                               gas_viscosity as _gas_viscosity, sutton_pseudo_critical)
+from manywells.pvt.gas import (
+    DAK_ZC,
+    dak_jt_factor,
+    dak_reduced_density,
+    dak_z_factor,
+    gas_z_factor,
+    gas_viscosity as _gas_viscosity,
+    sutton_pseudo_critical,
+)
 from manywells.units import M_AIR, CF_BAR
 
 GAS_LAWS = ('ideal', 'dak', 'papay')

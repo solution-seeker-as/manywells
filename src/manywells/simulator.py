@@ -35,7 +35,8 @@ log = logging.getLogger('manywells')
 
 
 class SimError(Exception):
-    """ Exception caused by simulator """
+    """Exception caused by simulator"""
+
     pass
 
 
@@ -77,8 +78,14 @@ class WellProperties:
     choke: ChokeModel = None
 
     def __post_init__(self):
-        for name, cls in (('geometry', WellGeometry), ('fluid', FluidModel), ('friction', FrictionModel),
-                          ('thermal', ThermalModel), ('slip', SlipModel), ('inflow', InflowModel)):
+        for name, cls in (
+            ('geometry', WellGeometry),
+            ('fluid', FluidModel),
+            ('friction', FrictionModel),
+            ('thermal', ThermalModel),
+            ('slip', SlipModel),
+            ('inflow', InflowModel),
+        ):
             if not isinstance(getattr(self, name), cls):
                 raise ValueError(f'{name} must be a {cls.__name__}, got {type(getattr(self, name)).__name__}')
         if self.choke is None:
@@ -88,28 +95,32 @@ class WellProperties:
         # Checked here, where both the roughness and the diameter are (specs/model/validity.md, note 3)
         D = self.geometry.D
         if isinstance(self.friction, RoughnessFriction) and not self.friction.roughness <= MAX_RELATIVE_ROUGHNESS * D:
-            raise ValueError(f'the relative roughness {self.friction.roughness / D:.4g} (roughness '
-                             f'{self.friction.roughness} m, D = {D} m) exceeds {MAX_RELATIVE_ROUGHNESS}, the upper end '
-                             'of the friction correlations\' range (specs/model/validity.md)')
+            raise ValueError(
+                f'the relative roughness {self.friction.roughness / D:.4g} (roughness '
+                f'{self.friction.roughness} m, D = {D} m) exceeds {MAX_RELATIVE_ROUGHNESS}, the upper end '
+                "of the friction correlations' range (specs/model/validity.md)"
+            )
 
 
 @dataclass(frozen=True)
 class BoundaryConditions:
     # Pressures
-    p_r: float = 170          # Upstream reservoir pressure (bar)
-    p_s: float = 20           # Downstream separator pressure (bar)
+    p_r: float = 170  # Upstream reservoir pressure (bar)
+    p_s: float = 20  # Downstream separator pressure (bar)
 
     # Temperatures
-    T_r: float = 373.15       # Reservoir temperature (K). Default value corresponds to 100 decC.
-    T_s: float = 277.15       # Ambient temperature (K) at the surface z=L. Default value corresponds to 4 degC.
-    T_lg: float = None        # Lift gas temperature (K) at injection point. None means T_r (no mixing effect).
+    T_r: float = 373.15  # Reservoir temperature (K). Default value corresponds to 100 decC.
+    T_s: float = 277.15  # Ambient temperature (K) at the surface z=L. Default value corresponds to 4 degC.
+    T_lg: float = None  # Lift gas temperature (K) at injection point. None means T_r (no mixing effect).
 
     # Controls
-    u: float = 1.             # Choke position (dimensionless). Must be in [0,1].
-    w_lg: float = 0.          # Lift gas mass flow rate (kg/s). Default value is 0. Assumed injected at z=0.
+    u: float = 1.0  # Choke position (dimensionless). Must be in [0,1].
+    w_lg: float = 0.0  # Lift gas mass flow rate (kg/s). Default value is 0. Assumed injected at z=0.
 
     def __post_init__(self):
-        values = (self.p_r, self.p_s, self.T_r, self.T_s, self.u, self.w_lg) + (() if self.T_lg is None else (self.T_lg,))
+        values = (self.p_r, self.p_s, self.T_r, self.T_s, self.u, self.w_lg) + (
+            () if self.T_lg is None else (self.T_lg,)
+        )
         checks = [
             (all(np.isfinite(v) for v in values), f'Boundary conditions must be finite: {self}'),
             (self.p_r > 0, 'Reservoir pressure must be positive'),
@@ -149,19 +160,24 @@ class SSDFSimulator:
     state as a flat list. It is removed in v2.0.0.
     """
 
-    def __init__(self, well_properties: WellProperties, boundary_conditions: BoundaryConditions = None,
-                 backend: str = 'casadi'):
+    def __init__(
+        self, well_properties: WellProperties, boundary_conditions: BoundaryConditions = None, backend: str = 'casadi'
+    ):
         """
         :param well_properties: Well properties (object of type WellProperties)
         :param boundary_conditions: Deprecated; pass the boundary conditions to simulate() instead
         :param backend: 'casadi' or 'rust' (the core's component classes only)
         """
         if boundary_conditions is not None:
-            warnings.warn('SSDFSimulator(wp, bc) is deprecated: use SSDFSimulator(wp) and simulate(bc), which returns '
-                          'the operating point as a Root', DeprecationWarning, stacklevel=2)
-        self.wp = well_properties       # Well properties
-        self.bc = boundary_conditions   # Boundary conditions of the deprecated simulate()
-        self.x_guess = None             # Initial guess of the deprecated simulate()
+            warnings.warn(
+                'SSDFSimulator(wp, bc) is deprecated: use SSDFSimulator(wp) and simulate(bc), which returns '
+                'the operating point as a Root',
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        self.wp = well_properties  # Well properties
+        self.bc = boundary_conditions  # Boundary conditions of the deprecated simulate()
+        self.x_guess = None  # Initial guess of the deprecated simulate()
 
         self.geo = well_properties.geometry  # Convenience alias
         self.n_cells = self.geo.n_cells
@@ -174,6 +190,7 @@ class SSDFSimulator:
             self._roots = RootFinder(self.system)
         elif backend == 'rust':
             from manywells.solvers.rust import RustRootFinder  # Imported here, so that only this backend loads the core
+
             self.system = None
             self._roots = RustRootFinder(well_properties)
         else:
@@ -196,15 +213,21 @@ class SSDFSimulator:
             raise ValueError(f'the reservoir pressure ({bc.p_r}) must exceed the separator pressure ({bc.p_s})')
         fluid = self.wp.fluid
         if not fluid.covers(bc.p_r, bc.T_r):
-            raise ValueError(f'the fluid\'s PVT table, {fluid.table_range}, does not cover the reservoir: '
-                             f'p_r = {bc.p_r} bar, T_r = {bc.T_r} K')
+            raise ValueError(
+                f"the fluid's PVT table, {fluid.table_range}, does not cover the reservoir: "
+                f'p_r = {bc.p_r} bar, T_r = {bc.T_r} K'
+            )
         if isinstance(x_guess, Root):
             x_guess = x_guess.x
         rs = self._roots.find(bc, x_guess=x_guess)
         failed = [a for a in rs.search if not a.found]
         if failed:
-            log.debug('%d of %d starts found no root: %s', len(failed), len(rs.search),
-                      '; '.join(f'{a.start}: {a.outcome}' for a in failed))
+            log.debug(
+                '%d of %d starts found no root: %s',
+                len(failed),
+                len(rs.search),
+                '; '.join(f'{a.start}: {a.outcome}' for a in failed),
+            )
         return rs
 
     def simulate(self, bc: BoundaryConditions = None, x_guess=None):
@@ -230,11 +253,16 @@ class SSDFSimulator:
         if rs.operating_point is None:
             raise NoOperatingPoint(rs)
         if rs.operating_point.off_table:
-            log.warning('the operating point has points off the fluid\'s PVT table, %s, where its properties are '
-                        'clamped to the grid\'s edge', self.wp.fluid.table_range)
+            log.warning(
+                "the operating point has points off the fluid's PVT table, %s, where its properties are "
+                "clamped to the grid's edge",
+                self.wp.fluid.table_range,
+            )
         if rs.several_stable:
-            log.info('%d stable roots; the operating point is the one with the lowest p_0 (SOL-6)',
-                     sum(r.label == 'stable' for r in rs.roots))
+            log.info(
+                '%d stable roots; the operating point is the one with the lowest p_0 (SOL-6)',
+                sum(r.label == 'stable' for r in rs.roots),
+            )
         return rs.operating_point.x.tolist() if legacy else rs.operating_point
 
     def solution_as_df(self, x):

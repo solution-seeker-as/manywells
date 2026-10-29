@@ -1,6 +1,6 @@
 # Lock the model for the new sampler — plan
 
-*Draft 2026-10-29. Owner: Bjarne Grimstad. Status: in progress; L1 decided (feature 021 to implement), L2 decided but for decision 5, L4 done; L2 and L3 implemented on branches.*
+*Draft 2026-10-29. Owner: Bjarne Grimstad. Status: in progress; L1 decided (feature 021 in implementation), L2 signed off (PR #30), L3 signed off (two fixes in progress), L4, L7 and L8 done.*
 
 The next step towards v2 is a new sampling procedure: synthetic wells and data that are more realistic than v1's (`specs/goals.md`, limitation 5). The sampler draws the inputs of a model, so the model should not move under it. This plan brings `develop` to the point where the sampler can be implemented:
 
@@ -58,7 +58,7 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
 ### Step L2 — Validity ranges, with a rule for each
 
 - **Goal.** One table of every correlation's valid range, the range the sampler reaches, and what the model does outside it: the input from which the redesign chooses its ranges.
-- **Status.** Drafted and committed on 2026-10-29 (`5294d52`), for Bjarne's sign-off. Bjarne took decisions 1 to 4 as recommended on 2026-10-29 and deferred decision 5 to the sampling redesign; the record, the follow-ups and the refusals are on the branch `validity-refusals`. `specs/model/validity.md` proposes three rules.
+- **Status.** Drafted and committed on 2026-10-29 (`5294d52`), for Bjarne's sign-off. Bjarne took decisions 1 to 4 as recommended on 2026-10-29 and deferred decision 5 to the sampling redesign; the record, the follow-ups and the refusals are on the branch `validity-refusals`. Bjarne signed off the implementation the same day: PR #30. `specs/model/validity.md` proposes three rules.
   - *Refuse* inputs fixed before the solve where the correlation fails.
   - *Extrapolate* every state-dependent quantity, and any input whose correlation degrades gradually.
   - *Clamp* only a PVT table.
@@ -84,8 +84,8 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
 
 ### Step L3 — Check the correlations against independent sources
 
-- **Status.** In progress on the branch `independent-checks` (2026-10-29).
-- **Goal.** Independent evidence that each correlation in the v2 configuration is implemented as published. Today the `develop` vectors come from `develop` itself, and the two backends implement the same spec, so agreement between them does not check the values. This step takes over Step V1 of the validation plan's draft (`plans/validation-plan.md`).
+- **Status.** Implemented on the branch `independent-checks` and signed off by Bjarne on 2026-10-29: `tests/test_worked_examples.py`, the notes in the specs and the list in `specs/model/README.md`. It found two differences from the sources, both ruled the same day to follow the source, and fixed on the same branch before its PR: Sutton's $p_{pc}$ has 131.0 where the code had 131.07 (PVT-GAS-5), and the mixture viscosity weights by the flowing gas fraction of Hasan et al.'s Eq. (A-3), where the code took the in-situ one (PVT-MIX-9).
+- **Goal.** Independent evidence that each correlation in the v2 configuration is implemented as published. Today the `develop` vectors come from `develop` itself, and the two backends implement the same spec, so agreement between them does not check the values. This step takes over Step V1 of a draft validation plan, since retired (its Step V2 is `plans/improvements.md` §2.16).
 - **Work.**
   - **Against `fluids`** (Caleb Bell, MIT licence), run by hand with `uv run --with fluids==1.3.1`, so it is not a dependency. A script in `plans/evidence/` compares:
     - Chen and Haaland (FRIC-4, FRIC-5);
@@ -170,12 +170,12 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
   - §2.15, NaN slip constants, NaN diameter and unknown friction correlations.
 - **Done when.** The PR is merged with the full suite and both verifier candidates passing.
 - **Who.** An agent.
-- **Status (2026-10-29).** Done but for §1.11, which waits for Bjarne's ruling: §1.4, §1.10, §2.11, §2.14 and §2.15 are fixed, with the backlog's other any-time items (`a1e8da4`).
+- **Status.** Done 2026-10-29: §1.4, §1.10, §2.11, §2.14 and §2.15 are fixed, with the backlog's other any-time items (`a1e8da4`). Bjarne left §1.11 to the sampling redesign, recorded in SMP-28.
 
 ### Step L8 — Housekeeping
 
-- `plans/validation-plan.md` (untracked): Step V1 moves into Step L3. Commit it with Step V2 alone, the fixed wellhead pressure, which the sampler does not need. Or drop it.
-- Issue #2, "Add dataset generation test and bump numpy version to >=2.0", is from 2025. Check it against `tests/test_sampling.py` and `pyproject.toml`, then close or update it.
+- `plans/validation-plan.md` (untracked): Step V1 moves into Step L3. Commit it with Step V2 alone, the fixed wellhead pressure, which the sampler does not need. Or drop it. **Done 2026-10-29:** Step V2 is `plans/improvements.md` §2.16, and the draft is deleted (Bjarne).
+- Issue #2, "Add dataset generation test and bump numpy version to >=2.0", is from 2025. Check it against `tests/test_sampling.py` and `pyproject.toml`, then close or update it. **Done 2026-10-29:** closed; `develop` runs numpy 2, and the ported sampler seeds every draw (SMP-31).
 
 ## Sequencing
 
@@ -202,7 +202,7 @@ Steps L1 to L4 can run in parallel: L1, L2 and L4 are mostly Bjarne's decisions,
 - **Roots each backend's search misses** (`plans/improvements.md` §2.9).
 - **Verifier cases** for wells whose roots lie near $p_r$, and for wells with more than two roots.
 - **The Rust core's performance target,** and the batch API (§4.3), which belongs with the v2 dataset generation.
-- **The fixed-wellhead-pressure boundary** (validation plan, Step V2).
+- **The fixed-wellhead-pressure boundary** (`plans/improvements.md` §2.16).
 - **Calibration's open items:** the false minimum (§2.10), whether $p_r$ is free, and the default noise.
 - **v2.0.0 release work:** prebuilt wheels, the license, the v2 dataset schema.
 
@@ -214,7 +214,7 @@ Steps L1 to L4 can run in parallel: L1, L2 and L4 are mostly Bjarne's decisions,
 - the several-void-fractions ruling (L4): done 2026-10-29;
 - the v2 configuration, its name, and the rule for changing it (L5);
 - the distribution check's margin (L6);
-- the QTOT filter's standard deviation (L7, §1.11).
+- the QTOT filter's standard deviation (L7, §1.11): left to the redesign, 2026-10-29.
 
 ## Open decisions
 

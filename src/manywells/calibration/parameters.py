@@ -29,8 +29,8 @@ FIELDS = {
     'profile_scale': ('slip', 'profile_scale', SlipModel),
 }
 
-MILLIDARCY = 9.869233e-16   # m²
-CENTIPOISE = 1e-3           # Pa s
+MILLIDARCY = 9.869233e-16  # m²
+CENTIPOISE = 1e-3  # Pa s
 
 
 @dataclass(frozen=True)
@@ -40,10 +40,11 @@ class Parameter:  # spec: CAL-5
     standardized log z = (log(value) - log(median)) / log_sd, so z = 0 is the prior median and z is the parameter's
     shift from it in prior standard deviations.
     """
-    name: str           # One of FIELDS
+
+    name: str  # One of FIELDS
     median: float
     log_sd: float
-    basis: str = ''     # Where the prior comes from
+    basis: str = ''  # Where the prior comes from
 
     def __post_init__(self):
         if self.name not in FIELDS:
@@ -67,8 +68,9 @@ def check_applies(wp, name: str):
     component, fld, cls = FIELDS[name]
     part = getattr(wp, component)
     if cls is not None and not isinstance(part, cls):
-        raise ValueError(f'parameter {name} needs {component} to be a {cls.__name__}, '
-                         f'but the well has a {type(part).__name__}')
+        raise ValueError(
+            f'parameter {name} needs {component} to be a {cls.__name__}, but the well has a {type(part).__name__}'
+        )
 
 
 def apply(wp, values: dict):  # spec: CAL-5
@@ -103,7 +105,7 @@ def default_prior(name: str, wp, A_c: float = None) -> Parameter:  # spec: CAL-6
             if not A_c > 0:
                 raise ValueError('the throat area A_c must be positive')
             return Parameter('K_c', 0.6 * A_c, 0.2, 'C_D A_c with C_D = 0.6 (Haug 2012)')
-        return Parameter('K_c', 0.12 * wp.geometry.A, 0.35, '0.12 A, the paper\'s reference (SMP-5)')
+        return Parameter('K_c', 0.12 * wp.geometry.A, 0.35, "0.12 A, the paper's reference (SMP-5)")
     if name in ('k_l', 'w_l_max'):
         return Parameter(name, current_value(wp, name), 1.15, "the well's value, a factor of 10 either way")
     if name == 'f_D':
