@@ -1,6 +1,17 @@
 # Lock the model for the new sampler — plan
 
-*Draft 2026-10-29. Owner: Bjarne Grimstad. Status: in progress; L1 decided (feature 021 in implementation), L2 signed off (PR #30), L3 signed off (two fixes in progress), L4, L7 and L8 done.*
+*Draft 2026-10-29. Owner: Bjarne Grimstad. Status: in progress; L2, L4, L7 and L8 done; L1 and L3 signed off, in PRs #31 and #32; L6 not started; L5 next (Where we stopped, 2026-10-29).*
+
+## Where we stopped (2026-10-29)
+
+- **Merged:** L2's validity refusals (PR #30), and the records of L1, L4, L7 and L8.
+- **Open PRs, signed off by Bjarne, waiting for his merge:**
+  - **PR #31**, feature 021, the lift gas through a valve (L1). Branch `lift-gas-injection-depth`, worktree `.worktrees/lift-gas-injection-depth`.
+  - **PR #32**, the independent checks and the two source fixes (L3). Branch `independent-checks`, worktree `.worktrees/independent-checks`.
+
+  Both edit `specs/tools/make_develop_vectors.py`, `thermal.md`'s vectors and the Rust bindings. Whichever is merged second needs `develop` merged into it, its vectors regenerated (`uv run python specs/tools/make_develop_vectors.py`; with `specs/tools/make_pvt_tables.py` for #32's table), and its checks rerun before it merges.
+- **L6** was stopped before it measured anything. Its branch and worktree, `distribution-margin` at `681e04b`, are empty. The work is as below, and it starts by giving `scripts/verification/regenerate_distributions.py` a seed option, so that the draws can be repeated to measure the gaps' noise. The CasADi regenerations take about 35 minutes each on 12 processes.
+- **L5** follows once #31 and #32 are merged. It needs Bjarne's choice of the configuration's name (`v2.0` proposed).
 
 The next step towards v2 is a new sampling procedure: synthetic wells and data that are more realistic than v1's (`specs/goals.md`, limitation 5). The sampler draws the inputs of a model, so the model should not move under it. This plan brings `develop` to the point where the sampler can be implemented:
 
