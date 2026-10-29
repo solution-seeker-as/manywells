@@ -32,6 +32,10 @@ impl WellSpec {
         if !(self.fluid.f_g > 0.0 && self.fluid.f_g < 1.0) {
             return Err("the gas mass fraction must be in (0, 1)".into());
         }
+        // SLIP-18: a negative scale would take C_0 below 1, and the void fraction's bracket on [0, 1] with it
+        if !(self.slip.profile_scale.is_finite() && self.slip.profile_scale >= 0.0) {
+            return Err(format!("the profile scale must be finite and non-negative, got {}", self.slip.profile_scale));
+        }
         Ok(())
     }
 
@@ -275,6 +279,20 @@ pub mod test_wells {
         (spec, op)
     }
 
+    /// W1 with the five flow regimes and the profile parameter halfway to no slip (020)
+    pub fn w1_profile_scale(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let (mut spec, op) = w1_five_regimes(n_cells);
+        spec.slip.profile_scale = 0.5;
+        (spec, op)
+    }
+
+    /// W2 L-shaped with the fitted classifier and no slip in the profile, C_0 = 1 (020)
+    pub fn w2_profile_scale(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let (mut spec, op) = w2_joule_thomson(n_cells);
+        spec.slip = Slip { profile_scale: 0.0, ..Slip::fitted() };
+        (spec, op)
+    }
+
     /// Every test well
     pub fn all(n_cells: usize) -> Vec<(&'static str, WellSpec, OperatingPoint)> {
         let named = |name, (spec, op)| (name, spec, op);
@@ -286,7 +304,8 @@ pub mod test_wells {
              named("w2_fixed_rate", w2_fixed_rate(n_cells)), named("w1_joule_thomson", w1_joule_thomson(n_cells)),
              named("w2_joule_thomson", w2_joule_thomson(n_cells)), named("w1_five_regimes", w1_five_regimes(n_cells)),
              named("w2_five_regimes", w2_five_regimes(n_cells)), named("w1_table", w1_table(n_cells)),
-             named("w2_table_one_temperature", w2_table_one_temperature(n_cells))]
+             named("w2_table_one_temperature", w2_table_one_temperature(n_cells)),
+             named("w1_profile_scale", w1_profile_scale(n_cells)), named("w2_profile_scale", w2_profile_scale(n_cells))]
     }
 }
 

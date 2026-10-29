@@ -78,6 +78,7 @@ def core_well(wp) -> '_core.Well':
                       regime_model=slip.regime_model, C_0_annular=slip.C_0_annular, C_0_slug=slip.C_0_slug,
                       C_0_bubbly=slip.C_0_bubbly, v_inf_annular=slip.v_inf_annular, f_ms=slip.f_ms,
                       transition_width=slip.transition_width, lambda_floor=slip.lambda_floor,
+                      profile_scale=slip.profile_scale,
                       **_inflow(wp.inflow),
                       choke='simpson' if type(choke) is SimpsonChokeModel else 'bernoulli', K_c=choke.K_c,
                       profile=choke.chk_profile)

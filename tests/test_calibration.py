@@ -27,6 +27,7 @@ from manywells.datasets.rows import root_features
 from manywells.friction import FixedFrictionFactor
 from manywells.inflow import ProductivityIndex, Vogel
 from manywells.simulator import BoundaryConditions, WellProperties
+from manywells.slip import SlipModel
 from manywells.solution import Root
 from manywells.solvers.rust import _friction, _inflow
 
@@ -144,6 +145,12 @@ def test_apply_changes_only_the_named_fields():
     assert _inflow(wp2.inflow)['inflow_coefficient'] == 33.0 and _friction(wp2.friction)['roughness'] == 1e-4
 
 
+def test_apply_profile_scale_to_either_classifier():
+    """CAL-5: profile_scale is the field of any SlipModel (SLIP-18); the classifier and its constants are kept."""
+    for slip in (WP.slip, SlipModel(regime_model='fitted', C_0_slug=1.1)):
+        assert apply(replace(WP, slip=slip), {'profile_scale': 0.4}).slip == replace(slip, profile_scale=0.4)
+
+
 def test_apply_checks_the_component_class():
     with pytest.raises(ValueError, match='ProductivityIndex'):
         apply(WP, {'k_l': 0.5})
@@ -165,6 +172,7 @@ def test_default_priors():
     assert (default_prior('w_l_max', WP).median, default_prior('w_l_max', WP).log_sd) == (50.0, 1.15)
     assert (default_prior('roughness', WP).median, default_prior('roughness', WP).log_sd) == (4.6e-5, 1.15)
     assert (default_prior('h', WP).median, default_prior('h', WP).log_sd) == (15.0, 0.5)
+    assert (default_prior('profile_scale', WP).median, default_prior('profile_scale', WP).log_sd) == (0.5, 0.7)
     wp_f = replace(WP, friction=FixedFrictionFactor(f_D=0.05), inflow=ProductivityIndex(k_l=0.8))
     assert (default_prior('f_D', wp_f).median, default_prior('f_D', wp_f).log_sd) == (0.02, 0.5)
     assert (default_prior('k_l', wp_f).median, default_prior('k_l', wp_f).log_sd) == (0.8, 1.15)

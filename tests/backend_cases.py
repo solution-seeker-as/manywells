@@ -52,7 +52,7 @@ ROOT_CHOKE_REL = 1e-6  # and the choke row to this fraction of the wellhead rate
 ROOT_P0_ULPS = 8       # this many ulp of p_r times |dR/dp_0|, if more (steep at the trickle roots next to p_r)
 SEED = 20261002       # the comparison set's seed (SMP-31)
 FEATURES = ('001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011', '016', '018',
-            '019')
+            '019', '020')
 
 
 def features(wp) -> frozenset:
@@ -68,6 +68,8 @@ def features(wp) -> frozenset:
         out.add('002')
     if slip.regime_model == 'hasan':
         out.add('019')
+    if slip.profile_scale != 1.0:
+        out.add('020')
     if fluid.surface_tension_model != 'liquid':
         out.add('003')
     if type(wp.friction) is RoughnessFriction:
@@ -221,6 +223,8 @@ OVERLAYS = {
     'slip constants': lambda wp, bc: (replace(wp, slip=SlipModel(regime_model='fitted', C_0_annular=1.02, C_0_slug=1.15,
                                                                  C_0_bubbly=1.25, v_inf_annular=0.02)), bc),
     'five regimes': lambda wp, bc: (replace(wp, slip=SlipModel(regime_model='hasan')), bc),
+    'profile scale': lambda wp, bc: (replace(wp, slip=replace(wp.slip, profile_scale=0.5)), bc),
+    'no profile slip': lambda wp, bc: (replace(wp, slip=replace(wp.slip, profile_scale=0.0)), bc),
     'water': fluid(wlr=0.3),
     'frictional heating': thermal(frictional_heating=True),
     'gravity term': thermal(gravity_term=True),
@@ -283,7 +287,7 @@ DEVELOP_OVERLAYS = ('dead oil', 'ideal gas', 'liquid surface tension', 'fixed f_
                     'no gravity term', 'no lift-gas mixing', 'no joule-thomson', 'fitted', 'papay', 'deviated',
                     'L-shaped', 'non-uniform grid',
                     'slip constants', 'water', 'bubble point', 'lift-gas temperature', 'fixed rate', 'vogel', 'simpson',
-                    'pvt table', 'pvt table, one temperature')
+                    'pvt table', 'pvt table, one temperature', 'profile scale', 'no profile slip')
 
 
 @dataclass(frozen=True)
@@ -311,6 +315,8 @@ def matrix() -> list:
     out += [Configuration('develop', ('deviated', 'fixed rate')), Configuration('develop', ('L-shaped', 'haaland'))]
     out += [Configuration('W1', ('papay', 'joule-thomson')), Configuration('W2', ('energy terms', 'joule-thomson'))]
     out += [Configuration('W1', ('deviated', 'five regimes')), Configuration('W2', ('L-shaped', 'five regimes'))]
+    out += [Configuration('W1', ('deviated', 'five regimes', 'profile scale')),
+            Configuration('W2', ('L-shaped', 'no profile slip'))]
     return out
 
 
@@ -376,7 +382,8 @@ COMPARISON = {
          'fixed rate', 'five regimes'),
     DEVELOP: ('', 'dead oil', 'ideal gas', 'papay', 'liquid surface tension', 'haaland', 'fixed f_D',
               'no frictional heating', 'no gravity term', 'no joule-thomson', 'lift-gas temperature', 'fixed rate',
-              'productivity index', 'bernoulli', 'bubble point', 'fitted', 'pvt table', 'pvt table, one temperature'),
+              'productivity index', 'bernoulli', 'bubble point', 'fitted', 'pvt table', 'pvt table, one temperature',
+              'profile scale', 'no profile slip'),
 }
 
 

@@ -15,6 +15,7 @@ import numpy as np
 
 from manywells.friction import FixedFrictionFactor, RoughnessFriction
 from manywells.inflow import ProductivityIndex, Vogel
+from manywells.slip import SlipModel
 from manywells.units import CF_BAR
 
 # spec: CAL-5. Each parameter is a field of a component of WellProperties, and the class the component must be
@@ -25,6 +26,7 @@ FIELDS = {
     'f_D': ('friction', 'f_D', FixedFrictionFactor),
     'roughness': ('friction', 'roughness', RoughnessFriction),
     'h': ('thermal', 'h', None),
+    'profile_scale': ('slip', 'profile_scale', SlipModel),
 }
 
 MILLIDARCY = 9.869233e-16   # m²
@@ -108,6 +110,8 @@ def default_prior(name: str, wp, A_c: float = None) -> Parameter:  # spec: CAL-6
         return Parameter('f_D', 0.02, 0.5, 'steel tubing (Moody), wider for holdup error')
     if name == 'roughness':
         return Parameter('roughness', 4.6e-5, 1.15, 'commercial steel (Moody 1944), drawn to corroded')
+    if name == 'profile_scale':
+        return Parameter('profile_scale', 0.5, 0.7, 'C_0 = 1.1 in bubbly and slug flow, mid published range 1.0-1.2')
     return Parameter('h', 15.0, 0.5, 'effective coefficient on T - T_a (Hasan and Kabir 2012)')
 
 

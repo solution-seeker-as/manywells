@@ -174,6 +174,19 @@ def hasan_slip(**kw):
     """C_0, v_inf and the label of develop's default slip model, the five regimes."""
     return tuple(HASAN.identify_parameters(**kw)) + (HASAN.flow_regime(**kw),)
 
+
+# (v_g, v_l, alpha, rho_g, rho_l, sigma, D) by classifier: the five regimes' states of HASAN_STATES at alpha = 0.3,
+# and the fitted classifier's bubbly, slug and annular states of SLIP_STATES
+PROFILE_STATES = {'hasan': tuple((s[0] / 0.3, s[1] / 0.7, 0.3) + s[2:] for s in HASAN_STATES[:5]),
+                  'fitted': tuple(s + (0.1524,) for s in SLIP_STATES[:3])}
+PROFILE_SCALES = (0.0, 0.5, 1.0, 1.5)
+
+
+def scaled_slip(regime_model):
+    """C_0 and v_inf of a classifier with its profile parameter scaled (SLIP-18), as a function of the table's inputs."""
+    return lambda profile_scale, **kw: tuple(
+        SlipModel(regime_model=regime_model, profile_scale=profile_scale).identify_parameters(**kw))
+
 TABLES = [
     # thermal.md
     Table('thermal.md', 'THM-4', ('tvd_frac', 'T_r', 'T_s'), ('T_a',),
@@ -221,6 +234,14 @@ TABLES = [
           ('C_0', 'v_inf', 'regime'),
           tuple((s[0] / a, s[1] / (1 - a), a) + s[2:] + (c,) for s in HASAN_STATES for a in (0.2, 0.5) for c in (1.0, 0.0)),
           hasan_slip),
+    Table('slip.md', 'SLIP-18',
+          ('profile_scale', 'v_g', 'v_l', 'alpha', 'rho_g', 'rho_l', 'sigma', 'D', 'cos_incl'), ('C_0', 'v_inf'),
+          tuple((k,) + s + (1.0,) for s in PROFILE_STATES['hasan'] for k in PROFILE_SCALES),
+          scaled_slip('hasan')),
+    Table('slip.md', 'SLIP-18 (fitted)',
+          ('profile_scale', 'v_g', 'v_l', 'alpha', 'rho_g', 'rho_l', 'sigma', 'D', 'cos_incl'), ('C_0', 'v_inf'),
+          tuple((k,) + s + (1.0,) for s in PROFILE_STATES['fitted'] for k in PROFILE_SCALES),
+          scaled_slip('fitted')),
     # friction.md
     Table('friction.md', 'FRIC-3', ('p', 'T', 'alpha', 'v_g', 'v_l', 'rho_g', 'rho_l', 'D', 'roughness'),
           ('f_D', 'F'),

@@ -10,6 +10,7 @@ Implementation of slip models
 """
 
 
+import math
 from dataclasses import dataclass
 
 import casadi as ca
@@ -179,6 +180,9 @@ class SlipModel:
         'hasan'   five regimes (annular, churn, dispersed bubbly, slug, bubbly) from the rules of Hasan et al.'s
                   hierarchy (SLIP-12 to SLIP-16); develop's default
         'fitted'  three regimes (annular, slug/churn, bubbly) from v1.0.0's fitted classifier (SLIP-2 to SLIP-8)
+
+    profile_scale scales C_0 about 1 with either classifier, C_0 -> 1 + profile_scale * (C_0 - 1) (SLIP-18): 1 leaves
+    C_0 as it is, and 0 gives C_0 = 1, no slip in the profile. It is a free parameter of a calibration.
     """
 
     regime_model: str = 'hasan'
@@ -195,6 +199,9 @@ class SlipModel:
     transition_width: float = 0.02
     lambda_floor: float = 0.1
 
+    # Either classifier: the scale of C_0 - 1 (SLIP-18)
+    profile_scale: float = 1.0
+
     def __post_init__(self):
         if self.regime_model not in REGIME_MODELS:
             raise ValueError(f'regime_model {self.regime_model!r} is not one of {REGIME_MODELS}')
@@ -204,6 +211,8 @@ class SlipModel:
             raise ValueError('transition_width must be positive')
         if not self.lambda_floor >= 0:
             raise ValueError('lambda_floor must be non-negative')
+        if not (math.isfinite(self.profile_scale) and self.profile_scale >= 0):
+            raise ValueError(f'profile_scale must be finite and non-negative, got {self.profile_scale}')
 
     @property
     def regimes(self) -> tuple:
@@ -276,7 +285,7 @@ class SlipModel:
             p_annular, p_churn, p_dispersed, p_slug, p_bubbly = (probs[k] for k in range(5))
             C_0 = 1.0 * p_annular + 1.15 * p_churn + 1.2 * (p_dispersed + p_slug + p_bubbly)  # spec: SLIP-15
             v_inf = v_inf_bubbly * (p_bubbly + p_dispersed) + v_inf_slug * (p_slug + p_churn)  # spec: SLIP-15
-            return C_0, v_inf
+            return self.scaled_profile(C_0), v_inf
 
         p_annular = probs[0]
         p_slug = probs[1]
@@ -288,7 +297,16 @@ class SlipModel:
         # Set drift velocity
         v_inf = p_annular * self.v_inf_annular + p_slug * v_inf_slug + p_bubbly * v_inf_bubbly  # spec: SLIP-3
 
-        return C_0, v_inf
+        return self.scaled_profile(C_0), v_inf
+
+    def scaled_profile(self, C_0):  # spec: SLIP-18
+        """
+        C_0 scaled about 1 by profile_scale. At the default, 1, C_0 is returned as it is, so that the result is the
+        classifier's to the bit (1 + (C_0 - 1) can differ from C_0 in the last bit).
+        """
+        if self.profile_scale == 1.0:
+            return C_0
+        return 1 + self.profile_scale * (C_0 - 1)
 
     def slip_equation(self, v_g, v_l, alpha, rho_g, rho_l, sigma, D, cos_incl):
         """

@@ -66,8 +66,11 @@ A free parameter is a field of a component of `WellProperties`, applied with `da
 | `f_D` | `friction.f_D` | `FixedFrictionFactor` | FRIC-1, FRIC-2 |
 | `roughness` | `friction.roughness` (m) | `RoughnessFriction` | FRIC-3 to FRIC-6 |
 | `h` | `thermal.h` (W/(m² K)) | `ThermalModel` | THM-1 |
+| `profile_scale` | `slip.profile_scale` ($\kappa_0$, –) | `SlipModel`, either classifier | SLIP-18 |
 
-Each has a log-normal prior, $\log\theta_i \sim N(\log m_i, s_i^2)$, which keeps it positive. The fit works in the standardized log $z_i = (\log\theta_i - \log m_i)/s_i$: $z = 0$ is the prior medians, and $z_i$ is the parameter's shift from its median in prior standard deviations. The parameters that are not free keep the well's values. The heat capacities are not parameters: they enter THM-1 only through $h/C$, so they are confounded with $h$. The choke profile, the critical pressure ratio and the slip parameters stay fixed.
+Each has a log-normal prior, $\log\theta_i \sim N(\log m_i, s_i^2)$, which keeps it positive. The fit works in the standardized log $z_i = (\log\theta_i - \log m_i)/s_i$: $z = 0$ is the prior medians, and $z_i$ is the parameter's shift from its median in prior standard deviations. The parameters that are not free keep the well's values. The heat capacities are not parameters: they enter THM-1 only through $h/C$, so they are confounded with $h$. The choke profile, the critical pressure ratio and the other slip parameters stay fixed.
+
+`profile_scale` moves the holdup, and with it the gravity term of the tubing's pressure drop, which friction otherwise has to absorb (`f_D`'s prior, CAL-6). Its log-normal prior keeps $\kappa_0 > 0$, so the flow stays between no slip and beyond the classifier's own $C_0$ (SLIP-18). A pressure drop says little about which of the two is in error, so free `profile_scale` with the friction parameter at its prior, or report their correlation if both are free (`specs/features/020-profile-scale.md`).
 
 ### CAL-6 · Default priors
 
@@ -78,6 +81,7 @@ Each has a log-normal prior, $\log\theta_i \sim N(\log m_i, s_i^2)$, which keeps
 | `f_D` | 0.02 | 0.5 (0.0075–0.053) | Moody gives 0.009–0.025 for steel tubing; the upper tail is wider because in a vertical well $f_D$ also absorbs holdup error. SMP-3 samples $U(0.01, 0.08)$. |
 | `roughness` | $4.6\cdot10^{-5}$ m, commercial steel (Moody 1944) | 1.15 ($4.6\cdot10^{-6}$ to $4.6\cdot10^{-4}$ m) | from drawn to corroded tubing; SMP-42 samples LogUniform($1.5\cdot10^{-6}$, $1.5\cdot10^{-4}$) |
 | `h` | 15 W/(m² K) | 0.5 (5.6–40) | $h$ acts on $T - T_a$ with $T_a$ the undisturbed geotherm (THM-1, THM-4), so it is Hasan and Kabir's (2012) effective coefficient $U k_e/(k_e + r_{ti} U T_D)$, about 5–25; Wiktorski et al. (2019) give 9.5–22 for $U$ before the formation's transient resistance; SMP-4 samples $U(10, 40)$ |
+| `profile_scale` | 0.5: $C_0^\ast = 1.1$ where the classifier has 1.2 | 0.7 (0.13–2.0: $C_0^\ast$ 1.025–1.39 in bubbly, dispersed bubbly and slug flow, 1.019–1.30 in churn flow) | the middle of the published range of $C_0$ for upward bubbly and slug flow, about 1.0 to 1.2: Zuber and Findlay's (1965) 1.2 in round tubes, Ishii's (1977) $1.2 - 0.2\sqrt{\rho_g/\rho_l}$, lower values in large pipes (Hibiki and Ishii 2003), and 1.0 in dispersed bubbly flow (Ansari et al. 1994). Chosen by Bjarne, 2026-10-29 (`specs/features/020-profile-scale.md`) |
 
 A user's prior replaces a default parameter by parameter.
 

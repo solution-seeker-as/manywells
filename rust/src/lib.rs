@@ -96,6 +96,7 @@ mod _core {
             friction, f_D=None, roughness=None, correlation=None,
             h, frictional_heating, gravity_term, lift_gas_mixing, joule_thomson,
             regime_model, C_0_annular, C_0_slug, C_0_bubbly, v_inf_annular, f_ms, transition_width, lambda_floor,
+            profile_scale,
             inflow, inflow_coefficient,
             choke, K_c, profile
         ))]
@@ -107,7 +108,7 @@ mod _core {
                friction: &str, f_D: Option<f64>, roughness: Option<f64>, correlation: Option<&str>,
                h: f64, frictional_heating: bool, gravity_term: bool, lift_gas_mixing: bool, joule_thomson: bool,
                regime_model: &str, C_0_annular: f64, C_0_slug: f64, C_0_bubbly: f64, v_inf_annular: f64, f_ms: f64,
-               transition_width: f64, lambda_floor: f64,
+               transition_width: f64, lambda_floor: f64, profile_scale: f64,
                inflow: &str, inflow_coefficient: f64,
                choke: &str, K_c: f64, profile: &str) -> PyResult<Self> {
             let (black_oil, table) = match (oil_model, table) {
@@ -164,7 +165,7 @@ mod _core {
                 friction,
                 thermal: Thermal { h, frictional_heating, gravity_term, lift_gas_mixing, joule_thomson },
                 slip: Slip { regime_model, c_0_annular: C_0_annular, c_0_slug: C_0_slug, c_0_bubbly: C_0_bubbly,
-                             v_inf_annular, f_ms, transition_width, lambda_floor },
+                             v_inf_annular, f_ms, transition_width, lambda_floor, profile_scale },
                 inflow,
                 choke: Choke::new(model, K_c, profile),
             };
