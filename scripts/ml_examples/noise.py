@@ -64,8 +64,8 @@ def add_noise(df, config, percentage_noise=0.1):
                 noise_df.loc[mask,col] = noise_df.loc[mask,'WOIL'] / rho_oil * 3600
             elif col == 'QWAT':
                 noise_df.loc[mask,col] = noise_df.loc[mask,'WWAT'] / rho_water * 3600
-            elif col == 'QTOT':
-                noise_df.loc[mask,col] = noise_df.loc[mask,'WTOT'] / rho_g * 3600
+            elif col == 'QTOT':  # QTOT = QGL + QGAS + QOIL + QWAT, whose noise is set above
+                noise_df.loc[mask,col] = noise_df.loc[mask,['QGL', 'QGAS', 'QOIL', 'QWAT']].sum(axis=1)
 
 
     df_copy = df.copy()

@@ -76,8 +76,10 @@ def friction_factor(Re, eps_D, correlation='chen'):  # spec: FRIC-6
     f_lam = 64.0 / Re_safe
     if correlation == 'chen':
         f_turb = chen_friction_factor(Re_turb, eps_D)
-    else:
+    elif correlation == 'haaland':
         f_turb = haaland_friction_factor(Re_turb, eps_D)
+    else:
+        raise ValueError(f'Friction correlation {correlation!r} is not one of {CORRELATIONS}')
     sigma = ca_sigmoid(Re_safe, 3000, 0.005)
     return (1 - sigma) * f_lam + sigma * f_turb
 

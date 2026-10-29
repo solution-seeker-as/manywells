@@ -60,11 +60,12 @@ def config_row(well: int, draw) -> dict:
 def write_dataset(path: Path, rows: pd.DataFrame, draws: dict, metadata: dict):
     """
     Write <path>_meta.json (the generator's metadata), <path>_config.parquet (one row per well: its draws) and
-    <path>.parquet (the rows, with ID), in that order, so that no rows are written without their record.
+    <path>.parquet (the rows, with ID), in that order, so that no rows are written without their record. The suffixes
+    are appended to path's name, which may itself hold a dot (data/sol-v1.0).
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.with_name(path.stem + '_meta.json').write_text(json.dumps(metadata | {'code_version': code_version()}, indent=1))
+    path.with_name(path.name + '_meta.json').write_text(json.dumps(metadata | {'code_version': code_version()}, indent=1))
     configs = pd.DataFrame([config_row(i, d) for i, d in draws.items()])
-    configs.to_parquet(path.with_name(path.stem + '_config.parquet'), index=False)
-    rows.to_parquet(path.with_suffix('.parquet'), index=False)
+    configs.to_parquet(path.with_name(path.name + '_config.parquet'), index=False)
+    rows.to_parquet(path.with_name(path.name + '.parquet'), index=False)

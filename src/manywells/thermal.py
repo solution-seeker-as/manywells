@@ -15,6 +15,8 @@ from dataclasses import dataclass
 
 from manywells.units import STD_GRAVITY
 
+SWITCHES = ('frictional_heating', 'gravity_term', 'lift_gas_mixing', 'joule_thomson')  # The model's on/off options
+
 
 @dataclass(frozen=True)
 class ThermalModel:
@@ -36,6 +38,12 @@ class ThermalModel:
     def __post_init__(self):
         if not self.h >= 0:
             raise ValueError('Heat transfer coefficient must be non-negative')
+        # Stored as bool, so that 0 and 1, or numpy's bools, reach the Rust core as the bools it takes
+        for name in SWITCHES:
+            value = getattr(self, name)
+            if value not in (True, False):
+                raise ValueError(f'{name} must be True or False, got {value!r}')
+            object.__setattr__(self, name, bool(value))
 
     @staticmethod
     def ambient_temperature(tvd_frac, T_r, T_s):  # spec: THM-4

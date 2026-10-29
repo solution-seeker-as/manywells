@@ -76,5 +76,5 @@ def test_ca_double_sigmoid():
     assert f(0.0) == pytest.approx(0.0, abs=0.01)
     assert f(5.0) == pytest.approx(2.0, abs=0.01)
     # a < b required
-    with pytest.raises(AssertionError, match="a must be less than b"):
+    with pytest.raises(ValueError, match="a must be less than b"):
         ca_double_sigmoid(x, l1, l2, l3, a=3.0, b=1.0)

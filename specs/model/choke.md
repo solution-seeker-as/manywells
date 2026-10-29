@@ -101,7 +101,7 @@ CHK-1 to CHK-4, CHK-11 and CHK-12 apply to every option, in every configuration.
 
 - The smooth max in CHK-3 (SMO-1), $\epsilon = 10^{-6}$ bar².
 - Nothing guards the square root in CHK-2 against $\Delta p < 0$ in v1.0.0 (CHK-11).
-- v1.0.0 asserts $K_c > 0$ and that the profile is one of the four. Its `cpr` constructor argument is ignored: `__post_init__` always sets it from CHK-4 (`plans/improvements.md` §1.4).
+- v1.0.0 asserts $K_c > 0$ and that the profile is one of the four. Its `cpr` constructor argument is ignored: `__post_init__` always sets it from CHK-4 (D-21). In `develop`, `cpr` is a property from CHK-4 and not an argument.
 
 ## Sources
 

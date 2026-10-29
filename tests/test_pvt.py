@@ -65,9 +65,9 @@ def test_gas_density_defaults():
 
 def test_liquid_mix_mass_fraction_bounds():
     """liquid_mix rejects mass_fraction outside [0, 1]."""
-    with pytest.raises(AssertionError, match="Mass fraction must be in"):
+    with pytest.raises(ValueError, match="Mass fraction must be in"):
         liquid_mix(WATER, SEAWATER, -0.1)
-    with pytest.raises(AssertionError, match="Mass fraction must be in"):
+    with pytest.raises(ValueError, match="Mass fraction must be in"):
         liquid_mix(WATER, SEAWATER, 1.5)
 
 

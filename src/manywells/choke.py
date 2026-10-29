@@ -26,7 +26,7 @@ CHOKE_PROFILES = ('linear', 'sigmoid', 'convex', 'concave')
 class ChokeModel(abc.ABC):
     """
     Abstract class for choke models based on the Bernoulli equation with support for two-phase correction multipliers:
-        w = K_c * sigma(u) * sqrt(2 * rho * max(p_in - max(p_out, cpm * p_in), 0) / Phi)
+        w = K_c * sigma(u) * sqrt(2 * rho * max(p_in - max(p_out, cpr * p_in), 0) / Phi)
     where
         w is mass rate of the mixture (kg/s)
         K_c is a choke coefficient (m²)
@@ -35,20 +35,19 @@ class ChokeModel(abc.ABC):
         Phi is a two-phase correction multiplier (dimensionless)
         rho is a fluid density (kg/m³)
         p_in and p_out are inlet and outlet pressure (bar)
-        cpm is the critical pressure ration (dimensionless)
+        cpr is the critical pressure ratio (dimensionless), from critical_pressure_ratio()
 
     A concrete model chooses the density and the multiplier from the state upstream of the choke
     (density_and_multiplier); mass_flow_rate is the same for every model.
 
-    Choked flow is modeled to occur at the critical pressure p_out = cpm * p_in.
+    Choked flow is modeled to occur at the critical pressure p_out = cpr * p_in.
     The flow rate becomes independent of the downstream pressure when p_out is below the critical pressure.
     This is modeled by replacing p_out in the choke equation by the following expression
-        p_c = max{p_out, cpm * p_in}
+        p_c = max{p_out, cpr * p_in}
     """
 
     # Choke properties
     K_c: float = 0.1 * np.pi * (0.1554 / 2) ** 2  # Choke coefficient (m²). Defaults to 10% of area of 6.11 inch pipe.
-    cpr: float = None  # Critical pressure ratio (dimensionless). Always set from critical_pressure_ratio().
     chk_profile: str = 'linear'    # Choke profile, one of CHOKE_PROFILES
 
     def __post_init__(self):
@@ -56,7 +55,11 @@ class ChokeModel(abc.ABC):
             raise ValueError('Choke coefficient must be positive')
         if self.chk_profile not in CHOKE_PROFILES:
             raise ValueError(f'Choke profile {self.chk_profile} is not supported')
-        object.__setattr__(self, 'cpr', self.critical_pressure_ratio())
+
+    @property
+    def cpr(self) -> float:
+        """Critical pressure ratio (dimensionless), from CHK-4 always: not a parameter of the model."""
+        return self.critical_pressure_ratio()
 
     def choke_opening(self, u: float):
         """

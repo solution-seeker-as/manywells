@@ -11,12 +11,13 @@ Tests for manywells.thermal: the terms of the temperature gradient and the inflo
 
 import dataclasses
 
+import numpy as np
 import pytest
 
 from manywells.discretization import PointState
 from manywells.pvt.dead_oil import DeadOil
 from manywells.pvt.fluid import FluidModel
-from manywells.thermal import ThermalModel
+from manywells.thermal import SWITCHES, ThermalModel
 from manywells.units import STD_GRAVITY
 
 FLUID = FluidModel(pvt=DeadOil(), cp_g=2225.0, cp_o=4180.0)
@@ -42,6 +43,16 @@ def test_frozen_and_validated():
         ThermalModel().h = 30.0
     with pytest.raises(ValueError, match="Heat transfer"):
         ThermalModel(h=-1.0)
+
+
+def test_switches_are_bools():
+    """0 and 1 are stored as bools, which the Rust core takes; anything else is refused."""
+    t = ThermalModel(frictional_heating=0, gravity_term=1, lift_gas_mixing=np.bool_(False))
+    assert (t.frictional_heating, t.gravity_term, t.lift_gas_mixing) == (False, True, False)
+    assert all(type(getattr(t, name)) is bool for name in SWITCHES)
+    for value in (2, 'yes', None, np.nan):
+        with pytest.raises(ValueError, match='joule_thomson must be True or False'):
+            ThermalModel(joule_thomson=value)
 
 
 def test_heat_loss_only():

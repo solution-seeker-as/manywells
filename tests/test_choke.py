@@ -28,6 +28,13 @@ def test_critical_pressure_ratio():
     assert 0.5 < cpr < 0.6
 
 
+def test_the_critical_pressure_ratio_is_not_an_argument():
+    """CHK-4 sets it always (D-21), so the constructor does not take one that it would ignore."""
+    assert SimpsonChokeModel().cpr == BernoulliChokeModel().cpr == ChokeModel.critical_pressure_ratio()
+    with pytest.raises(TypeError, match='cpr'):
+        SimpsonChokeModel(cpr=0.6)
+
+
 def test_choke_opening_linear():
     """Linear profile: opening equals position."""
     model = BernoulliChokeModel(chk_profile="linear")

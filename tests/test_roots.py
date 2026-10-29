@@ -50,6 +50,22 @@ def test_label_of():
     assert roots.label_of(5.0) == 'unstable'
     assert roots.label_of(roots.LABEL_MIN) == 'indeterminate'
     assert roots.label_of(-roots.LABEL_MIN / 2) == 'indeterminate'
+    assert roots.label_of(np.nan) == 'indeterminate'
+    assert roots.label_of(-np.inf) == 'indeterminate'
+
+
+def test_a_singular_reduced_jacobian_gives_no_slope():
+    """SOL-3 needs the reduced Jacobian nonsingular; where it is not, the slope is NaN, not an error that loses the
+    roots found so far."""
+    import casadi as ca
+    from manywells.discretization import build_system
+    from manywells.geometry import WellGeometry
+    from manywells.simulator import WellProperties
+    system = build_system(WellProperties(geometry=WellGeometry.vertical(100, 3, D=0.1)))
+    slope = roots.StabilitySlope(system)
+    slope._jac = lambda x, params: ca.DM(np.zeros((system.n_x, system.n_x)))
+    s = slope(np.ones(system.n_x), system.params(BoundaryConditions()))
+    assert np.isnan(s) and roots.label_of(s) == 'indeterminate'
 
 
 def test_admissible():

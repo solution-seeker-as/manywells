@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 
 from manywells.calibration.data import PHASE_RATES, PRESSURES_AND_TEMPERATURES, CalibrationData, Noise
+from manywells.calibration.fit import check_backend
 from manywells.calibration.parameters import apply
 from manywells.datasets.rows import root_features
 from manywells.simulator import SimError, SSDFSimulator
@@ -124,9 +125,11 @@ def synthetic_data(wp, bc, values: dict, n_rows: int, seed: int, instrumentation
     noise = noise or Noise()
     rng = np.random.default_rng(seed)
     truth = apply(wp, values)
+    check_backend(truth, backend)  # Else each row's ValueError reads as a row without an operating point
     rows = simulate_rows(truth, operating_points(bc, n_rows, rng, **spread), backend=backend, workers=workers)
     if len(rows) == 0:
         raise ValueError('the well has no operating point at any of the operating points drawn')
     if noisy:
         rows = add_noise(rows, noise, rng, rate_source=rate_source)
+    rows = rows.assign(RATE_SOURCE=rate_source)  # The noise the rows are weighted with, noisy or not
     return CalibrationData(instrument(rows, instrumentation, rng), noise=noise)

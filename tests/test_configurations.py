@@ -16,7 +16,7 @@ import pytest
 from manywells.choke import SimpsonChokeModel
 from manywells.configurations import V1, DEVELOP, check, differences, v1_fluid, v1_well
 from manywells.geometry import WellGeometry
-from manywells.inflow import FixedFlowRate, Vogel
+from manywells.inflow import FixedFlowRate, ProductivityIndex, Vogel
 from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.dead_oil import dead_oil_surface_tension
 from manywells.simulator import WellProperties
@@ -69,6 +69,26 @@ def test_check_rejects_fluid_options():
     assert any('surface_tension_model' in d for d in diff) and any('gas_law' in d for d in diff)
     diff = differences(dataclasses.replace(v1(), fluid=dataclasses.replace(fluid, pvt=BlackOil())), V1)
     assert any('pvt is BlackOil, not DeadOil' in d for d in diff)
+
+
+def test_check_rejects_subclasses():
+    """A subclass may change the physics, as a quadratic IPR in a ProductivityIndex would: each class is exact."""
+    class QuadraticPI(ProductivityIndex):
+        pass
+
+    class MyThermal(ThermalModel):
+        pass
+
+    wp = dataclasses.replace(v1(), inflow=QuadraticPI(k_l=1.0),
+                             thermal=MyThermal(h=25.0, frictional_heating=False, gravity_term=False,
+                                               lift_gas_mixing=False, joule_thomson=False))
+    diff = differences(wp, V1)
+    assert any('QuadraticPI, not Vogel or ProductivityIndex' in d for d in diff)
+    assert any('thermal: MyThermal, not ThermalModel' in d for d in diff)
+    with pytest.raises(ValueError):
+        v1_well(**PARAMS, inflow=QuadraticPI(k_l=1.0), choke=SimpsonChokeModel(K_c=0.002), n_cells=40)
+    assert differences(dataclasses.replace(WellProperties(), thermal=MyThermal()), DEVELOP) == [
+        'thermal: MyThermal, not ThermalModel']
 
 
 def test_unknown_configuration():

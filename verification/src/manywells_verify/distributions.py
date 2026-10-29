@@ -110,6 +110,9 @@ def compare(reference: dict, df: pd.DataFrame, weights=None) -> dict:
     """
     w = np.ones(len(df)) if weights is None else np.asarray(weights, dtype=float)
     keep = w > 0
+    if not keep.any():
+        raise ValueError('no candidate row belongs to a reference well' if weights is not None
+                         else 'the candidate has no rows')
     df, w = df[keep], w[keep]
     gaps = {}
     for f in FEATURES:

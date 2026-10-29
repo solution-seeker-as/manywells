@@ -13,10 +13,10 @@ fold brackets for near-fold cases. Runs in the Rust environment (README.md), fro
     .worktrees/rust/.venv/bin/python verification/build/rust_roots.py roots
 
 `fold` picks two-root sol-1 wells and bisects p_r down to where the two roots merge and the well
-stops flowing; it writes data/full/fold.csv for make_cases.py. `roots` solves every case in
-data/full/cases.json and writes data/full/rust_roots.{json,npz}. Rust's roots are not accurate
-enough to be reference roots themselves; label_cases.py refines them with Newton on the frozen
-graph. Rust returns at most two roots per case.
+stops flowing; it writes verification/data/build/fold.csv for make_cases.py. `roots` solves every
+case in verification/data/build/cases.json and writes verification/data/build/rust_roots.{json,npz}.
+Rust's roots are not accurate enough to be reference roots themselves; make_cases.py solve uses
+each as a start for v1.0.0's Ipopt and re-solves it there. Rust returns at most two roots per case.
 """
 
 import argparse
@@ -101,7 +101,7 @@ def main():
     sub = parser.add_subparsers(dest='command', required=True)
     p_fold = sub.add_parser('fold', help='fold brackets for near-fold cases')
     p_fold.add_argument('--data-dir', type=Path, required=True, help='folder with manywells-sol-1_config.zip')
-    sub.add_parser('roots', help='Rust roots for every case in data/full/cases.json')
+    sub.add_parser('roots', help='Rust roots for every case in verification/data/build/cases.json')
     args = parser.parse_args()
     {'fold': fold, 'roots': roots}[args.command](args)
 

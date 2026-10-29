@@ -74,13 +74,14 @@ def liquid_mix(liquid_1: LiquidProperties, liquid_2: LiquidProperties, mass_frac
                           where m1 and m2 is the mass of liquid 1 and 2. The mass fraction must be in [0, 1].
     :return: Mixed liquid
     """
-    assert 0 <= mass_fraction <= 1, 'Mass fraction must be in [0, 1]'
+    if not 0 <= mass_fraction <= 1:
+        raise ValueError(f'Mass fraction must be in [0, 1], got {mass_fraction}')
     if mass_fraction == 1:
         return liquid_1
     elif mass_fraction == 0:
         return liquid_2
     else:
-        vol_fraction = 1 / (1 + (liquid_1.rho / liquid_2.rho) * (1 / mass_fraction - 1))  # Water-liquid volume fraction
+        vol_fraction = 1 / (1 + (liquid_1.rho / liquid_2.rho) * (1 / mass_fraction - 1))  # Volume fraction of liquid 1
         mix_rho = vol_fraction * liquid_1.rho + (1 - vol_fraction) * liquid_2.rho  # Density of liquid mixture
         mix_cp = vol_fraction * liquid_1.cp + (1 - vol_fraction) * liquid_2.cp  # Specific heat capacity of mixture
         mix_name = f'{100*mass_fraction:.1f}% of {liquid_1.name} + {100*(1 - mass_fraction):.1f}% of {liquid_2.name}'

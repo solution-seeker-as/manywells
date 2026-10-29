@@ -54,9 +54,9 @@ def classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl):  # spe
 
     The classifier is built by first computing a feature vector from the above conditions:
         f1 = tanh(v_gs - 3.1 * (g * sigma * (rho_l - rho_g) / rho_g ** 2) ** (1/4))
-        f2 = tanh(alpha - 0.7)
+        f2 = tanh(2 * (alpha - 0.7))
         f3 = tanh(v_gs - 1.08 * v_ls)
-        f4 = tanh(alpha - 0.25 * cos_incl)
+        f4 = tanh(2 * (alpha - 0.25 * cos_incl))
         f = [f1, f2, f3, f4]
 
     An affine mapping of the features is then applied to give:
@@ -213,6 +213,12 @@ class SlipModel:
             raise ValueError('lambda_floor must be non-negative')
         if not (math.isfinite(self.profile_scale) and self.profile_scale >= 0):
             raise ValueError(f'profile_scale must be finite and non-negative, got {self.profile_scale}')
+        for name in ('C_0_annular', 'C_0_slug', 'C_0_bubbly'):  # C_0 >= 1 in every regime, as SLIP-18 assumes
+            value = getattr(self, name)
+            if not (math.isfinite(value) and value >= 1):
+                raise ValueError(f'{name} must be finite and at least 1, got {value}')
+        if not math.isfinite(self.v_inf_annular):
+            raise ValueError(f'v_inf_annular must be finite, got {self.v_inf_annular}')
 
     @property
     def regimes(self) -> tuple:
@@ -378,37 +384,3 @@ def hasan_regime_label(probs) -> str:  # spec: SLIP-16
         if probs[k] >= probs[best]:
             best = k
     return HASAN_REGIMES[best]
-
-
-if __name__ == '__main__':
-    from manywells.pvt.dead_oil import dead_oil_surface_tension
-
-    x = ca.SX.sym(f'x', 3)
-    f = ca.exp(x)
-    f = ca.tanh(x)
-    f = ca_softmax(x)
-    fun = ca.Function('fun', [x], [f])
-    y = fun([1, 2, 3]).full()
-    print(y)
-
-    # Test classification
-    alpha = 0.5
-    v_g = 20
-    v_l = 5
-    rho_g = 1
-    rho_l = 900
-    T = 273.15 + 20
-    sigma = dead_oil_surface_tension(rho_l, T)
-    probs = classify_flow_regime(v_g, v_l, alpha, rho_g, rho_l, sigma, cos_incl=1.0)
-
-    # annular boundary = 12.821059412975487
-    print(probs.full())
-    print(ca.sum1(probs).full())
-
-    print(probs.full().flatten()[0])  # Annular flow
-    print(probs.full().flatten()[1])  # Slug/churn flow
-    print(probs.full().flatten()[2])  # Bubbly flow
-
-    model = SlipModel()
-    C_0, v_inf = model.identify_parameters(v_g, v_l, alpha, rho_g, rho_l, sigma, D=0.1, cos_incl=1.0)
-    print(C_0, v_inf)

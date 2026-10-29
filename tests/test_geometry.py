@@ -10,6 +10,8 @@ def test_well_geometry_invalid_D():
     """WellGeometry rejects non-positive diameter."""
     with pytest.raises(ValueError, match="diameter"):
         WellGeometry.vertical(2000, 100, D=0)
+    with pytest.raises(ValueError, match="diameter"):  # as the Rust core refuses it
+        WellGeometry.vertical(2000, 100, D=float('nan'))
 
 
 def test_well_geometry_cos_incl_validation():

@@ -55,7 +55,7 @@ class CalibrationData:
 
     Inputs (CAL-1), with no missing values:
         CHK, PDC                    choke position in (0, 1] and the pressure downstream of the choke (bar)
-        WGL                         lift-gas rate (kg/s), 0 if absent
+        WGL                         lift-gas rate (kg/s), the well's if absent
         p_r, T_r, T_s, T_lg         reservoir pressure (bar) and temperatures (K), the well's if absent
         gor, wlr                    the fluid's gas-oil ratio (Sm³/Sm³) and water-liquid ratio, the well's if absent
     Observations (CAL-2), NaN where missing:
@@ -66,13 +66,15 @@ class CalibrationData:
         PBH_SD, PWH_SD, TWH_SD      absolute standard deviations that override noise's
         RATE_SD                     relative standard deviation of the rate that overrides noise's
 
-    Other columns, such as a time stamp, are kept and appear in the result's residual table.
+    Other columns, such as a time stamp, are kept and appear in the result's residual table. So does an index other
+    than the default 0, 1, ..., as a column named after it ('index' if it has no name).
     """
     rows: pd.DataFrame
     noise: Noise = field(default_factory=Noise)
 
     def __post_init__(self):
-        df = pd.DataFrame(self.rows).reset_index(drop=True).copy()
+        df = pd.DataFrame(self.rows)
+        df = df.reset_index(drop=df.index.name is None and df.index.equals(pd.RangeIndex(len(df)))).copy()
         object.__setattr__(self, 'rows', df)
         if not isinstance(self.noise, Noise):
             raise ValueError(f'noise must be a Noise, got {type(self.noise).__name__}')
@@ -85,6 +87,7 @@ class CalibrationData:
             values = pd.to_numeric(df[col], errors='coerce')
             if values.isna().any():
                 raise ValueError(f'input column {col} has missing or non-numeric values')
+            df[col] = values
         if not ((df['CHK'] > 0) & (df['CHK'] <= 1)).all():
             raise ValueError('CHK must be in (0, 1]: every row is a flowing period')
         for col in ('PDC', 'p_r', 'T_r', 'T_s', 'T_lg'):

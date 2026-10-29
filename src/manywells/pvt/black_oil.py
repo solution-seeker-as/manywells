@@ -202,7 +202,7 @@ def live_oil_surface_tension(sigma_dead, Rs_scf):  # spec: PVT-OIL-12
     Abdul-Majeed & Al-Soof (2000) live oil surface tension correction.
 
     Dissolved gas reduces surface tension. At Rs = 500 scf/STB, surface
-    tension drops to roughly 40% of the dead-oil value.
+    tension drops to about 20% of the dead-oil value.
 
     The original correlation switches branches at Rs_vol = 50 Sm3/Sm3, where
     they do not meet: sigma_live / sigma_dead is 0.425 by the first and 0.375

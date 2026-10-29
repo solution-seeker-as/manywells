@@ -13,6 +13,7 @@ core's roots. The core's rows are checked against v1.0.0's row vectors and its c
 in test_spec_vectors.py, and both against the CasADi backend in every configuration in test_backend_comparison.py.
 """
 
+import logging
 from pathlib import Path
 
 import casadi as ca
@@ -27,6 +28,7 @@ from manywells.inflow import InflowModel, ProductivityIndex, Vogel
 from manywells.pvt.dead_oil import dead_oil_surface_tension
 from manywells.simulator import BoundaryConditions, NoOperatingPoint, SSDFSimulator, WellProperties
 from manywells.slip import SlipModel
+from manywells.thermal import ThermalModel
 from manywells.solvers.roots import TOL_X, state_distance
 
 DATA = Path(__file__).resolve().parents[1] / 'verification' / 'data'
@@ -122,12 +124,20 @@ def test_the_rust_backend_refuses_what_it_does_not_cover():
     wp = well_977()[0]
     with pytest.raises(ValueError, match='inflow: LinearInflow is not one of the core'):
         SSDFSimulator(replace(wp, inflow=LinearInflow()), backend='rust')
-    with pytest.raises(ValueError, match='C_0 >= 1'):
-        SSDFSimulator(replace(wp, slip=SlipModel(regime_model='fitted', C_0_annular=0.9)), backend='rust')
+    with pytest.raises(ValueError, match='C_0 >= 1 and v_inf_annular >= 0'):
+        SSDFSimulator(replace(wp, slip=SlipModel(regime_model='fitted', v_inf_annular=-0.1)), backend='rust')
     with pytest.raises(ValueError, match='f_g > 0'):  # a well whose only gas is lift gas
         SSDFSimulator(replace(wp, fluid=replace(wp.fluid, gor=0.0)), backend='rust')
     with pytest.raises(ValueError, match='backend'):
         SSDFSimulator(wp, backend='fortran')
+
+
+def test_integer_switches_solve_on_the_core():
+    """ThermalModel stores 0 and 1 as bools, which the core takes, as the CasADi backend took 0 and 1."""
+    wp, bc = well_977()
+    thermal = ThermalModel(h=wp.thermal.h, frictional_heating=0, gravity_term=0, lift_gas_mixing=0, joule_thomson=0)
+    assert SSDFSimulator(replace(wp, thermal=thermal), backend='rust').simulate(bc).p_0 == pytest.approx(
+        SSDFSimulator(wp, backend='rust').simulate(bc).p_0, abs=0)
 
 
 @pytest.mark.parametrize('regime_model', ['fitted', 'hasan'])
@@ -148,6 +158,18 @@ def test_the_slip_law_brackets_the_void_fraction(regime_model):
     args = [j_g, j_l, rho_g, rho_l, sigma, D, cos_incl]
     at = lambda alpha: np.asarray(h.map(n)(np.full((1, n), alpha), *(a.reshape(1, -1) for a in args))).ravel()
     assert np.all(at(1e-12) < 0) and np.all(at(1 - 1e-12) > 0)  # α = 0 and 1 divide by zero in v_g or v_l
+
+
+def test_the_debug_log_reports_only_failed_searches(caplog):
+    """The core's one attempt failed only if it found no root, whatever its outcome reads."""
+    caplog.set_level(logging.DEBUG, logger='manywells')
+    wp, bc = well_977()
+    rs = SSDFSimulator(wp, backend='rust').root_set(bc)
+    assert rs.search[0].found == len(rs.roots) == 2
+    assert 'found no root' not in caplog.text
+    wp, bc = port_well('no_solution')
+    SSDFSimulator(wp, backend='rust').root_set(bc)
+    assert '1 of 1 starts found no root' in caplog.text
 
 
 def test_solution_as_df_with_the_rust_backend():
