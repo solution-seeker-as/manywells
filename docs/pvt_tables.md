@@ -43,9 +43,9 @@ from manywells.pvt.table import PVTTable
 from manywells.simulator import WellProperties, BoundaryConditions, SSDFSimulator
 
 fluid = FluidModel(pvt=PVTTable.read_csv('fluid.csv'), gor=110.0, wlr=0.2)
-sim = SSDFSimulator(WellProperties(fluid=fluid), backend='rust')   # or 'casadi'
+sim = SSDFSimulator(WellProperties(fluid=fluid), backend='rust')  # or 'casadi'
 op = sim.simulate(BoundaryConditions(p_r=250, T_r=360, p_s=20, u=0.6))
-print(op.off_table)   # True if a point of the operating point lies off the table's grid
+print(op.off_table)  # True if a point of the operating point lies off the table's grid
 ```
 
 `FluidModel` takes the table as its `pvt`, in place of `BlackOil` or `DeadOil`. Its `gor` and `wlr` are the
@@ -99,8 +99,9 @@ the stock-tank oil density, the gas density at standard conditions and the GOR. 
 `PVTTable.from_phase_split` makes the table:
 
 ```python
-table = PVTTable.from_phase_split(p, T, X, rho_L, rho_V, rho_o=866.4, rho_g=1.0354, gor=108.73,
-                                  mu_o=mu_o, mu_g=mu_g, sigma=sigma)
+table = PVTTable.from_phase_split(
+    p, T, X, rho_L, rho_V, rho_o=866.4, rho_g=1.0354, gor=108.73, mu_o=mu_o, mu_g=mu_g, sigma=sigma
+)
 ```
 
 At each node it takes three values from the flash:
@@ -159,9 +160,9 @@ points. In the file, a `gor` column holds each row's GOR; `read_csv` then return
 ```python
 import dataclasses
 
-axis = PVTTable.read_csv('fluid_gor.csv')        # a PVTTableSet
-fluid = FluidModel(pvt=axis, gor=120.0)          # read at 120 Sm³/Sm³
-other = dataclasses.replace(fluid, gor=135.0)    # read again at 135
+axis = PVTTable.read_csv('fluid_gor.csv')  # a PVTTableSet
+fluid = FluidModel(pvt=axis, gor=120.0)  # read at 120 Sm³/Sm³
+other = dataclasses.replace(fluid, gor=135.0)  # read again at 135
 ```
 
 `FluidModel` reads the axis at its own GOR when it is built. Each column is interpolated linearly in GOR between the

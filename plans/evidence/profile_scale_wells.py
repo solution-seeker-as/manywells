@@ -62,8 +62,7 @@ def solve(wp, bc, backend):
     op = rs.operating_point if rs else None
     if op is not None:
         X = op.state
-        out.update(PBH=X[0, 0], PWH=X[-1, 0], TWH=X[-1, 6], w_res=op.w_res,
-                   alpha_mean=float(X[:, 3].mean()))
+        out.update(PBH=X[0, 0], PWH=X[-1, 0], TWH=X[-1, 6], w_res=op.w_res, alpha_mean=float(X[:, 3].mean()))
     return out
 
 
@@ -74,18 +73,27 @@ def summary(df):
         print(f'== {backend}: {len(d)} cases')
         for v in SCALES:
             s = d[f'seconds_{v}']
-            print(f'  profile_scale {v}: operating point in {d[f"PBH_{v}"].notna().sum()}, roots per case '
-                  f'{dict(sorted(Counter(d[f"roots_{v}"]).items()))}, {s.median():.2f} s median, {s.sum():.1f} s total')
+            print(
+                f'  profile_scale {v}: operating point in {d[f"PBH_{v}"].notna().sum()}, roots per case '
+                f'{dict(sorted(Counter(d[f"roots_{v}"]).items()))}, {s.median():.2f} s median, {s.sum():.1f} s total'
+            )
         for v in ('0.5', '0'):
-            both = d.dropna(subset=[f'PBH_1', f'PBH_{v}'])
+            both = d.dropna(subset=['PBH_1', f'PBH_{v}'])
             lost = d[d['PBH_1'].notna() & d[f'PBH_{v}'].isna()]
             gained = d[d['PBH_1'].isna() & d[f'PBH_{v}'].notna()]
-            print(f'  {v} against 1: {len(both)} with an operating point in both; lost: {list(zip(lost.well, lost.k))};'
-                  f' gained: {list(zip(gained.well, gained.k))}')
-            diff = pd.DataFrame({'PBH': both[f'PBH_{v}'] - both['PBH_1'], 'PWH': both[f'PWH_{v}'] - both['PWH_1'],
-                                 'TWH': both[f'TWH_{v}'] - both['TWH_1'],
-                                 'rate (rel)': both[f'w_res_{v}'] / both['w_res_1'] - 1,
-                                 'mean alpha': both[f'alpha_mean_{v}'] - both['alpha_mean_1']})
+            print(
+                f'  {v} against 1: {len(both)} with an operating point in both; lost: {list(zip(lost.well, lost.k))};'
+                f' gained: {list(zip(gained.well, gained.k))}'
+            )
+            diff = pd.DataFrame(
+                {
+                    'PBH': both[f'PBH_{v}'] - both['PBH_1'],
+                    'PWH': both[f'PWH_{v}'] - both['PWH_1'],
+                    'TWH': both[f'TWH_{v}'] - both['TWH_1'],
+                    'rate (rel)': both[f'w_res_{v}'] / both['w_res_1'] - 1,
+                    'mean alpha': both[f'alpha_mean_{v}'] - both['alpha_mean_1'],
+                }
+            )
             print(diff.quantile(q).round(4).to_string())
 
 
@@ -100,11 +108,20 @@ def main():
         for backend in ('rust', 'casadi') if well < args.casadi_wells else ('rust',):
             rec = dict(backend=backend, well=well, k=k, f_g=wp.fluid.f_g, w_lg=bc.w_lg)
             for v, scale in SCALES.items():
-                rec.update({f'{key}_{v}': val for key, val in
-                            solve(replace(wp, slip=replace(wp.slip, profile_scale=scale)), bc, backend).items()})
+                rec.update(
+                    {
+                        f'{key}_{v}': val
+                        for key, val in solve(
+                            replace(wp, slip=replace(wp.slip, profile_scale=scale)), bc, backend
+                        ).items()
+                    }
+                )
             rows.append(rec)
-            print(f"{backend:>6} well {well:2d} k {k}: PBH " + ' -> '.join(
-                f"{rec.get(f'PBH_{v}', float('nan')):8.3f}" for v in SCALES), flush=True)
+            print(
+                f'{backend:>6} well {well:2d} k {k}: PBH '
+                + ' -> '.join(f'{rec.get(f"PBH_{v}", float("nan")):8.3f}' for v in SCALES),
+                flush=True,
+            )
     df = pd.DataFrame(rows)
     df.to_csv(args.out, index=False)
     summary(df)

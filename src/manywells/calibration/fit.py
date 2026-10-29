@@ -25,12 +25,12 @@ from manywells.simulator import SimError
 log = logging.getLogger('manywells')
 
 # spec: CAL-11. Stopping rule of the least-squares solver
-X_TOL = 1e-6        # Step in z (prior standard deviations)
-F_TOL = 1e-10       # Relative change of the cost
-G_TOL = 1e-10       # Gradient, scaled
-MAX_NFEV = 100      # Evaluations of the residuals, Jacobians not counted
-SHIFT_LIMIT = 2.0   # A parameter more than this many prior standard deviations from its median is flagged (CAL-12)
-START_SHIFTS = (1.0, 2.0)   # The starts tried along each parameter, besides the medians (CAL-9)
+X_TOL = 1e-6  # Step in z (prior standard deviations)
+F_TOL = 1e-10  # Relative change of the cost
+G_TOL = 1e-10  # Gradient, scaled
+MAX_NFEV = 100  # Evaluations of the residuals, Jacobians not counted
+SHIFT_LIMIT = 2.0  # A parameter more than this many prior standard deviations from its median is flagged (CAL-12)
+START_SHIFTS = (1.0, 2.0)  # The starts tried along each parameter, besides the medians (CAL-9)
 
 
 class CalibrationError(SimError):
@@ -51,6 +51,7 @@ class CalibrationResult:  # spec: CAL-12
     success     whether the solver met its stopping rule; message is its reason
     start       the z the fit started from (CAL-9)
     """
+
     values: dict
     z: dict
     parameters: tuple
@@ -73,7 +74,7 @@ class CalibrationResult:  # spec: CAL-12
         for obs in OBSERVATIONS:
             r = self.residuals[f'{obs}_res'].dropna()
             if len(r):
-                out[obs] = float(np.sqrt(np.mean(r ** 2)))
+                out[obs] = float(np.sqrt(np.mean(r**2)))
         return out
 
     def summary(self) -> str:
@@ -119,6 +120,7 @@ def check_backend(wp, backend):
     """Raise ValueError if the backend cannot solve the well, before any row is taken for one that cannot flow."""
     if backend == 'rust':
         from manywells.solvers.rust import not_in_core  # Imported here, so that only this backend loads the core
+
         missing = not_in_core(wp)
         if missing:
             raise ValueError('the Rust core cannot solve this well: ' + '; '.join(missing) + '. Use backend="casadi".')
@@ -135,18 +137,23 @@ def start(objective) -> np.ndarray:  # spec: CAL-9
     p = len(objective.parameters)
     candidates = [np.zeros(p)] + [s * sign * e for s in START_SHIFTS for e in np.eye(p) for sign in (1, -1)]
     evaluations = objective.predict(candidates)
-    feasible = [(0.5 * np.sum(np.concatenate([objective.scaled(pred), z]) ** 2), k, z)
-                for k, (z, (pred, _)) in enumerate(zip(candidates, evaluations)) if not failed_rows(pred).any()]
+    feasible = [
+        (0.5 * np.sum(np.concatenate([objective.scaled(pred), z]) ** 2), k, z)
+        for k, (z, (pred, _)) in enumerate(zip(candidates, evaluations))
+        if not failed_rows(pred).any()
+    ]
     if feasible:
         _, k, z = min(feasible, key=lambda t: (t[0], t[1]))
         if k:
             log.info('starting at z = %s, the cheapest feasible start (CAL-9)', z)
         return z
     failed = np.flatnonzero(failed_rows(evaluations[0][0]))
-    raise CalibrationError(f'{len(failed)} of {objective.n_rows} rows have no operating point at the prior medians '
-                           f'(rows {", ".join(map(str, failed[:10]))}{", ..." if len(failed) > 10 else ""}), and no '
-                           f'start {", ".join(map(str, START_SHIFTS))} prior standard deviations from them has one at '
-                           'every row; check their inputs or the priors (CAL-9)')
+    raise CalibrationError(
+        f'{len(failed)} of {objective.n_rows} rows have no operating point at the prior medians '
+        f'(rows {", ".join(map(str, failed[:10]))}{", ..." if len(failed) > 10 else ""}), and no '
+        f'start {", ".join(map(str, START_SHIFTS))} prior standard deviations from them has one at '
+        'every row; check their inputs or the priors (CAL-9)'
+    )
 
 
 def evaluate(wp, data: CalibrationData, bc, backend='rust', workers=None) -> pd.DataFrame:  # spec: CAL-12
@@ -159,12 +166,13 @@ def evaluate(wp, data: CalibrationData, bc, backend='rust', workers=None) -> pd.
         raise ValueError(f'data must be a CalibrationData, got {type(data).__name__}')
     check_backend(wp, backend)
     objective = Objective(wp, data, bc, (), backend=backend, workers=workers)
-    (pred, _), = objective.predict([np.zeros(0)])
+    ((pred, _),) = objective.predict([np.zeros(0)])
     return residual_table(objective, pred)
 
 
-def calibrate(wp, data: CalibrationData, bc, free, priors=None, A_c=None, backend='rust',
-              workers=None) -> CalibrationResult:  # spec: CAL-11
+def calibrate(
+    wp, data: CalibrationData, bc, free, priors=None, A_c=None, backend='rust', workers=None
+) -> CalibrationResult:  # spec: CAL-11
     """
     Calibrate one well: the MAP estimate of the free parameters under their priors and the data's measurement noise.
 
@@ -187,16 +195,32 @@ def calibrate(wp, data: CalibrationData, bc, free, priors=None, A_c=None, backen
     parameters = priors_for(wp, list(free), priors, A_c)
     objective = Objective(wp, data, bc, parameters, backend=backend, workers=workers)
     z0 = start(objective)
-    sol = least_squares(objective.residuals, z0, jac=objective.jacobian, method='trf', x_scale=1.0,
-                        xtol=X_TOL, ftol=F_TOL, gtol=G_TOL, max_nfev=MAX_NFEV)
-    (pred, _), = objective.predict([sol.x])
+    sol = least_squares(
+        objective.residuals,
+        z0,
+        jac=objective.jacobian,
+        method='trf',
+        x_scale=1.0,
+        xtol=X_TOL,
+        ftol=F_TOL,
+        gtol=G_TOL,
+        max_nfev=MAX_NFEV,
+    )
+    ((pred, _),) = objective.predict([sol.x])
     if failed_rows(pred).any():
         raise CalibrationError('the fit ended at parameters under which a row has no operating point')
     values = objective.values(sol.x)
     if not sol.success:
         log.warning('calibration did not converge: %s', sol.message)
-    return CalibrationResult(values=values, z={p.name: float(zi) for p, zi in zip(parameters, sol.x)},
-                             parameters=parameters, well=apply(wp, values), residuals=residual_table(objective, pred),
-                             success=bool(sol.success), message=str(sol.message), cost=float(sol.cost),
-                             n_solves=objective.n_solves,
-                             start={p.name: float(zi) for p, zi in zip(parameters, z0)})
+    return CalibrationResult(
+        values=values,
+        z={p.name: float(zi) for p, zi in zip(parameters, sol.x)},
+        parameters=parameters,
+        well=apply(wp, values),
+        residuals=residual_table(objective, pred),
+        success=bool(sol.success),
+        message=str(sol.message),
+        cost=float(sol.cost),
+        n_solves=objective.n_solves,
+        start={p.name: float(zi) for p, zi in zip(parameters, z0)},
+    )

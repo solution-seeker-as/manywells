@@ -1,0 +1,5 @@
+# Commits that only reformat, which git blame skips: git config blame.ignoreRevsFile .git-blame-ignore-revs
+# (GitHub reads this file itself).
+
+# Format every Python file with ruff
+3a897df494bf1cc6146362508ac93e76126f9b15

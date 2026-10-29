@@ -3,7 +3,6 @@
 import pytest
 
 from manywells.inflow import (
-    InflowModel,
     ProductivityIndex,
     Vogel,
     FixedFlowRate,
@@ -18,7 +17,7 @@ def test_productivity_index_init_valid():
 
 def test_productivity_index_init_invalid_k_l():
     """ProductivityIndex rejects negative k_l."""
-    with pytest.raises(ValueError, match="non-negative"):
+    with pytest.raises(ValueError, match='non-negative'):
         ProductivityIndex(k_l=-0.1)
 
 
@@ -58,5 +57,5 @@ def test_fixed_flow_rate():
 
 def test_fixed_flow_rate_negative_rejected():
     """FixedFlowRate rejects negative liquid rate."""
-    with pytest.raises(ValueError, match="non-negative"):
+    with pytest.raises(ValueError, match='non-negative'):
         FixedFlowRate(w_l_const=-1.0)

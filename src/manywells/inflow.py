@@ -48,7 +48,7 @@ class ProductivityIndex(InflowModel):
     The PI model is linear.
     """
 
-    k_l: float    # Liquid productivity index (kg/s/bar)
+    k_l: float  # Liquid productivity index (kg/s/bar)
 
     def __post_init__(self):
         if not self.k_l >= 0:
@@ -79,7 +79,7 @@ class Vogel(InflowModel):
     Vogel's IPR is quadratic.
     """
 
-    w_l_max: float    # Maximum liquid mass flow rate (kg/s)
+    w_l_max: float  # Maximum liquid mass flow rate (kg/s)
 
     def __post_init__(self):
         if not self.w_l_max >= 0:
@@ -94,7 +94,7 @@ class Vogel(InflowModel):
         :return: Liquid mass flow rate, w_l (kg/s)
         """
         r = p / p_r
-        return self.w_l_max * (1 - 0.2 * r - 0.8 * r ** 2)  # spec: INF-1
+        return self.w_l_max * (1 - 0.2 * r - 0.8 * r**2)  # spec: INF-1
 
 
 @dataclass(frozen=True)
@@ -107,7 +107,7 @@ class FixedFlowRate(InflowModel):
     when performing calibration.
     """
 
-    w_l_const: float    # Constant liquid mass flow rate (kg/s)
+    w_l_const: float  # Constant liquid mass flow rate (kg/s)
 
     def __post_init__(self):
         if not self.w_l_const >= 0:

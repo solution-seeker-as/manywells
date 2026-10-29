@@ -25,7 +25,7 @@ def v1_like(fixtures):
     candidate = {}
     for cid, (case, roots) in fixtures.items():
         if roots:
-            pick = roots[-1] if cid == 'sol1-977' else roots[0]   # trickle root for 977
+            pick = roots[-1] if cid == 'sol1-977' else roots[0]  # trickle root for 977
             candidate[cid] = [Root(pick.x, operating_point=True)]
     return candidate
 
@@ -48,22 +48,37 @@ def test_files_round_trip(data_dir, fixtures):
         assert [r.label for r in reference.get(cid, [])] == [r.label for r in roots]
         for a, b in zip(reference.get(cid, []), roots):
             np.testing.assert_array_equal(a.x, b.x)
-    assert 'sol1-977-past-fold' not in reference         # a case with no root has no rows
+    assert 'sol1-977-past-fold' not in reference  # a case with no root has no rows
 
 
 def test_a_null_label_reads_as_no_label(tmp_path):
     """A port that writes null rather than '' for an empty label, as pyarrow does; pandas reads it back as NaN."""
     import pyarrow as pa
     import pyarrow.parquet as pq
-    pq.write_table(pa.table({'case_id': ['a', 'a'], 'root': [0, 1], 'x': [[1.0, 2.0], [3.0, 4.0]],
-                             'label': pa.array([None, 'stable'], pa.string()), 'operating_point': [False, True],
-                             'choked': pa.array([None, None], pa.bool_())}), tmp_path / 'candidate.parquet')
+
+    pq.write_table(
+        pa.table(
+            {
+                'case_id': ['a', 'a'],
+                'root': [0, 1],
+                'x': [[1.0, 2.0], [3.0, 4.0]],
+                'label': pa.array([None, 'stable'], pa.string()),
+                'operating_point': [False, True],
+                'choked': pa.array([None, None], pa.bool_()),
+            }
+        ),
+        tmp_path / 'candidate.parquet',
+    )
     assert [r.label for r in read_roots(tmp_path / 'candidate.parquet')['a']] == [None, 'stable']
 
 
 def test_report_counts_and_rate(fixtures):
-    report = verify({c.case_id: c for c, _ in fixtures.values()}, v1_like(fixtures),
-                    {cid: roots for cid, (_, roots) in fixtures.items()}, name='v1-like')
+    report = verify(
+        {c.case_id: c for c, _ in fixtures.values()},
+        v1_like(fixtures),
+        {cid: roots for cid, (_, roots) in fixtures.items()},
+        name='v1-like',
+    )
     failures = report.unexpected_failures()
     assert [(k, n) for k, n, _ in failures] == [('sol1-977', 'operating_point')]
     assert report.stable_root_rate() == (4, 5)
@@ -76,11 +91,17 @@ def test_report_counts_and_rate(fixtures):
 
 def test_expected_failure_gives_pass(fixtures, tmp_path):
     path = tmp_path / 'expected.csv'
-    path.write_text('case_id,check,reason\nsol1-977,operating_point,v1 returns the trickle root\n'
-                    'sol1-one-root,invariants,stale entry\n')
+    path.write_text(
+        'case_id,check,reason\nsol1-977,operating_point,v1 returns the trickle root\n'
+        'sol1-one-root,invariants,stale entry\n'
+    )
     expected = read_expected_failures(path)
-    report = verify({c.case_id: c for c, _ in fixtures.values()}, v1_like(fixtures),
-                    {cid: roots for cid, (_, roots) in fixtures.items()}, expected=expected)
+    report = verify(
+        {c.case_id: c for c, _ in fixtures.values()},
+        v1_like(fixtures),
+        {cid: roots for cid, (_, roots) in fixtures.items()},
+        expected=expected,
+    )
     assert report.unexpected_failures() == []
     assert report.expected_now_passing() == [('sol1-one-root', 'invariants')]
     assert '**Verdict: PASS.**' in report.to_markdown()

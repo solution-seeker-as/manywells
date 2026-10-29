@@ -24,7 +24,7 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[2]
 V1 = Path(os.environ.get('MANYWELLS_V1', REPO / '.worktrees' / 'v1.0.0'))
 os.environ['MANYWELLS_V1'] = str(V1)  # plans/evidence scripts put it first on sys.path (else the cwd)
-DATA = REPO / 'verification' / 'data' / 'build'   # intermediate files, gitignored
+DATA = REPO / 'verification' / 'data' / 'build'  # intermediate files, gitignored
 for p in (str(REPO / 'plans' / 'evidence'), str(REPO / 'verification' / 'src'), str(V1)):
     if p not in sys.path:
         sys.path.insert(0, p)
@@ -44,8 +44,13 @@ def params_of(wp, bc) -> dict:
     """The residual graph's parameter values for a v1.0.0 well."""
     inflow = wp.inflow
     values = {k: float(getattr(wp, k)) for k in WELL_FIELDS} | {k: float(getattr(bc, k)) for k in BC_FIELDS}
-    values |= {'w_l_max': float(getattr(inflow, 'w_l_max', 0.0)), 'k_l': float(getattr(inflow, 'k_l', 0.0)),
-               'f_g': float(inflow.f_g), 'K_c': float(wp.choke.K_c), 'cpr': float(wp.choke.cpr)}
+    values |= {
+        'w_l_max': float(getattr(inflow, 'w_l_max', 0.0)),
+        'k_l': float(getattr(inflow, 'k_l', 0.0)),
+        'f_g': float(inflow.f_g),
+        'K_c': float(wp.choke.K_c),
+        'cpr': float(wp.choke.cpr),
+    }
     return values
 
 
@@ -57,11 +62,16 @@ def variant_of(wp) -> list:
 def well_of(case: dict):
     """v1.0.0 WellProperties and BoundaryConditions for a case (params, variant)."""
     prm, (inflow, choke, profile) = case['params'], case['variant']
-    inflow_model = (Vogel(w_l_max=prm['w_l_max'], f_g=prm['f_g']) if inflow == 'vogel'
-                    else ProductivityIndex(k_l=prm['k_l'], f_g=prm['f_g']))
-    choke_model = (SimpsonChokeModel if choke == 'simpson' else BernoulliChokeModel)(K_c=prm['K_c'], chk_profile=profile)
+    inflow_model = (
+        Vogel(w_l_max=prm['w_l_max'], f_g=prm['f_g'])
+        if inflow == 'vogel'
+        else ProductivityIndex(k_l=prm['k_l'], f_g=prm['f_g'])
+    )
+    choke_model = (SimpsonChokeModel if choke == 'simpson' else BernoulliChokeModel)(
+        K_c=prm['K_c'], chk_profile=profile
+    )
     if abs(choke_model.cpr - prm['cpr']) > 1e-12:
-        raise ValueError(f'{case["case_id"]}: cpr {prm["cpr"]} differs from v1.0.0\'s {choke_model.cpr}')
+        raise ValueError(f"{case['case_id']}: cpr {prm['cpr']} differs from v1.0.0's {choke_model.cpr}")
     wp = WellProperties(**{k: prm[k] for k in WELL_FIELDS}, inflow=inflow_model, choke=choke_model)
     bc = BoundaryConditions(**{k: prm[k] for k in BC_FIELDS})
     return wp, bc

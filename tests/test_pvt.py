@@ -7,8 +7,6 @@ from manywells.pvt import (
     P_REF,
     T_REF,
     R_UNIVERSAL,
-    LiquidProperties,
-    GasProperties,
     WATER,
     SEAWATER,
     NORTH_SEA_BRENT_CRUDE,
@@ -16,15 +14,23 @@ from manywells.pvt import (
     liquid_mix,
     api_from_density,
     density_from_api,
-    mixture_viscosity,    
+    mixture_viscosity,
 )
 from manywells.pvt.dead_oil import dead_oil_viscosity, dead_oil_surface_tension
 from manywells.pvt.black_oil import BlackOil, live_oil_surface_tension, live_oil_viscosity
-from manywells.pvt.gas import specific_gas_constant, gas_density, gas_viscosity, gas_z_factor, sutton_pseudo_critical, molecular_weight
-from manywells.pvt.gas import DAK_ZC, dak_jt_factor, dak_reduced_density, dak_z_factor
+from manywells.pvt.gas import (
+    specific_gas_constant,
+    gas_density,
+    gas_viscosity,
+    gas_z_factor,
+    sutton_pseudo_critical,
+    molecular_weight,
+)
+from manywells.pvt.gas import DAK_ZC, dak_reduced_density, dak_z_factor
 from manywells.pvt.fluid import FluidModel
 from manywells.pvt import gas_density_from_sg
 from manywells.pvt.water import water_viscosity
+
 
 def test_reference_conditions():
     """Reference pressure and temperature match ISO 13443."""
@@ -34,7 +40,7 @@ def test_reference_conditions():
 
 def test_water_properties():
     """Water has expected density and cp."""
-    assert WATER.name == "water"
+    assert WATER.name == 'water'
     assert WATER.rho == pytest.approx(999.1)
     assert WATER.cp == 4184
 
@@ -65,9 +71,9 @@ def test_gas_density_defaults():
 
 def test_liquid_mix_mass_fraction_bounds():
     """liquid_mix rejects mass_fraction outside [0, 1]."""
-    with pytest.raises(ValueError, match="Mass fraction must be in"):
+    with pytest.raises(ValueError, match='Mass fraction must be in'):
         liquid_mix(WATER, SEAWATER, -0.1)
-    with pytest.raises(ValueError, match="Mass fraction must be in"):
+    with pytest.raises(ValueError, match='Mass fraction must be in'):
         liquid_mix(WATER, SEAWATER, 1.5)
 
 
@@ -82,7 +88,7 @@ def test_liquid_mix_half():
     mix = liquid_mix(WATER, NORTH_SEA_BRENT_CRUDE, 0.5)
     # Mix density is between the two densities (water is denser than Brent crude)
     assert min(WATER.rho, NORTH_SEA_BRENT_CRUDE.rho) <= mix.rho <= max(WATER.rho, NORTH_SEA_BRENT_CRUDE.rho)
-    assert "50.0%" in mix.name
+    assert '50.0%' in mix.name
 
 
 def test_api_from_density():
@@ -296,6 +302,7 @@ def test_live_oil_surface_tension_near_zero_rs():
 def test_live_oil_surface_tension_continuity_at_branch():
     """The two branches of the correlation meet near Rs_vol = 50 Sm3/Sm3."""
     from manywells.units import CF_RS
+
     rho = 850.0
     T = 273.15 + 60
     sigma_dead = float(dead_oil_surface_tension(rho, T))
@@ -310,18 +317,18 @@ def test_live_oil_surface_tension_continuity_at_branch():
 
 
 class TestSuttonPseudoCritical:
-
     def test_methane_ppc(self):
         """Pseudo-critical pressure for near-methane gas (sg=0.554)."""
         from manywells.units import CF_PSI
+
         ppc, _ = sutton_pseudo_critical(0.554)
-        ppc_psia = 756.8 - 131.07 * 0.554 - 3.6 * 0.554 ** 2
+        ppc_psia = 756.8 - 131.07 * 0.554 - 3.6 * 0.554**2
         assert ppc == pytest.approx(ppc_psia * CF_PSI)
 
     def test_methane_tpc(self):
         """Pseudo-critical temperature for near-methane gas (sg=0.554)."""
         _, tpc = sutton_pseudo_critical(0.554)
-        tpc_R = 169.2 + 349.5 * 0.554 - 74.0 * 0.554 ** 2
+        tpc_R = 169.2 + 349.5 * 0.554 - 74.0 * 0.554**2
         assert tpc == pytest.approx(tpc_R / 1.8)
 
     def test_ppc_positive(self):
@@ -338,7 +345,6 @@ class TestSuttonPseudoCritical:
 
 
 class TestGasZFactor:
-
     def test_z_near_one_at_standard_conditions(self):
         """Z is near 1.0 at standard conditions (low pressure)."""
         Z = float(gas_z_factor(P_REF, T_REF, 0.65))
@@ -361,7 +367,7 @@ class TestGasZFactor:
         for p_bar in [10, 50, 100, 200, 300]:
             for T_K in [300, 340, 380, 420]:
                 Z = float(gas_z_factor(p_bar * 1e5, T_K, 0.65))
-                assert 0.3 < Z < 1.1, f"Z={Z} out of range at {p_bar} bar, {T_K} K"
+                assert 0.3 < Z < 1.1, f'Z={Z} out of range at {p_bar} bar, {T_K} K'
 
     def test_z_positive(self):
         """Z is positive for a range of conditions."""
@@ -372,10 +378,17 @@ class TestGasZFactor:
 # Methane from the reference equation of state of Setzmann and Wagner (1991), J. Phys. Chem. Ref. Data 20,
 # 1061-1155, through CoolProp 8.0.0 (plans/evidence/jt_factor.py): p (bar), T (K), J = T (d ln Z / dT)_p, Z
 METHANE_REFERENCE = (
-    (5.0, 280.0, 0.0383, 0.9892), (20.0, 300.0, 0.1316, 0.9667), (50.0, 300.0, 0.3544, 0.9195),
-    (100.0, 280.0, 1.0182, 0.8059), (100.0, 360.0, 0.3556, 0.9401), (150.0, 280.0, 1.2479, 0.7634),
-    (200.0, 330.0, 0.6609, 0.8912), (270.0, 425.0, 0.2651, 1.0265), (350.0, 360.0, 0.2849, 1.0308),
-    (460.0, 300.0, -0.0009, 1.1271), (460.0, 390.0, 0.0947, 1.1468),
+    (5.0, 280.0, 0.0383, 0.9892),
+    (20.0, 300.0, 0.1316, 0.9667),
+    (50.0, 300.0, 0.3544, 0.9195),
+    (100.0, 280.0, 1.0182, 0.8059),
+    (100.0, 360.0, 0.3556, 0.9401),
+    (150.0, 280.0, 1.2479, 0.7634),
+    (200.0, 330.0, 0.6609, 0.8912),
+    (270.0, 425.0, 0.2651, 1.0265),
+    (350.0, 360.0, 0.2849, 1.0308),
+    (460.0, 300.0, -0.0009, 1.1271),
+    (460.0, 390.0, 0.0947, 1.1468),
 )
 METHANE_SG = 0.5538  # 16.043 / 28.97
 
@@ -428,6 +441,7 @@ class TestDranchukAbouKassem:
     def test_the_factor_denominator_is_positive_above_the_critical_region(self):
         """Z + r dZ/dr is (dp/drho)_T up to a positive factor: positive for T_pr >= 1.05 and p_pr <= 15."""
         from manywells.pvt.gas import _dak_terms
+
         for t in np.linspace(1.05, 3.0, 40):
             for r in np.linspace(1e-6, 3.0, 600):
                 Z, Z_r, _ = (float(v) for v in _dak_terms(r, t))

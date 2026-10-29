@@ -36,10 +36,10 @@ from manywells.solution import Root, RootSet
 from manywells.solvers.ipopt import IpoptSolver
 from manywells.solvers.march import MarchFailed, Marcher
 
-TOL_X = 1e-4               # State distance within which two solutions are one root
-LABEL_MIN = 1e-3           # |normalized dR/dp_0| at or below which a label is indeterminate
-V_FLOOR = 1e-3             # m/s, floor on velocity scales in the state distance
-DEFAULT_DRAWDOWN = 0.05    # The default start: p_0 = p_r - DEFAULT_DRAWDOWN (p_r - p_s)
+TOL_X = 1e-4  # State distance within which two solutions are one root
+LABEL_MIN = 1e-3  # |normalized dR/dp_0| at or below which a label is indeterminate
+V_FLOOR = 1e-3  # m/s, floor on velocity scales in the state distance
+DEFAULT_DRAWDOWN = 0.05  # The default start: p_0 = p_r - DEFAULT_DRAWDOWN (p_r - p_s)
 START_FRACTIONS = (0.5, 0.7, 0.85, 0.975, 0.995, 0.999)  # Further starts: p_0 = p_s + f (p_r - p_s)
 
 
@@ -49,13 +49,17 @@ def state_distance(x, reference, bc) -> float:
     to the reference, alpha absolute, T by T_r - T_s.
     """
     X, Y = np.reshape(x, (-1, DIM_X)), np.reshape(reference, (-1, DIM_X))
-    scale = np.column_stack([
-        np.full(len(Y), max(bc.p_r - bc.p_s, 1.0)),
-        np.maximum(np.abs(Y[:, 1]), V_FLOOR), np.maximum(np.abs(Y[:, 2]), V_FLOOR),
-        np.ones(len(Y)),
-        np.maximum(Y[:, 4], 1e-3), np.maximum(Y[:, 5], 1e-3),
-        np.full(len(Y), max(bc.T_r - bc.T_s, 1.0)),
-    ])
+    scale = np.column_stack(
+        [
+            np.full(len(Y), max(bc.p_r - bc.p_s, 1.0)),
+            np.maximum(np.abs(Y[:, 1]), V_FLOOR),
+            np.maximum(np.abs(Y[:, 2]), V_FLOOR),
+            np.ones(len(Y)),
+            np.maximum(Y[:, 4], 1e-3),
+            np.maximum(Y[:, 5], 1e-3),
+            np.full(len(Y), max(bc.T_r - bc.T_s, 1.0)),
+        ]
+    )
     return float(np.max(np.abs(X - Y) / scale))
 
 
@@ -63,8 +67,15 @@ def admissible(x, bc) -> bool:  # spec: SOL-1
     """p_s <= p <= p_r, 0 <= alpha <= 1, and positive velocities and densities at every point."""
     X = np.reshape(x, (-1, DIM_X))
     p, v_g, v_l, alpha, rho_g, rho_l, T = X.T
-    return bool(np.all(np.isfinite(X)) and np.all((bc.p_s <= p) & (p <= bc.p_r)) and np.all((0 <= alpha) & (alpha <= 1))
-                and np.all(v_g > 0) and np.all(v_l > 0) and np.all(rho_g > 0) and np.all(rho_l > 0))
+    return bool(
+        np.all(np.isfinite(X))
+        and np.all((bc.p_s <= p) & (p <= bc.p_r))
+        and np.all((0 <= alpha) & (alpha <= 1))
+        and np.all(v_g > 0)
+        and np.all(v_l > 0)
+        and np.all(rho_g > 0)
+        and np.all(rho_l > 0)
+    )
 
 
 def label_of(slope: float) -> str:
@@ -109,12 +120,13 @@ class StabilitySlope:  # spec: SOL-3
 @dataclass(frozen=True)
 class Attempt:
     """One start of a search and its outcome."""
-    start: str          # 'x_guess', 'default' or 'p_s + f (p_r - p_s)' with f
-    p_0: float          # p_0 the march started from (bar); NaN for a given guess
-    outcome: str        # 'root at p_0 = ... bar', 'march failed', 'solve failed (<Ipopt status>)' or 'not admissible ...'
+
+    start: str  # 'x_guess', 'default' or 'p_s + f (p_r - p_s)' with f
+    p_0: float  # p_0 the march started from (bar); NaN for a given guess
+    outcome: str  # 'root at p_0 = ... bar', 'march failed', 'solve failed (<Ipopt status>)' or 'not admissible ...'
     seconds: float = 0.0  # Time taken by the march and the solve
-    iterations: int = 0   # Ipopt iterations
-    found: int = 0        # Roots the start reached; 0 if it failed
+    iterations: int = 0  # Ipopt iterations
+    found: int = 0  # Roots the start reached; 0 if it failed
 
 
 class RootFinder:
@@ -130,8 +142,9 @@ class RootFinder:
     def starts(bc):
         """The march starts, as (name, p_0)."""
         dp = bc.p_r - bc.p_s
-        return [('default', bc.p_r - DEFAULT_DRAWDOWN * dp)] + [(f'p_s + {f} (p_r - p_s)', bc.p_s + f * dp)
-                                                                for f in START_FRACTIONS]
+        return [('default', bc.p_r - DEFAULT_DRAWDOWN * dp)] + [
+            (f'p_s + {f} (p_r - p_s)', bc.p_s + f * dp) for f in START_FRACTIONS
+        ]
 
     def find(self, bc, x_guess=None) -> RootSet:  # spec: SOL-2
         """Every root found from the starts, labelled, with the operating point."""
@@ -149,34 +162,76 @@ class RootFinder:
                 continue
             result = self.solver.solve(x0, params, lbx, ubx)
             if result.status != 'Solve_Succeeded':  # not Solved_To_Acceptable_Level, which CasADi reports as success
-                attempts.append(Attempt(name, np.nan if p_0 is None else p_0, f'solve failed ({result.status})',
-                                        time.perf_counter() - t0, result.stats.get('iter_count', 0)))
+                attempts.append(
+                    Attempt(
+                        name,
+                        np.nan if p_0 is None else p_0,
+                        f'solve failed ({result.status})',
+                        time.perf_counter() - t0,
+                        result.stats.get('iter_count', 0),
+                    )
+                )
                 continue
             if not admissible(result.x, bc):
-                attempts.append(Attempt(name, np.nan if p_0 is None else p_0, 'not admissible', time.perf_counter() - t0,
-                                        result.stats.get('iter_count', 0)))
+                attempts.append(
+                    Attempt(
+                        name,
+                        np.nan if p_0 is None else p_0,
+                        'not admissible',
+                        time.perf_counter() - t0,
+                        result.stats.get('iter_count', 0),
+                    )
+                )
                 continue
             if not self.system.subsonic(result.x, params):  # spec: SOL-8
-                attempts.append(Attempt(name, np.nan if p_0 is None else p_0, 'not admissible (a cell is supersonic)',
-                                        time.perf_counter() - t0, result.stats.get('iter_count', 0)))
+                attempts.append(
+                    Attempt(
+                        name,
+                        np.nan if p_0 is None else p_0,
+                        'not admissible (a cell is supersonic)',
+                        time.perf_counter() - t0,
+                        result.stats.get('iter_count', 0),
+                    )
+                )
                 continue
             if not self.system.energy_rows_rise(result.x, params):  # spec: SOL-9
-                attempts.append(Attempt(name, np.nan if p_0 is None else p_0,
-                                        'not admissible (an energy row falls in T)', time.perf_counter() - t0,
-                                        result.stats.get('iter_count', 0)))
+                attempts.append(
+                    Attempt(
+                        name,
+                        np.nan if p_0 is None else p_0,
+                        'not admissible (an energy row falls in T)',
+                        time.perf_counter() - t0,
+                        result.stats.get('iter_count', 0),
+                    )
+                )
                 continue
             same = [x for x in solutions if state_distance(result.x, x, bc) <= TOL_X]
             if not same:
                 solutions.append(result.x)
             root = same[0] if same else result.x
-            attempts.append(Attempt(name, np.nan if p_0 is None else p_0, f'root at p_0 = {root[0]:.4f} bar',
-                                    time.perf_counter() - t0, result.stats.get('iter_count', 0), found=1))
+            attempts.append(
+                Attempt(
+                    name,
+                    np.nan if p_0 is None else p_0,
+                    f'root at p_0 = {root[0]:.4f} bar',
+                    time.perf_counter() - t0,
+                    result.stats.get('iter_count', 0),
+                    found=1,
+                )
+            )
 
         roots = []
         for x in solutions:
             slope = self.slope(x, params)
-            roots.append(Root(x=x, label=label_of(slope), slope=slope, off_table=self.system.wp.fluid.off_table(x),
-                              **self.system.root_outputs(x, params)))
+            roots.append(
+                Root(
+                    x=x,
+                    label=label_of(slope),
+                    slope=slope,
+                    off_table=self.system.wp.fluid.off_table(x),
+                    **self.system.root_outputs(x, params),
+                )
+            )
         return RootSet.of(roots, search=attempts)
 
     def flow_regimes(self, x) -> tuple:

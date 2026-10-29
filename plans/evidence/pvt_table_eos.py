@@ -56,16 +56,31 @@ import pandas as pd
 from neqsim import jneqsim
 
 # ManyWells's constants (manywells.units), copied because this script runs without ManyWells
-R_UNIVERSAL = 8314.46       # J/(kmol K)
+R_UNIVERSAL = 8314.46  # J/(kmol K)
 P_REF, T_REF = 101_325.0, 288.15
 CF_BAR = 1e5
 
-DEFINED = [('nitrogen', 0.5), ('CO2', 2.0), ('methane', 38.0), ('ethane', 6.5), ('propane', 5.0), ('i-butane', 0.9),
-           ('n-butane', 2.4), ('i-pentane', 0.9), ('n-pentane', 1.3), ('n-hexane', 1.8)]
-TBP = [('C7', 3.0, 0.096, 0.738), ('C8', 3.3, 0.107, 0.765), ('C9', 2.4, 0.121, 0.781),
-       ('C10_C19', 18.0, 0.190, 0.840), ('C20_plus', 14.2, 0.400, 0.920)]
-P_AXIS = np.concatenate([[1.0], np.arange(10.0, 400.0 + 1e-9, 10.0)])     # bar
-T_AXIS = np.arange(280.0, 400.0 + 1e-9, 10.0)                               # K
+DEFINED = [
+    ('nitrogen', 0.5),
+    ('CO2', 2.0),
+    ('methane', 38.0),
+    ('ethane', 6.5),
+    ('propane', 5.0),
+    ('i-butane', 0.9),
+    ('n-butane', 2.4),
+    ('i-pentane', 0.9),
+    ('n-pentane', 1.3),
+    ('n-hexane', 1.8),
+]
+TBP = [
+    ('C7', 3.0, 0.096, 0.738),
+    ('C8', 3.3, 0.107, 0.765),
+    ('C9', 2.4, 0.121, 0.781),
+    ('C10_C19', 18.0, 0.190, 0.840),
+    ('C20_plus', 14.2, 0.400, 0.920),
+]
+P_AXIS = np.concatenate([[1.0], np.arange(10.0, 400.0 + 1e-9, 10.0)])  # bar
+T_AXIS = np.arange(280.0, 400.0 + 1e-9, 10.0)  # K
 
 
 def system():
@@ -107,8 +122,15 @@ class Fluid:
         for i in range(n):
             ph = self.s.getPhase(i)
             beta = float(ph.getBeta()) if n > 1 else 1.0
-            phases.append((str(ph.getType()), beta * float(ph.getMolarMass()), float(ph.getDensity('kg/m3')),
-                           float(ph.getMolarMass()), float(ph.getViscosity('kg/msec'))))
+            phases.append(
+                (
+                    str(ph.getType()),
+                    beta * float(ph.getMolarMass()),
+                    float(ph.getDensity('kg/m3')),
+                    float(ph.getMolarMass()),
+                    float(ph.getViscosity('kg/msec')),
+                )
+            )
         total = sum(q[1] for q in phases)
         phases = [(t, m / total, rho, M, mu) for t, m, rho, M, mu in phases]
         ift = float(self.s.getInterfacialTension(0, 1)) if n > 1 else np.nan
@@ -130,14 +152,15 @@ class Fluid:
 
 def _jdouble(z):
     from jpype import JArray, JDouble
+
     return JArray(JDouble)([float(v) for v in z])
 
 
 def separation(f, z):
     """Single-stage separation at standard conditions: rho_o (kg/m3), rho_g (kg/Sm3) and gor (Sm3/Sm3)."""
     phases, _ = f.flash(z, P_REF / CF_BAR, T_REF)
-    (_, X, _, M_V, _), (_, _, rho_L, _, _) = sorted(phases, key=lambda q: q[2])   # vapour first
-    rho_g = P_REF * M_V * 1000 / (R_UNIVERSAL * T_REF)                              # M_V in kg/mol -> kg/kmol
+    (_, X, _, M_V, _), (_, _, rho_L, _, _) = sorted(phases, key=lambda q: q[2])  # vapour first
+    rho_g = P_REF * M_V * 1000 / (R_UNIVERSAL * T_REF)  # M_V in kg/mol -> kg/kmol
     gor = (X / rho_g) / ((1 - X) / rho_L)
     return rho_L, rho_g, gor
 
@@ -163,19 +186,28 @@ def tabulate(f, z, T_axis=T_AXIS):
         for p in sorted(p_axis):
             phases, ift = f.flash(z, p, T)
             if p < pb - 1e-6 and len(phases) < 2:
-                missed += 1                                     # A flash that missed the split: retry just below p_b
+                missed += 1  # A flash that missed the split: retry just below p_b
                 phases, ift = f.flash(z, p * (1 - 1e-6), T)
             if len(phases) == 2:
                 (_, X, rho_V, _, mu_g), (_, _, rho_L, _, mu_o) = sorted(phases, key=lambda q: q[2])
                 sigma_b = ift
-            else:                                               # Liquid only: the gas is the incipient vapour
+            else:  # Liquid only: the gas is the incipient vapour
                 (_, _, rho_L, _, mu_o), X = phases[0], 0.0
                 gas, _ = f.flash(y_b, p, T)
-                rho_V = sum(q[1] for q in gas) / sum(q[1] / q[2] for q in gas)      # Its density, whole
-                mu_g = min(gas, key=lambda q: q[2])[4]                  # The vapour's, where it splits at its dew point
-            rows.append(dict(p=p, T=T, R_so=gor - X * m / rho_g, B_o=(1 - X) * m / rho_L,
-                             Z=CF_BAR * p / (rho_V * R_s * T), mu_o=mu_o, mu_g=mu_g,
-                             sigma=sigma_b if X == 0.0 else ift))
+                rho_V = sum(q[1] for q in gas) / sum(q[1] / q[2] for q in gas)  # Its density, whole
+                mu_g = min(gas, key=lambda q: q[2])[4]  # The vapour's, where it splits at its dew point
+            rows.append(
+                dict(
+                    p=p,
+                    T=T,
+                    R_so=gor - X * m / rho_g,
+                    B_o=(1 - X) * m / rho_L,
+                    Z=CF_BAR * p / (rho_V * R_s * T),
+                    mu_o=mu_o,
+                    mu_g=mu_g,
+                    sigma=sigma_b if X == 0.0 else ift,
+                )
+            )
     df = pd.DataFrame(rows)
     # Above the bubble point, the surface tension is held at its value there
     df['sigma'] = df.groupby('T')['sigma'].transform(lambda s: s.ffill())
@@ -203,8 +235,10 @@ def main(out):
         fh.write('\n'.join(header) + '\n')
         df.to_csv(fh, index=False, float_format='%.10g')
     rho_air = P_REF * 28.97 / (R_UNIVERSAL * T_REF)
-    print(f'rho_o {s["rho_o"]:.2f} kg/m3, rho_g {s["rho_g"]:.4f} kg/Sm3 (gravity {s["rho_g"] / rho_air:.3f}), '
-          f'gor {s["gor"]:.2f} Sm3/Sm3')
+    print(
+        f'rho_o {s["rho_o"]:.2f} kg/m3, rho_g {s["rho_g"]:.4f} kg/Sm3 (gravity {s["rho_g"] / rho_air:.3f}), '
+        f'gor {s["gor"]:.2f} Sm3/Sm3'
+    )
     print('bubble points (bar):', {int(T): round(p, 2) for T, (p, _) in s['p_b'].items()})
     print(f'{len(df)} nodes ({s["n_p"]} x {len(T_AXIS)}), {s["missed"]} flashes missed the split and were retried')
     print(df.describe().T[['min', 'max']].to_string())
@@ -217,7 +251,7 @@ def split(df, s, gor=None):
     m = s['rho_o'] + gor * s['rho_g']
     R_d = np.minimum(df.R_so, gor)
     X = (gor - R_d) * s['rho_g'] / m
-    rho_L = (s['rho_o'] + df.R_so * s['rho_g']) / df.B_o                               # PVT-OIL-9, as PVT-MIX-6 has it
+    rho_L = (s['rho_o'] + df.R_so * s['rho_g']) / df.B_o  # PVT-OIL-9, as PVT-MIX-6 has it
     rho_V = CF_BAR * df.p / (df.Z * P_REF / (s['rho_g'] * T_REF) * df['T'])
     return X, rho_L, rho_V
 
@@ -229,11 +263,18 @@ def nodes(d):
 
 def errors(got, want):
     """Errors of a reading (X, rho_L, rho_V) against the stream's own table, and of the no-slip density."""
-    ns = lambda X, L, V: 1 / (X / V + (1 - X) / L)
+
+    def ns(X, L, V):
+        return 1 / (X / V + (1 - X) / L)
+
     d_ns = ns(*got) / ns(*want) - 1
-    return {'max |dX|': np.max(np.abs(got[0] - want[0])), 'max |d rho_L| (%)': 100 * np.max(np.abs(got[1] / want[1] - 1)),
-            'max |d rho_V| (%)': 100 * np.max(np.abs(got[2] / want[2] - 1)),
-            'median |d rho_ns| (%)': 100 * np.median(np.abs(d_ns)), 'max |d rho_ns| (%)': 100 * np.max(np.abs(d_ns))}
+    return {
+        'max |dX|': np.max(np.abs(got[0] - want[0])),
+        'max |d rho_L| (%)': 100 * np.max(np.abs(got[1] / want[1] - 1)),
+        'max |d rho_V| (%)': 100 * np.max(np.abs(got[2] / want[2] - 1)),
+        'median |d rho_ns| (%)': 100 * np.median(np.abs(d_ns)),
+        'max |d rho_ns| (%)': 100 * np.max(np.abs(d_ns)),
+    }
 
 
 def gor_study():
@@ -248,11 +289,19 @@ def gor_study():
     for factor in (0.6, 0.8, 0.9, 1.1, 1.25, 1.5, 2.0):
         df, s = tables[factor] = tabulate(f, recombined(f, factor))
         assert abs(s['rho_o'] / s0['rho_o'] - 1) < 1e-6 and abs(s['rho_g'] / s0['rho_g'] - 1) < 1e-6, (s, s0)
-        rows.append({'GOR': round(s['gor'], 1), 'GOR / table\'s': factor, 'p_b at 360 K (bar)': round(s['p_b'][360.0][0], 1),
-                     **errors(split(nodes(tables[1.0][0]), s0, s['gor']), split(nodes(df), s))})
+        rows.append(
+            {
+                'GOR': round(s['gor'], 1),
+                "GOR / table's": factor,
+                'p_b at 360 K (bar)': round(s['p_b'][360.0][0], 1),
+                **errors(split(nodes(tables[1.0][0]), s0, s['gor']), split(nodes(df), s)),
+            }
+        )
     pd.set_option('display.width', 200)
-    print(f"The table at GOR {s0['gor']:.1f}, read at the stream's GOR by the black-oil rule, against the stream's own "
-          'table; nodes 10-400 bar, 300-390 K:')
+    print(
+        f"The table at GOR {s0['gor']:.1f}, read at the stream's GOR by the black-oil rule, against the stream's own "
+        'table; nodes 10-400 bar, 300-390 K:'
+    )
     print(pd.DataFrame(rows).round(4).to_string(index=False))
     rows = []
     factors = sorted(tables)
@@ -263,10 +312,17 @@ def gor_study():
         mixed = a.copy()
         for c in ('R_so', 'B_o', 'Z'):
             mixed[c] = (1 - w) * a[c] + w * b[c]
-        rows.append({'GOR': round(s['gor'], 1), 'between': f'{s_a["gor"]:.1f} and {s_b["gor"]:.1f}',
-                     **errors(split(mixed, s), split(nodes(df), s))})
-    print('\nA GOR axis: the columns interpolated linearly in GOR between the neighbouring tables, against the stream\'s '
-          'own table, at the same nodes:')
+        rows.append(
+            {
+                'GOR': round(s['gor'], 1),
+                'between': f'{s_a["gor"]:.1f} and {s_b["gor"]:.1f}',
+                **errors(split(mixed, s), split(nodes(df), s)),
+            }
+        )
+    print(
+        "\nA GOR axis: the columns interpolated linearly in GOR between the neighbouring tables, against the stream's "
+        'own table, at the same nodes:'
+    )
     print(pd.DataFrame(rows).round(4).to_string(index=False))
 
 
@@ -285,12 +341,13 @@ def gor_table(out):
     header = [
         '# ManyWells PVT table (specs/model/pvt/table.md)',
         '# name: synthetic_eos_oil_gor',
-        '# source: plans/evidence/pvt_table_eos.py gor_table; synthetic_eos_oil.csv\'s stream recombined from its own '
+        "# source: plans/evidence/pvt_table_eos.py gor_table; synthetic_eos_oil.csv's stream recombined from its own "
         'separator gas and stock-tank oil at 0.6, 0.8, 1, 1.25 and 1.5 times its GOR, each GOR with its own grid',
         '# separation: single stage at 1.01325 bar and 288.15 K',
         f'# rho_o: {s0["rho_o"]:.4f}',
         f'# rho_g: {s0["rho_g"]:.6f}',
-        '# p_bubble at 360 K: ' + ', '.join(f'{s["gor"]:.1f}={s["p_b"][360.0][0]:.3f}' for s in gors)
+        '# p_bubble at 360 K: '
+        + ', '.join(f'{s["gor"]:.1f}={s["p_b"][360.0][0]:.3f}' for s in gors)
         + '  (GOR in Sm3/Sm3 = p in bar)',
         '# columns: gor (Sm3/Sm3), p (bar), T (K), R_so (Sm3/Sm3), B_o (-), Z (-, with R_s at standard conditions), '
         'mu_o and mu_g (Pa s), sigma (N/m)',

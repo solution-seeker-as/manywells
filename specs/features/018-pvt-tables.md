@@ -37,11 +37,11 @@ Three details of phase B, each as recommended (Bjarne, 2026-10-28):
 ```python
 @dataclass(frozen=True)
 class FluidModel:
-    pvt: PVTModel = BlackOil()       # the hydrocarbon PVT
-    rho_w: float = 999.1             # water, incompressible (PVT-WAT-1)
+    pvt: PVTModel = BlackOil()  # the hydrocarbon PVT
+    rho_w: float = 999.1  # water, incompressible (PVT-WAT-1)
     gor: float = 200.0
     wlr: float = 0.0
-    cp_g, cp_o, cp_w                 # as now
+    cp_g, cp_o, cp_w  # as now
     surface_tension_model: str = 'oil'
     # rho_o, rho_g: properties, from pvt
 ```

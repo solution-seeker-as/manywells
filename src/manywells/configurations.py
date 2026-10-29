@@ -26,7 +26,6 @@ from manywells.choke import BernoulliChokeModel, SimpsonChokeModel
 from manywells.friction import FixedFrictionFactor, RoughnessFriction
 from manywells.geometry import WellGeometry
 from manywells.inflow import ProductivityIndex, Vogel
-from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.dead_oil import DeadOil
 from manywells.pvt.fluid import FluidModel
 from manywells.simulator import WellProperties
@@ -53,8 +52,14 @@ def v1_fluid(rho_l, R_s, cp_g, cp_l, f_g) -> FluidModel:  # spec: SMP-40
     """
     rho_g_sc = P_REF / (R_s * T_REF)  # Gas density at standard conditions (PVT-GAS-2)
     gor = f_g * rho_l / ((1 - f_g) * rho_g_sc)
-    return FluidModel(pvt=DeadOil(rho_o=rho_l, rho_g=rho_g_sc, gas_law='ideal'), wlr=0.0, gor=gor,
-                      surface_tension_model='liquid', cp_g=cp_g, cp_o=cp_l)
+    return FluidModel(
+        pvt=DeadOil(rho_o=rho_l, rho_g=rho_g_sc, gas_law='ideal'),
+        wlr=0.0,
+        gor=gor,
+        surface_tension_model='liquid',
+        cp_g=cp_g,
+        cp_o=cp_l,
+    )
 
 
 def v1_well(*, L, D, rho_l, R_s, cp_g, cp_l, f_D, h, f_g, inflow, choke, n_cells) -> WellProperties:
@@ -74,12 +79,17 @@ def v1_well(*, L, D, rho_l, R_s, cp_g, cp_l, f_D, h, f_g, inflow, choke, n_cells
     :param choke: SimpsonChokeModel or BernoulliChokeModel
     :param n_cells: Number of cells N
     """
-    wp = WellProperties(geometry=WellGeometry.vertical(length=L, n_cells=n_cells, D=D),
-                        fluid=v1_fluid(rho_l, R_s, cp_g, cp_l, f_g),
-                        friction=FixedFrictionFactor(f_D=f_D),
-                        thermal=ThermalModel(h=h, frictional_heating=False, gravity_term=False, lift_gas_mixing=False,
-                                             joule_thomson=False),
-                        slip=SlipModel(regime_model='fitted'), inflow=inflow, choke=choke)
+    wp = WellProperties(
+        geometry=WellGeometry.vertical(length=L, n_cells=n_cells, D=D),
+        fluid=v1_fluid(rho_l, R_s, cp_g, cp_l, f_g),
+        friction=FixedFrictionFactor(f_D=f_D),
+        thermal=ThermalModel(
+            h=h, frictional_heating=False, gravity_term=False, lift_gas_mixing=False, joule_thomson=False
+        ),
+        slip=SlipModel(regime_model='fitted'),
+        inflow=inflow,
+        choke=choke,
+    )
     check(wp, V1)
     return wp
 
@@ -109,9 +119,16 @@ def differences(wp: WellProperties, configuration: str) -> list:
     if configuration not in CONFIGURATIONS:
         raise ValueError(f'unknown configuration {configuration!r}, expected one of {CONFIGURATIONS}')
     geo, fluid = wp.geometry, wp.fluid
-    out = [f'{name}: {type(getattr(wp, name)).__name__}, not {cls.__name__}'
-           for name, cls in (('geometry', WellGeometry), ('fluid', FluidModel), ('thermal', ThermalModel),
-                             ('slip', SlipModel)) if type(getattr(wp, name)) is not cls]
+    out = [
+        f'{name}: {type(getattr(wp, name)).__name__}, not {cls.__name__}'
+        for name, cls in (
+            ('geometry', WellGeometry),
+            ('fluid', FluidModel),
+            ('thermal', ThermalModel),
+            ('slip', SlipModel),
+        )
+        if type(getattr(wp, name)) is not cls
+    ]
     thermal = _thermal_options(wp.thermal)
     if configuration == V1:
         if not np.allclose(geo.cos_incl, 1.0, rtol=0, atol=1e-12):
@@ -123,7 +140,7 @@ def differences(wp: WellProperties, configuration: str) -> list:
             out.append(f'friction: {type(wp.friction).__name__}, not FixedFrictionFactor (FRIC-2)')
         out += [f'thermal: {k} is on' for k, v in thermal.items() if v]
         if wp.slip != SlipModel(regime_model='fitted'):
-            out.append(f'slip: not v1.0.0\'s fitted classifier with its parameters ({wp.slip})')
+            out.append(f"slip: not v1.0.0's fitted classifier with its parameters ({wp.slip})")
         if type(wp.inflow) not in (Vogel, ProductivityIndex):
             out.append(f'inflow: {type(wp.inflow).__name__}, not Vogel or ProductivityIndex (INF-1, INF-2)')
         if type(wp.choke) not in (SimpsonChokeModel, BernoulliChokeModel):

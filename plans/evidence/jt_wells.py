@@ -52,7 +52,7 @@ def j_papay(fluid, s):
     ppc, tpc = sutton_pseudo_critical(fluid.sg_gas)
     ppr, tpr = s.p * CF_BAR / ppc, s.T / tpc
     a = 3.52 * ppr * ca.power(10, -0.9813 * tpr)
-    b = 0.274 * ppr ** 2 * ca.power(10, -0.8157 * tpr)
+    b = 0.274 * ppr**2 * ca.power(10, -0.8157 * tpr)
     return tpr * np.log(10) * (0.9813 * a - 0.8157 * b) / (1 - a + b)
 
 
@@ -62,17 +62,19 @@ def j_dak(fluid, s):
     ppc, tpc = sutton_pseudo_critical(fluid.sg_gas)
     r = 0.27 * s.rho_g * fluid.R_s * tpc / ppc
     t = s.T / tpc
-    c1 = a1 + a2 / t + a3 / t ** 3 + a4 / t ** 4 + a5 / t ** 5
-    c2 = a6 + a7 / t + a8 / t ** 2
-    c3 = a9 * (a7 / t + a8 / t ** 2)
-    c4 = a10 / t ** 3
-    e = ca.exp(-a11 * r ** 2)
-    Z = 1 + c1 * r + c2 * r ** 2 - c3 * r ** 5 + c4 * r ** 2 * (1 + a11 * r ** 2) * e
-    Z_r = c1 + 2 * c2 * r - 5 * c3 * r ** 4 + 2 * c4 * r * e * (1 + a11 * r ** 2 - a11 ** 2 * r ** 4)
-    tZ_t = ((-a2 / t - 3 * a3 / t ** 3 - 4 * a4 / t ** 4 - 5 * a5 / t ** 5) * r
-            + (-a7 / t - 2 * a8 / t ** 2) * r ** 2
-            - a9 * (-a7 / t - 2 * a8 / t ** 2) * r ** 5
-            - 3 * a10 / t ** 3 * r ** 2 * (1 + a11 * r ** 2) * e)
+    c1 = a1 + a2 / t + a3 / t**3 + a4 / t**4 + a5 / t**5
+    c2 = a6 + a7 / t + a8 / t**2
+    c3 = a9 * (a7 / t + a8 / t**2)
+    c4 = a10 / t**3
+    e = ca.exp(-a11 * r**2)
+    Z = 1 + c1 * r + c2 * r**2 - c3 * r**5 + c4 * r**2 * (1 + a11 * r**2) * e
+    Z_r = c1 + 2 * c2 * r - 5 * c3 * r**4 + 2 * c4 * r * e * (1 + a11 * r**2 - a11**2 * r**4)
+    tZ_t = (
+        (-a2 / t - 3 * a3 / t**3 - 4 * a4 / t**4 - 5 * a5 / t**5) * r
+        + (-a7 / t - 2 * a8 / t**2) * r**2
+        - a9 * (-a7 / t - 2 * a8 / t**2) * r**5
+        - 3 * a10 / t**3 * r**2 * (1 + a11 * r**2) * e
+    )
     return (tZ_t - r * Z_r) / (Z + r * Z_r)
 
 
@@ -95,8 +97,14 @@ class JouleThomsonPrototype(ThermalModel):
 def outputs(sim, root, bc):
     T = root.state[:, 6]
     T_a = np.array([sim.wp.thermal.ambient_temperature(f, bc.T_r, bc.T_s) for f in sim.wp.geometry.tvd_frac])
-    return dict(PBH=root.state[0, 0], PWH=root.state[-1, 0], TWH=T[-1], alpha_wh=root.state[-1, 3],
-                min_T_minus_Ta=float(np.min(T[1:] - T_a[1:])), min_T_minus_Ts=float(np.min(T) - bc.T_s))
+    return dict(
+        PBH=root.state[0, 0],
+        PWH=root.state[-1, 0],
+        TWH=T[-1],
+        alpha_wh=root.state[-1, 3],
+        min_T_minus_Ta=float(np.min(T[1:] - T_a[1:])),
+        min_T_minus_Ts=float(np.min(T) - bc.T_s),
+    )
 
 
 def well_cases(well):
@@ -110,8 +118,20 @@ def well_cases(well):
         except ValueError:  # no oil to give a gas-oil ratio (SMP-43)
             continue
         ppc, _ = sutton_pseudo_critical(wp.fluid.sg_gas)
-        rec = dict(well=well, k=k, trajectory=draw.trajectory[0], f_g=fractions[0], w_lg=bc.w_lg, p_r=bc.p_r,
-                   p_s=bc.p_s, T_r=bc.T_r, u=bc.u, h=draw.h, sg_gas=wp.fluid.sg_gas, p_pc=ppc / CF_BAR)
+        rec = dict(
+            well=well,
+            k=k,
+            trajectory=draw.trajectory[0],
+            f_g=fractions[0],
+            w_lg=bc.w_lg,
+            p_r=bc.p_r,
+            p_s=bc.p_s,
+            T_r=bc.T_r,
+            u=bc.u,
+            h=draw.h,
+            sg_gas=wp.fluid.sg_gas,
+            p_pc=ppc / CF_BAR,
+        )
         t0 = time.time()
         try:
             sim = SSDFSimulator(wp)
@@ -141,11 +161,17 @@ def summary(df):
         print(f'  {m}: operating point in {base[f"TWH_{m}"].notna().sum()} of them')
     ok = base.dropna(subset=[f'TWH_{m}' for m in MODES]).copy()
     print(f'{len(ok)} cases with an operating point in every variant')
-    diff = pd.DataFrame({
-        'TWH dak': ok.TWH_dak_sub - ok.TWH_base, 'PWH dak': ok.PWH_dak_sub - ok.PWH_base,
-        'PBH dak': ok.PBH_dak_sub - ok.PBH_base,
-        'TWH dak-pap': ok.TWH_dak_sub - ok.TWH_pap_sub, 'PWH dak-pap': ok.PWH_dak_sub - ok.PWH_pap_sub,
-        'TWH sub-dp': ok.TWH_pap_sub - ok.TWH_pap_dp, 'PWH sub-dp': ok.PWH_pap_sub - ok.PWH_pap_dp})
+    diff = pd.DataFrame(
+        {
+            'TWH dak': ok.TWH_dak_sub - ok.TWH_base,
+            'PWH dak': ok.PWH_dak_sub - ok.PWH_base,
+            'PBH dak': ok.PBH_dak_sub - ok.PBH_base,
+            'TWH dak-pap': ok.TWH_dak_sub - ok.TWH_pap_sub,
+            'PWH dak-pap': ok.PWH_dak_sub - ok.PWH_pap_sub,
+            'TWH sub-dp': ok.TWH_pap_sub - ok.TWH_pap_dp,
+            'PWH sub-dp': ok.PWH_pap_sub - ok.PWH_pap_dp,
+        }
+    )
     print('Quantiles of the differences (K, bar):')
     print(diff.quantile(q).round(2).to_string())
     print(f'Share with |TWH dak - pap| > 1 K: {(diff["TWH dak-pap"].abs() > 1).mean():.3f}')
@@ -155,11 +181,15 @@ def summary(df):
     ok['TWH dak'], ok['TWH dak-pap'] = diff['TWH dak'], diff['TWH dak-pap']
     print(ok.groupby('f_g bin', observed=True)['TWH dak'].describe()[['count', 'min', '50%', 'max']].round(2))
     print(ok.groupby('p_pr,bh bin', observed=True)['TWH dak-pap'].describe()[['count', 'min', '50%', 'max']].round(2))
-    print(f'Bottomhole p_pr from {ok.ppr_bh.min():.2f} to {ok.ppr_bh.max():.2f}; above 6 in {(ok.ppr_bh > 6).mean():.3f}')
+    print(
+        f'Bottomhole p_pr from {ok.ppr_bh.min():.2f} to {ok.ppr_bh.max():.2f}; above 6 in {(ok.ppr_bh > 6).mean():.3f}'
+    )
     for m in ('base',) + MODES:
         c = ok[f'min_T_minus_Ta_{m}']
-        print(f'{m}: colder than ambient somewhere in {(c < 0).sum()} cases (min {c.min():.2f} K); '
-              f'min T - T_s {ok[f"min_T_minus_Ts_{m}"].min():.2f} K')
+        print(
+            f'{m}: colder than ambient somewhere in {(c < 0).sum()} cases (min {c.min():.2f} K); '
+            f'min T - T_s {ok[f"min_T_minus_Ts_{m}"].min():.2f} K'
+        )
 
 
 def main(n_wells, out):

@@ -21,8 +21,13 @@ from pathlib import Path
 from manywells_verify.checks import Check, Tolerances, check_convergence, verify_case
 
 CHECKS = ('invariants', 'operating_point', 'root_set', 'stability')
-TITLES = {'invariants': 'Invariants', 'operating_point': 'Operating point', 'root_set': 'Root set',
-          'stability': 'Stability', 'convergence': 'Convergence (groups)'}
+TITLES = {
+    'invariants': 'Invariants',
+    'operating_point': 'Operating point',
+    'root_set': 'Root set',
+    'stability': 'Stability',
+    'convergence': 'Convergence (groups)',
+}
 STATUSES = ('pass', 'fail', 'expected', 'indeterminate', 'n/a')
 
 
@@ -38,9 +43,9 @@ class Report:
     candidate: str
     model: str
     tolerances: Tolerances
-    results: list                                    # CaseResult per case
-    convergence: dict                                # group id -> Check
-    expected: dict = field(default_factory=dict)     # (case_id or group, check) -> reason
+    results: list  # CaseResult per case
+    convergence: dict  # group id -> Check
+    expected: dict = field(default_factory=dict)  # (case_id or group, check) -> reason
 
     def _entries(self):
         """(id, check name, Check) for every check of every case and group."""
@@ -78,22 +83,37 @@ class Report:
         hits, eligible = self.stable_root_rate()
         rate = f'{100 * hits / eligible:.1f}%' if eligible else 'n/a'
         verdict = 'PASS' if not failures else 'FAIL'
-        lines = [f'## manywells-verify: {self.candidate} against ManyWells {self.model}', '',
-                 f'**Verdict: {verdict}.** {len(failures)} unexpected failures, {n_expected} expected failures, '
-                 f'{len(self.results)} cases, {len(self.convergence)} convergence groups.', '',
-                 f'**Stable-root rate: {rate}** ({hits} of {eligible} cases with a stable reference root).', '',
-                 '| Check | Pass | Fail | Expected fail | Indeterminate | n/a |',
-                 '|---|--:|--:|--:|--:|--:|']
+        lines = [
+            f'## manywells-verify: {self.candidate} against ManyWells {self.model}',
+            '',
+            f'**Verdict: {verdict}.** {len(failures)} unexpected failures, {n_expected} expected failures, '
+            f'{len(self.results)} cases, {len(self.convergence)} convergence groups.',
+            '',
+            f'**Stable-root rate: {rate}** ({hits} of {eligible} cases with a stable reference root).',
+            '',
+            '| Check | Pass | Fail | Expected fail | Indeterminate | n/a |',
+            '|---|--:|--:|--:|--:|--:|',
+        ]
         counts = self.counts()
         for name in CHECKS + ('convergence',):
             c = counts[name]
             lines.append(f'| {TITLES[name]} | ' + ' | '.join(str(c[s]) for s in STATUSES) + ' |')
-        ops = [r for r in self.results if r.checks['operating_point'].status == 'pass'
-               and r.checks['operating_point'].value is not None]
+        ops = [
+            r
+            for r in self.results
+            if r.checks['operating_point'].status == 'pass' and r.checks['operating_point'].value is not None
+        ]
         worst = max(ops, key=lambda r: r.checks['operating_point'].value, default=None)
-        lines += ['', (f'Largest distance of a passing operating point to its reference root: '
-                       f'{worst.checks["operating_point"].value:.1e} ({worst.case.case_id}). ' if worst else '')
-                  + f'tol_x = {self.tolerances.tol_x:g}.']
+        lines += [
+            '',
+            (
+                f'Largest distance of a passing operating point to its reference root: '
+                f'{worst.checks["operating_point"].value:.1e} ({worst.case.case_id}). '
+                if worst
+                else ''
+            )
+            + f'tol_x = {self.tolerances.tol_x:g}.',
+        ]
 
         def section(title, items):
             if not items:
@@ -111,35 +131,60 @@ class Report:
     def to_json(self) -> dict:
         def check_dict(key, name, c):
             return {'status': self.status(key, name, c), 'detail': c.detail, 'value': c.value}
+
         hits, eligible = self.stable_root_rate()
         return {
-            'candidate': self.candidate, 'model': self.model, 'tolerances': asdict(self.tolerances),
+            'candidate': self.candidate,
+            'model': self.model,
+            'tolerances': asdict(self.tolerances),
             'verdict': 'PASS' if not self.unexpected_failures() else 'FAIL',
             'stable_root_rate': {'hits': hits, 'eligible': eligible},
-            'cases': [{'case_id': r.case.case_id, 'source': r.case.source, 'group': r.case.group,
-                       'checks': {n: check_dict(r.case.case_id, n, r.checks[n]) for n in CHECKS},
-                       'roots': [{'index': rr.index, 'invariants': asdict(rr.invariants), 'match': rr.match,
-                                  'distance': rr.distance} for rr in r.roots],
-                       'findings': r.findings} for r in self.results],
+            'cases': [
+                {
+                    'case_id': r.case.case_id,
+                    'source': r.case.source,
+                    'group': r.case.group,
+                    'checks': {n: check_dict(r.case.case_id, n, r.checks[n]) for n in CHECKS},
+                    'roots': [
+                        {
+                            'index': rr.index,
+                            'invariants': asdict(rr.invariants),
+                            'match': rr.match,
+                            'distance': rr.distance,
+                        }
+                        for rr in r.roots
+                    ],
+                    'findings': r.findings,
+                }
+                for r in self.results
+            ],
             'convergence': {g: check_dict(g, 'convergence', c) for g, c in self.convergence.items()},
         }
 
 
-def verify(cases: dict, candidate: dict, reference: dict, tol: Tolerances = Tolerances(),
-           expected: dict | None = None, name: str = 'candidate') -> Report:
+def verify(
+    cases: dict,
+    candidate: dict,
+    reference: dict,
+    tol: Tolerances = Tolerances(),
+    expected: dict | None = None,
+    name: str = 'candidate',
+) -> Report:
     """
     Check a candidate's roots on every case. Every case has a reference root set; a case with
     no reference rows has an empty one (no root). A case with no candidate rows means that the
     candidate reported no root.
     """
-    results = [verify_case(case, candidate.get(cid, []), reference.get(cid, []), tol)
-               for cid, case in cases.items()]
+    results = [verify_case(case, candidate.get(cid, []), reference.get(cid, []), tol) for cid, case in cases.items()]
 
     groups = defaultdict(list)
     for res in results:
         if res.case.group:
-            op = [candidate[res.case.case_id][rr.index] for rr in res.roots
-                  if rr.valid and candidate[res.case.case_id][rr.index].operating_point]
+            op = [
+                candidate[res.case.case_id][rr.index]
+                for rr in res.roots
+                if rr.valid and candidate[res.case.case_id][rr.index].operating_point
+            ]
             groups[res.case.group].append((res.case, op[0] if op else None))
     convergence = {g: check_convergence(members, tol) for g, members in sorted(groups.items())}
     models = {c.model for c in cases.values()}

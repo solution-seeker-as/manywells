@@ -1,18 +1,22 @@
 """Tests for the black oil PVT model and its simulator integration."""
 
 import pytest
-import numpy as np
 
-from manywells.pvt import P_REF, T_REF, WATER, density_from_api, api_from_density, gas_density_from_sg
+from manywells.pvt import P_REF, T_REF, density_from_api, gas_density_from_sg
 from manywells.pvt.black_oil import BlackOil, BlackOilPVT
-from manywells.units import CF_PSI, CF_RS, M_AIR, CF_BAR
+from manywells.units import CF_PSI, CF_RS, CF_BAR
 from manywells.pvt.gas import gas_fvf, gas_density_std
 from manywells.pvt.water import water_fvf
+from manywells.geometry import WellGeometry
+from manywells.pvt.dead_oil import DeadOil
+from manywells.pvt.fluid import FluidModel
+from manywells.simulator import WellProperties, BoundaryConditions, SSDFSimulator
 
 
 # ---------------------------------------------------------------------------
 # Shared test fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def bo_light():
@@ -20,8 +24,8 @@ def bo_light():
     return BlackOilPVT(
         api=35,
         sg_gas=0.65,
-        p_sep=100 * 6894.76,   # 100 psia in Pa
-        T_sep=273.15 + 21.1,   # 70 degF in K
+        p_sep=100 * 6894.76,  # 100 psia in Pa
+        T_sep=273.15 + 21.1,  # 70 degF in K
     )
 
 
@@ -44,7 +48,7 @@ def bo_with_bubble():
         sg_gas=0.65,
         p_sep=100 * 6894.76,
         T_sep=273.15 + 21.1,
-        p_bubble=200e5,        # 200 bar
+        p_bubble=200e5,  # 200 bar
     )
 
 
@@ -54,21 +58,20 @@ def bo_with_bubble():
 
 
 class TestBlackOilPVTConstruction:
-
     def test_valid_construction(self, bo_light):
         assert bo_light.api == 35
         assert bo_light.sg_gas == 0.65
 
     def test_api_out_of_range_low(self):
-        with pytest.raises(ValueError, match="outside valid range"):
+        with pytest.raises(ValueError, match='outside valid range'):
             BlackOilPVT(api=5, sg_gas=0.65, p_sep=1e6, T_sep=300)
 
     def test_api_out_of_range_high(self):
-        with pytest.raises(ValueError, match="outside valid range"):
+        with pytest.raises(ValueError, match='outside valid range'):
             BlackOilPVT(api=50, sg_gas=0.65, p_sep=1e6, T_sep=300)
 
     def test_negative_sg_gas(self):
-        with pytest.raises(ValueError, match="positive"):
+        with pytest.raises(ValueError, match='positive'):
             BlackOilPVT(api=30, sg_gas=-0.1, p_sep=1e6, T_sep=300)
 
     def test_pre_computed_densities(self, bo_light):
@@ -86,11 +89,10 @@ class TestBlackOilPVTConstruction:
 
 
 class TestVazquezBeggsRs:
-
     def test_rs_positive(self, bo_light):
         """Rs is positive for typical wellbore conditions."""
-        p = 150e5     # 150 bar in Pa
-        T = 373.15    # 100 degC
+        p = 150e5  # 150 bar in Pa
+        T = 373.15  # 100 degC
         rs = float(bo_light.rs(p, T))
         assert rs > 0
 
@@ -131,7 +133,6 @@ class TestVazquezBeggsRs:
 
 
 class TestVazquezBeggsBo:
-
     def test_bo_greater_than_one(self, bo_light):
         """Bo > 1 because live oil expands relative to stock-tank conditions."""
         p = 150e5
@@ -155,7 +156,6 @@ class TestVazquezBeggsBo:
 
 
 class TestLiveOilDensity:
-
     def test_density_positive(self, bo_light):
         p = 150e5
         T = 373.15
@@ -182,7 +182,6 @@ class TestLiveOilDensity:
 
 
 class TestBubblePointPressure:
-
     def test_returns_stored_value(self, bo_with_bubble):
         """When p_bubble is set, bubble_point_pressure returns it."""
         p_b = bo_with_bubble.bubble_point_pressure(50, 373.15)
@@ -190,7 +189,7 @@ class TestBubblePointPressure:
 
     def test_standing_correlation_positive(self, bo_light):
         """Standing correlation returns a positive pressure."""
-        Rs_total = 30.0   # Sm3/Sm3
+        Rs_total = 30.0  # Sm3/Sm3
         T = 373.15
         p_b = bo_light.bubble_point_pressure(Rs_total, T)
         assert p_b > 0
@@ -209,7 +208,6 @@ class TestBubblePointPressure:
 
 
 class TestGasFVF:
-
     def test_standard_conditions_equals_one(self):
         """Bg = 1 at standard conditions."""
         bg = float(gas_fvf(P_REF, T_REF))
@@ -227,7 +225,6 @@ class TestGasFVF:
 
 
 class TestGasDensityStd:
-
     def test_methane(self):
         R_s = 518.3  # methane
         rho = gas_density_std(R_s)
@@ -235,7 +232,6 @@ class TestGasDensityStd:
 
 
 class TestWaterFVF:
-
     def test_standard_conditions_equals_one(self):
         bw = float(water_fvf(P_REF, T_REF))
         assert bw == pytest.approx(1.0)
@@ -258,14 +254,17 @@ class TestWaterFVF:
 
 
 class TestFluidModelMixing:
-
     @staticmethod
     def _make_bo_fluid():
         return FluidModel(
-            pvt=BlackOil(rho_o=850.0, rho_g=gas_density_from_sg(0.65),
-                         p_sep=100 * CF_PSI / CF_BAR,  # bar
-                         T_sep=273.15 + 21.1),
-            gor=200.0, wlr=0.0,
+            pvt=BlackOil(
+                rho_o=850.0,
+                rho_g=gas_density_from_sg(0.65),
+                p_sep=100 * CF_PSI / CF_BAR,  # bar
+                T_sep=273.15 + 21.1,
+            ),
+            gor=200.0,
+            wlr=0.0,
         )
 
     def test_liquid_density_no_water(self):
@@ -298,11 +297,6 @@ class TestFluidModelMixing:
 # Simulator integration tests
 # =========================================================================
 
-from manywells.geometry import WellGeometry
-from manywells.pvt.dead_oil import DeadOil
-from manywells.pvt.fluid import FluidModel
-from manywells.simulator import WellProperties, BoundaryConditions, SSDFSimulator, SimError
-
 
 @pytest.mark.slow
 class TestDeadOilRegression:
@@ -328,10 +322,13 @@ class TestBlackOilSimulator:
     def bo_sim(self):
         """Set up a simulator with the black oil model enabled."""
         fl = FluidModel(
-            pvt=BlackOil(rho_o=density_from_api(35), rho_g=gas_density_from_sg(0.65),
-                         p_sep=100 * CF_PSI / CF_BAR,  # bar
-                         T_sep=273.15 + 21.1,
-                         p_bubble=250.0),  # bar
+            pvt=BlackOil(
+                rho_o=density_from_api(35),
+                rho_g=gas_density_from_sg(0.65),
+                p_sep=100 * CF_PSI / CF_BAR,  # bar
+                T_sep=273.15 + 21.1,
+                p_bubble=250.0,
+            ),  # bar
             wlr=0.0,
         )
         geo = WellGeometry.vertical(2000, 5, D=0.1554)
@@ -355,7 +352,7 @@ class TestBlackOilSimulator:
 
         total_mass_fluxes = []
         for i in range(n + 1):
-            cell = result[dim * i: dim * (i + 1)]
+            cell = result[dim * i : dim * (i + 1)]
             p, v_g, v_l, alpha, rho_g, rho_l, T = cell
             w_g = wp.geometry.A * alpha * rho_g * v_g
             w_l = wp.geometry.A * (1 - alpha) * rho_l * v_l
@@ -373,7 +370,7 @@ class TestBlackOilSimulator:
         dim = bo_sim.dim_x
 
         cell_0 = result[0:dim]
-        cell_n = result[dim * n: dim * (n + 1)]
+        cell_n = result[dim * n : dim * (n + 1)]
 
         w_g_bottom = wp.geometry.A * cell_0[3] * cell_0[4] * cell_0[1]
         w_g_top = wp.geometry.A * cell_n[3] * cell_n[4] * cell_n[1]
@@ -411,5 +408,6 @@ class TestSeparatorGasGravity:
     def test_standard_separator(self):
         """At standard conditions (14.7 psia, 59 F) and API 35 the correction is 0.891, about 11% (ln gave 0.75)."""
         from manywells.pvt.fluid import FluidModel
+
         fl = FluidModel(pvt=BlackOil(rho_o=density_from_api(35), rho_g=gas_density_from_sg(0.65)))
         assert fl.pvt._black_oil.sg_gas_corr / 0.65 == pytest.approx(0.8911, abs=2e-4)

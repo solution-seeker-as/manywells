@@ -50,7 +50,7 @@ from manywells.simulator import SimError, SSDFSimulator
 SEED = 2026
 PROCESSES = 12
 BACKENDS = ('casadi', 'rust')
-P_GRID = np.unique(np.r_[1.0, np.arange(10.0, 470.0 + 1e-9, 10.0)])   # The medium grid of pvt_tables.py
+P_GRID = np.unique(np.r_[1.0, np.arange(10.0, 470.0 + 1e-9, 10.0)])  # The medium grid of pvt_tables.py
 T_GRID = np.arange(270.0, 430.0 + 1e-9, 10.0)
 EOS = pathlib.Path(__file__).resolve().parents[2] / 'tests' / 'data' / 'pvt' / 'synthetic_eos_oil.csv'
 
@@ -73,8 +73,14 @@ def tabulate(fluid, p, T):
     f = ca.Function('pvt', [ps, Ts], [fluid.rs(ps, Ts), fluid.bo(ps, Ts), fluid.z_factor(ps, Ts)])
     P, TT = np.meshgrid(p, T, indexing='ij')
     out = f.map(P.size)(P.ravel(), TT.ravel())
-    return PVTTable(p=p, T=T, rho_o=fluid.rho_o, rho_g=fluid.rho_g, gor=fluid.gor,
-                    **{k: np.asarray(v, float).reshape(P.shape) for k, v in zip(('R_so', 'B_o', 'Z'), out)})
+    return PVTTable(
+        p=p,
+        T=T,
+        rho_o=fluid.rho_o,
+        rho_g=fluid.rho_g,
+        gor=fluid.gor,
+        **{k: np.asarray(v, float).reshape(P.shape) for k, v in zip(('R_so', 'B_o', 'Z'), out)},
+    )
 
 
 def solve(wp, bc, backend):
@@ -87,8 +93,9 @@ def solve(wp, bc, backend):
     except SimError as e:
         return dict(err=type(e).__name__, build=np.nan, search=time.perf_counter() - t0)
     s = op.state
-    return dict(PBH=s[0, 0], PWH=s[-1, 0], TWH=s[-1, 6], off_table=op.off_table, build=t1 - t0,
-                search=time.perf_counter() - t1)
+    return dict(
+        PBH=s[0, 0], PWH=s[-1, 0], TWH=s[-1, 6], off_table=op.off_table, build=t1 - t0, search=time.perf_counter() - t1
+    )
 
 
 def solve_variants(rec, wp, bc, variants):
@@ -103,13 +110,22 @@ def solve_variants(rec, wp, bc, variants):
 # Part 1: develop's black oil and its table
 # ---------------------------------------------------------------------------------------------------------------------
 
+
 def well_cases(well):
     rows = []
     for k, wp, bc in cases(well):
         t0 = time.perf_counter()
         table = tabulate(wp.fluid, P_GRID, T_GRID)
-        rec = dict(well=well, k=k, gor=wp.fluid.gor, wlr=wp.fluid.wlr, p_r=bc.p_r, T_r=bc.T_r, w_lg=bc.w_lg,
-                   table=time.perf_counter() - t0)
+        rec = dict(
+            well=well,
+            k=k,
+            gor=wp.fluid.gor,
+            wlr=wp.fluid.wlr,
+            p_r=bc.p_r,
+            T_r=bc.T_r,
+            w_lg=bc.w_lg,
+            table=time.perf_counter() - t0,
+        )
         rows.append(solve_variants(rec, wp, bc, {'bo': wp.fluid, 'table': replace(wp.fluid, pvt=table)}))
     return rows
 
@@ -129,15 +145,18 @@ def compare(df, a, b, backends):
 
 
 def times(df, names):
-    t = pd.DataFrame({f'{n} {b}': df[f'build_{n}_{b}'].fillna(0) + df[f'search_{n}_{b}']
-                      for n in names for b in BACKENDS})
+    t = pd.DataFrame(
+        {f'{n} {b}': df[f'build_{n}_{b}'].fillna(0) + df[f'search_{n}_{b}'] for n in names for b in BACKENDS}
+    )
     print('\nTime per case, to build the well and find its roots on one process (s):')
     print(pd.DataFrame({'median': t.median(), 'total': t.sum()}).round(3).to_string())
     for b in BACKENDS:
         ratio = t[f'{names[1]} {b}'] / t[f'{names[0]} {b}']
-        print(f'{names[1]} / {names[0]} on {b}: median ratio {ratio.median():.2f}, total ratio '
-              f'{t[f"{names[1]} {b}"].sum() / t[f"{names[0]} {b}"].sum():.2f}')
-    print(f'casadi / rust: ' + ', '.join(f'{n} {t[f"{n} casadi"].sum() / t[f"{n} rust"].sum():.1f}' for n in names))
+        print(
+            f'{names[1]} / {names[0]} on {b}: median ratio {ratio.median():.2f}, total ratio '
+            f'{t[f"{names[1]} {b}"].sum() / t[f"{names[0]} {b}"].sum():.2f}'
+        )
+    print('casadi / rust: ' + ', '.join(f'{n} {t[f"{n} casadi"].sum() / t[f"{n} rust"].sum():.1f}' for n in names))
 
 
 def operating_points(df, names):
@@ -146,14 +165,16 @@ def operating_points(df, names):
         print(f'  {n}: ' + ', '.join(f'{b} {found(df, n, b).sum()}' for b in BACKENDS))
     for b in BACKENDS:
         a, t = found(df, names[0], b), found(df, names[1], b)
-        print(f'  {b}: {names[1]} lost {(a & ~t).sum()} of {names[0]}\'s, and found {(t & ~a).sum()} more')
+        print(f"  {b}: {names[1]} lost {(a & ~t).sum()} of {names[0]}'s, and found {(t & ~a).sum()} more")
     for n in names:
         c, r = found(df, n, 'casadi'), found(df, n, 'rust')
         print(f'  {n}: rust only {(r & ~c).sum()}, casadi only {(c & ~r).sum()}')
     for n in names:
         if f'off_table_{n}_casadi' in df:
-            print(f'  {n}: operating points with a point off the table: '
-                  + ', '.join(f'{b} {df[f"off_table_{n}_{b}"].fillna(False).astype(bool).sum()}' for b in BACKENDS))
+            print(
+                f'  {n}: operating points with a point off the table: '
+                + ', '.join(f'{b} {df[f"off_table_{n}_{b}"].fillna(False).astype(bool).sum()}' for b in BACKENDS)
+            )
 
 
 def summary(df):
@@ -178,6 +199,7 @@ def wells(n_wells, out):
 # ---------------------------------------------------------------------------------------------------------------------
 # Part 2: the synthetic equation-of-state fluid
 # ---------------------------------------------------------------------------------------------------------------------
+
 
 def bubble_points(path):
     """{T (K): p_b (bar)} from the table's header line 'p_bubble: 280=109.268, ...  (T in K = p in bar)'."""

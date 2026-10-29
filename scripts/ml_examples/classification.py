@@ -6,6 +6,7 @@ terms of the CC BY-NC 4.0 International Public License.
 Created 26 January 2025
 Erlend Lundby, erlend@solutionseeker.no
 """
+
 import os
 import statistics
 
@@ -32,6 +33,7 @@ task_col = 'ID'
 # Define columns to scale
 scale_cols = ['QGAS', 'QGL', 'QLIQ', 'PWH']
 
+
 class SingleTaskClassificationModel(LearningAlgorithm):
     def __init__(self, base_model, base_model_kwargs, input_cols, output_cols, task_col, df):
         """
@@ -44,7 +46,7 @@ class SingleTaskClassificationModel(LearningAlgorithm):
         self.task_col = task_col
         self.models = {}
         self.label_encoder = LabelEncoder()
-        assert df is not None, "Full DataFrame must be provided."
+        assert df is not None, 'Full DataFrame must be provided.'
         self.label_encoder.fit(df[self.output_cols].values.ravel())
 
     def fit(self, df):
@@ -85,15 +87,16 @@ class SingleTaskClassificationModel(LearningAlgorithm):
 
 
 class SingleTaskSVC(SingleTaskClassificationModel):
-    def __init__(self,base_model_kwargs={'C':1000.0, 'gamma':0.1, 'cache_size':1000, 'class_weight': 'balanced'},
-                 input_cols=input_cols, output_cols=output_cols, task_col=task_col, df=None):
+    def __init__(
+        self,
+        base_model_kwargs={'C': 1000.0, 'gamma': 0.1, 'cache_size': 1000, 'class_weight': 'balanced'},
+        input_cols=input_cols,
+        output_cols=output_cols,
+        task_col=task_col,
+        df=None,
+    ):
 
-        super().__init__(SVC,
-                         base_model_kwargs,
-                         input_cols,
-                         output_cols,
-                         task_col,
-                         df)
+        super().__init__(SVC, base_model_kwargs, input_cols, output_cols, task_col, df)
 
 
 class MultiTaskClassificationModel(LearningAlgorithm):
@@ -109,9 +112,9 @@ class MultiTaskClassificationModel(LearningAlgorithm):
         self.model = self.base_model(**self.base_model_kwargs)
         self.label_encoder = LabelEncoder()
         self.ohe_tasks = OneHotEncoder()
-        self.ohe_tasks.fit(df[task_col].to_numpy().reshape(-1,1))
+        self.ohe_tasks.fit(df[task_col].to_numpy().reshape(-1, 1))
         self.ohe_cols = self.ohe_tasks.get_feature_names_out().tolist()
-        #self.dummy_cols = None
+        # self.dummy_cols = None
 
         if df is not None:
             self.ohe_tasks.fit(df[task_col].to_numpy().reshape(-1, 1))
@@ -120,15 +123,14 @@ class MultiTaskClassificationModel(LearningAlgorithm):
 
     def fit(self, df: pd.DataFrame):
 
-        #task_dummies = pd.get_dummies(df[self.task_col], prefix='TASK')
-        #self.dummy_cols = task_dummies.columns.tolist()
+        # task_dummies = pd.get_dummies(df[self.task_col], prefix='TASK')
+        # self.dummy_cols = task_dummies.columns.tolist()
 
-        x_tasks = self.ohe_tasks.transform(df[self.task_col].to_numpy().reshape(-1,1)).toarray()
+        x_tasks = self.ohe_tasks.transform(df[self.task_col].to_numpy().reshape(-1, 1)).toarray()
         df_tasks_ohe = pd.DataFrame(x_tasks)
         df_tasks_ohe.columns = self.ohe_tasks.get_feature_names_out()
         df_train = pd.concat([df[self.input_cols + self.output_cols], df_tasks_ohe.set_index(df.index)], axis=1)
-        #df_train = pd.concat([df[self.input_cols + self.output_cols], task_dummies], axis=1)
-        a = self.input_cols + self.ohe_cols
+        # df_train = pd.concat([df[self.input_cols + self.output_cols], task_dummies], axis=1)
         input_data = df_train[self.input_cols + self.ohe_cols]
         output_data = df_train[self.output_cols].values.ravel()
 
@@ -139,7 +141,7 @@ class MultiTaskClassificationModel(LearningAlgorithm):
 
     def predict(self, df: pd.DataFrame):
         # Generate dummy variables for the task column
-        #task_dummies = pd.get_dummies(df[self.task_col], prefix='TASK')
+        # task_dummies = pd.get_dummies(df[self.task_col], prefix='TASK')
         x_tasks = self.ohe_tasks.transform(df[self.task_col].to_numpy().reshape(-1, 1)).toarray()
         df_tasks_ohe = pd.DataFrame(x_tasks)
         df_tasks_ohe.columns = self.ohe_tasks.get_feature_names_out()
@@ -159,15 +161,18 @@ class MultiTaskClassificationModel(LearningAlgorithm):
 
 
 class MultiTaskSVC(MultiTaskClassificationModel):
-    def __init__(self,base_model_kwargs ={'C':1000.0, 'gamma':0.1, 'cache_size':1000, 'class_weight': 'balanced'},
-                 input_cols=input_cols, output_cols=output_cols, task_col=task_col, df=None):
-        #={'C':50.0, 'gamma':0.6, 'tol':1e-4, 'cache_size':1000}
+    def __init__(
+        self,
+        base_model_kwargs={'C': 1000.0, 'gamma': 0.1, 'cache_size': 1000, 'class_weight': 'balanced'},
+        input_cols=input_cols,
+        output_cols=output_cols,
+        task_col=task_col,
+        df=None,
+    ):
+        # ={'C':50.0, 'gamma':0.6, 'tol':1e-4, 'cache_size':1000}
         kwargs = base_model_kwargs if base_model_kwargs is not None else {}
-        super().__init__(SVC,
-                         kwargs,
-                         input_cols,
-                         output_cols,
-                         task_col, df)
+        super().__init__(SVC, kwargs, input_cols, output_cols, task_col, df)
+
 
 def accuracy(model, df):
     """
@@ -177,7 +182,7 @@ def accuracy(model, df):
     try:
         true_labels = model.label_encoder.transform(true_labels)
     except ValueError as e:
-        print(f"Warning: {e}")
+        print(f'Warning: {e}')
         # Handle unseen labels by mapping them to a special class or ignoring them
         # For simplicity, we'll ignore them in this example
         return None
@@ -217,7 +222,7 @@ def select_and_replace_tasks(df, task_col, output_col, n_tasks):
 
     # If there are not enough valid tasks, raise an error
     if len(selected_tasks) < n_tasks:
-        raise ValueError("Not enough tasks with multiple classes available to meet the requested number.")
+        raise ValueError('Not enough tasks with multiple classes available to meet the requested number.')
 
     return selected_tasks
 
@@ -235,45 +240,45 @@ def plot_accuracy(accuracy_scores, n_tasks):
 
 def report(results, n_top=3):
     for i in range(1, n_top + 1):
-        candidates = np.flatnonzero(results["rank_test_score"] == i)
+        candidates = np.flatnonzero(results['rank_test_score'] == i)
         for candidate in candidates:
-            print("Model with rank: {0}".format(i))
+            print('Model with rank: {0}'.format(i))
             print(
-                "Mean validation score: {0:.3f} (std: {1:.3f})".format(
-                    results["mean_test_score"][candidate],
-                    results["std_test_score"][candidate],
+                'Mean validation score: {0:.3f} (std: {1:.3f})'.format(
+                    results['mean_test_score'][candidate],
+                    results['std_test_score'][candidate],
                 )
             )
-            print("Parameters: {0}".format(results["params"][candidate]))
-            print("")
+            print('Parameters: {0}'.format(results['params'][candidate]))
+            print('')
 
 
 if __name__ == '__main__':
-    #------------------------------
-    #1. Load dataset and dataset config
+    # ------------------------------
+    # 1. Load dataset and dataset config
     # ------------------------------
     dataset_name = 'manywells-sol-1'
     df_orig = load_data(dataset_name)
     config_orig = load_config(dataset_name)
 
-    #------------------------------
-    #2. Add gaussian noise to data
+    # ------------------------------
+    # 2. Add gaussian noise to data
     # ------------------------------
     df_noise, _ = add_noise(df_orig, config_orig, percentage_noise=0.5)
 
-    #------------------------------
-    #3. df = create_and_add_mass_fraction_cols(df_noise)
+    # ------------------------------
+    # 3. df = create_and_add_mass_fraction_cols(df_noise)
     # ------------------------------
     df_scaled = standard_scaler(df_noise, scale_cols)
 
-    #------------------------------
-    #4. Define number of tasks to share data.
+    # ------------------------------
+    # 4. Define number of tasks to share data.
     #    - len(n_tasks_) number of experiments
     # ------------------------------
     n_tasks_ = [1, 2, 5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 
-    #------------------------------
-    #5. Identify and select tasks where all classes are present
+    # ------------------------------
+    # 5. Identify and select tasks where all classes are present
     # ------------------------------
     # Identify all classes in the dataset
     all_classes = df_scaled[output_cols[0]].unique()
@@ -290,8 +295,8 @@ if __name__ == '__main__':
     # Initialize results matrices
     acc_mat = np.zeros((n_runs, len(n_tasks_)))
 
-    #------------------------------
-    #6. Loop over repeated experiments
+    # ------------------------------
+    # 6. Loop over repeated experiments
     # ------------------------------
     for k in range(n_runs):
         # ------------------------------
@@ -332,7 +337,7 @@ if __name__ == '__main__':
                 acc_mtl = []
 
                 for j in range(n_models):
-                    model_tasks = selected_tasks[j * n:(j + 1) * n]
+                    model_tasks = selected_tasks[j * n : (j + 1) * n]
                     train_task = train[train[task_col].isin(model_tasks)]
                     test_task = test[test[task_col].isin(model_tasks)]
                     model = MultiTaskSVC(df=train_task)
@@ -346,13 +351,12 @@ if __name__ == '__main__':
         acc_mat[k, :] = acc
     acc_mean = acc_mat.mean(axis=0)
 
-    #--------------------------
+    # --------------------------
     # 7. Plot and store
     # --------------------------
     fig = plot_accuracy(acc_mean, n_tasks_)
     store_path = os.path.join(os.getcwd(), 'results')
     if not os.path.exists(store_path):
         os.makedirs(store_path)
-    fig.savefig(os.path.join(store_path,'sol_accuracy_classification.pdf'), bbox_inches='tight')
+    fig.savefig(os.path.join(store_path, 'sol_accuracy_classification.pdf'), bbox_inches='tight')
     plt.show()
-

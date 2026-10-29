@@ -42,7 +42,7 @@ def dead_oil_surface_tension(rho, T):  # spec: PVT-OIL-3
     Reference: Abdul-Majeed, G.H. and Al-Soof, N.B.A., "Estimation of gas-oil
     surface tension", J Pet Sci Eng 27 (2000): 197-200.
 
-    The correlation gives surface tension in dyn/cm, which can be converted 
+    The correlation gives surface tension in dyn/cm, which can be converted
     to SI units as 1 dyn/cm = 0.001 J/m².
 
     :param rho: Density of oil (kg/m³)
@@ -64,6 +64,7 @@ class DeadOil(CorrelationPVT):
     :param rho_g: Gas density at standard conditions (kg/m3)
     :param gas_law: 'ideal', 'dak' or 'papay'
     """
+
     rho_o: float = 850.0
     rho_g: float = gas_density_from_sg(0.554)
     gas_law: str = 'dak'

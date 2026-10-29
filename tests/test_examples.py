@@ -29,12 +29,18 @@ EXAMPLES = sorted(p.stem for p in (ROOT / 'scripts' / 'sim_examples').glob('*.py
 @pytest.mark.parametrize('name', EXAMPLES)
 def test_example_runs(name, tmp_path):
     env = os.environ | {
-        'MPLBACKEND': 'Agg',       # plt.show() returns at once
+        'MPLBACKEND': 'Agg',  # plt.show() returns at once
         'MPLCONFIGDIR': str(tmp_path),
         'PYTHONPATH': os.pathsep.join([str(ROOT), str(ROOT / 'src'), os.environ.get('PYTHONPATH', '')]),
     }
-    result = subprocess.run([sys.executable, '-m', f'scripts.sim_examples.{name}'], cwd=tmp_path, env=env,
-                            capture_output=True, text=True, timeout=600)
+    result = subprocess.run(
+        [sys.executable, '-m', f'scripts.sim_examples.{name}'],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
     assert result.returncode == 0, f'{name} failed:\n{result.stderr[-3000:]}'
 
 

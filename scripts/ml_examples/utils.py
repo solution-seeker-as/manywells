@@ -27,7 +27,7 @@ def sample_n_fraction_per_task(df, task_col, fraction):
     """
     # Ensure the fraction is between 0 and 1
     if not (0 < fraction <= 1):
-        raise ValueError("Fraction must be between 0 and 1.")
+        raise ValueError('Fraction must be between 0 and 1.')
 
     # Group by the task column and apply sampling
     sampled_df = df.groupby(task_col).apply(lambda x: x.sample(frac=fraction)).reset_index(drop=True)
@@ -43,7 +43,7 @@ def standard_scaler(df, cols):
     :return: scaled train and test sets
     """
     scaler = StandardScaler()
-    scaler.fit_transform(pd.concat([df[cols]],axis=0))
+    scaler.fit_transform(pd.concat([df[cols]], axis=0))
     df_scaled = df.copy()
     df_scaled[cols] = scaler.transform(df[cols])
     return df_scaled
@@ -52,7 +52,7 @@ def standard_scaler(df, cols):
 def split_data_by_task(df, train_frac=0.8, test_frac=0.15, task_col='ID'):
     # Check that the fractions sum to 1
     val_frac = 1 - train_frac - test_frac
-    assert train_frac + test_frac + val_frac == 1.0, "Fractions must sum to 1"
+    assert train_frac + test_frac + val_frac == 1.0, 'Fractions must sum to 1'
 
     # Create empty DataFrames for train, test, and validation sets
     train_df = pd.DataFrame()
@@ -92,28 +92,26 @@ def split_data_by_time_or_random(df, n1, n2, task_col='ID', time_col='WEEKS'):
             max_start_index = len(sorted_group) - n1 - n2
 
             if max_start_index < 0:
-                raise ValueError(f"Not enough data points for task {task} to split into the desired sizes.")
+                raise ValueError(f'Not enough data points for task {task} to split into the desired sizes.')
 
             # Select a random starting index for df1
             start_index = np.random.randint(0, max_start_index + 1)
 
             # Split the data for each task
-            df1_task = sorted_group.iloc[start_index:start_index + n1]
-            df2_task = sorted_group.iloc[start_index + n1:start_index + n1 + n2]
+            df1_task = sorted_group.iloc[start_index : start_index + n1]
+            df2_task = sorted_group.iloc[start_index + n1 : start_index + n1 + n2]
         else:
             # Randomly sample n1 and n2 data points if the time column is not present
             if len(group) < n1 + n2:
-                raise ValueError(f"Not enough data points for task {task} to split into the desired sizes.")
+                raise ValueError(f'Not enough data points for task {task} to split into the desired sizes.')
 
             # Randomly sample without replacement
             sampled_indices = np.random.choice(group.index, n1 + n2, replace=False)
             df1_task = group.loc[sampled_indices[:n1]]
-            df2_task = group.loc[sampled_indices[n1:n1 + n2]]
+            df2_task = group.loc[sampled_indices[n1 : n1 + n2]]
 
         # Append the splits to the respective DataFrames
         df1 = pd.concat([df1, df1_task])
         df2 = pd.concat([df2, df2_task])
 
     return df1, df2
-
-

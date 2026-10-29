@@ -27,12 +27,12 @@ def load_well(well_id, df_config) -> WellDraw:
     return well_from_config(df_config[df_config['ID'] == well_id].to_dict('records')[0])
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     df_meta = pd.read_csv(sys.argv[1], compression='zip')
     draw = load_well(int(sys.argv[2]) if len(sys.argv) > 2 else 0, df_meta)
     print('Well:', draw)
     try:
-        sim = SSDFSimulator(well_properties(draw))   # the v1.0.0 configuration
+        sim = SSDFSimulator(well_properties(draw))  # the v1.0.0 configuration
         op = sim.simulate(nominal_conditions(draw, u=0.5))
         print(sim.solution_as_df(op))
     except SimError as e:

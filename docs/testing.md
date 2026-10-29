@@ -71,8 +71,28 @@ Pytest is configured in `pyproject.toml` under `[tool.pytest.ini_options]`:
 - **pythonpath**: `["src"]`, so the `manywells` package is importable
 - **markers**: `slow`, for the tests that run a full solve or the examples (deselect with `-m "not slow"`)
 
+## Lint and format
+
+[Ruff](https://docs.astral.sh/ruff/) lints and formats every Python file in the repository, configured in
+`pyproject.toml` under `[tool.ruff]`: lines up to 120 characters, single quotes, and the rules of pyflakes and
+pycodestyle's errors (`E4`, `E7`, `E9`, `F`). Its version is pinned in the dependency group `lint`, which `uv sync`
+installs with `dev`.
+
+```console
+uv run ruff check                  # lint; --fix fixes what it can
+uv run ruff format                 # format in place; --check only reports
+uvx pre-commit install             # run both on the files of every commit (.pre-commit-config.yaml)
+```
+
+The hook runs the locked ruff through `uv run --only-group lint`, which does not build the Rust core. Where it
+reformats or fixes a file, the commit stops: stage the changes and commit again.
+
+The repository was reformatted in one commit, which `.git-blame-ignore-revs` lists: GitHub's blame skips it, and
+`git config blame.ignoreRevsFile .git-blame-ignore-revs` makes a local `git blame` skip it too.
+
 ## CI
 
-`.github/workflows/tests.yml` runs on every push to `main` and `develop` and on every pull request. The `test` job
+`.github/workflows/tests.yml` runs on every push to `main` and `develop` and on every pull request. The `lint` job
+runs `ruff check` and `ruff format --check`. The `test` job
 runs `uv run pytest` on Python 3.11 to 3.14. The `verify` job runs the Rust core's cargo tests and then the
 verifier on v1.0.0's own solutions and on `develop`'s candidates with each backend (`AGENTS.md`, The verifier).

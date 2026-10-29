@@ -26,14 +26,15 @@ class Root:
     x holds the 7(N + 1) state values, point by point from the bottomhole, in the order
     [p, v_g, v_l, alpha, rho_g, rho_l, T] (bar, m/s, m/s, -, kg/m³, kg/m³, K).
     """
+
     x: np.ndarray
-    label: str                   # One of LABELS (SOL-3)
-    slope: float                 # dR/dp_0 normalized by (p_r - p_s) / w_m; positive is unstable
-    choked: bool                 # CHK-12, at the root
-    flow_regime: tuple           # Regime label at each point (SLIP-8 or SLIP-16), bottomhole first
-    w_res: float                 # Reservoir liquid mass rate (kg/s)
-    w_g_res: float               # Reservoir gas mass rate (kg/s), without the lift gas
-    off_table: bool = False      # Whether a point lies off the fluid's PVT table (specs/model/pvt/table.md)
+    label: str  # One of LABELS (SOL-3)
+    slope: float  # dR/dp_0 normalized by (p_r - p_s) / w_m; positive is unstable
+    choked: bool  # CHK-12, at the root
+    flow_regime: tuple  # Regime label at each point (SLIP-8 or SLIP-16), bottomhole first
+    w_res: float  # Reservoir liquid mass rate (kg/s)
+    w_g_res: float  # Reservoir gas mass rate (kg/s), without the lift gas
+    off_table: bool = False  # Whether a point lies off the fluid's PVT table (specs/model/pvt/table.md)
 
     def __post_init__(self):
         if self.label not in LABELS:
@@ -70,6 +71,7 @@ class RootSet:
 
     search records each start the search tried and its outcome; it is not part of the model.
     """
+
     roots: tuple
     operating_point: Root = None
     several_stable: bool = False

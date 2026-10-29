@@ -33,7 +33,7 @@ def haaland_friction_factor(Re, eps_D):  # spec: FRIC-5
     :return: Darcy friction factor (dimensionless)
     """
     inv_sqrt_f = -1.8 * ca.log10(ca.constpow(eps_D / 3.7, 1.11) + 6.9 / Re)
-    return 1.0 / (inv_sqrt_f ** 2)
+    return 1.0 / (inv_sqrt_f**2)
 
 
 def chen_friction_factor(Re, eps_D):  # spec: FRIC-4
@@ -55,7 +55,7 @@ def chen_friction_factor(Re, eps_D):  # spec: FRIC-4
     Lambda = ca.constpow(eps_D, 1.1098) / 2.8257 + ca.constpow(7.149 / Re, 0.8981)
     arg = eps_D / 3.7065 - (5.0452 / Re) * ca.log10(Lambda)
     inv_sqrt_f = -2.0 * ca.log10(arg)
-    return 1.0 / (inv_sqrt_f ** 2)
+    return 1.0 / (inv_sqrt_f**2)
 
 
 def friction_factor(Re, eps_D, correlation='chen'):  # spec: FRIC-6
@@ -112,14 +112,14 @@ class FrictionModel(abc.ABC):
         :param D: Inner pipe diameter (m)
         :return: F (Pa/m)
         """
-        return (self.friction_factor(s, fluid, D) / D / 2) * s.rho_m * s.v_m ** 2
+        return (self.friction_factor(s, fluid, D) / D / 2) * s.rho_m * s.v_m**2
 
 
 @dataclass(frozen=True)
 class FixedFrictionFactor(FrictionModel):
     """One Darcy friction factor for the whole well."""
 
-    f_D: float    # Darcy friction factor (dimensionless)
+    f_D: float  # Darcy friction factor (dimensionless)
 
     def __post_init__(self):
         if not self.f_D > 0:
@@ -138,8 +138,8 @@ class RoughnessFriction(FrictionModel):
     Roughness of new/smooth tubing: 1.5e-6 to 4.5e-5 m. Commercial/welded steel: 4.5e-5 m.
     """
 
-    roughness: float = 4.5e-5     # Pipe wall roughness (m). Default: commercial steel.
-    correlation: str = 'chen'     # Turbulent correlation, one of CORRELATIONS
+    roughness: float = 4.5e-5  # Pipe wall roughness (m). Default: commercial steel.
+    correlation: str = 'chen'  # Turbulent correlation, one of CORRELATIONS
 
     def __post_init__(self):
         if not self.roughness > 0:

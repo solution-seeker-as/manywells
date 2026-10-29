@@ -26,9 +26,9 @@ from manywells.simulator import SimError, SSDFSimulator
 
 # spec: CAL-13. The instrumentations of the recovery tests and the twin study
 INSTRUMENTATIONS = ('full', 'no_downhole', 'periodic_tests', 'pressures_only', 'random_missing')
-TEST_EVERY = 5          # periodic_tests: rates on one row in five
-RATED_ROWS = 2          # pressures_only: rates on two rows
-MISSING_SHARE = 0.2     # random_missing: each observation missing with this probability
+TEST_EVERY = 5  # periodic_tests: rates on one row in five
+RATED_ROWS = 2  # pressures_only: rates on two rows
+MISSING_SHARE = 0.2  # random_missing: each observation missing with this probability
 
 
 def operating_points(bc, n, rng, u=(0.2, 1.0), w_lg=None, p_s_spread=0.1) -> list:  # spec: CAL-13
@@ -59,8 +59,15 @@ def simulate_rows(wp, conditions, backend='rust', workers=None) -> pd.DataFrame:
         except (SimError, ValueError):
             return None
         f = root_features(root, bc, fluid.rho_o, fluid.rho_w, fluid.rho_g, 1 - fluid.f_o_in_liquid)
-        return {'CHK': bc.u, 'PDC': bc.p_s, 'WGL': bc.w_lg, 'p_r': bc.p_r, 'T_r': bc.T_r, 'T_s': bc.T_s,
-                **{c: f[c] for c in PRESSURES_AND_TEMPERATURES + PHASE_RATES}}
+        return {
+            'CHK': bc.u,
+            'PDC': bc.p_s,
+            'WGL': bc.w_lg,
+            'p_r': bc.p_r,
+            'T_r': bc.T_r,
+            'T_s': bc.T_s,
+            **{c: f[c] for c in PRESSURES_AND_TEMPERATURES + PHASE_RATES},
+        }
 
     n = 1 if backend == 'casadi' else (workers or min(32, os.cpu_count() or 1))
     with ThreadPoolExecutor(n) as ex:
@@ -111,12 +118,24 @@ def instrument(rows: pd.DataFrame, instrumentation: str, rng) -> pd.DataFrame:  
             drop = rng.random(n) < MISSING_SHARE
             df.loc[drop, cols] = np.nan
         empty = df[list(PRESSURES_AND_TEMPERATURES) + rates].isna().all(axis=1)
-        df.loc[empty, 'PWH'] = rows.loc[empty, 'PWH']   # Every row keeps at least one observation
+        df.loc[empty, 'PWH'] = rows.loc[empty, 'PWH']  # Every row keeps at least one observation
     return df
 
 
-def synthetic_data(wp, bc, values: dict, n_rows: int, seed: int, instrumentation='full', noise=None,
-                   noisy=True, rate_source='test', backend='rust', workers=None, **spread) -> CalibrationData:
+def synthetic_data(
+    wp,
+    bc,
+    values: dict,
+    n_rows: int,
+    seed: int,
+    instrumentation='full',
+    noise=None,
+    noisy=True,
+    rate_source='test',
+    backend='rust',
+    workers=None,
+    **spread,
+) -> CalibrationData:
     """
     Calibration data for a well whose parameters are `values` ({name: value}): n_rows operating points around bc
     (operating_points, with `spread`), solved, with noise (unless noisy is False) and instrumented. Every draw comes
