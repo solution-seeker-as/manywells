@@ -111,7 +111,7 @@ def component_tables():
         dict(K_c=K, profile='concave', u=1.0, p_in=20.01, p_out=20.0, rho=850.0, Phi=4.0),   # small drop
         dict(K_c=0.5 * K, profile='sigmoid', u=0.05, p_in=120.0, p_out=100.0, rho=600.0, Phi=1.3),
     ]
-    simpson_cases = [dict(x_g=x, rho_g=g, rho_l=l) for x, g, l in
+    simpson_cases = [dict(x_g=x, rho_g=g, rho_l=rl) for x, g, rl in
                      [(0.0, 50.0, 850.0), (0.1, 50.0, 850.0), (0.5, 20.0, 900.0), (1.0, 100.0, 800.0), (0.02, 150.0, 950.0)]]
     simpson_rate = [dict(K_c=K, profile='sigmoid', u=0.6, p_in=45.0, p_out=30.0, x_g=0.1, rho_g=35.0, rho_l=850.0),
                     dict(K_c=K, profile='linear', u=0.9, p_in=60.0, p_out=15.0, x_g=0.4, rho_g=45.0, rho_l=900.0),

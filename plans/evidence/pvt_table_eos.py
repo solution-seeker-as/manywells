@@ -229,7 +229,9 @@ def nodes(d):
 
 def errors(got, want):
     """Errors of a reading (X, rho_L, rho_V) against the stream's own table, and of the no-slip density."""
-    ns = lambda X, L, V: 1 / (X / V + (1 - X) / L)
+    def ns(X, L, V):
+        return 1 / (X / V + (1 - X) / L)
+
     d_ns = ns(*got) / ns(*want) - 1
     return {'max |dX|': np.max(np.abs(got[0] - want[0])), 'max |d rho_L| (%)': 100 * np.max(np.abs(got[1] / want[1] - 1)),
             'max |d rho_V| (%)': 100 * np.max(np.abs(got[2] / want[2] - 1)),

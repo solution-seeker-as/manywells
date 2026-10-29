@@ -77,7 +77,7 @@ def summary(df):
             print(f'  profile_scale {v}: operating point in {d[f"PBH_{v}"].notna().sum()}, roots per case '
                   f'{dict(sorted(Counter(d[f"roots_{v}"]).items()))}, {s.median():.2f} s median, {s.sum():.1f} s total')
         for v in ('0.5', '0'):
-            both = d.dropna(subset=[f'PBH_1', f'PBH_{v}'])
+            both = d.dropna(subset=['PBH_1', f'PBH_{v}'])
             lost = d[d['PBH_1'].notna() & d[f'PBH_{v}'].isna()]
             gained = d[d['PBH_1'].isna() & d[f'PBH_{v}'].notna()]
             print(f'  {v} against 1: {len(both)} with an operating point in both; lost: {list(zip(lost.well, lost.k))};'
