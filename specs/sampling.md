@@ -201,7 +201,7 @@ $\varepsilon \sim \text{LogUniform}(1.5\cdot10^{-6},\ 1.5\cdot10^{-4})$ m, from 
 
 ### SMP-43 · Black-oil parameters
 
-No new draws: the API gravity from SMP-9 (21.3 to 39.9, inside the Vazquez–Beggs range of 10 to 40), the gas gravity from SMP-11 (0.55 to 0.90), and the gas–oil and water–liquid ratios from SMP-40's mapping. There is no bubble-point cap: gas dissolves up to the gas available. Separator conditions are standard conditions (`FluidModel`'s defaults). Wells with a small oil fraction get very high gas–oil ratios (above $10^4$ Sm³/Sm³), outside the correlations' range; Bjarne accepted them until the redesign, with no cap (2026-10-01).
+No new draws: the API gravity from SMP-9 (21.3 to 39.9, inside the 16 to 58 that the black oil takes, `specs/model/validity.md`), the gas gravity from SMP-11 (0.55 to 0.90), and the gas–oil and water–liquid ratios from SMP-40's mapping. There is no bubble-point cap: gas dissolves up to the gas available. Separator conditions are standard conditions (`FluidModel`'s defaults). Wells with a small oil fraction get very high gas–oil ratios (above $10^4$ Sm³/Sm³), outside the correlations' range; Bjarne accepted them until the redesign, with no cap (2026-10-01).
 
 ### SMP-44 · Lift-gas temperature
 

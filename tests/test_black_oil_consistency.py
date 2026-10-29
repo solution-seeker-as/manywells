@@ -23,12 +23,12 @@ from manywells.units import CF_BAR
 
 
 # ---------------------------------------------------------------------------
-# Fluid configurations spanning the valid API 10-40 range
+# Fluid configurations from the lower end of the black oil's API range, 16 to 58 (specs/model/validity.md), to 40
 # ---------------------------------------------------------------------------
 
 FLUID_PARAMS = [
     pytest.param(
-        dict(api=15, sg_gas=0.70, gor=50, p_bubble=150.0),
+        dict(api=16, sg_gas=0.70, gor=50, p_bubble=150.0),
         id="heavy-oil-low-gor",
     ),
     pytest.param(

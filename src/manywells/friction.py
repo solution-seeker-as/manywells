@@ -18,6 +18,12 @@ from manywells.ca_functions import ca_max_approx, ca_sigmoid
 
 CORRELATIONS = ('chen', 'haaland')
 
+# The largest relative roughness eps / D a well with RoughnessFriction takes: the upper end of Chen's (1979) and
+# Haaland's (1983) range. Beyond it the correlations head for a pole near eps / D = 3.7, and past the pole fall to
+# plausible friction factors again. WellProperties, which holds both eps and D, refuses more (specs/model/validity.md,
+# note 3).
+MAX_RELATIVE_ROUGHNESS = 0.05
+
 
 def haaland_friction_factor(Re, eps_D):  # spec: FRIC-5
     """
@@ -135,7 +141,8 @@ class RoughnessFriction(FrictionModel):
     Darcy friction factor from the Reynolds number of the mixture and the relative roughness of the pipe wall,
     with a smooth laminar-turbulent transition (friction_factor above).
 
-    Roughness of new/smooth tubing: 1.5e-6 to 4.5e-5 m. Commercial/welded steel: 4.5e-5 m.
+    Roughness of new/smooth tubing: 1.5e-6 to 4.5e-5 m. Commercial/welded steel: 4.5e-5 m. A well refuses a roughness
+    above MAX_RELATIVE_ROUGHNESS times its diameter.
     """
 
     roughness: float = 4.5e-5     # Pipe wall roughness (m). Default: commercial steel.

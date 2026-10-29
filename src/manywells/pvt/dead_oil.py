@@ -22,7 +22,8 @@ def dead_oil_viscosity(api, T):  # spec: PVT-OIL-10
     Reference: Beggs, H.D. and Robinson, J.R., "Estimating the Viscosity of
     Crude Oil Systems", J Pet Technol 27 (1975): 1140-1141.
 
-    Valid for API 10-58, temperature 100-295 degF (~38-146 degC).
+    Fitted to oils of API 16 to 58 at 70 to 295 degF (21 to 146 degC) (Beggs and Robinson, Table 1). It
+    extrapolates outside (specs/model/validity.md); the black oil refuses API gravities outside that range.
 
     :param api: Oil API gravity (dimensionless, float constant)
     :param T: Temperature (K), may be a CasADi symbolic

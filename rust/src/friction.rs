@@ -12,6 +12,10 @@ use crate::discretization::State;
 use crate::pvt::fluid::Fluid;
 use crate::smoothing::{max_approx, sigmoid};
 
+/// The largest relative roughness eps / D of friction from roughness, the upper end of Chen's and Haaland's range;
+/// a well with more is refused (specs/model/validity.md, note 3), as friction.MAX_RELATIVE_ROUGHNESS
+pub const MAX_RELATIVE_ROUGHNESS: f64 = 0.05;
+
 /// The turbulent correlation of friction from roughness
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Correlation {

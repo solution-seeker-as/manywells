@@ -24,7 +24,9 @@ from dataclasses import replace
 
 from manywells.choke import BernoulliChokeModel, SimpsonChokeModel
 from manywells.configurations import v1_well
+from manywells.geometry import WellGeometry
 from manywells.inflow import InflowModel, ProductivityIndex, Vogel
+from manywells.pvt import density_from_api
 from manywells.pvt.dead_oil import dead_oil_surface_tension
 from manywells.simulator import BoundaryConditions, NoOperatingPoint, SSDFSimulator, WellProperties
 from manywells.slip import SlipModel
@@ -138,6 +140,39 @@ def test_integer_switches_solve_on_the_core():
     thermal = ThermalModel(h=wp.thermal.h, frictional_heating=0, gravity_term=0, lift_gas_mixing=0, joule_thomson=0)
     assert SSDFSimulator(replace(wp, thermal=thermal), backend='rust').simulate(bc).p_0 == pytest.approx(
         SSDFSimulator(wp, backend='rust').simulate(bc).p_0, abs=0)
+
+
+def test_the_core_refuses_what_the_dataclasses_refuse():
+    """
+    specs/model/validity.md: BlackOil and WellProperties refuse API gravities outside 16 to 58 and relative roughnesses
+    above 0.05, and the core checks both again (WellSpec::check), on its parameters given directly.
+    """
+    from manywells import _core
+    from manywells.solvers.rust import core_inputs
+    D = 0.1
+    inputs = core_inputs(WellProperties(geometry=WellGeometry.vertical(2000.0, 10, D=D), inflow=Vogel(w_l_max=40.0)))
+    assert inputs['oil_model'] == 'black_oil' and inputs['friction'] == 'roughness'
+    for api in (16.0, 58.0):
+        _core.Well(**{**inputs, 'rho_o': density_from_api(api)})
+    for api in (15.9, 58.1):
+        with pytest.raises(ValueError, match='API gravities from 16 to 58'):
+            _core.Well(**{**inputs, 'rho_o': density_from_api(api)})
+    _core.Well(**{**inputs, 'roughness': 0.05 * D})
+    for roughness in (0.0051, 143.0):
+        with pytest.raises(ValueError, match=r'relative roughness .* exceeds 0\.05'):
+            _core.Well(**{**inputs, 'roughness': roughness})
+    # The v1.0.0 configuration's dead oil and fixed friction factor have neither to refuse
+    _core.Well(**{**inputs, 'oil_model': 'dead_oil', 'rho_o': 1050.0, 'friction': 'fixed', 'f_D': 0.03,
+                  'roughness': None})
+
+
+def test_the_v1_configuration_refuses_nothing_v1_accepts():
+    """A v1.0.0 well of a liquid heavier than API 16 (well 977's is API 11.4) builds in both backends."""
+    wp, bc = well_977()
+    assert wp.fluid.api < 16
+    wp = replace(wp, fluid=replace(wp.fluid, pvt=replace(wp.fluid.pvt, rho_o=1050.0)))  # API 3
+    for backend in ('casadi', 'rust'):
+        SSDFSimulator(wp, backend=backend)
 
 
 @pytest.mark.parametrize('regime_model', ['fitted', 'hasan'])

@@ -5,6 +5,7 @@ import numpy as np
 
 from manywells.pvt import P_REF, T_REF, WATER, density_from_api, api_from_density, gas_density_from_sg
 from manywells.pvt.black_oil import BlackOil, BlackOilPVT
+from manywells.pvt.dead_oil import DeadOil
 from manywells.units import CF_PSI, CF_RS, M_AIR, CF_BAR
 from manywells.pvt.gas import gas_fvf, gas_density_std
 from manywells.pvt.water import water_fvf
@@ -59,13 +60,10 @@ class TestBlackOilPVTConstruction:
         assert bo_light.api == 35
         assert bo_light.sg_gas == 0.65
 
-    def test_api_out_of_range_low(self):
-        with pytest.raises(ValueError, match="outside valid range"):
-            BlackOilPVT(api=5, sg_gas=0.65, p_sep=1e6, T_sep=300)
-
-    def test_api_out_of_range_high(self):
-        with pytest.raises(ValueError, match="outside valid range"):
-            BlackOilPVT(api=50, sg_gas=0.65, p_sep=1e6, T_sep=300)
+    def test_the_correlations_take_any_api_gravity(self):
+        """BlackOilPVT evaluates the correlations, as the correlation functions do; BlackOil refuses the API."""
+        for api in (5.0, 70.0):
+            assert float(BlackOilPVT(api=api, sg_gas=0.65, p_sep=1e6, T_sep=300).rs(100e5, 350.0)) > 0
 
     def test_negative_sg_gas(self):
         with pytest.raises(ValueError, match="positive"):
@@ -83,6 +81,25 @@ class TestBlackOilPVTConstruction:
     def test_api_dependent_coefficients_heavy(self, bo_heavy):
         """API <= 30 uses the first coefficient set."""
         assert bo_heavy._c1 == 0.0362
+
+
+class TestBlackOilAPIRange:
+    """specs/model/validity.md, note 2: the black oil refuses API gravities outside Beggs and Robinson's 16 to 58."""
+
+    @pytest.mark.parametrize("api", [16.0, 30.0, 58.0])
+    def test_accepted(self, api):
+        oil = BlackOil(rho_o=density_from_api(api))
+        assert oil.api == pytest.approx(api, abs=1e-12)
+        assert oil.at_gor(100.0).api == oil.api
+
+    @pytest.mark.parametrize("api", [10.0, 15.9, 58.1, 70.0])
+    def test_refused(self, api):
+        with pytest.raises(ValueError, match="API gravities from 16 to 58"):
+            BlackOil(rho_o=density_from_api(api))
+
+    def test_a_dead_oil_checks_no_api_gravity(self):
+        """The v1.0.0 configuration's dead oil takes any liquid density, as v1.0.0 does: here API 3."""
+        assert DeadOil(rho_o=1050.0).api < 10
 
 
 class TestVazquezBeggsRs:

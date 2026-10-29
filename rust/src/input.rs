@@ -5,13 +5,16 @@
 // Created 01 October 2026
 
 //! The core's inputs: a well, built once from the Python dataclasses (src/manywells/solvers/rust.py), and an
-//! operating point. Validation stays in the dataclasses; the core checks only what it needs to run.
+//! operating point. Validation stays in the dataclasses; the core checks what it needs to run, and the refusals of
+//! specs/model/validity.md again, so that a well built from the core's parameters directly is refused as the
+//! dataclasses refuse it.
 
 use crate::choke::Choke;
-use crate::friction::Friction;
+use crate::friction::{Friction, MAX_RELATIVE_ROUGHNESS};
 use crate::geometry::Geometry;
 use crate::inflow::Inflow;
-use crate::pvt::fluid::Fluid;
+use crate::pvt::fluid::{Fluid, Pvt};
+use crate::pvt::oil::API_RANGE;
 use crate::slip::Slip;
 use crate::thermal::Thermal;
 
@@ -35,6 +38,17 @@ impl WellSpec {
         // SLIP-18: a negative scale would take C_0 below 1, and the void fraction's bracket on [0, 1] with it
         if !(self.slip.profile_scale.is_finite() && self.slip.profile_scale >= 0.0) {
             return Err(format!("the profile scale must be finite and non-negative, got {}", self.slip.profile_scale));
+        }
+        // specs/model/validity.md, notes 2 and 3, as BlackOil and WellProperties
+        let (low, high) = API_RANGE;
+        if matches!(self.fluid.pvt, Pvt::BlackOil { .. }) && !(self.fluid.api >= low && self.fluid.api <= high) {
+            return Err(format!("the black oil takes API gravities from {low} to {high}, got {}", self.fluid.api));
+        }
+        if let Friction::Roughness { roughness, .. } = self.friction {
+            if !(roughness <= MAX_RELATIVE_ROUGHNESS * self.geometry.d) {
+                return Err(format!("the relative roughness {} (roughness {roughness} m, D = {} m) exceeds {}",
+                                   roughness / self.geometry.d, self.geometry.d, MAX_RELATIVE_ROUGHNESS));
+            }
         }
         Ok(())
     }
@@ -311,8 +325,11 @@ pub mod test_wells {
 
 #[cfg(test)]
 mod tests {
-    use super::test_wells::{v1_fluid, w1};
+    use super::test_wells::{v1_fluid, w1, w1_black_oil, w1_develop};
     use super::{OperatingPoint, WellSpec};
+    use crate::friction::{Correlation, Friction, MAX_RELATIVE_ROUGHNESS};
+    use crate::pvt::fluid::{Fluid, FluidInputs};
+    use crate::pvt::oil::WATER_RHO;
 
     fn assert_send_sync<T: Send + Sync>() {}
 
@@ -327,6 +344,41 @@ mod tests {
         assert!(op.check().is_ok());
         assert!(OperatingPoint { p_r: f64::INFINITY, ..op }.check().is_err());  // the scan's step would be infinite
         assert!(OperatingPoint { w_lg: f64::NAN, ..op }.check().is_err());
+    }
+
+    #[test]
+    fn a_black_oil_outside_its_api_range_is_refused() {
+        let (spec, _) = w1_black_oil(10);
+        let with_api = |api: f64| {
+            let rho_o = 141.5 * WATER_RHO / (api + 131.5);
+            WellSpec { fluid: Fluid::new(FluidInputs { rho_o, ..spec.fluid.inputs.clone() }), ..spec.clone() }
+        };
+        for api in [16.0, 25.0, 58.0] {
+            assert!(with_api(api).check().is_ok(), "API {api}");
+        }
+        for api in [15.9, 58.1, 10.0, 70.0] {
+            assert!(with_api(api).check().unwrap_err().contains("API gravities from 16 to 58"), "API {api}");
+        }
+        // A dead oil, as in the v1.0.0 configuration, checks no API gravity
+        let (mut dead, _) = w1(10);
+        dead.fluid = v1_fluid(1050.0, 420.0, 2225.0, 3000.0, 0.15);
+        assert!(dead.fluid.api < 10.0 && dead.check().is_ok());
+    }
+
+    #[test]
+    fn a_relative_roughness_above_its_range_is_refused() {
+        let (spec, _) = w1_develop(10);
+        let d = spec.geometry.d;
+        let with = |roughness: f64, correlation| WellSpec { friction: Friction::Roughness { roughness, correlation },
+                                                            ..spec.clone() };
+        for correlation in [Correlation::Chen, Correlation::Haaland] {
+            assert!(with(MAX_RELATIVE_ROUGHNESS * d, correlation).check().is_ok());
+            for roughness in [0.051 * d, 3.7 * d, 143.0, f64::INFINITY] {
+                assert!(with(roughness, correlation).check().unwrap_err().contains("exceeds 0.05"), "{roughness}");
+            }
+        }
+        // A fixed friction factor, as in the v1.0.0 configuration, has no roughness
+        assert!(WellSpec { friction: Friction::FixedFactor { f_d: 0.03 }, ..spec.clone() }.check().is_ok());
     }
 
     #[test]

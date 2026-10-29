@@ -14,8 +14,11 @@ from manywells.simulator import (
     BoundaryConditions,
     SSDFSimulator,
 )
-from manywells.choke import BernoulliChokeModel
+from manywells.choke import BernoulliChokeModel, SimpsonChokeModel
+from manywells.configurations import v1_well
 from manywells.discretization import DIM_X
+from manywells.friction import FixedFrictionFactor, RoughnessFriction
+from manywells.inflow import Vogel
 from manywells.pvt import density_from_api, gas_density_from_sg
 from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.dead_oil import DeadOil
@@ -55,6 +58,26 @@ def test_inputs_are_frozen():
 def test_well_properties_rejects_wrong_component():
     with pytest.raises(ValueError, match="friction must be a FrictionModel"):
         WellProperties(friction=0.03)
+
+
+@pytest.mark.parametrize('correlation', ['chen', 'haaland'])
+def test_well_properties_refuses_a_relative_roughness_above_005(correlation):
+    """
+    specs/model/validity.md, note 3: beyond eps/D = 0.05, the upper end of their range, Chen's and Haaland's
+    friction factors head for a pole near 3.7 and fall again past it. 017's fit stopped at a roughness of 143 m.
+    """
+    geo = WellGeometry.vertical(2000, 10, D=0.1)
+    assert WellProperties(geometry=geo, friction=RoughnessFriction(roughness=0.05 * 0.1, correlation=correlation))
+    for roughness in (0.0051, 0.37, 143.0, np.inf):
+        with pytest.raises(ValueError, match=r'relative roughness .* exceeds 0\.05'):
+            WellProperties(geometry=geo, friction=RoughnessFriction(roughness=roughness, correlation=correlation))
+
+
+def test_a_fixed_friction_factor_has_no_roughness_to_refuse():
+    """The v1.0.0 configuration's friction (FRIC-2) refuses nothing that v1.0.0 accepts (specs/model/validity.md)."""
+    wp = v1_well(L=2000.0, D=0.0762, rho_l=1050.0, R_s=420.0, cp_g=2225.0, cp_l=4000.0, f_D=0.08, h=20.0, f_g=0.15,
+                 inflow=Vogel(w_l_max=20.0), choke=SimpsonChokeModel(K_c=0.001), n_cells=10)
+    assert type(wp.friction) is FixedFrictionFactor and wp.fluid.api < 10
 
 
 def test_boundary_conditions_defaults():

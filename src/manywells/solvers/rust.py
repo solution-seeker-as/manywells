@@ -64,24 +64,32 @@ def not_in_core(wp) -> list:
 
 def core_well(wp) -> '_core.Well':
     """The core's well for WellProperties; raises ValueError for a well the core cannot solve."""
+    return _core.Well(**core_inputs(wp))
+
+
+def core_inputs(wp) -> dict:
+    """
+    The core's parameters for WellProperties, as _core.Well takes them; raises ValueError for a well the core cannot
+    solve. The core checks the refusals of specs/model/validity.md again on them (WellSpec::check).
+    """
     missing = not_in_core(wp)
     if missing:
         raise ValueError('the Rust core cannot solve this well: ' + '; '.join(missing) + '. Use backend="casadi".')
     geo, fluid, thermal, slip, choke = wp.geometry, wp.fluid, wp.thermal, wp.slip, wp.choke
-    return _core.Well(md=list(geo.md), tvd=list(geo.tvd), D=geo.D,
-                      rho_o=fluid.rho_o, rho_g=fluid.rho_g, rho_w=fluid.rho_w, gor=fluid.gor, wlr=fluid.wlr,
-                      cp_g=fluid.cp_g, cp_o=fluid.cp_o, cp_w=fluid.cp_w,
-                      surface_tension_model=fluid.surface_tension_model, **_pvt(fluid),
-                      **_friction(wp.friction),
-                      h=thermal.h, frictional_heating=thermal.frictional_heating, gravity_term=thermal.gravity_term,
-                      lift_gas_mixing=thermal.lift_gas_mixing, joule_thomson=thermal.joule_thomson,
-                      regime_model=slip.regime_model, C_0_annular=slip.C_0_annular, C_0_slug=slip.C_0_slug,
-                      C_0_bubbly=slip.C_0_bubbly, v_inf_annular=slip.v_inf_annular, f_ms=slip.f_ms,
-                      transition_width=slip.transition_width, lambda_floor=slip.lambda_floor,
-                      profile_scale=slip.profile_scale,
-                      **_inflow(wp.inflow),
-                      choke='simpson' if type(choke) is SimpsonChokeModel else 'bernoulli', K_c=choke.K_c,
-                      profile=choke.chk_profile)
+    return dict(md=list(geo.md), tvd=list(geo.tvd), D=geo.D,
+                rho_o=fluid.rho_o, rho_g=fluid.rho_g, rho_w=fluid.rho_w, gor=fluid.gor, wlr=fluid.wlr,
+                cp_g=fluid.cp_g, cp_o=fluid.cp_o, cp_w=fluid.cp_w,
+                surface_tension_model=fluid.surface_tension_model, **_pvt(fluid),
+                **_friction(wp.friction),
+                h=thermal.h, frictional_heating=thermal.frictional_heating, gravity_term=thermal.gravity_term,
+                lift_gas_mixing=thermal.lift_gas_mixing, joule_thomson=thermal.joule_thomson,
+                regime_model=slip.regime_model, C_0_annular=slip.C_0_annular, C_0_slug=slip.C_0_slug,
+                C_0_bubbly=slip.C_0_bubbly, v_inf_annular=slip.v_inf_annular, f_ms=slip.f_ms,
+                transition_width=slip.transition_width, lambda_floor=slip.lambda_floor,
+                profile_scale=slip.profile_scale,
+                **_inflow(wp.inflow),
+                choke='simpson' if type(choke) is SimpsonChokeModel else 'bernoulli', K_c=choke.K_c,
+                profile=choke.chk_profile)
 
 
 def _pvt(fluid) -> dict:

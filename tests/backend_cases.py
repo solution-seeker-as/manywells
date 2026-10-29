@@ -37,7 +37,7 @@ from manywells.friction import FixedFrictionFactor, RoughnessFriction
 from manywells.geometry import WellGeometry
 from manywells.inflow import FixedFlowRate, ProductivityIndex, Vogel
 from manywells.pvt import api_from_density, density_from_api
-from manywells.pvt.black_oil import BlackOil
+from manywells.pvt.black_oil import API_RANGE, BlackOil
 from manywells.pvt.dead_oil import DeadOil
 from manywells.pvt.table import PVTTable, PVTTableSet
 from manywells.sampling.conditions import sample_conditions
@@ -139,9 +139,9 @@ def gas_law(name):
 
 
 def black_oil(wp, bc):
-    """Black oil with dissolved gas; an oil outside the correlations' API range of 10 to 40 becomes API 30."""
+    """Black oil with dissolved gas; an oil outside the API gravities the black oil takes (API_RANGE) becomes API 30."""
     pvt = wp.fluid.pvt
-    rho_o = pvt.rho_o if 10 <= api_from_density(pvt.rho_o) <= 40 else density_from_api(30.0)
+    rho_o = pvt.rho_o if API_RANGE[0] <= api_from_density(pvt.rho_o) <= API_RANGE[1] else density_from_api(30.0)
     if type(pvt) is BlackOil:
         return with_pvt(wp, replace(pvt, rho_o=rho_o)), bc
     return with_pvt(wp, BlackOil(rho_o=rho_o, rho_g=pvt.rho_g, gas_law=pvt.gas_law)), bc

@@ -14,6 +14,10 @@ use crate::units::{kelvin_to_fahrenheit, CF_PSI, CF_RS};
 /// Density of water at standard conditions (kg/m³), the reference of the specific gravity
 pub const WATER_RHO: f64 = 999.1;
 
+/// The API gravities a black oil takes, Beggs and Robinson's (1975); a well with another is refused
+/// (specs/model/validity.md, note 2), as pvt.black_oil.API_RANGE
+pub const API_RANGE: (f64, f64) = (16.0, 58.0);
+
 /// API gravity of a liquid of density rho (kg/m³)
 pub fn api_from_density(rho: f64) -> f64 {  // spec: PVT-OIL-2
     let sg = rho / WATER_RHO;
@@ -77,9 +81,9 @@ pub struct BlackOil {
 }
 
 impl BlackOil {
-    /// For an oil of API gravity api (10 to 40), gas of specific gravity sg_gas, a separator at p_sep (Pa) and
-    /// t_sep (K), an optional bubble point p_bubble (Pa), and the optional gas-oil ratio gor (Sm³/Sm³) of the stream
-    /// it is part of
+    /// For an oil of API gravity api, gas of specific gravity sg_gas, a separator at p_sep (Pa) and t_sep (K), an
+    /// optional bubble point p_bubble (Pa), and the optional gas-oil ratio gor (Sm³/Sm³) of the stream it is part of.
+    /// It evaluates the correlations at any API gravity; a well refuses one outside API_RANGE (WellSpec::check)
     pub fn new(api: f64, sg_gas: f64, p_sep: f64, t_sep: f64, p_bubble: Option<f64>, gor: Option<f64>) -> Self {
         let (c, f) = if api <= 30.0 {
             ([0.0362, 1.0937, 25.7240], [4.677e-4, 1.751e-5, -1.811e-8])
