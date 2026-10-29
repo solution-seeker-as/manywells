@@ -22,9 +22,9 @@ from manywells.calibration.parameters import apply
 from manywells.datasets.rows import root_features
 from manywells.simulator import BoundaryConditions, SimError, SSDFSimulator
 
-BARRIER = 1e3      # The scaled residual of every observation of a row with no operating point (CAL-9)
-FD_STEP = 1e-6     # Forward-difference step of the Jacobian in z, the standardized log (CAL-10)
-CACHE_SIZE = 64    # Evaluations kept, so that the fit reuses the start's and the residuals' solves at x
+BARRIER = 1e3  # The scaled residual of every observation of a row with no operating point (CAL-9)
+FD_STEP = 1e-6  # Forward-difference step of the Jacobian in z, the standardized log (CAL-10)
+CACHE_SIZE = 64  # Evaluations kept, so that the fit reuses the start's and the residuals' solves at x
 
 
 def row_conditions(data, bc: BoundaryConditions) -> list:  # spec: CAL-1
@@ -80,7 +80,7 @@ class Objective:
         self.mask = ~np.isnan(self.y)
         self.workers = 1 if backend == 'casadi' else (workers or min(32, os.cpu_count() or 1))
         self.n_solves = 0
-        self._guess = {}   # The last root of each row, as an extra start for the CasADi backend
+        self._guess = {}  # The last root of each row, as an extra start for the CasADi backend
         self._cache = {}
 
     @property
@@ -121,9 +121,11 @@ class Objective:
                 tasks.append((len(out) - 1, k, wp, bc))
         if tasks:
             results = {}
+
             def run(t):
                 i, k, wp, bc = t
                 return i, self._solve((k, wp, bc))
+
             if self.workers > 1:
                 with ThreadPoolExecutor(self.workers) as ex:
                     done = list(ex.map(run, tasks))
@@ -161,7 +163,7 @@ class Objective:
 
     def residuals(self, z) -> np.ndarray:  # spec: CAL-10
         """The residual vector at z: the observations' scaled residuals, then the priors' (z itself)."""
-        (pred, _), = self.predict([z])
+        ((pred, _),) = self.predict([z])
         return np.concatenate([self.scaled(pred), np.asarray(z, dtype=float)])
 
     def jacobian(self, z) -> np.ndarray:  # spec: CAL-10
@@ -172,6 +174,6 @@ class Objective:
         r0 = self.scaled(evaluations[0][0])
         J = np.empty((len(r0) + len(z), len(z)))
         for j, (pred, _) in enumerate(evaluations[1:]):
-            J[:len(r0), j] = (self.scaled(pred) - r0) / FD_STEP
-        J[len(r0):] = np.eye(len(z))
+            J[: len(r0), j] = (self.scaled(pred) - r0) / FD_STEP
+        J[len(r0) :] = np.eye(len(z))
         return J

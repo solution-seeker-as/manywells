@@ -41,7 +41,7 @@ def gradient(model, s, F=0.0, cos_incl=1.0):
 def test_frozen_and_validated():
     with pytest.raises(dataclasses.FrozenInstanceError):
         ThermalModel().h = 30.0
-    with pytest.raises(ValueError, match="Heat transfer"):
+    with pytest.raises(ValueError, match='Heat transfer'):
         ThermalModel(h=-1.0)
 
 
@@ -69,7 +69,9 @@ def test_gravity_term_of_pure_gas_is_the_lapse_rate():
     """For pure gas (alpha=1), gravitational cooling rate equals g cos(theta) / cp_g."""
     m = ThermalModel(h=0.0, frictional_heating=False, gravity_term=True, joule_thomson=False)
     for cos_incl in (1.0, 0.5):
-        assert gradient(m, state(1.0), cos_incl=cos_incl) == pytest.approx(-STD_GRAVITY * cos_incl / FLUID.cp_g, rel=1e-12)
+        assert gradient(m, state(1.0), cos_incl=cos_incl) == pytest.approx(
+            -STD_GRAVITY * cos_incl / FLUID.cp_g, rel=1e-12
+        )
 
 
 def test_gravity_term_of_pure_liquid_vanishes():
@@ -130,11 +132,11 @@ def test_ambient_temperature_is_linear_in_true_vertical_depth():
 def test_inflow_temperature():
     """Lift gas colder than the reservoir fluid lowers the inflow temperature, but not below T_lg."""
     m, T_r, T_lg, w_res = ThermalModel(), 373.15, 300.0, 10.0
-    assert V1.inflow_temperature(w_res, 1.0, T_r, T_lg, FLUID) == T_r            # THM-3: the lift gas is ignored
-    assert m.inflow_temperature(w_res, 1.0, T_r, T_r, FLUID) == T_r             # T_lg = T_r: exactly T_r
-    assert m.inflow_temperature(w_res, 0.0, T_r, T_lg, FLUID) == T_r            # no lift gas: exactly T_r
+    assert V1.inflow_temperature(w_res, 1.0, T_r, T_lg, FLUID) == T_r  # THM-3: the lift gas is ignored
+    assert m.inflow_temperature(w_res, 1.0, T_r, T_r, FLUID) == T_r  # T_lg = T_r: exactly T_r
+    assert m.inflow_temperature(w_res, 0.0, T_r, T_lg, FLUID) == T_r  # no lift gas: exactly T_r
     T_mix = m.inflow_temperature(w_res, 1.0, T_r, T_lg, FLUID)
     assert T_lg < T_mix < T_r
-    assert m.inflow_temperature(w_res, 3.0, T_r, T_lg, FLUID) < T_mix          # more lift gas, colder
+    assert m.inflow_temperature(w_res, 3.0, T_r, T_lg, FLUID) < T_mix  # more lift gas, colder
     H_res = w_res * FLUID.cp_l + FLUID.reservoir_gas_rate(w_res) * FLUID.cp_g
     assert T_mix == pytest.approx((H_res * T_r + 1.0 * FLUID.cp_g * T_lg) / (H_res + FLUID.cp_g), rel=1e-15)

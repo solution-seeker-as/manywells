@@ -29,11 +29,11 @@ class ThermalModel:
     where H is the heat loss of Zhang et al. (2006).
     """
 
-    h: float = 20.0                    # Overall heat transfer coefficient (W/m²/K)
-    frictional_heating: bool = True    # Viscous dissipation heats the liquid
-    gravity_term: bool = True          # Work against gravity cools the flow
-    lift_gas_mixing: bool = True       # Lift gas at T_lg mixes with the reservoir fluid at the bottomhole
-    joule_thomson: bool = True         # A real gas cools as it expands (zero for an ideal gas)
+    h: float = 20.0  # Overall heat transfer coefficient (W/m²/K)
+    frictional_heating: bool = True  # Viscous dissipation heats the liquid
+    gravity_term: bool = True  # Work against gravity cools the flow
+    lift_gas_mixing: bool = True  # Lift gas at T_lg mixes with the reservoir fluid at the bottomhole
+    joule_thomson: bool = True  # A real gas cools as it expands (zero for an ideal gas)
 
     def __post_init__(self):
         if not self.h >= 0:

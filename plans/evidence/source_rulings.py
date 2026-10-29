@@ -49,32 +49,43 @@ def join(a, b, suffixes):
 def compare(before, after):
     df = join(before, after, ('_b', '_a'))
     found_b, found_a = df.PBH_b.notna(), df.PBH_a.notna()
-    print(f'{len(df)} cases; operating point before {found_b.sum()}, after {found_a.sum()}; '
-          f'lost {(found_b & ~found_a).sum()}, gained {(~found_b & found_a).sum()}')
+    print(
+        f'{len(df)} cases; operating point before {found_b.sum()}, after {found_a.sum()}; '
+        f'lost {(found_b & ~found_a).sum()}, gained {(~found_b & found_a).sum()}'
+    )
     for name, rows in (('lost', df[found_b & ~found_a]), ('gained', df[~found_b & found_a])):
         if len(rows):
             print(f'  {name}: ' + ', '.join(f'({r.well}, {r.k})' for r in rows.itertuples()))
     both = df[found_b & found_a]
-    changes = pd.DataFrame({
-        'PBH (bar)': both.PBH_a - both.PBH_b,
-        'PWH (bar)': both.PWH_a - both.PWH_b,
-        'TWH (K)': both.TWH_a - both.TWH_b,
-        'w_res (%)': 100 * (both.w_res_a / both.w_res_b - 1),
-    })
+    changes = pd.DataFrame(
+        {
+            'PBH (bar)': both.PBH_a - both.PBH_b,
+            'PWH (bar)': both.PWH_a - both.PWH_b,
+            'TWH (K)': both.TWH_a - both.TWH_b,
+            'w_res (%)': 100 * (both.w_res_a / both.w_res_b - 1),
+        }
+    )
     print(f'\n{len(both)} cases with an operating point in both. Quantiles of the changes, after minus before:')
     print(changes.quantile([0, 0.1, 0.5, 0.9, 1]).to_string(float_format=lambda v: f'{v:.4g}'))
     print('\nLargest absolute change, and the median of the absolute changes:')
-    print(pd.DataFrame({'max': changes.abs().max(), 'median': changes.abs().median()})
-          .to_string(float_format=lambda v: f'{v:.4g}'))
-    print(f'\nSeconds per case, median (total): before {df.seconds_b.median():.3f} ({df.seconds_b.sum():.0f}), '
-          f'after {df.seconds_a.median():.3f} ({df.seconds_a.sum():.0f})')
+    print(
+        pd.DataFrame({'max': changes.abs().max(), 'median': changes.abs().median()}).to_string(
+            float_format=lambda v: f'{v:.4g}'
+        )
+    )
+    print(
+        f'\nSeconds per case, median (total): before {df.seconds_b.median():.3f} ({df.seconds_b.sum():.0f}), '
+        f'after {df.seconds_a.median():.3f} ({df.seconds_a.sum():.0f})'
+    )
 
 
 def backends(rust, casadi):
     df = join(rust, casadi, ('_r', '_c'))
     found_r, found_c = df.PBH_r.notna(), df.PBH_c.notna()
-    print(f'{len(df)} cases in both runs; operating point on the core {found_r.sum()}, on CasADi {found_c.sum()}; '
-          f'the core only {(found_r & ~found_c).sum()}, CasADi only {(~found_r & found_c).sum()}')
+    print(
+        f'{len(df)} cases in both runs; operating point on the core {found_r.sum()}, on CasADi {found_c.sum()}; '
+        f'the core only {(found_r & ~found_c).sum()}, CasADi only {(~found_r & found_c).sum()}'
+    )
     both = df[found_r & found_c]
     d_pbh, d_pwh = (both.PBH_r - both.PBH_c).abs().max(), (both.PWH_r - both.PWH_c).abs().max()
     print(f'{len(both)} cases solved by both: largest |PBH difference| {d_pbh:.3g} bar, |PWH| {d_pwh:.3g} bar')
@@ -120,8 +131,10 @@ def zero_flow():
             print(f'  alpha {alpha}, v_g {v_g}, v_l {v_l}: rows {rows}, Jacobian {rows_J}')
         case_wp, case_bc = Case('v1.0.0', 'chen', 6).inputs()
         rs = SSDFSimulator(case_wp).root_set(case_bc)
-        print(f'  v1.0.0+chen#6: roots {[round(r.p_0, 4) for r in rs.roots]}; starts: '
-              + '; '.join(f'{a.start}: {a.outcome}' for a in rs.search))
+        print(
+            f'  v1.0.0+chen#6: roots {[round(r.p_0, 4) for r in rs.roots]}; starts: '
+            + '; '.join(f'{a.start}: {a.outcome}' for a in rs.search)
+        )
 
 
 def main():

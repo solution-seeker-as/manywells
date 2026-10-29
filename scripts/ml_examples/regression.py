@@ -6,6 +6,7 @@ terms of the CC BY-NC 4.0 International Public License.
 Created 26 January 2025
 Erlend Lundby, erlend@solutionseeker.no
 """
+
 import os
 import statistics
 
@@ -27,7 +28,7 @@ input_cols = ['CHK', 'QGL', 'PWH', 'PDC', 'TWH', 'FOIL', 'FGAS']
 output_cols = ['WTOT']
 
 # Define the column for the task identifier
-task_col ='ID'
+task_col = 'ID'
 
 # Define columns to scale
 scale_cols = ['QGL', 'PWH', 'PDC', 'TWH']
@@ -74,15 +75,11 @@ class SingleTaskRegressionModel(LearningAlgorithm):
     def load(self):
         pass
 
+
 class SingleTaskSVR(SingleTaskRegressionModel):
-    def __init__(self, base_model_kwargs,
-                 input_cols, output_cols, task_col):
-        #base_model_kwargs = {'C': 100.0, 'gamma': 0.4, 'epsilon': 0.1, 'tol': 1e-4, 'cache_size': 1000}
-        super().__init__(SVR,
-                         base_model_kwargs,
-                         input_cols,
-                         output_cols,
-                         task_col)
+    def __init__(self, base_model_kwargs, input_cols, output_cols, task_col):
+        # base_model_kwargs = {'C': 100.0, 'gamma': 0.4, 'epsilon': 0.1, 'tol': 1e-4, 'cache_size': 1000}
+        super().__init__(SVR, base_model_kwargs, input_cols, output_cols, task_col)
 
 
 class MTLRegressionModel(LearningAlgorithm):
@@ -128,12 +125,8 @@ class MTLRegressionModel(LearningAlgorithm):
 
 class MultiTaskSVR(MTLRegressionModel):
     def __init__(self, base_model_kwargs, input_cols, output_cols, task_col):
-        #base_model_kwargs = {'C': 100.0, 'gamma': 0.4, 'epsilon': 0.1, 'tol': 1e-4, 'cache_size': 1000}
-        super().__init__(SVR,
-                         base_model_kwargs,
-                         input_cols,
-                         output_cols,
-                         task_col)
+        # base_model_kwargs = {'C': 100.0, 'gamma': 0.4, 'epsilon': 0.1, 'tol': 1e-4, 'cache_size': 1000}
+        super().__init__(SVR, base_model_kwargs, input_cols, output_cols, task_col)
 
 
 def evaluate(model, df):
@@ -156,7 +149,7 @@ def plot_mse(n_tasks, mse_scores):
 
 
 if __name__ == '__main__':
-    #-------------------------------
+    # -------------------------------
     # 1. Load dataset and dataset config
     # -------------------------------
     dataset_name = 'manywells-sol-1'
@@ -166,7 +159,7 @@ if __name__ == '__main__':
     # -------------------------------
     # 2. Add gaussian noise to the data
     # -------------------------------
-    df_noise, _ = add_noise(df_orig,config_orig,percentage_noise=0.5)
+    df_noise, _ = add_noise(df_orig, config_orig, percentage_noise=0.5)
 
     # -------------------------------
     # 3. Randomly select tasks to be included in experiments
@@ -174,8 +167,8 @@ if __name__ == '__main__':
     unique_tasks = df_orig[task_col].unique()
     np.random.shuffle(unique_tasks)
     # Number of tasks that share data, one experiment per element in n_tasks_
-    n_tasks_ = [1,2,5,10,20,50,100, 250, 500] #, 200, 500
-    selected_tasks = unique_tasks[:n_tasks_[-1]]
+    n_tasks_ = [1, 2, 5, 10, 20, 50, 100, 250, 500]  # , 200, 500
+    selected_tasks = unique_tasks[: n_tasks_[-1]]
     df = df_noise[df_noise[task_col].isin(selected_tasks)]
 
     # -------------------------------
@@ -184,7 +177,7 @@ if __name__ == '__main__':
     df_scaled = standard_scaler(df, scale_cols)
 
     # -------------------------------
-    #5. Split data into train and test
+    # 5. Split data into train and test
     # -------------------------------
     train_scaled, test_scaled = split_data_by_time_or_random(df_scaled, n1=10, n2=30, task_col='ID', time_col='WEEKS')
 
@@ -197,12 +190,12 @@ if __name__ == '__main__':
     # -------------------------------
     for i in range(len(n_tasks_)):
         n = n_tasks_[i]
-        if n==1:
+        if n == 1:
             # -------------------------------
             # 6.1 Single-task learning
             # -------------------------------
             SVR_kwargs = {'C': 100.0, 'gamma': 0.4, 'epsilon': 0.1, 'tol': 1e-4, 'cache_size': 1000}
-            model = SingleTaskSVR(SVR_kwargs,input_cols,output_cols, task_col)
+            model = SingleTaskSVR(SVR_kwargs, input_cols, output_cols, task_col)
             model.fit(train_scaled)
             result = evaluate(model, test_scaled)
             print(f'{n} tasks: mse: {result["mean_squared_error"]}, r2: {result["r2_score"]}')
@@ -212,11 +205,11 @@ if __name__ == '__main__':
             # -------------------------------
             # 6.2 Multi-task learning
             # -------------------------------
-            n_models = int(len(selected_tasks)/n)
+            n_models = int(len(selected_tasks) / n)
             mse_mtl = []
             r2_mtl = []
             for j in range(n_models):
-                model_tasks = selected_tasks[j * n:(j + 1)*n]
+                model_tasks = selected_tasks[j * n : (j + 1) * n]
                 task_dummies = pd.get_dummies(df[df[task_col].isin(model_tasks)][task_col], prefix='TASK')
                 dummy_cols = task_dummies.columns.tolist()
                 SVR_kwargs = {'C': 100.0, 'gamma': 0.4, 'epsilon': 0.1, 'tol': 1e-4, 'cache_size': 1000}

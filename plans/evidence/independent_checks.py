@@ -73,16 +73,21 @@ def report(name, value, unit=''):
 # ---------------------------------------------------------------------------------------------------------------
 # 1. fluids
 
+
 def chen_colebrook(Re, eD):
     """Chen's form of Colebrook's equation (Chen 1979, eq 4): 1/sqrt(f) = -2 log10(eD/3.7065 + 2.5226/(Re sqrt(f)))."""
-    g = lambda x: x + 2.0 * math.log10(eD / 3.7065 + 2.5226 * x / Re)      # x = 1/sqrt(f)
+
+    def g(x):  # x = 1/sqrt(f)
+        return x + 2.0 * math.log10(eD / 3.7065 + 2.5226 * x / Re)
+
     x = brentq(g, 1.0, 50.0, xtol=1e-14, rtol=1e-15)
-    return 1.0 / x ** 2
+    return 1.0 / x**2
 
 
 def friction():
-    print('FRIC-4 and FRIC-5 against fluids, over Re 4000 to 1e8 and eps/D 0 to 0.05 '
-          f'({len(RE)} x {len(EPS_D)} points)')
+    print(
+        f'FRIC-4 and FRIC-5 against fluids, over Re 4000 to 1e8 and eps/D 0 to 0.05 ({len(RE)} x {len(EPS_D)} points)'
+    )
     d_chen, d_haaland = 0.0, 0.0
     cw_chen, cw_haaland = [], []
     for Re in RE:
@@ -96,16 +101,24 @@ def friction():
     report('FRIC-4 against fluids.friction.Chen_1979, largest relative difference', d_chen)
     report('FRIC-5 against fluids.friction.Haaland, largest relative difference', d_haaland)
     for name, d in (('FRIC-4', cw_chen), ('FRIC-5', cw_haaland)):
-        report(f'{name} against Colebrook-White (fluids.friction.Clamond), largest |difference|',
-               100 * max(abs(v) for v in d), ' %')
+        report(
+            f'{name} against Colebrook-White (fluids.friction.Clamond), largest |difference|',
+            100 * max(abs(v) for v in d),
+            ' %',
+        )
         report(f'{name} against Colebrook-White, range', 100 * min(d), f' % to {100 * max(d):.3g} %')
     # Chen's Table I: 36 points over Re 4000 to 4e8 and eps/D 5e-7 to 0.05, max +0.4651 % and min -0.2286 %, which
     # match (Colebrook - Chen) / Chen
-    own = [(chen_colebrook(Re, eD) - num(chen_friction_factor(Re, eD))) / num(chen_friction_factor(Re, eD))
-           for Re in np.logspace(np.log10(4.0e3), np.log10(4.0e8), 61)
-           for eD in np.logspace(np.log10(5e-7), np.log10(0.05), 31)]
-    report("Chen's form of Colebrook (3.7065, 2.5226) minus FRIC-4, over his range, range", 100 * min(own),
-           f' % to {100 * max(own):.4g} %')
+    own = [
+        (chen_colebrook(Re, eD) - num(chen_friction_factor(Re, eD))) / num(chen_friction_factor(Re, eD))
+        for Re in np.logspace(np.log10(4.0e3), np.log10(4.0e8), 61)
+        for eD in np.logspace(np.log10(5e-7), np.log10(0.05), 31)
+    ]
+    report(
+        "Chen's form of Colebrook (3.7065, 2.5226) minus FRIC-4, over his range, range",
+        100 * min(own),
+        f' % to {100 * max(own):.4g} %',
+    )
 
 
 def choke():
@@ -137,18 +150,32 @@ def mixture():
 # 2. The source's equations, transcribed
 
 # Dranchuk and Abou-Kassem (1975), the constants under Eq. (2), and Z_c of Eq. (3)
-DAK_A = {1: 0.3265, 2: -1.0700, 3: -0.5339, 4: 0.01569, 5: -0.05165, 6: 0.5475, 7: -0.7361, 8: 0.1844, 9: 0.1056,
-         10: 0.6134, 11: 0.7210}
+DAK_A = {
+    1: 0.3265,
+    2: -1.0700,
+    3: -0.5339,
+    4: 0.01569,
+    5: -0.05165,
+    6: 0.5475,
+    7: -0.7361,
+    8: 0.1844,
+    9: 0.1056,
+    10: 0.6134,
+    11: 0.7210,
+}
 DAK_ZC = 0.270
 
 
 def dak_eq2(rho_r, T_r):
     """Dranchuk and Abou-Kassem (1975), Eq. (2), as printed."""
     A = DAK_A
-    return (1 + (A[1] + A[2] / T_r + A[3] / T_r ** 3 + A[4] / T_r ** 4 + A[5] / T_r ** 5) * rho_r
-            + (A[6] + A[7] / T_r + A[8] / T_r ** 2) * rho_r ** 2
-            - A[9] * (A[7] / T_r + A[8] / T_r ** 2) * rho_r ** 5
-            + A[10] * (1 + A[11] * rho_r ** 2) * (rho_r ** 2 / T_r ** 3) * math.exp(-A[11] * rho_r ** 2))
+    return (
+        1
+        + (A[1] + A[2] / T_r + A[3] / T_r**3 + A[4] / T_r**4 + A[5] / T_r**5) * rho_r
+        + (A[6] + A[7] / T_r + A[8] / T_r**2) * rho_r**2
+        - A[9] * (A[7] / T_r + A[8] / T_r**2) * rho_r**5
+        + A[10] * (1 + A[11] * rho_r**2) * (rho_r**2 / T_r**3) * math.exp(-A[11] * rho_r**2)
+    )
 
 
 def dak_density(P_r, T_r):
@@ -159,8 +186,10 @@ def dak_density(P_r, T_r):
 def dak():
     P_r = np.concatenate((np.linspace(0.2, 1.0, 5), np.linspace(1.5, 15.0, 28)))
     T_r = np.linspace(1.05, 3.0, 40)
-    print(f'PVT-GAS-9, PVT-GAS-11 against Dranchuk and Abou-Kassem (1975), Eqs. (2) and (3), solved by bisection, '
-          f'over P_r 0.2 to 15 and T_r 1.05 to 3 ({len(P_r)} x {len(T_r)} points)')
+    print(
+        f'PVT-GAS-9, PVT-GAS-11 against Dranchuk and Abou-Kassem (1975), Eqs. (2) and (3), solved by bisection, '
+        f'over P_r 0.2 to 15 and T_r 1.05 to 3 ({len(P_r)} x {len(T_r)} points)'
+    )
     dz, dr, dj = 0.0, 0.0, 0.0
     for p in P_r:
         for t in T_r:
@@ -184,8 +213,8 @@ def sutton():
     dp, dt = [], []
     for g in np.linspace(0.571, 1.679, 112):
         ppc, tpc = sutton_pseudo_critical(g)
-        p_eq14 = 756.8 - 131.0 * g - 3.6 * g ** 2            # psia
-        t_eq15 = 169.2 + 349.5 * g - 74.0 * g ** 2           # deg R
+        p_eq14 = 756.8 - 131.0 * g - 3.6 * g**2  # psia
+        t_eq15 = 169.2 + 349.5 * g - 74.0 * g**2  # deg R
         dp.append(rel(ppc / CF_PSI, p_eq14))
         dt.append(rel(tpc * 1.8, t_eq15))
     report('T_pc, largest relative difference', max(dt))
@@ -195,8 +224,14 @@ def sutton():
 
 # Abdul-Majeed and Abu Al-Soof (2000), Table 1: dead-oil surface tension (dyn/cm) by API gravity, at 54.44, 37.78
 # and 15.56 deg C
-AM_TABLE_1 = {15: (32.8, 34.0, 36.0), 20: (31.5, 33.0, 35.0), 30: (29.0, 30.2, 32.2), 35: (28.0, 29.4, 31.4),
-              40: (26.2, 27.8, 30.0), 50: (23.1, 24.9, 26.9)}
+AM_TABLE_1 = {
+    15: (32.8, 34.0, 36.0),
+    20: (31.5, 33.0, 35.0),
+    30: (29.0, 30.2, 32.2),
+    35: (28.0, 29.4, 31.4),
+    40: (26.2, 27.8, 30.0),
+    50: (23.1, 24.9, 26.9),
+}
 AM_T = (54.44, 37.78, 15.56)
 
 
@@ -207,7 +242,7 @@ def abdul_majeed_dead(api, T_C):
 
 def abdul_majeed_ratio(R_s):
     """sigma_lo / sigma_do: Eq. (4) for R_s < 50 Sm3/Sm3, Eq. (5) above."""
-    return 1 / (1 + 0.02549 * R_s ** 1.0157) if R_s < 50 else 32.0436 * R_s ** -1.1367
+    return 1 / (1 + 0.02549 * R_s**1.0157) if R_s < 50 else 32.0436 * R_s**-1.1367
 
 
 def abdul_majeed():
@@ -218,12 +253,17 @@ def abdul_majeed():
             ours = num(dead_oil_surface_tension(density_from_api(api), T_C + 273.15)) / CF_DYNCM
             d = max(d, rel(ours, abdul_majeed_dead(api, T_C)))
     report('largest relative difference', d)
-    res = [num(dead_oil_surface_tension(density_from_api(api), T_C + 273.15)) / CF_DYNCM - s
-           for api, row in AM_TABLE_1.items() for T_C, s in zip(AM_T, row)]
+    res = [
+        num(dead_oil_surface_tension(density_from_api(api), T_C + 273.15)) / CF_DYNCM - s
+        for api, row in AM_TABLE_1.items()
+        for T_C, s in zip(AM_T, row)
+    ]
     report('against the data of their Table 1 (18 points), largest |residual|', max(abs(v) for v in res), ' dyn/cm')
     report('against the data of their Table 1, mean |residual|', float(np.mean(np.abs(res))), ' dyn/cm')
-    print('PVT-OIL-12 against their Eqs. (4) and (5), outside the blend of the two at 50 Sm3/Sm3 (R_s below 20 and '
-          'above 80, where the blend weight is below 1e-6)')
+    print(
+        'PVT-OIL-12 against their Eqs. (4) and (5), outside the blend of the two at 50 Sm3/Sm3 (R_s below 20 and '
+        'above 80, where the blend weight is below 1e-6)'
+    )
     d = 0.0
     for R_s in np.concatenate((np.linspace(0.5, 20.0, 40), np.linspace(80.0, 400.0, 65))):
         ours = num(live_oil_surface_tension(1.0, R_s / CF_RS))
@@ -231,8 +271,10 @@ def abdul_majeed():
     report('largest relative difference', d)
     for R_s in (30.0, 40.0, 45.0, 50.0, 55.0, 60.0, 70.0):
         ours = num(live_oil_surface_tension(1.0, R_s / CF_RS))
-        print(f'  at {R_s:.0f} Sm3/Sm3: develop {ours:.4f}, Eq. (4) {1 / (1 + 0.02549 * R_s ** 1.0157):.4f}, '
-              f'Eq. (5) {32.0436 * R_s ** -1.1367:.4f}')
+        print(
+            f'  at {R_s:.0f} Sm3/Sm3: develop {ours:.4f}, Eq. (4) {1 / (1 + 0.02549 * R_s**1.0157):.4f}, '
+            f'Eq. (5) {32.0436 * R_s**-1.1367:.4f}'
+        )
 
 
 def main():

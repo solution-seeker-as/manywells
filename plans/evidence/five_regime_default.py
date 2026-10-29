@@ -65,8 +65,13 @@ def solve(wp, bc, backend):
     if op is not None:
         X = op.state
         shares = Counter(op.flow_regime)
-        out.update(PBH=X[0, 0], PWH=X[-1, 0], TWH=X[-1, 6], w_res=op.w_res,
-                   **{f'share_{r}': shares[r] / len(op.flow_regime) for r in LABELS})
+        out.update(
+            PBH=X[0, 0],
+            PWH=X[-1, 0],
+            TWH=X[-1, 6],
+            w_res=op.w_res,
+            **{f'share_{r}': shares[r] / len(op.flow_regime) for r in LABELS},
+        )
     return out
 
 
@@ -77,16 +82,25 @@ def summary(df):
         print(f'== {backend}: {len(d)} cases')
         for v in VARIANTS:
             s = d[f'seconds_{v}']
-            print(f'  {v}: operating point in {d[f"PBH_{v}"].notna().sum()}, roots per case '
-                  f'{dict(sorted(Counter(d[f"roots_{v}"]).items()))}, {s.median():.2f} s median, {s.sum():.1f} s total')
+            print(
+                f'  {v}: operating point in {d[f"PBH_{v}"].notna().sum()}, roots per case '
+                f'{dict(sorted(Counter(d[f"roots_{v}"]).items()))}, {s.median():.2f} s median, {s.sum():.1f} s total'
+            )
         both = d.dropna(subset=[f'PBH_{v}' for v in VARIANTS])
         lost = d[d['PBH_fitted'].notna() & d['PBH_hasan'].isna()]
         gained = d[d['PBH_fitted'].isna() & d['PBH_hasan'].notna()]
-        print(f'  {len(both)} with an operating point in both; lost with hasan: {list(zip(lost.well, lost.k))}; '
-              f'gained: {list(zip(gained.well, gained.k))}')
-        diff = pd.DataFrame({'PBH': both['PBH_hasan'] - both['PBH_fitted'], 'PWH': both['PWH_hasan'] - both['PWH_fitted'],
-                             'TWH': both['TWH_hasan'] - both['TWH_fitted'],
-                             'rate (rel)': both['w_res_hasan'] / both['w_res_fitted'] - 1})
+        print(
+            f'  {len(both)} with an operating point in both; lost with hasan: {list(zip(lost.well, lost.k))}; '
+            f'gained: {list(zip(gained.well, gained.k))}'
+        )
+        diff = pd.DataFrame(
+            {
+                'PBH': both['PBH_hasan'] - both['PBH_fitted'],
+                'PWH': both['PWH_hasan'] - both['PWH_fitted'],
+                'TWH': both['TWH_hasan'] - both['TWH_fitted'],
+                'rate (rel)': both['w_res_hasan'] / both['w_res_fitted'] - 1,
+            }
+        )
         print(diff.quantile(q).round(4).to_string())
         for v in VARIANTS:
             shares = {r: d[f'share_{r}_{v}'].mean() for r in LABELS if d[f'share_{r}_{v}'].sum() > 0}
@@ -106,8 +120,11 @@ def main():
             for v, slip in VARIANTS.items():
                 rec.update({f'{key}_{v}': val for key, val in solve(replace(wp, slip=slip), bc, backend).items()})
             rows.append(rec)
-            print(f"{backend:>6} well {well:2d} k {k}: PBH {rec.get('PBH_fitted', float('nan')):8.3f} -> "
-                  f"{rec.get('PBH_hasan', float('nan')):8.3f}", flush=True)
+            print(
+                f'{backend:>6} well {well:2d} k {k}: PBH {rec.get("PBH_fitted", float("nan")):8.3f} -> '
+                f'{rec.get("PBH_hasan", float("nan")):8.3f}',
+                flush=True,
+            )
     df = pd.DataFrame(rows)
     df.to_csv(args.out, index=False)
     summary(df)

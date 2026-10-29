@@ -29,7 +29,7 @@ from manywells.sampling.conditions import NonStationaryBehavior, nominal_conditi
 from manywells.sampling.wells import N_CELLS, rng_for, well_properties
 from manywells.simulator import SimError, SSDFSimulator
 
-CHK_STD_MIN = np.sqrt((1 / 12) * (1 - 0.05) ** 2) / 5   # A fifth of the standard deviation of U(0.05, 1)
+CHK_STD_MIN = np.sqrt((1 / 12) * (1 - 0.05) ** 2) / 5  # A fifth of the standard deviation of U(0.05, 1)
 
 
 class WellDiscarded(Exception):
@@ -42,6 +42,7 @@ class Settings:
     What a generator run needs besides the wells: the configuration, the grid and the dataset's seed (SMP-31), and
     the simulator backend, 'casadi' or 'rust', which solve the same model.
     """
+
     seed: int
     configuration: str = V1
     n_cells: int = N_CELLS
@@ -51,8 +52,9 @@ class Settings:
 def solve(draw, fractions, bc, settings: Settings, x_guess=None):
     """The operating point of a draw's well at fractions and bc, or None if there is none (or the well is invalid)."""
     try:
-        sim = SSDFSimulator(well_properties(draw, fractions, settings.configuration, settings.n_cells),
-                            backend=settings.backend)
+        sim = SSDFSimulator(
+            well_properties(draw, fractions, settings.configuration, settings.n_cells), backend=settings.backend
+        )
         return sim.simulate(bc, x_guess=x_guess)
     except (SimError, ValueError):
         return None
@@ -154,7 +156,9 @@ def nonstationary_well(draw, well: int, n_samples: int, settings: Settings) -> p
             raise WellDiscarded('initial solve failed')
         x = op.x
     A = np.pi * (draw.D / 2) ** 2
-    w_m = A * (op.state[-1, 3] * op.state[-1, 4] * op.state[-1, 1] + (1 - op.state[-1, 3]) * op.state[-1, 5] * op.state[-1, 2])
+    w_m = A * (
+        op.state[-1, 3] * op.state[-1, 4] * op.state[-1, 1] + (1 - op.state[-1, 3]) * op.state[-1, 5] * op.state[-1, 2]
+    )
     if w_m < 7:
         raise WellDiscarded('too little production at u = 1')
     pool = StartPool()
@@ -203,6 +207,7 @@ GENERATORS = {'sol': stationary_well, 'nsol': nonstationary_well}
 def _attempt(task):
     """Draw well number `well` and generate its samples; (well, draw, rows or None, reason)."""
     from manywells.sampling.wells import sample_well
+
     kind, well, n_samples, settings = task
     draw = sample_well(settings.seed, well)
     try:
@@ -220,6 +225,7 @@ def generate(kind: str, n_wells: int, n_samples: int, settings: Settings, proces
     :return: (rows with an ID column, {ID: WellDraw}, the number of wells drawn)
     """
     import multiprocessing
+
     accepted, drawn, chunk = {}, 0, max(1, processes)
     with multiprocessing.Pool(processes) if processes > 1 else _Serial() as pool:
         while len(accepted) < n_wells:

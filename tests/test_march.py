@@ -25,7 +25,7 @@ def point_solver(rows):
 
 
 def test_newton_solves_a_point():
-    assert point_solver(lambda x, p: x ** 2 - p)(np.array([3.0]), np.array([4.0])) == pytest.approx([2.0])
+    assert point_solver(lambda x, p: x**2 - p)(np.array([3.0]), np.array([4.0])) == pytest.approx([2.0])
 
 
 def test_a_point_with_nan_rows_goes_to_ipopt():

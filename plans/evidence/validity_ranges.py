@@ -40,7 +40,7 @@ from manywells.simulator import SimError, SSDFSimulator
 from manywells.units import CF_BAR, CF_PSI, CF_RS
 
 SEED = 2026
-STB_PER_M3 = 6.28981           # Barrels per cubic metre
+STB_PER_M3 = 6.28981  # Barrels per cubic metre
 PSI_PER_BAR = CF_BAR / CF_PSI
 
 
@@ -58,15 +58,32 @@ def point_rows(wp, op):
         rho_m = alpha * rho_g + (1 - alpha) * rho_l
         v_m = alpha * v_g + (1 - alpha) * v_l
         mu_m = float(fl.mixture_viscosity(p, T, alpha, rho_g, rho_l, v_g, v_l))
-        rows.append(dict(
-            i=i, md=geo.md[i], cos_incl=cos[max(i - 1, 0)], p=p, T=T, alpha=alpha, v_g=v_g, v_l=v_l, rho_g=rho_g,
-            rho_l=rho_l, regime=op.flow_regime[i],
-            p_psia=p * PSI_PER_BAR, T_F=fahrenheit(T), T_C=T - 273.15,
-            ppr=p * CF_BAR / ppc, tpr=T / tpc,
-            rs_vb=float(fl.pvt.rs(p, T)), rs=float(fl.rs(p, T)), bo=float(fl.bo(p, T)),
-            Re=rho_m * abs(v_m) * geo.D / mu_m,
-            vgs=alpha * v_g, vls=(1 - alpha) * v_l,
-        ))
+        rows.append(
+            dict(
+                i=i,
+                md=geo.md[i],
+                cos_incl=cos[max(i - 1, 0)],
+                p=p,
+                T=T,
+                alpha=alpha,
+                v_g=v_g,
+                v_l=v_l,
+                rho_g=rho_g,
+                rho_l=rho_l,
+                regime=op.flow_regime[i],
+                p_psia=p * PSI_PER_BAR,
+                T_F=fahrenheit(T),
+                T_C=T - 273.15,
+                ppr=p * CF_BAR / ppc,
+                tpr=T / tpc,
+                rs_vb=float(fl.pvt.rs(p, T)),
+                rs=float(fl.rs(p, T)),
+                bo=float(fl.bo(p, T)),
+                Re=rho_m * abs(v_m) * geo.D / mu_m,
+                vgs=alpha * v_g,
+                vls=(1 - alpha) * v_l,
+            )
+        )
     return rows
 
 
@@ -84,22 +101,45 @@ def well_cases(well, backend):
         rho_l_sc = fl.rho_l
         kind = draw.trajectory[0]
         rec = dict(
-            well=well, k=k, trajectory=kind,
+            well=well,
+            k=k,
+            trajectory=kind,
             inclination=draw.trajectory[2] if kind == 'deviated' else (90.0 if kind == 'l_shaped' else 0.0),
-            tvd=draw.L, md=geo.md[0], D=geo.D, eps_D=draw.roughness / geo.D, h=draw.h,
-            api=fl.api, sg_gas=fl.sg_gas, gor=fl.gor, wlr=fl.wlr, f_g=fl.f_g,
-            gor_scf=fl.gor / CF_RS, glr_scf=fl.glr / CF_RS,
-            p_r=bc.p_r, p_s=bc.p_s, T_r=bc.T_r, T_s=bc.T_s, u=bc.u, w_lg=bc.w_lg,
+            tvd=draw.L,
+            md=geo.md[0],
+            D=geo.D,
+            eps_D=draw.roughness / geo.D,
+            h=draw.h,
+            api=fl.api,
+            sg_gas=fl.sg_gas,
+            gor=fl.gor,
+            wlr=fl.wlr,
+            f_g=fl.f_g,
+            gor_scf=fl.gor / CF_RS,
+            glr_scf=fl.glr / CF_RS,
+            p_r=bc.p_r,
+            p_s=bc.p_s,
+            T_r=bc.T_r,
+            T_s=bc.T_s,
+            u=bc.u,
+            w_lg=bc.w_lg,
         )
         t0 = time.time()
         try:
             op = SSDFSimulator(wp, backend=backend).simulate(bc)
-            q_l = op.w_res / rho_l_sc                                   # Stock-tank liquid (m3/s)
-            q_lg = bc.w_lg / fl.rho_g                                   # Lift gas at standard conditions (m3/s)
-            rec.update(found=True, PBH=op.p_0, PWH=op.state[-1, 0], TWH=op.state[-1, 6], w_res=op.w_res,
-                       q_l_stbd=q_l * 86400 * STB_PER_M3, bhp_psig=(op.p_0 - 1.01325) * PSI_PER_BAR,
-                       glr_total_scf=(fl.glr + q_lg / q_l) / CF_RS if q_l > 0 else np.nan,
-                       choked=op.choked)
+            q_l = op.w_res / rho_l_sc  # Stock-tank liquid (m3/s)
+            q_lg = bc.w_lg / fl.rho_g  # Lift gas at standard conditions (m3/s)
+            rec.update(
+                found=True,
+                PBH=op.p_0,
+                PWH=op.state[-1, 0],
+                TWH=op.state[-1, 6],
+                w_res=op.w_res,
+                q_l_stbd=q_l * 86400 * STB_PER_M3,
+                bhp_psig=(op.p_0 - 1.01325) * PSI_PER_BAR,
+                glr_total_scf=(fl.glr + q_lg / q_l) / CF_RS if q_l > 0 else np.nan,
+                choked=op.choked,
+            )
             points += [dict(well=well, k=k, **r) for r in point_rows(wp, op)]
         except SimError as e:
             rec.update(found=False, err=type(e).__name__)
@@ -115,8 +155,10 @@ def run(n_wells, prefix, backend, processes):
     points = pd.DataFrame([p for _, ps in results for p in ps])
     cases.to_csv(f'{prefix}_cases.csv', index=False)
     points.to_parquet(f'{prefix}_points.parquet', index=False)
-    print(f'{len(cases)} cases from {n_wells} wells ({backend}), operating point in {cases.found.sum()}, '
-          f'{len(points)} points, {cases.seconds.sum():.0f} s in total')
+    print(
+        f'{len(cases)} cases from {n_wells} wells ({backend}), operating point in {cases.found.sum()}, '
+        f'{len(points)} points, {cases.seconds.sum():.0f} s in total'
+    )
 
 
 # The published ranges of specs/model/validity.md: (row, column, table, low, high). The table is 'cases' for a well
@@ -162,8 +204,10 @@ def summary(prefix):
     cases = pd.read_csv(f'{prefix}_cases.csv')
     points = pd.read_parquet(f'{prefix}_points.parquet')
     solved = cases[cases.found]
-    print(f'{len(cases)} cases of {cases.well.nunique()} wells; operating point in {len(solved)} '
-          f'({solved.well.nunique()} wells); {len(points)} grid points\n')
+    print(
+        f'{len(cases)} cases of {cases.well.nunique()} wells; operating point in {len(solved)} '
+        f'({solved.well.nunique()} wells); {len(points)} grid points\n'
+    )
     q = [0, 0.05, 0.5, 0.95, 1]
     rows = []
     for name, col, table, lo, hi in RANGES:
@@ -180,15 +224,28 @@ def summary(prefix):
         else:
             share_cases = out.groupby([df.well, df.k]).any().mean()
             share_points = out.mean()
-        rows.append(dict(row=name, variable=col, low=lo, high=hi, **{f'q{int(100 * v)}': x.quantile(v) for v in q},
-                         cases_out=round(100 * share_cases, 1), points_out=round(100 * share_points, 1)))
+        rows.append(
+            dict(
+                row=name,
+                variable=col,
+                low=lo,
+                high=hi,
+                **{f'q{int(100 * v)}': x.quantile(v) for v in q},
+                cases_out=round(100 * share_cases, 1),
+                points_out=round(100 * share_points, 1),
+            )
+        )
     pd.set_option('display.width', 250)
     pd.set_option('display.max_columns', 20)
     print(pd.DataFrame(rows).to_string(index=False, float_format=lambda v: f'{v:.4g}'))
-    print('\nShares in %: of the cases with an operating point that have a point (or input) outside the range, and '
-          'of all grid points.')
-    print(f"Regimes at the points of horizontal cells (cos < 0.05): "
-          f"{points[points.cos_incl < 0.05].regime.value_counts(normalize=True).round(3).to_dict()}")
+    print(
+        '\nShares in %: of the cases with an operating point that have a point (or input) outside the range, and '
+        'of all grid points.'
+    )
+    print(
+        f'Regimes at the points of horizontal cells (cos < 0.05): '
+        f'{points[points.cos_incl < 0.05].regime.value_counts(normalize=True).round(3).to_dict()}'
+    )
 
 
 def main():

@@ -31,12 +31,13 @@ T_MARGIN = 50.0
 
 DIM_X = 7
 STATE = ('p', 'v_g', 'v_l', 'alpha', 'rho_g', 'rho_l', 'T')  # Order is important
-PARAMS = ('p_r', 'p_s', 'T_r', 'T_s', 'T_lg', 'u', 'w_lg')   # The operating point, as the system's parameters
+PARAMS = ('p_r', 'p_s', 'T_r', 'T_s', 'T_lg', 'u', 'w_lg')  # The operating point, as the system's parameters
 
 
 @dataclass(frozen=True)
 class PointState:
     """The seven state values at one grid point, symbolic or numeric."""
+
     p: object
     v_g: object
     v_l: object
@@ -72,12 +73,13 @@ class PointState:
     @property
     def momentum_flux(self):
         """Momentum flux (Pa)."""
-        return self.alpha * self.rho_g * self.v_g ** 2 + (1 - self.alpha) * self.rho_l * self.v_l ** 2
+        return self.alpha * self.rho_g * self.v_g**2 + (1 - self.alpha) * self.rho_l * self.v_l**2
 
 
 @dataclass(frozen=True)
 class OperatingPoint:
     """The system's parameters (PARAMS), symbolic or numeric."""
+
     p_r: object
     p_s: object
     T_r: object
@@ -94,15 +96,16 @@ class OperatingPoint:
 # ---------------------------------------------------------------------------------------------
 # Rows
 
+
 def bottom_rows(wp, s, w_res, op):
     """Rows at the bottomhole, point 0: the inflow rows and the inflow temperature."""
     fluid, A = wp.fluid, wp.geometry.A
     w_g, w_l = fluid.phase_rates(s.p, s.T, w_res, op.w_lg)
     T_in = wp.thermal.inflow_temperature(w_res, op.w_lg, op.T_r, op.T_lg, fluid)
     return [
-        A * s.alpha * s.rho_g * s.v_g - w_g,         # spec: INF-6
-        A * (1 - s.alpha) * s.rho_l * s.v_l - w_l,   # spec: INF-7
-        s.T - T_in,                                   # Inflow temperature (THM-3 or THM-5)
+        A * s.alpha * s.rho_g * s.v_g - w_g,  # spec: INF-6
+        A * (1 - s.alpha) * s.rho_l * s.v_l - w_l,  # spec: INF-7
+        s.T - T_in,  # Inflow temperature (THM-3 or THM-5)
     ]
 
 
@@ -113,20 +116,23 @@ def cell_rows(wp, s, s_prev, w_res, op, delta_md, cos_incl, tvd_frac):
     # Mass: the change in mass flux equals the change in the phase rates, which is zero without mass transfer
     w_g, w_l = fluid.phase_rates(s.p, s.T, w_res, op.w_lg)
     w_g_prev, w_l_prev = fluid.phase_rates(s_prev.p, s_prev.T, w_res, op.w_lg)
-    r_g = s.gas_flux - s_prev.gas_flux - (w_g - w_g_prev) / A          # spec: DISC-7
-    r_l = s.liquid_flux - s_prev.liquid_flux - (w_l - w_l_prev) / A    # spec: DISC-8
+    r_g = s.gas_flux - s_prev.gas_flux - (w_g - w_g_prev) / A  # spec: DISC-7
+    r_l = s.liquid_flux - s_prev.liquid_flux - (w_l - w_l_prev) / A  # spec: DISC-8
 
     # Momentum: friction along the flow path, gravity along the vertical
     F = wp.friction.pressure_gradient(s, fluid, D)
     G = STD_GRAVITY * s.rho_m  # spec: BAL-6
-    r_p = (s.momentum_flux / CF_BAR + s.p) - (s_prev.momentum_flux / CF_BAR + s_prev.p) \
-        + delta_md * (F + cos_incl * G) / CF_BAR                          # spec: DISC-9
+    r_p = (
+        (s.momentum_flux / CF_BAR + s.p)
+        - (s_prev.momentum_flux / CF_BAR + s_prev.p)
+        + delta_md * (F + cos_incl * G) / CF_BAR
+    )  # spec: DISC-9
 
     # Energy
     T_a = wp.thermal.ambient_temperature(tvd_frac, op.T_r, op.T_s)
     dp_dmd = CF_BAR * (s.p - s_prev.p) / delta_md
     dT_dmd = wp.thermal.temperature_gradient(s, fluid, T_a, F, dp_dmd, cos_incl, D)
-    r_T = s.T - s_prev.T - delta_md * dT_dmd                              # spec: DISC-10
+    r_T = s.T - s_prev.T - delta_md * dT_dmd  # spec: DISC-10
 
     return [r_g, r_l, r_p, r_T]
 
@@ -144,9 +150,9 @@ def closure_rows(wp, s, cos_incl):
     sigma = fluid.surface_tension(s.p, s.T, s.rho_l)
     C_0, v_inf = wp.slip.identify_parameters(s.v_g, s.v_l, s.alpha, s.rho_g, s.rho_l, sigma, wp.geometry.D, cos_incl)
     return [
-        s.v_g - C_0 * s.v_m - v_inf,                 # spec: SLIP-1
-        fluid.gas_law_row(s.p, s.T, s.rho_g),        # Gas law (PVT-GAS-1, PVT-GAS-3 or PVT-GAS-11)
-        s.rho_l - fluid.liquid_density(s.p, s.T),    # Liquid density (PVT-MIX-1 or PVT-MIX-6)
+        s.v_g - C_0 * s.v_m - v_inf,  # spec: SLIP-1
+        fluid.gas_law_row(s.p, s.T, s.rho_g),  # Gas law (PVT-GAS-1, PVT-GAS-3 or PVT-GAS-11)
+        s.rho_l - fluid.liquid_density(s.p, s.T),  # Liquid density (PVT-MIX-1 or PVT-MIX-6)
     ]
 
 
@@ -156,8 +162,7 @@ def row_ids(wp) -> tuple:
     bottom = ('INF-6', 'INF-7', 'THM-5' if wp.thermal.lift_gas_mixing else 'THM-3')
     cell = ('DISC-7', 'DISC-8', 'DISC-9', 'DISC-10')
     gas_law = {'ideal': 'PVT-GAS-1', 'dak': 'PVT-GAS-11', 'papay': 'PVT-GAS-3', 'table': 'PVT-TAB-4'}[fluid.pvt.gas_law]
-    closures = ('SLIP-1', gas_law,
-                'PVT-MIX-6' if fluid.pvt.dissolves_gas else 'PVT-MIX-1')
+    closures = ('SLIP-1', gas_law, 'PVT-MIX-6' if fluid.pvt.dissolves_gas else 'PVT-MIX-1')
     ids = bottom + closures
     for i in range(1, N + 1):
         ids += cell + (('CHK-1',) if i == N else ()) + closures
@@ -166,6 +171,7 @@ def row_ids(wp) -> tuple:
 
 # ---------------------------------------------------------------------------------------------
 # The system of a well
+
 
 @dataclass(frozen=True)
 class System:
@@ -191,6 +197,7 @@ class System:
                                                  the rest of what a root carries besides its state: CHOKED (CHK-12,
                                                  1 or 0) and the reservoir liquid and gas rates (kg/s)
     """
+
     wp: object
     n_x: int
     row_ids: tuple
@@ -222,16 +229,21 @@ class System:
     def root_outputs(self, x, params) -> dict:
         """What a root carries besides its state, as Python values: flow_regime, choked, w_res and w_g_res."""
         choked, w_res, w_g_res = self.outputs(x, params)
-        return {'flow_regime': self.flow_regimes(x), 'choked': bool(float(choked)), 'w_res': float(w_res),
-                'w_g_res': float(w_g_res)}
+        return {
+            'flow_regime': self.flow_regimes(x),
+            'choked': bool(float(choked)),
+            'w_res': float(w_res),
+            'w_g_res': float(w_g_res),
+        }
 
     def subsonic(self, x, params) -> bool:  # spec: SOL-8
         """Whether every cell of state x is subsonic: its momentum row rises with p_i along the point's other rows."""
         geo, X = self.wp.geometry, np.reshape(x, (-1, DIM_X))
         w_res = float(self.reservoir_rate(X[0, 0], params))
         N = self.n_cells
-        slopes = self.cell_slope.map(N)(X[1:].T, X[:-1].T, w_res, params, ca.DM(geo.delta_md).T,
-                                        ca.DM(geo.cos_incl).T, ca.DM(geo.tvd_frac[1:]).T)
+        slopes = self.cell_slope.map(N)(
+            X[1:].T, X[:-1].T, w_res, params, ca.DM(geo.delta_md).T, ca.DM(geo.cos_incl).T, ca.DM(geo.tvd_frac[1:]).T
+        )
         return bool(np.all(np.asarray(slopes) > 0))
 
     def energy_rows_rise(self, x, params) -> bool:  # spec: SOL-9
@@ -240,8 +252,9 @@ class System:
         geo, X = self.wp.geometry, np.reshape(x, (-1, DIM_X))
         w_res = float(self.reservoir_rate(X[0, 0], params))
         N = self.n_cells
-        slopes = self.energy_slope.map(N)(X[1:].T, X[:-1].T, w_res, params, ca.DM(geo.delta_md).T,
-                                          ca.DM(geo.cos_incl).T, ca.DM(geo.tvd_frac[1:]).T)
+        slopes = self.energy_slope.map(N)(
+            X[1:].T, X[:-1].T, w_res, params, ca.DM(geo.delta_md).T, ca.DM(geo.cos_incl).T, ca.DM(geo.tvd_frac[1:]).T
+        )
         return bool(np.all(np.asarray(slopes) > 0))
 
     def bounds(self, bc):
@@ -280,7 +293,7 @@ def build_system(wp) -> System:  # spec: DISC-11
     x = ca.SX.sym('x', n_x)
     prm = ca.SX.sym('params', len(PARAMS))
     op = OperatingPoint.of(prm)
-    S = [PointState.of(x[DIM_X * i:DIM_X * (i + 1)]) for i in range(N + 1)]
+    S = [PointState.of(x[DIM_X * i : DIM_X * (i + 1)]) for i in range(N + 1)]
 
     # The reservoir liquid rate is a function of x_0 and the parameters, passed to every point's rows
     w_res = wp.inflow.liquid_mass_flow_rate(S[0].p, op.p_r)
@@ -305,23 +318,38 @@ def build_system(wp) -> System:  # spec: DISC-11
     w, d_md, cos_i, frac = ca.SX.sym('w_res'), ca.SX.sym('delta_md'), ca.SX.sym('cos_incl'), ca.SX.sym('tvd_frac')
     s_i, s_prev = PointState.of(x_i), PointState.of(x_prev)
     r_i = cell_rows(wp, s_i, s_prev, w, op, d_md, cos_i, frac) + closure_rows(wp, s_i, cos_i)
-    point = ca.Function('point_rows', [x_i, x_prev, w, prm, d_md, cos_i, frac], [ca.vertcat(*r_i)],
-                        ['x_i', 'x_prev', 'w_res', 'params', 'delta_md', 'cos_incl', 'tvd_frac'], ['r_i'])
+    point = ca.Function(
+        'point_rows',
+        [x_i, x_prev, w, prm, d_md, cos_i, frac],
+        [ca.vertcat(*r_i)],
+        ['x_i', 'x_prev', 'w_res', 'params', 'delta_md', 'cos_incl', 'tvd_frac'],
+        ['r_i'],
+    )
 
     # The momentum row's slope in p_i along the curve on which the point's six other rows are zero (SOL-8):
     # ds = ∂r_p/∂p - ∂r_p/∂y (∂r_o/∂y)^-1 ∂r_o/∂p, with y the other six unknowns and r_o the other six rows
     J = ca.jacobian(ca.vertcat(*r_i), x_i)
     other = [0, 1, 3, 4, 5, 6]  # the rows of point i but DISC-9, the third of cell_rows
     slope = J[2, 0] - ca.mtimes(J[2, 1:], ca.solve(J[other, 1:], J[other, 0]))
-    cell_slope = ca.Function('cell_slope', [x_i, x_prev, w, prm, d_md, cos_i, frac], [slope],
-                             ['x_i', 'x_prev', 'w_res', 'params', 'delta_md', 'cos_incl', 'tvd_frac'], ['s'])
+    cell_slope = ca.Function(
+        'cell_slope',
+        [x_i, x_prev, w, prm, d_md, cos_i, frac],
+        [slope],
+        ['x_i', 'x_prev', 'w_res', 'params', 'delta_md', 'cos_incl', 'tvd_frac'],
+        ['s'],
+    )
 
     # The energy row's slope in T_i at fixed p_i along the curve on which the point's mass rows and closures are zero
     # (SOL-9): ∂r_T/∂T - ∂r_T/∂y (∂r_c/∂y)^-1 ∂r_c/∂T, with y the five unknowns between p and T
     held, y = [0, 1, 4, 5, 6], [1, 2, 3, 4, 5]  # DISC-7, DISC-8 and the closures; v_g, v_l, alpha, rho_g, rho_l
     t_slope = J[3, 6] - ca.mtimes(J[3, y], ca.solve(J[held, y], J[held, 6]))
-    energy_slope = ca.Function('energy_slope', [x_i, x_prev, w, prm, d_md, cos_i, frac], [t_slope],
-                               ['x_i', 'x_prev', 'w_res', 'params', 'delta_md', 'cos_incl', 'tvd_frac'], ['s'])
+    energy_slope = ca.Function(
+        'energy_slope',
+        [x_i, x_prev, w, prm, d_md, cos_i, frac],
+        [t_slope],
+        ['x_i', 'x_prev', 'w_res', 'params', 'delta_md', 'cos_incl', 'tvd_frac'],
+        ['s'],
+    )
 
     # Reservoir rate, and a starting point for point 0: the densities and the inflow temperature at p_0, half gas
     # by volume, and the velocities that carry the phase rates
@@ -341,16 +369,32 @@ def build_system(wp) -> System:  # spec: DISC-11
     x_pt, cos_pt = ca.SX.sym('x_pt', DIM_X), ca.SX.sym('cos_incl')
     s = PointState.of(x_pt)
     sigma = fluid.surface_tension(s.p, s.T, s.rho_l)
-    classify = ca.Function('classify', [x_pt, cos_pt],
-                           [wp.slip.classify(s.v_g, s.v_l, s.alpha, s.rho_g, s.rho_l, sigma, geo.D, cos_pt)])
+    classify = ca.Function(
+        'classify', [x_pt, cos_pt], [wp.slip.classify(s.v_g, s.v_l, s.alpha, s.rho_g, s.rho_l, sigma, geo.D, cos_pt)]
+    )
     cos_points = [geo.cos_incl[max(i - 1, 0)] for i in range(N + 1)]
     P = classify.map(N + 1)(ca.reshape(x, DIM_X, N + 1), ca.DM(cos_points).T)
     regimes = ca.Function('regime_probabilities', [x], [P], ['x'], ['P'])
     choked = wp.choke.is_choked(S[N].p, op.p_s)
-    outputs = ca.Function('outputs', [x, prm], [choked, w_res, fluid.reservoir_gas_rate(w_res)],
-                          ['x', 'params'], ['choked', 'w_res', 'w_g_res'])
+    outputs = ca.Function(
+        'outputs',
+        [x, prm],
+        [choked, w_res, fluid.reservoir_gas_rate(w_res)],
+        ['x', 'params'],
+        ['choked', 'w_res', 'w_g_res'],
+    )
 
-    return System(wp=wp, n_x=n_x, row_ids=row_ids(wp), residual=residual, bottom_rows=bottom, point_rows=point,
-                  cell_slope=cell_slope, energy_slope=energy_slope,
-                  reservoir_rate=reservoir_rate, bottom_guess=bottom_guess, regime_probabilities=regimes,
-                  outputs=outputs)
+    return System(
+        wp=wp,
+        n_x=n_x,
+        row_ids=row_ids(wp),
+        residual=residual,
+        bottom_rows=bottom,
+        point_rows=point,
+        cell_slope=cell_slope,
+        energy_slope=energy_slope,
+        reservoir_rate=reservoir_rate,
+        bottom_guess=bottom_guess,
+        regime_probabilities=regimes,
+        outputs=outputs,
+    )

@@ -20,25 +20,26 @@ import numpy as np
 
 from manywells_verify.cases import DIM_X, Case
 
-V_FLOOR = 1e-3      # m/s, floor on velocity scales in the state distance
+V_FLOOR = 1e-3  # m/s, floor on velocity scales in the state distance
 
 
 @dataclass(frozen=True)
 class Tolerances:
     """Set in Step 2 item 5 and confirmed by Bjarne on 2026-09-30 (specs/verification.md)."""
-    tol_x: float = 1e-4              # scaled state distance to a reference root, ∞-norm
-    p_slack: float = 1e-6            # bar: allowed pressure rise between neighbouring points
-    flux_rel: float = 1e-6           # phase mass-rate variation along the well, relative to the total rate
-    T_slack: float = 1e-6            # K: allowed temperature below the ambient profile
-    choke_band: float = 5e-4         # bar: dead band around the choked/unchoked switch
-    order: tuple = (0.8, 1.25)       # bounds on the observed order of convergence
-    conv_noise: float = 1e-9         # relative change of an output below which it is not used
-    conv_choke_margin: float = 1.0   # bar: groups this close to the choke switch are skipped
+
+    tol_x: float = 1e-4  # scaled state distance to a reference root, ∞-norm
+    p_slack: float = 1e-6  # bar: allowed pressure rise between neighbouring points
+    flux_rel: float = 1e-6  # phase mass-rate variation along the well, relative to the total rate
+    T_slack: float = 1e-6  # K: allowed temperature below the ambient profile
+    choke_band: float = 5e-4  # bar: dead band around the choked/unchoked switch
+    order: tuple = (0.8, 1.25)  # bounds on the observed order of convergence
+    conv_noise: float = 1e-9  # relative change of an output below which it is not used
+    conv_choke_margin: float = 1.0  # bar: groups this close to the choke switch are skipped
 
 
 @dataclass
 class Check:
-    status: str                      # 'pass', 'fail', 'indeterminate' or 'n/a'
+    status: str  # 'pass', 'fail', 'indeterminate' or 'n/a'
     detail: str = ''
     value: float | None = None
 
@@ -51,8 +52,8 @@ class Check:
 class RootResult:
     index: int
     invariants: Check
-    match: int | None = None         # index of the reference root within tol_x, if any
-    distance: float | None = None    # scaled distance to the nearest reference root
+    match: int | None = None  # index of the reference root within tol_x, if any
+    distance: float | None = None  # scaled distance to the nearest reference root
 
     @property
     def valid(self) -> bool:
@@ -63,13 +64,14 @@ class RootResult:
 class CaseResult:
     case: Case
     roots: list
-    checks: dict                     # invariants, operating_point, root_set, stability
+    checks: dict  # invariants, operating_point, root_set, stability
     findings: list = field(default_factory=list)
     n_stable_reference: int | None = None
 
 
 # ---------------------------------------------------------------------------------------------
 # Quantities derived from a state
+
 
 def area(case: Case) -> float:
     return np.pi * (case.params['D'] / 2) ** 2
@@ -103,18 +105,23 @@ def state_distance(x, reference, case: Case) -> float:
     densities relative to the reference, alpha absolute, T by T_r - T_s.
     """
     X, Y = grid(x, case.n_cells), grid(reference, case.n_cells)
-    scale = np.column_stack([
-        np.full(len(Y), max(case.params['p_r'] - case.params['p_s'], 1.0)),
-        np.maximum(np.abs(Y[:, 1]), V_FLOOR), np.maximum(np.abs(Y[:, 2]), V_FLOOR),
-        np.ones(len(Y)),
-        np.maximum(Y[:, 4], 1e-3), np.maximum(Y[:, 5], 1e-3),
-        np.full(len(Y), max(case.params['T_r'] - case.params['T_s'], 1.0)),
-    ])
+    scale = np.column_stack(
+        [
+            np.full(len(Y), max(case.params['p_r'] - case.params['p_s'], 1.0)),
+            np.maximum(np.abs(Y[:, 1]), V_FLOOR),
+            np.maximum(np.abs(Y[:, 2]), V_FLOOR),
+            np.ones(len(Y)),
+            np.maximum(Y[:, 4], 1e-3),
+            np.maximum(Y[:, 5], 1e-3),
+            np.full(len(Y), max(case.params['T_r'] - case.params['T_s'], 1.0)),
+        ]
+    )
     return float(np.max(np.abs(X - Y) / scale))
 
 
 # ---------------------------------------------------------------------------------------------
 # Per-root check
+
 
 def check_invariants(x, case: Case, choked, tol: Tolerances) -> Check:
     N = case.n_cells
@@ -148,7 +155,7 @@ def check_invariants(x, case: Case, choked, tol: Tolerances) -> Check:
     if below.max() > tol.T_slack:
         problems.append(f'temperature {below.max():.2e} K below ambient at point {int(np.argmax(below))}')
     if choked is not None:
-        margin = prm['cpr'] * p[-1] - prm['p_s']       # v1's is_choked: p_s <= cpr p_N
+        margin = prm['cpr'] * p[-1] - prm['p_s']  # v1's is_choked: p_s <= cpr p_N
         if abs(margin) > tol.choke_band and choked != (margin >= 0):
             problems.append(f'CHOKED = {choked}, but cpr p_N - p_s = {margin:+.4f} bar')
     if problems:
@@ -160,6 +167,7 @@ def check_invariants(x, case: Case, choked, tol: Tolerances) -> Check:
 # ---------------------------------------------------------------------------------------------
 # Per-case checks
 
+
 def check_operating_point(case: Case, roots, results, reference, tol: Tolerances) -> Check:
     stable = [k for k, r in enumerate(reference) if r.label == 'stable']
     chosen = [k for k, r in enumerate(roots) if r.operating_point]
@@ -167,7 +175,9 @@ def check_operating_point(case: Case, roots, results, reference, tol: Tolerances
         return Check('fail', f'{len(chosen)} roots are marked as the operating point')
     if not stable:
         if chosen:
-            return Check('fail', 'reference has no stable root (the well cannot flow), but an operating point is reported')
+            return Check(
+                'fail', 'reference has no stable root (the well cannot flow), but an operating point is reported'
+            )
         return Check('pass', 'no stable reference root and no operating point reported')
     if not chosen:
         return Check('fail', 'no operating point reported, but the reference has a stable root')
@@ -180,9 +190,13 @@ def check_operating_point(case: Case, roots, results, reference, tol: Tolerances
     if d <= tol.tol_x:
         return Check('pass', f'distance {d:.1e} to the stable reference root', d)
     nearest = min(range(len(reference)), key=lambda j: state_distance(roots[k].x, reference[j].x, case))
-    return Check('fail', f'distance {d:.1e} to the stable reference root; nearest reference root is '
-                         f'{reference[nearest].label} ({state_distance(roots[k].x, reference[nearest].x, case):.1e}); '
-                         f'p0 {roots[k].x[0]:.3f} bar vs {reference[s].x[0]:.3f} bar', d)
+    return Check(
+        'fail',
+        f'distance {d:.1e} to the stable reference root; nearest reference root is '
+        f'{reference[nearest].label} ({state_distance(roots[k].x, reference[nearest].x, case):.1e}); '
+        f'p0 {roots[k].x[0]:.3f} bar vs {reference[s].x[0]:.3f} bar',
+        d,
+    )
 
 
 def check_root_set(roots, results, reference) -> Check:
@@ -197,15 +211,21 @@ def check_root_set(roots, results, reference) -> Check:
 
 def check_stability(roots, results, reference) -> Check:
     """Each label the candidate reports must equal the label of the reference root it matches."""
-    compared = [(k, res.match) for k, res in enumerate(results)
-                if roots[k].label is not None and res.valid and res.match is not None]
+    compared = [
+        (k, res.match)
+        for k, res in enumerate(results)
+        if roots[k].label is not None and res.valid and res.match is not None
+    ]
     if not compared:
         return Check('n/a', 'no labelled root matches a reference root')
     wrong = [(k, j) for k, j in compared if roots[k].label != reference[j].label]
     if wrong:
         k, j = wrong[0]
-        return Check('fail', f'root {k} is labelled {roots[k].label}, the reference root at '
-                             f'p0 = {reference[j].x[0]:.3f} bar is {reference[j].label}')
+        return Check(
+            'fail',
+            f'root {k} is labelled {roots[k].label}, the reference root at '
+            f'p0 = {reference[j].x[0]:.3f} bar is {reference[j].label}',
+        )
     return Check('pass', f'{len(compared)} labels match the reference')
 
 
@@ -231,22 +251,29 @@ def verify_case(case: Case, roots, reference, tol: Tolerances = Tolerances()) ->
             res.match = j if dist[j] <= tol.tol_x else None
         results.append(res)
 
-    checks = {'invariants': aggregate_invariants(results),
-              'operating_point': check_operating_point(case, roots, results, reference, tol),
-              'root_set': check_root_set(roots, results, reference),
-              'stability': check_stability(roots, results, reference)}
-    findings = [f'root {res.index} (p0 = {roots[res.index].x[0]:.3f} bar) passes Invariants but matches no '
-                f'reference root' + (f' (nearest at distance {res.distance:.1e})' if res.distance is not None else '')
-                for res in results if res.valid and res.match is None]
+    checks = {
+        'invariants': aggregate_invariants(results),
+        'operating_point': check_operating_point(case, roots, results, reference, tol),
+        'root_set': check_root_set(roots, results, reference),
+        'stability': check_stability(roots, results, reference),
+    }
+    findings = [
+        f'root {res.index} (p0 = {roots[res.index].x[0]:.3f} bar) passes Invariants but matches no '
+        f'reference root' + (f' (nearest at distance {res.distance:.1e})' if res.distance is not None else '')
+        for res in results
+        if res.valid and res.match is None
+    ]
     n_stable = sum(r.label == 'stable' for r in reference)
     if n_stable > 1:
-        findings.append(f'reference has {n_stable} stable roots; the operating point is the one with the lowest p0 '
-                        f'(SOL-6)')
+        findings.append(
+            f'reference has {n_stable} stable roots; the operating point is the one with the lowest p0 (SOL-6)'
+        )
     return CaseResult(case, results, checks, findings, n_stable)
 
 
 # ---------------------------------------------------------------------------------------------
 # Per-group check
+
 
 def check_convergence(members, tol: Tolerances) -> Check:
     """

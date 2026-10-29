@@ -52,12 +52,12 @@ def plot_well_geometry(geo: WellGeometry, ax_traj=None, ax_incl=None, label=None
 
     # -- trajectory --
     ax_traj.plot(horiz, tvd, 'o-', markersize=3, label=label)
-    ax_traj.set_xlabel("Horizontal displacement (m)")
-    ax_traj.set_ylabel("TVD (m)")
-    ax_traj.set_title("Wellbore trajectory")
+    ax_traj.set_xlabel('Horizontal displacement (m)')
+    ax_traj.set_ylabel('TVD (m)')
+    ax_traj.set_title('Wellbore trajectory')
     if not ax_traj.yaxis_inverted():
         ax_traj.invert_yaxis()
-    ax_traj.set_aspect("equal")
+    ax_traj.set_aspect('equal')
     if label:
         ax_traj.legend()
 
@@ -65,12 +65,12 @@ def plot_well_geometry(geo: WellGeometry, ax_traj=None, ax_incl=None, label=None
     md_mid = 0.5 * (md[:-1] + md[1:])
     cos_incl = np.array(geo.cos_incl[::-1])  # back to survey order
     ax_incl.plot(md_mid, cos_incl, 's-', markersize=3, label=label)
-    ax_incl.set_xlabel("MD (m)")
-    ax_incl.set_ylabel("cos(inclination)")
-    ax_incl.set_title("Inclination profile")
+    ax_incl.set_xlabel('MD (m)')
+    ax_incl.set_ylabel('cos(inclination)')
+    ax_incl.set_title('Inclination profile')
     ax_incl.set_ylim(-0.05, 1.1)
-    ax_incl.axhline(1.0, color="grey", ls=":", lw=0.8)
-    ax_incl.axhline(0.0, color="grey", ls=":", lw=0.8)
+    ax_incl.axhline(1.0, color='grey', ls=':', lw=0.8)
+    ax_incl.axhline(0.0, color='grey', ls=':', lw=0.8)
     if label:
         ax_incl.legend()
 
@@ -78,8 +78,7 @@ def plot_well_geometry(geo: WellGeometry, ax_traj=None, ax_incl=None, label=None
     return fig, ax_traj, ax_incl
 
 
-if __name__ == "__main__":
-
+if __name__ == '__main__':
     # Plot some example geometries
 
     # 1. Vertical well
@@ -97,9 +96,9 @@ if __name__ == "__main__":
     geo_l = WellGeometry.from_survey(md_survey, tvd_survey, n_cells=80)
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 7))
-    plot_well_geometry(geo_vert, ax1, ax2, label="Vertical")
-    plot_well_geometry(geo_l, ax1, ax2, label="L-shaped")
+    plot_well_geometry(geo_vert, ax1, ax2, label='Vertical')
+    plot_well_geometry(geo_l, ax1, ax2, label='L-shaped')
 
-    fig.suptitle("Well geometry comparison", fontsize=13, fontweight="bold")
+    fig.suptitle('Well geometry comparison', fontsize=13, fontweight='bold')
     fig.tight_layout(rect=[0, 0, 1, 0.95])
     plt.show()

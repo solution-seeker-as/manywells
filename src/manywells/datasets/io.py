@@ -25,8 +25,9 @@ def code_version() -> str:
     v = version('manywells')
     try:
         root = Path(__file__).resolve().parents[3]
-        commit = subprocess.run(['git', 'describe', '--always', '--dirty'], cwd=root, capture_output=True, text=True,
-                                check=True).stdout.strip()
+        commit = subprocess.run(
+            ['git', 'describe', '--always', '--dirty'], cwd=root, capture_output=True, text=True, check=True
+        ).stdout.strip()
         return f'{v} ({commit})'
     except (OSError, subprocess.CalledProcessError):
         return v
@@ -65,7 +66,9 @@ def write_dataset(path: Path, rows: pd.DataFrame, draws: dict, metadata: dict):
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.with_name(path.name + '_meta.json').write_text(json.dumps(metadata | {'code_version': code_version()}, indent=1))
+    path.with_name(path.name + '_meta.json').write_text(
+        json.dumps(metadata | {'code_version': code_version()}, indent=1)
+    )
     configs = pd.DataFrame([config_row(i, d) for i, d in draws.items()])
     configs.to_parquet(path.with_name(path.name + '_config.parquet'), index=False)
     rows.to_parquet(path.with_name(path.name + '.parquet'), index=False)

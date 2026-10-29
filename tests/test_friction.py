@@ -5,8 +5,13 @@ import casadi as ca
 import numpy as np
 
 from manywells.discretization import PointState
-from manywells.friction import (FixedFrictionFactor, RoughnessFriction, chen_friction_factor, friction_factor,
-                                haaland_friction_factor)
+from manywells.friction import (
+    FixedFrictionFactor,
+    RoughnessFriction,
+    chen_friction_factor,
+    friction_factor,
+    haaland_friction_factor,
+)
 from manywells.pvt.fluid import FluidModel
 from manywells.thermal import ThermalModel
 
@@ -17,7 +22,6 @@ def _eval(expr):
 
 
 class TestHaalandFrictionFactor:
-
     def test_known_moody_value(self):
         """Haaland at Re=1e5, eps/D=0.001 should be close to Moody chart value ~0.0222."""
         f = _eval(haaland_friction_factor(1e5, 0.001))
@@ -52,7 +56,6 @@ class TestHaalandFrictionFactor:
 
 
 class TestFrictionFactor:
-
     def test_laminar_regime(self):
         """In laminar regime (Re=1000), friction factor is close to 64/Re."""
         Re = 1000
@@ -111,7 +114,7 @@ def test_fixed_friction_factor_pressure_gradient():
     """FRIC-1 with FRIC-2: F = f_D / (2 D) rho_m v_m^2."""
     D = 0.15
     F = FixedFrictionFactor(0.03).pressure_gradient(STATE, FluidModel(), D)
-    assert F == pytest.approx(0.03 / (2 * D) * STATE.rho_m * STATE.v_m ** 2, rel=1e-15)
+    assert F == pytest.approx(0.03 / (2 * D) * STATE.rho_m * STATE.v_m**2, rel=1e-15)
 
 
 def test_roughness_friction_uses_the_mixture_reynolds_number():
@@ -121,8 +124,9 @@ def test_roughness_friction_uses_the_mixture_reynolds_number():
     Re = STATE.rho_m * abs(STATE.v_m) * D / mu_m
     got = _eval(RoughnessFriction(roughness=eps).friction_factor(STATE, fl, D))
     assert got == pytest.approx(_eval(friction_factor(Re, eps / D)), rel=1e-12)
-    assert _eval(RoughnessFriction(roughness=eps, correlation='haaland').friction_factor(STATE, fl, D)) == \
-        pytest.approx(_eval(friction_factor(Re, eps / D, 'haaland')), rel=1e-12)
+    assert _eval(
+        RoughnessFriction(roughness=eps, correlation='haaland').friction_factor(STATE, fl, D)
+    ) == pytest.approx(_eval(friction_factor(Re, eps / D, 'haaland')), rel=1e-12)
 
 
 def test_the_mixture_viscosity_is_undefined_only_where_the_energy_row_is():
@@ -142,11 +146,11 @@ def test_the_mixture_viscosity_is_undefined_only_where_the_energy_row_is():
 
 
 def test_friction_models_are_validated():
-    with pytest.raises(ValueError, match="Friction factor must be positive"):
+    with pytest.raises(ValueError, match='Friction factor must be positive'):
         FixedFrictionFactor(0.0)
-    with pytest.raises(ValueError, match="roughness must be positive"):
+    with pytest.raises(ValueError, match='roughness must be positive'):
         RoughnessFriction(roughness=0.0)
-    with pytest.raises(ValueError, match="correlation"):
+    with pytest.raises(ValueError, match='correlation'):
         RoughnessFriction(correlation='moody')
     with pytest.raises(ValueError, match="'colebrook' is not one of"):
         friction_factor(1e5, 1e-4, 'colebrook')

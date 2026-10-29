@@ -65,13 +65,13 @@ install `git+https://github.com/solution-seeker-as/manywells.git@v1.0.0`.
 ```python
 from manywells.simulator import WellProperties, BoundaryConditions, SSDFSimulator
 
-wp = WellProperties()                            # a 2000 m vertical well with the default model
-sim = SSDFSimulator(wp)                          # builds the well's system once
+wp = WellProperties()  # a 2000 m vertical well with the default model
+sim = SSDFSimulator(wp)  # builds the well's system once
 bc = BoundaryConditions(p_r=170, p_s=20, u=0.5)  # reservoir and separator pressures (bar), choke opening
 
-op = sim.simulate(bc)                            # the operating point: the stable solution
+op = sim.simulate(bc)  # the operating point: the stable solution
 print(f'Bottomhole pressure: {op.p_0:.1f} bar')
-df = sim.solution_as_df(op)                      # pressure, velocities, void fraction, ... along the well
+df = sim.solution_as_df(op)  # pressure, velocities, void fraction, ... along the well
 ```
 
 `SSDFSimulator(wp, backend='rust')` solves the same model with the Rust core.
@@ -87,7 +87,7 @@ You can use the `datasets` Python package to get started:
 import datasets
 
 # Download 'manywells-sol-1'
-data = datasets.load_dataset("solution-seeker-as/manywells", name='manywells-sol-1')
+data = datasets.load_dataset('solution-seeker-as/manywells', name='manywells-sol-1')
 
 # Cast dataset to a Pandas DataFrame
 df = data['train'].to_pandas()

@@ -23,53 +23,54 @@ yields the equivalent value in Pa.
 # PHYSICAL CONSTANTS
 ################################################
 
-STD_GRAVITY = 9.80665       # Standard acceleration of gravity (m/s2)
-R_UNIVERSAL = 8314.46       # Universal gas constant (J/(kmol K))
-M_AIR = 28.97               # Molecular weight of air (g/mol = kg/kmol)
+STD_GRAVITY = 9.80665  # Standard acceleration of gravity (m/s2)
+R_UNIVERSAL = 8314.46  # Universal gas constant (J/(kmol K))
+M_AIR = 28.97  # Molecular weight of air (g/mol = kg/kmol)
 
 
 ################################################
 # STANDARD REFERENCE CONDITIONS (ISO 13443)
 ################################################
 
-P_REF = 101_325             # Reference pressure (Pa)
-T_REF = 288.15              # Reference temperature (K), i.e. 15 degC
+P_REF = 101_325  # Reference pressure (Pa)
+T_REF = 288.15  # Reference temperature (K), i.e. 15 degC
 
 
 ################################################
 # PRESSURE CONVERSION FACTORS
 ################################################
 
-CF_BAR = 1e5                # bar -> Pa
-CF_PSI = 6894.76            # psi -> Pa
+CF_BAR = 1e5  # bar -> Pa
+CF_PSI = 6894.76  # psi -> Pa
 
 
 ################################################
 # VOLUME / RATIO CONVERSION FACTORS
 ################################################
 
-CF_RS = 0.178108            # scf/STB -> Sm3/Sm3
+CF_RS = 0.178108  # scf/STB -> Sm3/Sm3
 
 
 ################################################
 # VISCOSITY CONVERSION FACTORS
 ################################################
 
-CF_CP = 1e-3                # centipoise -> Pa s
-CF_UP = 1e-7                # micropoise -> Pa s
+CF_CP = 1e-3  # centipoise -> Pa s
+CF_UP = 1e-7  # micropoise -> Pa s
 
 
 ################################################
 # OTHER CONVERSION FACTORS
 ################################################
 
-CF_DYNCM = 1e-3             # dyn/cm -> J/m2 (surface tension)
-CF_KGM3_TO_GCC = 1e-3       # kg/m3 -> g/cm3
+CF_DYNCM = 1e-3  # dyn/cm -> J/m2 (surface tension)
+CF_KGM3_TO_GCC = 1e-3  # kg/m3 -> g/cm3
 
 
 ################################################
 # TEMPERATURE CONVERSION HELPERS
 ################################################
+
 
 def kelvin_to_fahrenheit(T):
     """Convert temperature from Kelvin to degrees Fahrenheit.

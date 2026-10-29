@@ -43,7 +43,7 @@ from .test_spec_vectors import rust
 
 AHMED = 'Ahmed (2006), Reservoir engineering handbook, 3rd ed.'
 HK = 'Hasan and Kabir (2018), Fluid flow and heat transfer in wellbores, 2nd ed.'
-FT, LBFT3, LBS2 = 0.3048, 16.018463, 0.45359237     # ft -> m, lbm/ft3 -> kg/m3, lbm/s2 -> N/m
+FT, LBFT3, LBS2 = 0.3048, 16.018463, 0.45359237  # ft -> m, lbm/ft3 -> kg/m3, lbm/s2 -> N/m
 
 
 def num(x):
@@ -56,13 +56,13 @@ def bar(psia):
 
 @dataclass(frozen=True)
 class Example:
-    ids: str                # the spec IDs it checks
-    source: str             # reference, example and page
-    quantity: str           # what the example prints, and its unit
-    printed: str            # the value as printed: its last digit sets the tolerance
-    python: object          # () -> the CasADi backend's value, in the printed unit
-    rust: object = None     # () -> the Rust core's value, or None where the adapter does not reach the function
-    finding: str = None     # an open finding: develop does not reproduce the printed value
+    ids: str  # the spec IDs it checks
+    source: str  # reference, example and page
+    quantity: str  # what the example prints, and its unit
+    printed: str  # the value as printed: its last digit sets the tolerance
+    python: object  # () -> the CasADi backend's value, in the printed unit
+    rust: object = None  # () -> the Rust core's value, or None where the adapter does not reach the function
+    finding: str = None  # an open finding: develop does not reproduce the printed value
 
 
 def agrees(value, printed):
@@ -70,33 +70,38 @@ def agrees(value, printed):
     if not printed[0].isdigit():
         return value == printed
     decimals = len(printed.partition('.')[2])
-    return abs(num(value) - float(printed)) <= 0.5 * 10 ** -decimals * (1 + 1e-9)
+    return abs(num(value) - float(printed)) <= 0.5 * 10**-decimals * (1 + 1e-9)
 
 
 # ---------------------------------------------------------------------------------------------------------------
 # Vazquez and Beggs (PVT-OIL-5, PVT-OIL-6, PVT-OIL-8) and Beggs and Robinson (PVT-OIL-10, PVT-OIL-11): the six oils
 # of Ahmed's Example 2-17
 
+
 @dataclass(frozen=True)
 class Oil:
-    T: float            # reservoir temperature (°F)
-    p_b: float          # bubble point (psig)
-    R_s: float          # solution gas-oil ratio at p_b (scf/STB)
-    p_sep: float        # first-stage separator (psig)
-    T_sep: float        # (°F)
+    T: float  # reservoir temperature (°F)
+    p_b: float  # bubble point (psig)
+    R_s: float  # solution gas-oil ratio at p_b (scf/STB)
+    p_sep: float  # first-stage separator (psig)
+    T_sep: float  # (°F)
     api: float
-    sg_gas: float       # gas gravity at the separator
-    gamma_gs: float     # Vazquez and Beggs's Eq. (1) at the separator, unrounded, as Examples 2-18 and 2-29 carry it
+    sg_gas: float  # gas gravity at the separator
+    gamma_gs: float  # Vazquez and Beggs's Eq. (1) at the separator, unrounded, as Examples 2-18 and 2-29 carry it
 
     @property
     def p_b_psia(self):
-        return self.p_b + 14.7      # psig + 14.7, as Ahmed's Example 2-23 gives the measured bubble points
+        return self.p_b + 14.7  # psig + 14.7, as Ahmed's Example 2-23 gives the measured bubble points
 
     def black_oil(self, gor=200.0):
         """A fluid with develop's black oil of this oil, from its densities and its separator: PVT-OIL-5 to PVT-OIL-8
         in turn. Its gas-oil ratio (Sm3/Sm3) caps the fluid's R_s and B_o (PVT-OIL-15), not those of its pvt."""
-        pvt = BlackOil(rho_o=density_from_api(self.api), rho_g=gas_density_from_sg(self.sg_gas),
-                       p_sep=bar(self.p_sep + 14.7), T_sep=fahrenheit_to_kelvin(self.T_sep))
+        pvt = BlackOil(
+            rho_o=density_from_api(self.api),
+            rho_g=gas_density_from_sg(self.sg_gas),
+            p_sep=bar(self.p_sep + 14.7),
+            T_sep=fahrenheit_to_kelvin(self.T_sep),
+        )
         return FluidModel(pvt=pvt, gor=gor)
 
 
@@ -151,32 +156,64 @@ def black_oil_examples():
     for k, printed in {1: '0.873', 2: '0.855', 3: '0.911', 4: '0.850', 5: '0.814', 6: '0.834'}.items():
         oil = OILS[k]
         p_sep, T_sep = (oil.p_sep + 14.7) * CF_PSI, fahrenheit_to_kelvin(oil.T_sep)
-        out.append(Example(
-            'PVT-OIL-5', f'{AHMED}, Example 2-25, p. 89, oil {k}', 'gamma_gs', printed,
-            (lambda o=oil, p=p_sep, T=T_sep: BlackOilPVT(o.api, o.sg_gas, p, T).sg_gas_corr) if in_range(oil) else None,
-            lambda o=oil, p=p_sep, T=T_sep: rust('separator_gravity', o.api, o.sg_gas, p / CF_BAR, T)))
+        out.append(
+            Example(
+                'PVT-OIL-5',
+                f'{AHMED}, Example 2-25, p. 89, oil {k}',
+                'gamma_gs',
+                printed,
+                (lambda o=oil, p=p_sep, T=T_sep: BlackOilPVT(o.api, o.sg_gas, p, T).sg_gas_corr)
+                if in_range(oil)
+                else None,
+                lambda o=oil, p=p_sep, T=T_sep: rust('separator_gravity', o.api, o.sg_gas, p / CF_BAR, T),
+            )
+        )
     # Example 2-18, p. 82: R_s at the bubble point (scf/STB)
     for k, printed in {1: '779', 2: '733', 3: '702', 5: '947', 6: '841'}.items():
         oil = OILS[k]
-        out.append(Example('PVT-OIL-6', f'{AHMED}, Example 2-18, p. 82, oil {k}', 'R_s (scf/STB)', printed,
-                           lambda o=oil: rs_scf(o)))
+        out.append(
+            Example(
+                'PVT-OIL-6', f'{AHMED}, Example 2-18, p. 82, oil {k}', 'R_s (scf/STB)', printed, lambda o=oil: rs_scf(o)
+            )
+        )
         if in_range(oil):
-            out.append(Example(
-                'PVT-OIL-5, PVT-OIL-6', f'{AHMED}, Example 2-18, p. 82, oil {k}, from the separator',
-                'R_s (scf/STB)', printed, lambda o=oil: rs_scf(o, o.black_oil()),
-                lambda o=oil: rust('black_oil', bar(o.p_b_psia), fahrenheit_to_kelvin(o.T),
-                                   fluid=o.black_oil())[0] / CF_RS))
+            out.append(
+                Example(
+                    'PVT-OIL-5, PVT-OIL-6',
+                    f'{AHMED}, Example 2-18, p. 82, oil {k}, from the separator',
+                    'R_s (scf/STB)',
+                    printed,
+                    lambda o=oil: rs_scf(o, o.black_oil()),
+                    lambda o=oil: (
+                        rust('black_oil', bar(o.p_b_psia), fahrenheit_to_kelvin(o.T), fluid=o.black_oil())[0] / CF_RS
+                    ),
+                )
+            )
     # Example 2-29, pp. 97-98, Method 2: B_o at the bubble point, from the measured R_s
     for k, printed in {1: '1.474', 2: '1.450', 3: '1.451', 5: '1.546', 6: '1.389'}.items():
         oil = OILS[k]
-        out.append(Example('PVT-OIL-8', f'{AHMED}, Example 2-29, p. 98, Method 2, oil {k}', 'B_o', printed,
-                           lambda o=oil: bo_at_measured_rs(o)))
+        out.append(
+            Example(
+                'PVT-OIL-8',
+                f'{AHMED}, Example 2-29, p. 98, Method 2, oil {k}',
+                'B_o',
+                printed,
+                lambda o=oil: bo_at_measured_rs(o),
+            )
+        )
         if in_range(oil):
-            out.append(Example(
-                'PVT-OIL-5, PVT-OIL-8, PVT-OIL-15', f'{AHMED}, Example 2-29, p. 98, Method 2, oil {k}, from the '
-                'separator', 'B_o', printed, lambda o=oil: bo_at_measured_rs(o, o.black_oil(o.R_s * CF_RS)),
-                lambda o=oil: rust('bo', 2 * bar(o.p_b_psia), fahrenheit_to_kelvin(o.T),
-                                   fluid=o.black_oil(o.R_s * CF_RS))))
+            out.append(
+                Example(
+                    'PVT-OIL-5, PVT-OIL-8, PVT-OIL-15',
+                    f'{AHMED}, Example 2-29, p. 98, Method 2, oil {k}, from the separator',
+                    'B_o',
+                    printed,
+                    lambda o=oil: bo_at_measured_rs(o, o.black_oil(o.R_s * CF_RS)),
+                    lambda o=oil: rust(
+                        'bo', 2 * bar(o.p_b_psia), fahrenheit_to_kelvin(o.T), fluid=o.black_oil(o.R_s * CF_RS)
+                    ),
+                )
+            )
     # Example 2-35, pp. 119-120: Beggs and Robinson's dead-oil viscosity at the reservoir temperature (cP), and the
     # saturated oil's from the measured dead-oil viscosity and R_s (the table's footnote, "Using the measured mu_od",
     # marks oil 1; every row's value is the one from the measured mu_od). Oil 2's measured mu_od is 1.286, printed
@@ -186,38 +223,80 @@ def black_oil_examples():
     live = {1: '0.287', 2: '0.377', 3: '0.279', 4: '0.297', 5: '0.300', 6: '0.689'}
     for k, oil in OILS.items():
         T = fahrenheit_to_kelvin(oil.T)
-        out.append(Example('PVT-OIL-10', f'{AHMED}, Example 2-35, p. 120, oil {k}', 'mu_od (cP)', dead[k],
-                           lambda o=oil, T=T: num(dead_oil_viscosity(o.api, T)) / CF_CP,
-                           lambda o=oil, T=T: rust('dead_oil_viscosity', o.api, T) / CF_CP))
+        out.append(
+            Example(
+                'PVT-OIL-10',
+                f'{AHMED}, Example 2-35, p. 120, oil {k}',
+                'mu_od (cP)',
+                dead[k],
+                lambda o=oil, T=T: num(dead_oil_viscosity(o.api, T)) / CF_CP,
+                lambda o=oil, T=T: rust('dead_oil_viscosity', o.api, T) / CF_CP,
+            )
+        )
         mu = measured_mu_od[k] * CF_CP
-        out.append(Example('PVT-OIL-11', f'{AHMED}, Example 2-35, p. 120, oil {k}', 'mu_ob (cP)', live[k],
-                           lambda o=oil, mu=mu: num(live_oil_viscosity(mu, o.R_s)) / CF_CP,
-                           lambda o=oil, mu=mu: rust('live_oil_viscosity', mu, o.R_s) / CF_CP))
+        out.append(
+            Example(
+                'PVT-OIL-11',
+                f'{AHMED}, Example 2-35, p. 120, oil {k}',
+                'mu_ob (cP)',
+                live[k],
+                lambda o=oil, mu=mu: num(live_oil_viscosity(mu, o.R_s)) / CF_CP,
+                lambda o=oil, mu=mu: rust('live_oil_viscosity', mu, o.R_s) / CF_CP,
+            )
+        )
     return out
 
 
 # ---------------------------------------------------------------------------------------------------------------
 # The gas: Lee, Gonzalez and Eakin (PVT-GAS-7) and Sutton (PVT-GAS-5)
 
+
 def gas_examples():
     # Ahmed (2006), Example 2-14, pp. 74-75: T = 600 °R, M_a = 20.85, rho_g = 8.3 lb/ft3, which Eq. (2-63) divides
     # by 62.4 for g/cm3
     T, rho_g, M = 600.0 / 1.8, 8.3 / 62.4 * 1000.0, 20.85
-    out = [Example('PVT-GAS-7', f'{AHMED}, Example 2-14, p. 75', 'mu_g (cP)', '0.0173',
-                   lambda: num(gas_viscosity(T, rho_g, M)) / CF_CP,
-                   lambda: rust('gas_viscosity', T, rho_g, M) / CF_CP)]
+    out = [
+        Example(
+            'PVT-GAS-7',
+            f'{AHMED}, Example 2-14, p. 75',
+            'mu_g (cP)',
+            '0.0173',
+            lambda: num(gas_viscosity(T, rho_g, M)) / CF_CP,
+            lambda: rust('gas_viscosity', T, rho_g, M) / CF_CP,
+        )
+    ]
     # Whitson and Brulé (2000), Appendix B, Problem 6, p. 174: Sutton's correlations at gamma_g = 0.65
     src = 'Whitson and Brulé (2000), Phase behavior, Appendix B, Problem 6, p. 174'
-    out += [Example('PVT-GAS-5', src, 'T_pc (°R)', '365', lambda: sutton_pseudo_critical(0.65)[1] * 1.8,
-                    lambda: rust('sutton_pseudo_critical', 0.65)[1] * 1.8),
-            Example('PVT-GAS-5', src, 'p_pc (psia)', '670', lambda: sutton_pseudo_critical(0.65)[0] / CF_PSI,
-                    lambda: rust('sutton_pseudo_critical', 0.65)[0] / CF_PSI)]
+    out += [
+        Example(
+            'PVT-GAS-5',
+            src,
+            'T_pc (°R)',
+            '365',
+            lambda: sutton_pseudo_critical(0.65)[1] * 1.8,
+            lambda: rust('sutton_pseudo_critical', 0.65)[1] * 1.8,
+        ),
+        Example(
+            'PVT-GAS-5',
+            src,
+            'p_pc (psia)',
+            '670',
+            lambda: sutton_pseudo_critical(0.65)[0] / CF_PSI,
+            lambda: rust('sutton_pseudo_critical', 0.65)[0] / CF_PSI,
+        ),
+    ]
     # Sutton (1985), Eq. (14), p. 3: p_pc = 756.8 - 131.0 gamma_g - 3.6 gamma_g^2. develop's coefficient of gamma_g is
     # (p_pc(-1) - p_pc(1)) / 2 in psia: 131.07 until Bjarne's ruling of 2026-10-29 (pvt/gas.md, PVT-GAS-5)
-    out.append(Example(
-        'PVT-GAS-5', 'Sutton (1985), SPE 14265, Eq. (14), p. 3', 'coefficient of gamma_g in p_pc (psia)', '131.0',
-        lambda: (sutton_pseudo_critical(-1.0)[0] - sutton_pseudo_critical(1.0)[0]) / 2 / CF_PSI,
-        lambda: (rust('sutton_pseudo_critical', -1.0)[0] - rust('sutton_pseudo_critical', 1.0)[0]) / 2 / CF_PSI))
+    out.append(
+        Example(
+            'PVT-GAS-5',
+            'Sutton (1985), SPE 14265, Eq. (14), p. 3',
+            'coefficient of gamma_g in p_pc (psia)',
+            '131.0',
+            lambda: (sutton_pseudo_critical(-1.0)[0] - sutton_pseudo_critical(1.0)[0]) / 2 / CF_PSI,
+            lambda: (rust('sutton_pseudo_critical', -1.0)[0] - rust('sutton_pseudo_critical', 1.0)[0]) / 2 / CF_PSI,
+        )
+    )
     return out
 
 
@@ -227,28 +306,47 @@ def gas_examples():
 # (A-13) of Hasan et al. (2010), which SLIP-15 leaves out, and two of the three points lie within a few percent of a
 # transition, where SLIP-13 smooths it (specs/features/019-five-flow-regimes.md).
 
+
 @dataclass(frozen=True)
 class FlowPoint:
-    v_gs: float         # m/s
+    v_gs: float  # m/s
     v_ls: float
-    rho_g: float        # kg/m3
+    rho_g: float  # kg/m3
     rho_l: float
-    sigma: float        # N/m
-    D: float            # m
+    sigma: float  # N/m
+    D: float  # m
     cos_incl: float
 
     def state(self, alpha=0.5):
         """A state at these superficial velocities: the five regimes depend on alpha only through them."""
-        return dict(v_g=self.v_gs / alpha, v_l=self.v_ls / (1 - alpha), alpha=alpha, rho_g=self.rho_g,
-                    rho_l=self.rho_l, sigma=self.sigma, D=self.D, cos_incl=self.cos_incl)
+        return dict(
+            v_g=self.v_gs / alpha,
+            v_l=self.v_ls / (1 - alpha),
+            alpha=alpha,
+            rho_g=self.rho_g,
+            rho_l=self.rho_l,
+            sigma=self.sigma,
+            D=self.D,
+            cos_incl=self.cos_incl,
+        )
 
     def regime(self):
         return SlipModel().flow_regime(**self.state())
 
     def rust_regime(self):
         s = self.state()
-        k = rust('regime', s['v_g'], s['v_l'], s['alpha'], s['rho_g'], s['rho_l'], s['sigma'], s['cos_incl'],
-                 slip=SlipModel(), geometry=WellGeometry.vertical(length=1000.0, n_cells=10, D=self.D))
+        k = rust(
+            'regime',
+            s['v_g'],
+            s['v_l'],
+            s['alpha'],
+            s['rho_g'],
+            s['rho_l'],
+            s['sigma'],
+            s['cos_incl'],
+            slip=SlipModel(),
+            geometry=WellGeometry.vertical(length=1000.0, n_cells=10, D=self.D),
+        )
         return HASAN_REGIMES[int(k)]
 
     def c_0(self):
@@ -263,11 +361,13 @@ class FlowPoint:
 # solution; the regime is slug flow with either.
 HK_3_1 = FlowPoint(2.784 * FT, 1.601 * FT, 2.17 * LBFT3, 55.042 * LBFT3, 0.0696 * LBS2, 2.99 * 0.0254, 1.0)
 # §4.2.4, Field Example 4.1: 17.5° from vertical, the wellhead at 361 psig
-HK_4_1 = FlowPoint(17.62 * FT, 7.691 * FT, 1.08 * LBFT3, 53.3 * LBFT3, 0.064 * LBS2, 0.203 * FT,
-                   math.cos(math.radians(17.5)))
+HK_4_1 = FlowPoint(
+    17.62 * FT, 7.691 * FT, 1.08 * LBFT3, 53.3 * LBFT3, 0.064 * LBS2, 0.203 * FT, math.cos(math.radians(17.5))
+)
 # Appendix 7-E, §7-E.2: a geothermal well, 2.87° from vertical
-HK_7_E_2 = FlowPoint(20.044 * FT, 2.222 * FT, 0.315 * LBFT3, 55.57 * LBFT3, 0.0936 * LBS2, 8.819 * 0.0254,
-                     math.cos(math.radians(2.87)))
+HK_7_E_2 = FlowPoint(
+    20.044 * FT, 2.222 * FT, 0.315 * LBFT3, 55.57 * LBFT3, 0.0936 * LBS2, 8.819 * 0.0254, math.cos(math.radians(2.87))
+)
 
 
 def harmathy_ft_s(f):
@@ -280,22 +380,42 @@ def taylor_ft_s(f):
 
 def slip_examples():
     out = []
-    for f, where, printed in ((HK_3_1, '§3.4, Field Example 3.1', 'slug'),
-                              (HK_4_1, '§4.2.4, Field Example 4.1', 'churn'),
-                              (HK_7_E_2, 'Appendix 7-E, §7-E.2', 'annular')):
-        out.append(Example('SLIP-12, SLIP-13, SLIP-14, SLIP-16', f'{HK}, {where}', 'flow regime', printed,
-                           f.regime, f.rust_regime))
+    for f, where, printed in (
+        (HK_3_1, '§3.4, Field Example 3.1', 'slug'),
+        (HK_4_1, '§4.2.4, Field Example 4.1', 'churn'),
+        (HK_7_E_2, 'Appendix 7-E, §7-E.2', 'annular'),
+    ):
+        out.append(
+            Example(
+                'SLIP-12, SLIP-13, SLIP-14, SLIP-16', f'{HK}, {where}', 'flow regime', printed, f.regime, f.rust_regime
+            )
+        )
     out += [
         Example('SLIP-15', f'{HK}, §3.4, Field Example 3.1', 'C_0 of slug flow', '1.2', HK_3_1.c_0, HK_3_1.rust_c_0),
-        Example('SLIP-4', f'{HK}, §3.4, Field Example 3.1, Eq. 3.6', 'v_inf (ft/s)', '0.680',
-                lambda: harmathy_ft_s(HK_3_1),
-                lambda: rust('harmathy_rise_velocity', HK_3_1.rho_g, HK_3_1.rho_l, HK_3_1.sigma) / FT),
-        Example('SLIP-4', f'{HK}, §4.2.4, Field Example 4.1, Eq. 3.6', 'v_inf (ft/s)', '0.675',
-                lambda: harmathy_ft_s(HK_4_1),
-                lambda: rust('harmathy_rise_velocity', HK_4_1.rho_g, HK_4_1.rho_l, HK_4_1.sigma) / FT),
-        Example('SLIP-5', f'{HK}, §3.4, Field Example 3.1, Eq. 3.8', 'v_inf_T (ft/s)', '0.971',
-                lambda: taylor_ft_s(HK_3_1),
-                lambda: rust('taylor_rise_velocity', HK_3_1.rho_g, HK_3_1.rho_l, HK_3_1.D) / FT),
+        Example(
+            'SLIP-4',
+            f'{HK}, §3.4, Field Example 3.1, Eq. 3.6',
+            'v_inf (ft/s)',
+            '0.680',
+            lambda: harmathy_ft_s(HK_3_1),
+            lambda: rust('harmathy_rise_velocity', HK_3_1.rho_g, HK_3_1.rho_l, HK_3_1.sigma) / FT,
+        ),
+        Example(
+            'SLIP-4',
+            f'{HK}, §4.2.4, Field Example 4.1, Eq. 3.6',
+            'v_inf (ft/s)',
+            '0.675',
+            lambda: harmathy_ft_s(HK_4_1),
+            lambda: rust('harmathy_rise_velocity', HK_4_1.rho_g, HK_4_1.rho_l, HK_4_1.sigma) / FT,
+        ),
+        Example(
+            'SLIP-5',
+            f'{HK}, §3.4, Field Example 3.1, Eq. 3.8',
+            'v_inf_T (ft/s)',
+            '0.971',
+            lambda: taylor_ft_s(HK_3_1),
+            lambda: rust('taylor_rise_velocity', HK_3_1.rho_g, HK_3_1.rho_l, HK_3_1.D) / FT,
+        ),
     ]
     return out
 
@@ -303,18 +423,25 @@ def slip_examples():
 # ---------------------------------------------------------------------------------------------------------------
 # The mixture viscosity (PVT-MIX-9), and Vogel's inflow (INF-1, a well option)
 
+
 def other_examples():
     # Hasan and Kabir (2018), §3.4, Field Example 3.1, Eq. 2.25: mu_m = x mu_g + (1 - x) mu_L with x the flowing mass
     # fraction v_sg rho_g / (v_sg rho_g + v_sL rho_L), as Hasan et al. (2010) define it for (A-3), and as PVT-MIX-9
     # takes it since Bjarne's ruling of 2026-10-29 (it took the in-situ one, which gives 12.67 cP). The state carries
     # the superficial velocities at the example's gas volume fraction f_g = 0.457 (Eq. 3.27), with v_sg = 2.845 ft/s
     # as the solution carries it (x = 0.0655; it prints 0.066)
-    mu_l, mu_g, alpha, rho_l, rho_g = 13.09, 0.019, 0.457, 55.042, 2.17     # cP, lbm/ft3
-    v_g, v_l = 2.845 / alpha, 1.601 / (1 - alpha)                           # ft/s
-    out = [Example(
-        'PVT-MIX-9', f'{HK}, §3.4, Field Example 3.1, Eq. 2.25', 'mu_m (cP)', '12.2',
-        lambda: num(mixture_viscosity(mu_l, mu_g, alpha, rho_l, rho_g, v_g, v_l)),
-        lambda: rust('mixture_viscosity', mu_l, mu_g, alpha, rho_l, rho_g, v_g, v_l))]
+    mu_l, mu_g, alpha, rho_l, rho_g = 13.09, 0.019, 0.457, 55.042, 2.17  # cP, lbm/ft3
+    v_g, v_l = 2.845 / alpha, 1.601 / (1 - alpha)  # ft/s
+    out = [
+        Example(
+            'PVT-MIX-9',
+            f'{HK}, §3.4, Field Example 3.1, Eq. 2.25',
+            'mu_m (cP)',
+            '12.2',
+            lambda: num(mixture_viscosity(mu_l, mu_g, alpha, rho_l, rho_g, v_g, v_l)),
+            lambda: rust('mixture_viscosity', mu_l, mu_g, alpha, rho_l, rho_g, v_g, v_l),
+        )
+    ]
     # Guo, Lyons and Ghalambor (2007), Example Problem 3.2, p. 3/34: Vogel's IPR at a reservoir pressure of 5,651 psia,
     # with q_max = J p / 1.8 (Eq. 3.21). The example prints J as 0.1968 stb/d-psi and q_max as 618 stb/d, and its table
     # carries both unrounded (with 618, two of its rows round the other way). Rates in stb/d at p_wf in psia: INF-1
@@ -322,12 +449,31 @@ def other_examples():
     J = 8.2 * 53 / (141.2 * 1.1 * 1.7 * (math.log(2980 / 0.328) - 0.75))
     q_max = J * 5651 / 1.8
     src = 'Guo et al. (2007), Petroleum production engineering, Example Problem 3.2, p. 3/34'
-    rows = {5651: '0', 5000: '122', 4500: '206', 4000: '283', 3500: '352', 3000: '413', 2500: '466', 2000: '512',
-            1500: '550', 1000: '580', 500: '603', 0: '618'}
+    rows = {
+        5651: '0',
+        5000: '122',
+        4500: '206',
+        4000: '283',
+        3500: '352',
+        3000: '413',
+        2500: '466',
+        2000: '512',
+        1500: '550',
+        1000: '580',
+        500: '603',
+        0: '618',
+    }
     for p, printed in rows.items():
-        out.append(Example('INF-1', f'{src}, p_wf = {p} psia', 'q_o (stb/d)', printed,
-                           lambda p=p: num(Vogel(q_max).liquid_mass_flow_rate(float(p), 5651.0)),
-                           lambda p=p: rust('liquid_rate', float(p), 5651.0, inflow=Vogel(q_max))))
+        out.append(
+            Example(
+                'INF-1',
+                f'{src}, p_wf = {p} psia',
+                'q_o (stb/d)',
+                printed,
+                lambda p=p: num(Vogel(q_max).liquid_mass_flow_rate(float(p), 5651.0)),
+                lambda p=p: rust('liquid_rate', float(p), 5651.0, inflow=Vogel(q_max)),
+            )
+        )
     return out
 
 
@@ -336,18 +482,18 @@ EXAMPLES = black_oil_examples() + gas_examples() + slip_examples() + other_examp
 # Values the examples print that their own equations do not give at their own inputs, by hand: not checked
 EXAMPLE_ERRORS = {
     f'{AHMED}, Example 2-18, p. 82, oil 4': 'R_s printed 820 scf/STB; Eq. (2-71) at its inputs gives 782 (develop '
-                                            '782.3)',
+    '782.3)',
     f'{AHMED}, Example 2-29, p. 98, Method 2, oil 4': 'B_o printed 1.542; Eq. (2-86) at the measured R_s of 968 '
-                                                      'gives 1.556 (develop 1.5557)',
+    'gives 1.556 (develop 1.5557)',
     f'{AHMED}, Example 2-18, p. 82, oil 1': 'gamma_gs printed 0.8731; Eq. (2-72) gives 0.87334, which Example 2-25 '
-                                            'prints as 0.873 and Example 2-18 carries into R_s',
+    'prints as 0.873 and Example 2-18 carries into R_s',
     f'{HK}, §3.4, Field Example 3.1, Eq. 3.12': 'v_sg for annular flow printed 6.939 ft/s; its own expression gives '
-                                                '6.942 (develop 6.942)',
+    '6.942 (develop 6.942)',
     f'{HK}, §4.2.4, Field Example 4.1, Eq. 4.33': 'the deviation factor printed 1.208 and v_inf_T 1.125 ft/s; Eq. '
-                                                  '4.33 at 72.5° from horizontal gives 1.339 (develop SLIP-10: '
-                                                  '1.3388), and 0.886 times 1.208 is 1.070',
+    '4.33 at 72.5° from horizontal gives 1.339 (develop SLIP-10: '
+    '1.3388), and 0.886 times 1.208 is 1.070',
     f'{HK}, §4.2.4, Field Example 4.1, Eq. 3.12': 'v_sg for annular flow printed 9.595 ft/s; its own expression '
-                                                  'gives 9.613',
+    'gives 9.613',
 }
 
 

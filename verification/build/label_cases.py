@@ -34,12 +34,19 @@ from manywells_verify.checks import Tolerances, check_invariants
 
 VERIFICATION = Path(__file__).resolve().parents[1]
 BUILD, OUT = VERIFICATION / 'data' / 'build', VERIFICATION / 'data'
-LABEL_MIN = 1e-3          # |normalized dR/dp0| at or below which a label is indeterminate
+LABEL_MIN = 1e-3  # |normalized dR/dp0| at or below which a label is indeterminate
 
 
 def case_from(d: dict) -> Case:
-    return Case(d['case_id'], d['params'], d['n_cells'], Variant(*d['variant']), source=d['source'],
-                group=d['group'], meta={'config_id': d['config_id'], 'seed': d['seed'], 'note': d['note']})
+    return Case(
+        d['case_id'],
+        d['params'],
+        d['n_cells'],
+        Variant(*d['variant']),
+        source=d['source'],
+        group=d['group'],
+        meta={'config_id': d['config_id'], 'seed': d['seed'], 'note': d['note']},
+    )
 
 
 def label_of(slope: float) -> str:
@@ -71,21 +78,40 @@ def main():
         rejected = [x for x in r['roots'] if not any(x['key'] == y['key'] for y in roots)]
         if len(a) == len(b) == len(roots) and not indeterminate and not rejected:
             settled.append(case)
-            reference[cid] = [Root(x['x'], x['label'], info={'slope': x['slope'], 'spread': x['spread'], 'starts': ', '.join(x['starts'])})
-                              for x in roots]
+            reference[cid] = [
+                Root(
+                    x['x'],
+                    x['label'],
+                    info={'slope': x['slope'], 'spread': x['spread'], 'starts': ', '.join(x['starts'])},
+                )
+                for x in roots
+            ]
         else:
             why = []
             if not len(a) == len(b) == len(roots):
-                why.append('v1 starts: ' + ', '.join(f'{x["p0"]:.3f}' for x in a) + ' bar; Rust roots re-solved: '
-                           + ', '.join(f'{x["p0"]:.3f}' for x in b) + ' bar')
+                why.append(
+                    'v1 starts: '
+                    + ', '.join(f'{x["p0"]:.3f}' for x in a)
+                    + ' bar; Rust roots re-solved: '
+                    + ', '.join(f'{x["p0"]:.3f}' for x in b)
+                    + ' bar'
+                )
             if indeterminate:
                 why.append(f'{len(indeterminate)} indeterminate label(s)')
             if rejected:
-                why.append('rejected v1 solution(s): ' + ', '.join(
-                    f'{x["p0"]:.3f} bar ({x["return_status"]}, slope {x["slope"]:+.1e})' for x in rejected))
-            lines.append(f'- `{cid}` ({d["source"]}; {d["note"] or "-"}): ' + '; '.join(why) + '. Roots: '
-                         + ', '.join(f'{x["p0"]:.3f} bar {x["label"]} (slope {x["slope"]:+.1e}, from {", ".join(x["starts"])})'
-                                     for x in roots))
+                why.append(
+                    'rejected v1 solution(s): '
+                    + ', '.join(f'{x["p0"]:.3f} bar ({x["return_status"]}, slope {x["slope"]:+.1e})' for x in rejected)
+                )
+            lines.append(
+                f'- `{cid}` ({d["source"]}; {d["note"] or "-"}): '
+                + '; '.join(why)
+                + '. Roots: '
+                + ', '.join(
+                    f'{x["p0"]:.3f} bar {x["label"]} (slope {x["slope"]:+.1e}, from {", ".join(x["starts"])})'
+                    for x in roots
+                )
+            )
 
         # v1's own solutions as candidates. Convergence members follow the stable root on every grid.
         if d['source'] == 'convergence':
@@ -114,7 +140,8 @@ def main():
     (BUILD / 'disagreements.md').write_text(
         f'# Cases left out ({len(lines)})\n\nThe two root searches disagree, a label is indeterminate '
         f'(|normalized dR/dp0| <= {LABEL_MIN:g}), or a v1 solution was rejected (no Solve_Succeeded, or it '
-        'fails Invariants). These cases are not in the case set (Bjarne, 2026-09-30).\n\n' + '\n'.join(lines) + '\n')
+        'fails Invariants). These cases are not in the case set (Bjarne, 2026-09-30).\n\n' + '\n'.join(lines) + '\n'
+    )
 
     counts = Counter((c.source, len(reference[c.case_id])) for c in settled)
     print(f'{len(settled)} settled cases, {len(lines)} for adjudication')

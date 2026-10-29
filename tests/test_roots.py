@@ -61,6 +61,7 @@ def test_a_singular_reduced_jacobian_gives_no_slope():
     from manywells.discretization import build_system
     from manywells.geometry import WellGeometry
     from manywells.simulator import WellProperties
+
     system = build_system(WellProperties(geometry=WellGeometry.vertical(100, 3, D=0.1)))
     slope = roots.StabilitySlope(system)
     slope._jac = lambda x, params: ca.DM(np.zeros((system.n_x, system.n_x)))
@@ -79,8 +80,15 @@ def test_admissible():
 
 
 def root(p_0, label):
-    return Root(x=[p_0] + [1.0] * 6, label=label, slope=-1.0 if label == 'stable' else 1.0, choked=False,
-                flow_regime=('bubbly',), w_res=1.0, w_g_res=0.1)
+    return Root(
+        x=[p_0] + [1.0] * 6,
+        label=label,
+        slope=-1.0 if label == 'stable' else 1.0,
+        choked=False,
+        flow_regime=('bubbly',),
+        w_res=1.0,
+        w_g_res=0.1,
+    )
 
 
 def test_operating_point_is_the_stable_root():
@@ -120,6 +128,7 @@ def test_a_state_with_a_supersonic_cell_is_not_a_root():
     """
     from manywells.simulator import SSDFSimulator
     from .backend_cases import Case
+
     wp, bc = Case('develop', 'dead oil', 6).inputs()
     sim = SSDFSimulator(wp)
     rs = sim.root_set(bc)
@@ -136,24 +145,47 @@ def test_the_energy_slope_with_heat_loss_alone():
     from manywells.discretization import build_system
     from manywells.inflow import Vogel
     from manywells.choke import SimpsonChokeModel
-    wp = v1_well(L=2000.0, D=0.127, rho_l=880.0, R_s=420.0, cp_g=2225.0, cp_l=3000.0, f_D=0.03, h=25.0, f_g=0.15,
-                 inflow=Vogel(60.0), choke=SimpsonChokeModel(K_c=0.0015, chk_profile='linear'), n_cells=10)
+
+    wp = v1_well(
+        L=2000.0,
+        D=0.127,
+        rho_l=880.0,
+        R_s=420.0,
+        cp_g=2225.0,
+        cp_l=3000.0,
+        f_D=0.03,
+        h=25.0,
+        f_g=0.15,
+        inflow=Vogel(60.0),
+        choke=SimpsonChokeModel(K_c=0.0015, chk_profile='linear'),
+        n_cells=10,
+    )
     bc = BoundaryConditions(p_r=220.0, p_s=20.0, u=0.6)
     system = build_system(wp)
     params = system.params(bc)
     x = np.asarray(system.bottom_guess(180.0, params), dtype=float).ravel()
     X = np.vstack([x] * 2)
-    X[1, 0] -= 5.0                                  # any state of the next point: the slope holds along the curve
+    X[1, 0] -= 5.0  # any state of the next point: the slope holds along the curve
     geo = wp.geometry
-    tau = float(system.energy_slope(X[1], X[0], float(system.reservoir_rate(X[0, 0], params)), params,
-                                    geo.delta_md[0], geo.cos_incl[0], geo.tvd_frac[1]))
+    tau = float(
+        system.energy_slope(
+            X[1],
+            X[0],
+            float(system.reservoir_rate(X[0, 0], params)),
+            params,
+            geo.delta_md[0],
+            geo.cos_incl[0],
+            geo.tvd_frac[1],
+        )
+    )
     p, v_g, v_l, alpha, rho_g, rho_l, T = X[0]
     C = wp.fluid.cp_g * alpha * rho_g * v_g + wp.fluid.cp_l * (1 - alpha) * rho_l * v_l
     assert tau == pytest.approx(1 + geo.delta_md[0] * 4 * wp.thermal.h / (geo.D * C), rel=1e-10)
 
 
-@pytest.mark.parametrize('T_r, T_s, T_lg', ((370.0, 280.0, None), (300.0, 310.0, None), (340.0, 277.15, 380.0),
-                                             (340.0, 277.15, 260.0)))
+@pytest.mark.parametrize(
+    'T_r, T_s, T_lg', ((370.0, 280.0, None), (300.0, 310.0, None), (340.0, 277.15, 380.0), (340.0, 277.15, 260.0))
+)
 def test_the_temperature_bound(T_r, T_s, T_lg):
     """The CasADi backend bounds T below by min(T_r, T_s, T_lg), or by the Joule-Thomson floor where that is lower,
     and above by max(T_r, T_s, T_lg) + 50 K: frictional heating, hot lift gas and a warm surface put roots above
@@ -163,11 +195,15 @@ def test_the_temperature_bound(T_r, T_s, T_lg):
     from manywells.geometry import WellGeometry
     from manywells.simulator import WellProperties
     from manywells.thermal import ThermalModel
+
     bc = BoundaryConditions(p_r=250.0, p_s=30.0, T_r=T_r, T_s=T_s, T_lg=T_lg, w_lg=1.0)
-    wp = WellProperties(geometry=WellGeometry.vertical(length=2000.0, n_cells=4, D=0.1),
-                        thermal=ThermalModel(joule_thomson=False))
-    for well, floor in ((wp, min(T for T in (T_r, T_s, T_lg) if T is not None)),
-                        (replace(wp, thermal=ThermalModel()), JT_T_PR_MIN * wp.fluid.pseudo_critical[1])):
+    wp = WellProperties(
+        geometry=WellGeometry.vertical(length=2000.0, n_cells=4, D=0.1), thermal=ThermalModel(joule_thomson=False)
+    )
+    for well, floor in (
+        (wp, min(T for T in (T_r, T_s, T_lg) if T is not None)),
+        (replace(wp, thermal=ThermalModel()), JT_T_PR_MIN * wp.fluid.pseudo_critical[1]),
+    ):
         lb, ub = build_system(well).bounds(bc)
         assert T_MARGIN == 50.0
         assert np.all(ub[6::7] == max(T for T in (T_r, T_s, T_lg) if T is not None) + T_MARGIN)
@@ -182,11 +218,19 @@ def _hot_well(case):
     from manywells.pvt.fluid import FluidModel
     from manywells.simulator import WellProperties
     from manywells.thermal import ThermalModel
+
     wp = WellProperties()
     if case == 'frictional heating':
-        return (replace(wp, fluid=FluidModel(gor=50.0), thermal=ThermalModel(h=10.0), inflow=ProductivityIndex(k_l=2.0),
-                        geometry=replace(wp.geometry, D=3 * 0.0254)),
-                BoundaryConditions(p_r=300.0, p_s=20.0, u=1.0))
+        return (
+            replace(
+                wp,
+                fluid=FluidModel(gor=50.0),
+                thermal=ThermalModel(h=10.0),
+                inflow=ProductivityIndex(k_l=2.0),
+                geometry=replace(wp.geometry, D=3 * 0.0254),
+            ),
+            BoundaryConditions(p_r=300.0, p_s=20.0, u=1.0),
+        )
     return wp, BoundaryConditions(p_r=200.0, p_s=20.0, T_r=340.0, T_lg=380.0, w_lg=2.0)
 
 
@@ -196,6 +240,7 @@ def test_the_search_finds_operating_points_warmer_than_the_reservoir(case):
     """Both backends find the operating point, warmer than T_r + 1 K somewhere; with that upper bound the CasADi
     search found no root (issue #13)."""
     from manywells.simulator import SSDFSimulator
+
     wp, bc = _hot_well(case)
     core = SSDFSimulator(wp, backend='rust').simulate(bc)
     op = SSDFSimulator(wp).simulate(bc)
@@ -211,8 +256,10 @@ def _all_liquid_well(n_cells):
     from manywells.configurations import DEVELOP
     from manywells.sampling.conditions import nominal_conditions
     from manywells.sampling.wells import sample_well, well_properties
+
     draw = sample_well(2026, 87)
     from manywells.slip import SlipModel
+
     wp = replace(well_properties(draw, draw.fractions, DEVELOP, n_cells=n_cells), slip=SlipModel(regime_model='fitted'))
     return wp, replace(wp, fluid=replace(wp.fluid, gor=40.0)), nominal_conditions(draw)
 
@@ -221,15 +268,16 @@ def test_no_slip_guess():
     """Point 0's retry: the no-slip void fraction of the guess's volume rates, at most the guess's own, with the
     velocities that carry the same rates; None where it would be the guess itself, or nothing flows (issue #10)."""
     from manywells.solvers.march import ALPHA_MIN, no_slip_guess
-    guess = np.array([300.0, 0.004, 4.0, 0.5, 200.0, 700.0, 380.0])   # q_g = 0.002, q_l = 2 (m/s)
+
+    guess = np.array([300.0, 0.004, 4.0, 0.5, 200.0, 700.0, 380.0])  # q_g = 0.002, q_l = 2 (m/s)
     retry = no_slip_guess(guess)
     assert retry[3] == pytest.approx(0.002 / 2.002, rel=1e-12)
     assert retry[3] * retry[1] == pytest.approx(0.002, rel=1e-12)
     assert (1 - retry[3]) * retry[2] == pytest.approx(2.0, rel=1e-12)
     assert np.array_equal(np.delete(retry, [1, 2, 3]), np.delete(guess, [1, 2, 3]))
     assert no_slip_guess(np.array([300.0, 0.0, 4.0, 0.5, 200.0, 700.0, 380.0]))[3] == ALPHA_MIN
-    assert no_slip_guess(np.array([300.0, 4.0, 4.0, 0.5, 200.0, 700.0, 380.0])) is None   # no-slip 0.5: no retry
-    assert no_slip_guess(np.array([300.0, 0.0, 0.0, 0.5, 200.0, 700.0, 380.0])) is None   # no flow
+    assert no_slip_guess(np.array([300.0, 4.0, 4.0, 0.5, 200.0, 700.0, 380.0])) is None  # no-slip 0.5: no retry
+    assert no_slip_guess(np.array([300.0, 0.0, 0.0, 0.5, 200.0, 700.0, 380.0])) is None  # no flow
 
 
 def test_the_march_retries_point_0_where_the_bottomhole_is_all_liquid():
@@ -237,6 +285,7 @@ def test_the_march_retries_point_0_where_the_bottomhole_is_all_liquid():
     and the march retries it from the no-slip void fraction (issue #10)."""
     from manywells.discretization import build_system
     from manywells.solvers.march import Marcher, MarchFailed, no_slip_guess
+
     _, wp, bc = _all_liquid_well(n_cells=10)
     system = build_system(wp)
     params, p_0 = system.params(bc), 322.0
@@ -254,6 +303,7 @@ def test_the_search_finds_an_operating_point_with_an_all_liquid_bottomhole():
     """With all the gas dissolved at the bottomhole, the CasADi search finds the Rust core's operating point; without
     the march's retry of point 0 it found none (issue #10)."""
     from manywells.simulator import SSDFSimulator
+
     _, wp, bc = _all_liquid_well(n_cells=100)
     core = SSDFSimulator(wp, backend='rust').simulate(bc)
     op = SSDFSimulator(wp).simulate(bc)

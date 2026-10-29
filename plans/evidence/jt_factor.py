@@ -22,8 +22,8 @@ import numpy as np
 import CoolProp.CoolProp as CP
 from scipy.optimize import brentq
 
-CF_PSI = 6894.76    # Pa/psi
-M_AIR = 28.97       # kg/kmol
+CF_PSI = 6894.76  # Pa/psi
+M_AIR = 28.97  # kg/kmol
 A = (0.3265, -1.0700, -0.5339, 0.01569, -0.05165, 0.5475, -0.7361, 0.1844, 0.1056, 0.6134, 0.7210)
 
 GASES = {
@@ -31,13 +31,13 @@ GASES = {
     'natural gas, gravity 0.67': 'HEOS::Methane[0.85]&Ethane[0.09]&Propane[0.04]&n-Butane[0.02]',
     'natural gas, gravity 0.80': 'HEOS::Methane[0.70]&Ethane[0.15]&Propane[0.10]&n-Butane[0.05]',
 }
-PRESSURES = (5, 20, 50, 100, 150, 200, 270, 350, 460)    # bar
-TEMPERATURES = (280, 300, 330, 360, 390, 425)            # K
+PRESSURES = (5, 20, 50, 100, 150, 200, 270, 350, 460)  # bar
+TEMPERATURES = (280, 300, 330, 360, 390, 425)  # K
 
 
 def sutton(sg):
     """Pseudo-critical pressure (Pa) and temperature (K), PVT-GAS-5."""
-    return (756.8 - 131.07 * sg - 3.6 * sg ** 2) * CF_PSI, (169.2 + 349.5 * sg - 74.0 * sg ** 2) / 1.8
+    return (756.8 - 131.07 * sg - 3.6 * sg**2) * CF_PSI, (169.2 + 349.5 * sg - 74.0 * sg**2) / 1.8
 
 
 def j_papay(p, T, sg):
@@ -45,24 +45,26 @@ def j_papay(p, T, sg):
     ppc, tpc = sutton(sg)
     ppr, tpr = p / ppc, T / tpc
     a = 3.52 * ppr * 10 ** (-0.9813 * tpr)
-    b = 0.274 * ppr ** 2 * 10 ** (-0.8157 * tpr)
+    b = 0.274 * ppr**2 * 10 ** (-0.8157 * tpr)
     return tpr * np.log(10) * (0.9813 * a - 0.8157 * b) / (1 - a + b)
 
 
 def dak(r, t):
     """DAK's Z, dZ/dr and t dZ/dt at reduced density r and reduced temperature t (proposed PVT-GAS-9)."""
     a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11 = A
-    c1 = a1 + a2 / t + a3 / t ** 3 + a4 / t ** 4 + a5 / t ** 5
-    c2 = a6 + a7 / t + a8 / t ** 2
-    c3 = a9 * (a7 / t + a8 / t ** 2)
-    c4 = a10 / t ** 3
-    e = np.exp(-a11 * r ** 2)
-    Z = 1 + c1 * r + c2 * r ** 2 - c3 * r ** 5 + c4 * r ** 2 * (1 + a11 * r ** 2) * e
-    Z_r = c1 + 2 * c2 * r - 5 * c3 * r ** 4 + 2 * c4 * r * e * (1 + a11 * r ** 2 - a11 ** 2 * r ** 4)
-    tZ_t = ((-a2 / t - 3 * a3 / t ** 3 - 4 * a4 / t ** 4 - 5 * a5 / t ** 5) * r
-            + (-a7 / t - 2 * a8 / t ** 2) * r ** 2
-            - a9 * (-a7 / t - 2 * a8 / t ** 2) * r ** 5
-            - 3 * a10 / t ** 3 * r ** 2 * (1 + a11 * r ** 2) * e)
+    c1 = a1 + a2 / t + a3 / t**3 + a4 / t**4 + a5 / t**5
+    c2 = a6 + a7 / t + a8 / t**2
+    c3 = a9 * (a7 / t + a8 / t**2)
+    c4 = a10 / t**3
+    e = np.exp(-a11 * r**2)
+    Z = 1 + c1 * r + c2 * r**2 - c3 * r**5 + c4 * r**2 * (1 + a11 * r**2) * e
+    Z_r = c1 + 2 * c2 * r - 5 * c3 * r**4 + 2 * c4 * r * e * (1 + a11 * r**2 - a11**2 * r**4)
+    tZ_t = (
+        (-a2 / t - 3 * a3 / t**3 - 4 * a4 / t**4 - 5 * a5 / t**5) * r
+        + (-a7 / t - 2 * a8 / t**2) * r**2
+        - a9 * (-a7 / t - 2 * a8 / t**2) * r**5
+        - 3 * a10 / t**3 * r**2 * (1 + a11 * r**2) * e
+    )
     return Z, Z_r, tZ_t
 
 
@@ -108,9 +110,11 @@ def main():
                 line += f'| {j_ref:6.3f} {j_papay(p, T, sg):6.3f} {j_cf:6.3f} ({j_fd:6.3f}) '
             print(line)
         p, T = 460e5, 360.0
-        print(f'Z at {p / 1e5:.0f} bar, {T:.0f} K: reference {CP.PropsSI("Z", "T", T, "P", p, fluid):.3f}, '
-              f'Papay {1 - 3.52 * p / ppc * 10 ** (-0.9813 * T / tpc) + 0.274 * (p / ppc) ** 2 * 10 ** (-0.8157 * T / tpc):.3f}, '
-              f'DAK {z_dak(p, T, sg):.3f}')
+        print(
+            f'Z at {p / 1e5:.0f} bar, {T:.0f} K: reference {CP.PropsSI("Z", "T", T, "P", p, fluid):.3f}, '
+            f'Papay {1 - 3.52 * p / ppc * 10 ** (-0.9813 * T / tpc) + 0.274 * (p / ppc) ** 2 * 10 ** (-0.8157 * T / tpc):.3f}, '
+            f'DAK {z_dak(p, T, sg):.3f}'
+        )
 
     print('\nDAK: minimum of Z + r dZ/dr over the reduced densities of p_pr <= 15, by reduced temperature')
     r = np.linspace(1e-6, 3.0, 3001)

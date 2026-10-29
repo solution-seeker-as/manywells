@@ -57,13 +57,13 @@ def fold(args):
             continue
         p_config = p_hi = p_lo = bc.p_r
         step = 0.02 * (bc.p_r - bc.p_s)
-        while rust_roots(wp, bc) and bc.p_r - step > bc.p_s + 1.0:   # step down until no root
+        while rust_roots(wp, bc) and bc.p_r - step > bc.p_s + 1.0:  # step down until no root
             p_hi = bc.p_r
             bc.p_r -= step
             p_lo = bc.p_r
         if rust_roots(wp, bc):
-            continue                                                    # still flowing near p_s
-        while p_hi - p_lo > 1e-4:                                       # bisect the fold
+            continue  # still flowing near p_s
+        while p_hi - p_lo > 1e-4:  # bisect the fold
             bc.p_r = 0.5 * (p_hi + p_lo)
             if rust_roots(wp, bc):
                 p_hi = bc.p_r

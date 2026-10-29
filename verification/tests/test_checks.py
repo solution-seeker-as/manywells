@@ -35,7 +35,7 @@ def test_reference_roots_pass_every_check(fixtures):
 def test_perturbed_root_fails_operating_point(fixtures):
     case, roots = fixtures['sol1-one-root']
     x = roots[0].x.copy()
-    x[7 * 50] += 0.1                                  # 0.1 bar at point 50: still a plausible state
+    x[7 * 50] += 0.1  # 0.1 bar at point 50: still a plausible state
     res = verify_case(case, [Root(x, operating_point=True)], roots)
     assert res.checks['invariants'].status == 'pass'
     assert res.checks['operating_point'].failed
@@ -45,7 +45,7 @@ def test_perturbed_root_fails_operating_point(fixtures):
 def test_small_error_passes_within_tol_x(fixtures):
     case, roots = fixtures['sol1-one-root']
     x = roots[0].x.copy()
-    x[7 * 50] += 1e-4                                 # far below tol_x times the pressure scale
+    x[7 * 50] += 1e-4  # far below tol_x times the pressure scale
     assert verify_case(case, [Root(x, operating_point=True)], roots).checks['operating_point'].status == 'pass'
 
 
@@ -96,7 +96,7 @@ def test_past_the_fold(fixtures):
 def test_invariants(fixtures):
     case, roots = fixtures['sol1-one-root']
     x = roots[0].x.copy()
-    x[7 * 10 + 3] = 1.2                               # alpha at point 10
+    x[7 * 10 + 3] = 1.2  # alpha at point 10
     assert 'alpha outside [0, 1]' in verify_case(case, [Root(x)], roots).checks['invariants'].detail
 
     X = roots[0].x.reshape(-1, 7)
@@ -109,7 +109,7 @@ def test_invariants(fixtures):
 
 
 def test_convergence_is_first_order(fixtures):
-    members = [fixtures[f'conv-one-root-N{n}'] for n in (200, 50, 100)]   # order does not matter
+    members = [fixtures[f'conv-one-root-N{n}'] for n in (200, 50, 100)]  # order does not matter
     check = check_convergence([(case, roots[0]) for case, roots in members], Tolerances())
     assert check.status == 'pass', check.detail
     assert 0.9 < check.value < 1.1

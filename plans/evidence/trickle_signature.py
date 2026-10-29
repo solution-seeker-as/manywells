@@ -32,11 +32,15 @@ def main():
     print(f'{len(d)} samples, {d.ID.nunique()} wells')
     for thr in [1e-3, 1e-2, 0.1, 1.0]:
         m = dp < thr
-        print(f'PWH-PDC < {thr:g} bar: {m.mean() * 100:5.2f}% of samples, {d.loc[m, "ID"].nunique()} wells; '
-              f'TWH median {d.loc[m, "TWH"].median():.1f} K, WLIQ median {d.loc[m, "WLIQ"].median():.3f} kg/s')
+        print(
+            f'PWH-PDC < {thr:g} bar: {m.mean() * 100:5.2f}% of samples, {d.loc[m, "ID"].nunique()} wells; '
+            f'TWH median {d.loc[m, "TWH"].median():.1f} K, WLIQ median {d.loc[m, "WLIQ"].median():.3f} kg/s'
+        )
     rest = dp >= 1
-    print(f'PWH-PDC >= 1 bar: TWH median {d.loc[rest, "TWH"].median():.1f} K, '
-          f'WLIQ median {d.loc[rest, "WLIQ"].median():.3f} kg/s')
+    print(
+        f'PWH-PDC >= 1 bar: TWH median {d.loc[rest, "TWH"].median():.1f} K, '
+        f'WLIQ median {d.loc[rest, "WLIQ"].median():.3f} kg/s'
+    )
 
     edges = np.arange(270, 380, 5)
     h, _ = np.histogram(d.TWH, bins=edges)
