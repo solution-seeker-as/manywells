@@ -29,10 +29,26 @@ df = sim.solution_as_df(op)                      # one row per grid point, from 
 | `slip` | `SlipModel` (`slip.py`) | drift-flux closure per flow regime |
 | `inflow` | `ProductivityIndex`, `Vogel` or `FixedFlowRate` (`inflow.py`) | `ProductivityIndex(k_l=0.5)` |
 | `choke` | `BernoulliChokeModel` or `SimpsonChokeModel` (`choke.py`) | Bernoulli, `K_c` 10% of the pipe's cross-section |
+| `injection_md` | the measured depth (m) from the surface at which the lift gas enters | `None`: the bottomhole |
 
 `BoundaryConditions` is the operating point: the reservoir and separator pressures `p_r` and `p_s` (bar), the
 reservoir and surface temperatures `T_r` and `T_s` (K), the choke position `u`, the lift-gas rate `w_lg` (kg/s)
-and the lift-gas temperature `T_lg` (K; `None` means `T_r`).
+and the lift-gas temperature `T_lg` (K; `None` means the ambient temperature at the injection point, which at the
+bottomhole is `T_r`).
+
+The lift gas enters at the bottomhole by default. A gas-lifted well usually injects through a valve in the tubing
+above the packer: set `injection_md` to the valve's measured depth, and the lift gas enters at the grid point nearest
+it (INF-9 in [`specs/model/inflow.md`](../specs/model/inflow.md)). Below that point the tubing carries the reservoir
+fluid alone, so its column is heavier than with the lift gas at the bottomhole; at the point the lift gas mixes with
+the flow from below by heat-capacity rates (THM-9). The depth belongs to the well, not to the operating point: a
+simulator is built for one injection point.
+
+```python
+from manywells.geometry import WellGeometry
+
+wp = WellProperties(geometry=WellGeometry.vertical(length=2500, n_cells=100), injection_md=1800.0)
+op = SSDFSimulator(wp).simulate(BoundaryConditions(p_r=150, p_s=20, u=0.8, w_lg=2.0))
+```
 
 The inputs are frozen dataclasses, validated when they are built, and the simulator does not change them. To vary
 one part, build a new object, for instance with `dataclasses.replace`. Pressures are in bar and temperatures in
@@ -129,6 +145,7 @@ Run the examples as modules from the project root, for instance
 | [`L_shaped_well.py`](../scripts/sim_examples/L_shaped_well.py) | An L-shaped well against a vertical well of the same depth |
 | [`fixed_rate.py`](../scripts/sim_examples/fixed_rate.py) | A fixed liquid rate (`FixedFlowRate`), where the bottomhole pressure follows from the rate |
 | [`gl_temp.py`](../scripts/sim_examples/gl_temp.py) | A gas-lift study, with the lift-gas temperature's effect on the wellhead temperature |
+| [`gl_valve.py`](../scripts/sim_examples/gl_valve.py) | Gas lift through a valve at three depths, against the lift gas at the bottomhole |
 | [`backends.py`](../scripts/sim_examples/backends.py) | One well with each backend, and their roots compared |
 
 ## Generating datasets
