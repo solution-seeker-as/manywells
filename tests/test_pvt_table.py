@@ -504,12 +504,13 @@ class TestSimulator:
 
 @pytest.mark.slow
 @pytest.mark.parametrize('backend', ['casadi', 'rust'])
-@pytest.mark.parametrize('well', [5, 8, 11])
+@pytest.mark.parametrize('well', [0, 5, 8])
 def test_a_table_of_the_wells_black_oil_gives_its_operating_point(well, backend):
     """
     A sampled well (seed 2026, develop's configuration), with its own black oil tabulated on a 10 bar by 10 K grid
     over its pressures and temperatures: the operating point within 0.05 bar at the bottomhole and the wellhead
-    (specs/features/018-pvt-tables.md, acceptance 6), and on the grid.
+    (specs/features/018-pvt-tables.md, acceptance 6), and on the grid. Wells 0 (deviated), 5 and 8 flow at their
+    nominal point with develop's five flow regimes (019); well 11, which did with the fitted three, does not.
     """
     draw = sample_well(2026, well)
     wp, bc = well_properties(draw, configuration='develop', n_cells=30), nominal_conditions(draw)
