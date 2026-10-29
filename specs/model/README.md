@@ -1,6 +1,6 @@
 # ManyWells model specification
 
-*Step 4 of `plans/manywells-v2-plan.md`. Owner: Bjarne Grimstad. Status: in use, 2026-09-30; `develop`'s options added in Step 7, 2026-10-01, a draft for Bjarne's sign-off. The `v1.0.0` configuration is complete, and Bjarne has ruled on every item of `specs/discrepancies.md`. `develop`'s model changes since v1.0.0 (`plans/develop_model_changes.md`) are options here, each with a feature spec in `specs/features/`.*
+*Step 4 of `plans/manywells-v2-plan.md`. Owner: Bjarne Grimstad. Status: in use, 2026-09-30; `develop`'s options added in Step 7, 2026-10-01, and signed off by Bjarne on 2026-10-29. The `v1.0.0` configuration is complete, and Bjarne has ruled on every item of `specs/discrepancies.md`. `develop`'s model changes since v1.0.0 (`plans/develop_model_changes.md`) are options here, each with a feature spec in `specs/features/`.*
 
 This directory specifies ManyWells' steady-state drift-flux model of gas–liquid flow in a well. It is the source of truth for the physics: every physics expression in the code traces to an equation ID here (principle 1), and no physics change goes in without a change to these files in the same PR. The spec says *what* the model is. Derivations and motivation stay in `docs/` and the paper, and the spec cites them.
 

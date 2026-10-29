@@ -1,6 +1,6 @@
 # 003 · Surface tension from the fluid model
 
-*Feature spec, written after the fact in Step 7 of `plans/manywells-v2-plan.md` (2026-10-01): change 3 of `plans/develop_model_changes.md`. Status: draft for Bjarne's sign-off.*
+*Feature spec, written after the fact in Step 7 of `plans/manywells-v2-plan.md` (2026-10-01): change 3 of `plans/develop_model_changes.md`. Status: signed off by Bjarne on 2026-10-29.*
 
 ## Motivation
 

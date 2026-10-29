@@ -1,6 +1,6 @@
 # 010 · Lift-gas temperature
 
-*Feature spec, written after the fact in Step 7 of `plans/manywells-v2-plan.md` (2026-10-01): change 10 of `plans/develop_model_changes.md`. Status: draft for Bjarne's sign-off.*
+*Feature spec, written after the fact in Step 7 of `plans/manywells-v2-plan.md` (2026-10-01): change 10 of `plans/develop_model_changes.md`. Status: signed off by Bjarne on 2026-10-29.*
 
 ## Motivation
 
@@ -22,4 +22,4 @@ The THM-3 row vectors in the `v1.0.0` configuration; the develop vectors of THM-
 
 ## Open
 
-The upper temperature bound of the solver is $T_r + 1$ K, so lift gas hotter than that cannot be simulated; no sampler draws it (SMP-44).
+The upper temperature bound of the solver is $T_r + 1$ K, so lift gas hotter than that cannot be simulated; no sampler draws it (SMP-44). Issue #13.

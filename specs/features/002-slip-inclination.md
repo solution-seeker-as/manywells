@@ -1,6 +1,6 @@
 # 002 · Inclination in the slip model
 
-*Feature spec, written after the fact in Step 7 of `plans/manywells-v2-plan.md` (2026-10-01): change 2 of `plans/develop_model_changes.md`. Status: draft for Bjarne's sign-off.*
+*Feature spec, written after the fact in Step 7 of `plans/manywells-v2-plan.md` (2026-10-01): change 2 of `plans/develop_model_changes.md`. Status: signed off by Bjarne on 2026-10-29.*
 
 ## Motivation
 
@@ -24,4 +24,4 @@ Both terms are exactly v1.0.0's at $\cos\theta = 1$, which the `v1.0.0` configur
 
 ## Out of scope
 
-Refitting the classifier for inclined pipes, and the four-regime model (after the plan; `scripts/flow_regimes/new_flow_regime_model.md`).
+Refitting the classifier for inclined pipes, and a new flow-regime model, which came after the plan as the five regimes of `019-five-flow-regimes.md`.

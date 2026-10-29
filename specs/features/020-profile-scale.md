@@ -1,6 +1,6 @@
 # 020 · A scale on the profile parameter, free in calibration
 
-*Feature spec, 2026-10-29. Status: approved by Bjarne on 2026-10-29 (Approval, at the end); implemented on the branch `profile-scale`. The implemented feature's measurements await sign-off.*
+*Feature spec, 2026-10-29. Status: approved by Bjarne on 2026-10-29 (Approval, at the end); implemented on the branch `profile-scale`. Bjarne signed off the implemented feature's measurements on 2026-10-29 (Sign-off).*
 
 ## Decisions (Bjarne, 2026-10-29)
 
@@ -209,17 +209,17 @@ The scripts are in `plans/evidence/` (`README.md` there). The wells are all synt
 - **Where the data do not depend on $\kappa_0$ (wells 0, 4, 7)**, all three fits are equal.
 - **Well 1's false minimum** is the exception.
 
-## Sign-off
+## Sign-off (Bjarne, 2026-10-29)
 
-For Bjarne, on the implemented feature:
+On the implemented feature:
 
-- **The changed results** where $\kappa_0 \ne 1$ (Measurements, Sampled wells). The default $\kappa_0 = 1$ changes no result of `develop`.
-- **The solver finding**: the core misses a stable root that the CasADi search finds, in 1 of 90 cases at $\kappa_0 \le 0.5$.
-- **The twin checks' tolerances.** Proposed:
+- **The changed results** where $\kappa_0 \ne 1$ (Measurements, Sampled wells). The default $\kappa_0 = 1$ changes no result of `develop`. Signed off.
+- **The solver finding**: the core misses a stable root that the CasADi search finds, in 1 of 90 cases at $\kappa_0 \le 0.5$. A known kind of miss, not changed. Signed off.
+- **The twin checks' tolerances**, as proposed. Signed off:
   - 017's criteria stay as they are for fits with `profile_scale` free.
   - The criteria hold in 95%, 89%, 100%, 100% and 95% of the fits. `no_downhole` is below 95% by well 1's false minimum and by well 6.
   - No recovery tolerance on `profile_scale` itself, since on a third of the sampled wells the data do not determine it.
-  - Well 1's false minimum is a finding for `plans/improvements.md`, as 017's start search was.
+  - Well 1's false minimum is a finding for `plans/improvements.md` (§2.10), as 017's start search was.
 
 ## Out of scope
 

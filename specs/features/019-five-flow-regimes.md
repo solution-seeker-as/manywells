@@ -1,6 +1,6 @@
 # 019 · Five flow regimes after Hasan, Kabir and Sayarpour (2010)
 
-*Feature spec, 2026-10-28. Status: approved by Bjarne on 2026-10-28 (Approval, at the end); implemented on the branch `five-flow-regimes` (Implementation); the implemented feature awaits sign-off (Sign-off). Bjarne made the decisions below while it was drafted.*
+*Feature spec, 2026-10-28. Status: approved by Bjarne on 2026-10-28 (Approval, at the end); implemented on the branch `five-flow-regimes` (Implementation); the implemented feature signed off by Bjarne on 2026-10-29 (Sign-off). Bjarne made the decisions below while it was drafted.*
 
 ## Decisions (Bjarne, 2026-10-28)
 
@@ -223,12 +223,12 @@ Done on the branch, 2026-10-28:
 
 The implemented feature's measurements (Acceptance, item 7), and any solver machinery the implementation finds it needs, come back for sign-off, as in 016.
 
-## Sign-off
+## Sign-off (Bjarne, 2026-10-29)
 
-For Bjarne, on the implemented feature:
+On the implemented feature:
 
-- **The changed results of `develop`** on sampled wells (Measurements, the implemented feature), including the 4 cases of 263 that lose their operating point, where the model has no root, and the 1 that gains one.
-- **The implementation's differences from the Delta** (Implementation): `SlipModel.label` in place of `regime_label(probs, regimes)`, and the tests and the calibration twin that now pin the fitted classifier.
+- **The changed results of `develop`** on sampled wells (Measurements, the implemented feature), including the 4 cases of 263 that lose their operating point, where the model has no root, and the 1 that gains one. Signed off.
+- **The implementation's differences from the Delta** (Implementation): `SlipModel.label` in place of `regime_label(probs, regimes)`, and the tests and the calibration twin that now pin the fitted classifier. Signed off.
 
 ## Sources
 

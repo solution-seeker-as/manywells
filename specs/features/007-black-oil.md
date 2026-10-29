@@ -1,6 +1,6 @@
 # 007 · Black oil
 
-*Feature spec, written after the fact in Step 7 of `plans/manywells-v2-plan.md` (2026-10-01): change 7 of `plans/develop_model_changes.md`. Status: draft for Bjarne's sign-off.*
+*Feature spec, written after the fact in Step 7 of `plans/manywells-v2-plan.md` (2026-10-01): change 7 of `plans/develop_model_changes.md`. Status: signed off by Bjarne on 2026-10-29.*
 
 ## Motivation
 
@@ -32,4 +32,4 @@ The PVT-MIX-1 row vectors in the `v1.0.0` configuration; the develop vectors of 
   - *Tests.* Two tests pinned values of the old model. The Joule–Thomson gas wells of `tests/test_rust_backend.py` were re-solved: their $p_0$ moved by 0.002 to 0.008 bar, and both backends agree. The two-root well of `tests/test_model_properties.py` lost its trickle root, because its lighter in-situ column can now reach the separator. That root had been 0.13 bar below $p_r$. Its separator pressure was raised from 25 to 29 bar, which puts the trickle root 2.5 bar below $p_r$.
   - *Not rerun.* The twin-study measurements of `017-calibration.md` were made with the old density.
 - **Water's formation volume factor (open).** PVT-MIX-6 takes $B_w = 1$ (PVT-WAT-1). Downhole, heating expands water more than pressure compresses it: $B_w$ is about 1.03 to 1.04 at 380 K and 250 bar, so the water is itself 3–4% too dense. PVT-WAT-2 depends only on pressure and goes the wrong way. A temperature-dependent $B_w$ would be a separate option.
-- **Dissolved gas in the density (open).** Where $R_{so}(p, T)$ exceeds the gas–oil ratio, PVT-MIX-6 still takes $R_{so}$ and $B_o$ at $(p, T)$, so it counts more dissolved gas and swelling than PVT-OIL-13 dissolves. This happens at the bottomhole in 117 of the 1456 sampled cases above. Evaluating both at the gas actually dissolved would fix it, and would change only $R_{so}$ and $B_o$ in PVT-MIX-6's formula.
+- **Dissolved gas in the density (open, issue #16).** Where $R_{so}(p, T)$ exceeds the gas–oil ratio, PVT-MIX-6 still takes $R_{so}$ and $B_o$ at $(p, T)$, so it counts more dissolved gas and swelling than PVT-OIL-13 dissolves. This happens at the bottomhole in 117 of the 1456 sampled cases above. Evaluating both at the gas actually dissolved would fix it, and would change only $R_{so}$ and $B_o$ in PVT-MIX-6's formula.

@@ -156,6 +156,18 @@ completeness matters.
   roots only one backend finds. That is a comparison between the backends, not an
   independent search, so the verifier's reference stays as it is.
 
+### 2.10 A calibration fit can end in a false minimum
+
+**[after the plan]** *Found by feature 020, 2026-10-29*
+(`specs/features/020-profile-scale.md`, Measurements, Twins). On the twin study's
+well 1 (L-shaped), with `profile_scale` free, the fit stops at
+$z_\text{profile\_scale} = -1.00$, one of CAL-9's starts, against a truth of
+$+1.26$, with `h` 1.9 and `K_c` 0.8 from it. Along `profile_scale` alone the cost
+is smooth with its minimum near the truth, so the minimum is in the joint space,
+as feature 017's well 3 was for `roughness` before CAL-9's start search. It is
+behind three of the four fits that miss 017's twin criteria. Options: more starts,
+or starts along pairs of parameters, each measured under principle 7.
+
 ## 3. Testing
 
 - Done: a gas-lift test (§1.1, `8b05b18`); `tests/test_examples.py` runs each

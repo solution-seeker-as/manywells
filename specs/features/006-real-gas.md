@@ -1,6 +1,6 @@
 # 006 · Real gas
 
-*Feature spec, written after the fact in Step 7 of `plans/manywells-v2-plan.md` (2026-10-01): change 6 of `plans/develop_model_changes.md`. Status: draft for Bjarne's sign-off.*
+*Feature spec, written after the fact in Step 7 of `plans/manywells-v2-plan.md` (2026-10-01): change 6 of `plans/develop_model_changes.md`. Status: signed off by Bjarne on 2026-10-29.*
 
 ## Motivation
 
@@ -22,4 +22,4 @@ The PVT-GAS-1 row vectors in the `v1.0.0` configuration (exact now, without the 
 
 ## Open
 
-Nothing checks Papay's range ($p_{pr} < 6$, $T_{pr} > 1.05$); `specs/sampling.md` (SMP-43) can draw gases and pressures outside it.
+Nothing checks Papay's range ($p_{pr} < 6$, $T_{pr} > 1.05$); `specs/sampling.md` (SMP-43) can draw gases and pressures outside it. Since 016, `develop`'s default gas law is Dranchuk–Abou-Kassem, which covers them, and Papay's $Z$ is an option (`016-joule-thomson.md`).

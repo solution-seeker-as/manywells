@@ -1,6 +1,6 @@
 # 013 · Components, frozen inputs, configurations and the API
 
-*Feature spec for Step 7 of `plans/manywells-v2-plan.md` (2026-10-01), with change 13 of `plans/develop_model_changes.md`; implements `specs/architecture.md`. Status: draft for Bjarne's sign-off.*
+*Feature spec for Step 7 of `plans/manywells-v2-plan.md` (2026-10-01), with change 13 of `plans/develop_model_changes.md`; implements `specs/architecture.md`. Status: signed off by Bjarne on 2026-10-29.*
 
 ## Motivation
 
