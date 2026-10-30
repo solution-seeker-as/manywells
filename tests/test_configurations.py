@@ -6,20 +6,22 @@ terms of the CC BY-NC 4.0 International Public License.
 Created 01 October 2026
 Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
-Tests for manywells.configurations: the v1.0.0 configuration and the check that a well is in it.
+Tests for manywells.configurations: the v1.0.0 and v2.0.0 configurations and the check that a well is in one.
 """
 
 import dataclasses
 
 import pytest
 
-from manywells.choke import SimpsonChokeModel
-from manywells.configurations import V1, DEVELOP, check, differences, v1_fluid, v1_well
+from manywells.choke import BernoulliChokeModel, SimpsonChokeModel
+from manywells.configurations import V1, V2, DEVELOP, check, differences, v1_fluid, v1_well
 from manywells.geometry import WellGeometry
 from manywells.inflow import FixedFlowRate, ProductivityIndex, Vogel
 from manywells.pvt.black_oil import BlackOil
-from manywells.pvt.dead_oil import dead_oil_surface_tension
+from manywells.pvt.dead_oil import DeadOil, dead_oil_surface_tension
+from manywells.pvt.table import PVTTable
 from manywells.simulator import WellProperties
+from manywells.slip import SlipModel
 from manywells.thermal import ThermalModel
 
 PARAMS = dict(L=2500.0, D=0.1397, rho_l=880.0, R_s=420.0, cp_g=2225.0, cp_l=3100.0, f_D=0.035, h=25.0, f_g=0.2)
@@ -108,6 +110,54 @@ def test_check_rejects_an_injection_depth():
         diff = differences(dataclasses.replace(v1(), injection_md=md), V1)
         assert diff == [f'injection_md is {md}, not None: v1.0.0 injects the lift gas at the bottomhole (INF-5)']
     assert differences(dataclasses.replace(WellProperties(), injection_md=1000.0), DEVELOP) == []
+
+
+def v2():
+    """develop's defaults with a choke: in v2.0.0 as long as develop's defaults are v2.0.0's."""
+    return dataclasses.replace(WellProperties(), choke=SimpsonChokeModel(K_c=0.002))
+
+
+def test_develop_defaults_are_v2():
+    """develop's defaults are v2.0.0's on 2026-10-30. A default that changes takes develop out of v2.0.0, which this
+    test reports: change the test, and the develop column of specs/model/README.md's table."""
+    assert differences(v2(), V2) == []
+    assert len(differences(v2(), V1)) > 0 and len(differences(v1(), V2)) > 0
+
+
+def test_v2_takes_the_well_options():
+    """v2.0.0 leaves the well's inputs free: the trajectory, the inflow and choke models, a PVT table instead of the
+    black oil, an injection depth, the roughness and the profile scale (SLIP-18)."""
+    table = PVTTable.read_csv('tests/data/pvt/synthetic_eos_oil.csv')
+    for change in (
+        dict(geometry=WellGeometry.from_survey([0, 1000, 2500], [0, 1000, 1500], n_cells=20)),
+        dict(inflow=ProductivityIndex(k_l=0.5)),
+        dict(inflow=FixedFlowRate(10.0)),
+        dict(choke=BernoulliChokeModel(K_c=0.002, chk_profile='convex')),
+        dict(fluid=dataclasses.replace(WellProperties().fluid, pvt=table, gor=table.gor)),
+        dict(injection_md=1000.0),
+        dict(friction=dataclasses.replace(WellProperties().friction, roughness=1e-4)),
+        dict(slip=dataclasses.replace(WellProperties().slip, profile_scale=1.2)),
+    ):
+        assert differences(dataclasses.replace(v2(), **change), V2) == [], change
+
+
+def test_v2_rejects_other_options():
+    """v2.0.0 fixes the model's options and the slip law's constants, whatever develop's defaults become."""
+    wp, fluid = v2(), v2().fluid
+    for change, part in (
+        (
+            dict(fluid=dataclasses.replace(fluid, pvt=dataclasses.replace(fluid.pvt, gas_law='papay'))),
+            "gas_law is 'papay'",
+        ),
+        (dict(fluid=dataclasses.replace(fluid, pvt=DeadOil())), 'pvt is DeadOil'),
+        (dict(fluid=dataclasses.replace(fluid, surface_tension_model='liquid')), 'surface_tension_model'),
+        (dict(friction=dataclasses.replace(wp.friction, correlation='haaland')), 'not RoughnessFriction with Chen'),
+        (dict(thermal=dataclasses.replace(wp.thermal, joule_thomson=False)), 'joule_thomson is off'),
+        (dict(slip=SlipModel(regime_model='fitted')), "not v2.0.0's five regimes"),
+        (dict(slip=dataclasses.replace(wp.slip, C_0_slug=1.2)), "not v2.0.0's five regimes"),
+    ):
+        diff = differences(dataclasses.replace(wp, **change), V2)
+        assert len(diff) == 1 and part in diff[0], (change, diff)
 
 
 def test_unknown_configuration():

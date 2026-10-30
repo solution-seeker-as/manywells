@@ -10,32 +10,50 @@ Named configurations of the model (specs/model/README.md): a choice of one optio
 
 The options live in the component objects of WellProperties, so a configuration is not an object the simulator
 takes. 'v1.0.0' reproduces ManyWells v1.0.0, which generated the published datasets; it is the regression anchor
-that the verifier checks against reference roots computed from v1.0.0 (specs/verification.md). 'develop' is the
-dataclasses' defaults.
+that the verifier checks against reference roots computed from v1.0.0 (specs/verification.md). 'v2.0.0' is the model
+that v2's datasets are drawn in, pinned by the row vectors of specs/model/vectors/v2_rows.json. 'develop' is the
+dataclasses' defaults, which may move on without moving either.
 
     wp = v1_well(L=2000, D=0.1554, rho_l=850, R_s=450, cp_g=2225, cp_l=2000, f_D=0.03, h=20, f_g=0.1,
                  inflow=Vogel(w_l_max=50), choke=SimpsonChokeModel(K_c=0.002), n_cells=100)
     check(wp, 'v1.0.0')   # raises ValueError, listing every option that differs
 """
 
-from dataclasses import fields
+from dataclasses import fields, replace
 
 import numpy as np
 
 from manywells.choke import BernoulliChokeModel, SimpsonChokeModel
 from manywells.friction import FixedFrictionFactor, RoughnessFriction
 from manywells.geometry import WellGeometry
-from manywells.inflow import ProductivityIndex, Vogel
+from manywells.inflow import FixedFlowRate, ProductivityIndex, Vogel
+from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.dead_oil import DeadOil
 from manywells.pvt.fluid import FluidModel
+from manywells.pvt.table import PVTTable, PVTTableSet
 from manywells.simulator import WellProperties
 from manywells.slip import SlipModel
 from manywells.thermal import ThermalModel
 from manywells.units import P_REF, T_REF
 
 V1 = 'v1.0.0'
+V2 = 'v2.0.0'
 DEVELOP = 'develop'
-CONFIGURATIONS = (V1, DEVELOP)
+CONFIGURATIONS = (V1, V2, DEVELOP)
+
+# The v2.0.0 configuration's slip law: the five regimes after Hasan et al. with their constants, written out so that a
+# changed default does not change it. profile_scale (SLIP-18) is a well's parameter, which calibration fits.
+V2_SLIP = SlipModel(
+    regime_model='hasan',
+    C_0_annular=1.0,
+    C_0_slug=1.175,
+    C_0_bubbly=1.2,
+    v_inf_annular=0.0,
+    f_ms=0.02,
+    transition_width=0.02,
+    lambda_floor=0.1,
+)
+V2_THERMAL = ('frictional_heating', 'gravity_term', 'lift_gas_mixing', 'joule_thomson')  # on; any other term off
 
 
 def v1_fluid(rho_l, R_s, cp_g, cp_l, f_g) -> FluidModel:  # spec: SMP-40
@@ -150,6 +168,23 @@ def differences(wp: WellProperties, configuration: str) -> list:
             out.append(
                 f'injection_md is {wp.injection_md}, not None: v1.0.0 injects the lift gas at the bottomhole (INF-5)'
             )
+    elif configuration == V2:
+        if type(fluid.pvt) not in (BlackOil, PVTTable, PVTTableSet):
+            out.append(f'fluid: pvt is {type(fluid.pvt).__name__}, not BlackOil, PVTTable or PVTTableSet')
+        elif type(fluid.pvt) is BlackOil and fluid.pvt.gas_law != 'dak':
+            out.append(f"fluid: gas_law is {fluid.pvt.gas_law!r}, not 'dak'")
+        if fluid.surface_tension_model != 'oil':
+            out.append(f"fluid: surface_tension_model is {fluid.surface_tension_model!r}, not 'oil'")
+        if type(wp.friction) is not RoughnessFriction or wp.friction.correlation != 'chen':
+            out.append(f'friction: {wp.friction}, not RoughnessFriction with Chen (FRIC-4)')
+        out += [f'thermal: {k} is off' for k, v in thermal.items() if k in V2_THERMAL and not v]
+        out += [f'thermal: {k} is on, not in v2.0.0' for k, v in thermal.items() if k not in V2_THERMAL and v]
+        if replace(wp.slip, profile_scale=V2_SLIP.profile_scale) != V2_SLIP:
+            out.append(f"slip: not v2.0.0's five regimes with their constants ({wp.slip})")
+        if type(wp.inflow) not in (Vogel, ProductivityIndex, FixedFlowRate):
+            out.append(f'inflow: {type(wp.inflow).__name__}, not Vogel, ProductivityIndex or FixedFlowRate')
+        if type(wp.choke) not in (SimpsonChokeModel, BernoulliChokeModel):
+            out.append(f'choke: {type(wp.choke).__name__}, not SimpsonChokeModel or BernoulliChokeModel')
     else:
         default = FluidModel()
         out += _fluid_options(fluid, type(default.pvt), default.pvt.gas_law, default.surface_tension_model)
