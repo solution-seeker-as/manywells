@@ -114,11 +114,28 @@ Confirmed by Bjarne on 2026-09-30, from the measurements of `build/tolerance_sta
 
 **Reference.** `verification/data/distribution_reference.json` is built by `build/distribution_reference.py` from the published `sol-1` and `nsol-1` rows, with the rows on the trickle-root signature (PWH − PDC < 0.01 bar) removed. That removes 35,259 `sol-1` rows (3.53%) and 1,464 `nsol-1` rows (0.15%). The signature misses some trickle rows: on the case set it catches 47 of the 64 unstable roots and none of the 136 stable ones. For each of 21 features (CHK, PBH, PWH, PDC, TBH, TWH, the mass rates, the standard-volume rates and the inflow fractions), the reference stores the values at the percentiles 1..99 and the empirical CDF at those values, and it stores the Spearman correlation matrix and the number of rows of each well (`well_rows`, added 2026-10-01; the rebuild left every other value unchanged).
 
-**Check.** For each feature, the candidate's empirical CDF at the reference's percentile values may differ from the reference's by at most 0.02, and no rank correlation may differ by more than 0.05. Bjarne confirmed the bounds, and the removal of signature rows instead of re-solving them at the stable root, on 2026-09-30. Calibration on the published data: a 50k-row subsample of the reference gives gaps of 0.005 and 0.009, while the published `sol-1` rows with the trickle rows left in give 0.034 (TWH) and 0.092, so they fail.
+**Check.** For each feature, the candidate's empirical CDF at the reference's percentile values may differ from the reference's by at most 0.03, and no rank correlation may differ by more than 0.05. Bjarne confirmed the bounds, and the removal of signature rows instead of re-solving them at the stable root, on 2026-09-30, and raised the CDF bound from 0.02 to 0.03 on 2026-10-30 (Step L6 of `plans/model-lock-plan.md`; `plans/evidence/README.md`, Step L6).
+- **Why 0.03.** The gap of a regeneration at 5 samples per well is mostly a bias of the reference, not noise, and it does not fall with more samples. v1.0.0's generator drew again after a failed solve, so the published data lack the draws it failed (3.5%, at small openings and high wellhead pressures), which `develop` solves (Step 8's gap 5). The reference also keeps v1.0.0's trickle rows that the signature misses (1.3%).
+  - The Rust core's largest CDF gap over 11 seeds is 0.0218 ± 0.0030, at most 0.0285. The CasADi backend's over 3 seeds is 0.0180 ± 0.0015, at most 0.0191.
+  - The reference's own rows, drawn as a regeneration draws them, give 0.0085 ± 0.0021.
+  - At 0.02 the Rust core failed at 8 of 11 seeds.
+- **What it catches,** weighted:
+  - trickle roots spread over the wells, from about 2.5% of the rows: 0.024 to 0.026 and a rank-correlation gap of 0.044 to 0.053;
+  - a choke position drawn from U(0.1, 1): 0.037;
+  - lift gas drawn from U(0, 4): 0.034.
+
+  A doubled separator-pressure range (0.010) and gas fractions off by ±10% (0.004) pass.
+- **Calibration on the published data:**
+  - a 50k-row subsample of the reference gives gaps of 0.005 and 0.009;
+  - the published `sol-1` rows with every trickle row left in give 0.005 and 0.020 weighted, and pass: the weights blunt the check against v1.0.0's own trickle rows. Unweighted they give 0.034 (TWH) and 0.092.
 
 **Weights** (decided by Bjarne, 2026-10-01). The candidate's rows are weighted so that its wells mix as the reference's do: a row of well $k$ weighs $n_\text{ref}(k)/n_\text{cand}(k)$, its well's rows in the reference over its rows in the candidate, and a well with no reference rows (4 in `sol-1`) weighs nothing. The CDFs are weighted empirical CDFs, and the rank correlations the weighted Pearson correlations of weighted mid-ranks; with equal weights both are the unweighted ones exactly. The candidate needs the reference's well IDs in an `ID` column. Why: removing the signature rows left some wells with far fewer rows than others (131 `sol-1` wells lost rows, some nearly all of them), so the reference mixes the wells unequally, while a regeneration draws the same number of samples per well. A 50k-row random subsample keeps the reference's mix and passes; five rows per well do not: unweighted they give 0.035 and 0.086 on `sol-1`, so the check would fail v1.0.0's own stable rows drawn as a regeneration draws them; weighted they give 0.008 and 0.011 (`nsol-1`: 0.010 and 0.018 either way, since it lost few rows).
 
-**`develop` on it** (Step 7, 2026-10-01). `scripts/verification/regenerate_distributions.py` draws 5 samples per published `sol-1` well (SMP-18 to SMP-22, seeded by SMP-31), solves each at the stable root in the `v1.0.0` configuration from the well's operating point at u = 0.5, and drops failed solves and $w_m < 0.1$ kg/s as SMP-28 does; the published wells' filters are not applied again. 9,879 rows: PASS, largest CDF gap 0.0196 (PWH), largest rank-correlation gap 0.031; unweighted, 0.026 and 0.048. `nsol-1` has not been regenerated.
+**`develop` on it** (Step 7, 2026-10-01). `scripts/verification/regenerate_distributions.py` draws 5 samples per published `sol-1` well (SMP-18 to SMP-22, seeded by SMP-31), solves each at the stable root in the `v1.0.0` configuration from the well's operating point at u = 0.5, and drops failed solves and $w_m < 0.1$ kg/s as SMP-28 does; the published wells' filters are not applied again. 9,879 rows: PASS, largest CDF gap 0.0196 (PWH), largest rank-correlation gap 0.031; unweighted, 0.026 and 0.048. On 2026-10-30 (Step L6), at the same draws, both backends pass the bound of 0.03:
+- the CasADi backend: 9,880 rows, 0.0191 (PWH) and 0.030;
+- the Rust core: 9,920 rows, 0.0210 (PWH) and 0.035. It solves 50 small-opening draws that the CasADi search does not.
+
+`nsol-1` has not been regenerated.
 
 ## v1.0.0 on its own reference
 

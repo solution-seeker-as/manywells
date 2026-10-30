@@ -1,12 +1,17 @@
 # Lock the model for the new sampler — plan
 
-*Draft 2026-10-29. Owner: Bjarne Grimstad. Status: in progress; L1 to L4, L7 and L8 done; L5 in review; L6 measuring (Where we are, 2026-10-30).*
+*Draft 2026-10-29. Owner: Bjarne Grimstad. Status: L1 to L5, L7 and L8 done; L6 ruled on 2026-10-30 and in review. The plan is done when L6 is merged (Where we are, 2026-10-30).*
 
 ## Where we are (2026-10-30)
 
-- **Merged:** L2's validity refusals (PR #30), feature 021 (L1, PR #31), the independent checks and the two source fixes (L3, PR #32), and the records of L4, L7 and L8.
-- **L5** is on branch `v2-configuration` (worktree `.worktrees/v2-configuration`), for Bjarne's sign-off: the `v2.0.0` configuration, its check and its row vectors. Bjarne chose the name on 2026-10-30, and left the rule for changing a configuration to the v2.0.0 release (Out of scope).
-- **L6** is measuring on branch `distribution-margin` (worktree `.worktrees/distribution-margin`): `scripts/verification/regenerate_distributions.py` has a seed option, and the gaps at the default seed are measured in both backends. The noise across seeds and the options for the bound are next.
+- **Merged:**
+  - L2's validity refusals (PR #30);
+  - feature 021 (L1, PR #31);
+  - the independent checks and the two source fixes (L3, PR #32);
+  - the `v2.0.0` configuration, its check and its row vectors (L5, PR #34). Bjarne chose the name and left the rule for changing a configuration to the v2.0.0 release (Out of scope);
+  - the records of L4, L7 and L8.
+- **L6** is on branch `distribution-margin`, for review: the measurements, Bjarne's ruling of a CDF bound of 0.03, and the bound in the verifier and `specs/verification.md`.
+- **Next:** the sampler redesign (What the sampler redesign starts from, below).
 
 The next step towards v2 is a new sampling procedure: synthetic wells and data that are more realistic than v1's (`specs/goals.md`, limitation 5). The sampler draws the inputs of a model, so the model should not move under it. This plan brings `develop` to the point where the sampler can be implemented:
 
@@ -178,6 +183,8 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
   4. **Remove gap 5 at its source** (not asked for; after the plan). Store v1.0.0's replay of the default seed's draws as reference data, and check a candidate draw by draw against it. The comparison with the published data becomes the replay's own calibration (0.0063 and 0.0136). This is stricter than any bound (`develop` matches all 9,150 shared draws), but it is a new check, with new reference data.
 
   **Recommended: option 1.** With it, `specs/verification.md`'s calibration sentence should be replaced by the weighted numbers and the table of what the check catches, and gap 5 recorded as measured.
+
+  **Ruled 2026-10-30** (Bjarne): a CDF bound of 0.03, the correlation bound 0.05 as before, 5 samples per well. 0.03 passes every run measured (the Rust core's largest gap is 0.0285), and still catches a choke drawn from U(0.1, 1) (0.037), lift gas from U(0, 4) (0.034) and trickle roots from about 2.5% of the rows. `MAX_CDF_GAP` and `specs/verification.md` carry it.
 - **Work.**
   - Rerun both regenerations on today's `develop` (`scripts/verification/regenerate_distributions.py`, about 17 minutes on 24 cores).
   - Measure the gap's spread over repeated draws.

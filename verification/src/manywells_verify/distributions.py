@@ -60,7 +60,7 @@ FEATURES = (
 )
 PERCENTILES = np.arange(1, 100)
 TRICKLE_DP = 0.01  # bar: rows with PWH - PDC below this are on the trickle-root signature
-MAX_CDF_GAP = 0.02  # largest allowed empirical-CDF difference per feature
+MAX_CDF_GAP = 0.03  # largest allowed empirical-CDF difference per feature (Bjarne, 2026-10-30)
 MAX_CORR_GAP = 0.05  # largest allowed rank-correlation difference
 REFERENCE = Path(__file__).resolve().parents[2] / 'data' / 'distribution_reference.json'
 
