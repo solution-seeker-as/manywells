@@ -45,7 +45,7 @@ def test_well_properties_choke_default():
 
 
 def test_inputs_are_frozen():
-    """The simulator never writes to its inputs, and a typo in a field name fails (plans/improvements.md, 1.3)."""
+    """The simulator never writes to its inputs, and a typo in a field name fails (plans/backlog.md, 1.3)."""
     wp, bc = WellProperties(), BoundaryConditions()
     with pytest.raises(dataclasses.FrozenInstanceError):
         wp.choke = None

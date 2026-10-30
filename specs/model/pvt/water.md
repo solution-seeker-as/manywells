@@ -18,7 +18,7 @@ Water is incompressible, with density $\rho_w = 999.1$ kg/m³ and heat capacity 
 
 $$B_w = 1 - c_w\thinspace(p - p_\text{ref}), \qquad c_w = 4.5\cdot10^{-10}\ \text{Pa}^{-1},$$
 
-constant compressibility to first order: water shrinks under pressure, so $B_w < 1$ above $p_\text{ref}$. `develop` had $1 + c_w(p - p_\text{ref})$, the wrong sign; Step 7 fixed it (`plans/improvements.md` §1.2), in this first-order form (decided by Bjarne, 2026-10-01). Not used by the simulator: water stays incompressible (PVT-WAT-1).
+constant compressibility to first order: water shrinks under pressure, so $B_w < 1$ above $p_\text{ref}$. `develop` had $1 + c_w(p - p_\text{ref})$, the wrong sign; Step 7 fixed it (`plans/backlog.md` §1.2), in this first-order form (decided by Bjarne, 2026-10-01). Not used by the simulator: water stays incompressible (PVT-WAT-1).
 
 ### PVT-WAT-3 · Water viscosity
 

@@ -219,7 +219,7 @@ On the implemented feature:
   - 017's criteria stay as they are for fits with `profile_scale` free.
   - The criteria hold in 95%, 89%, 100%, 100% and 95% of the fits. `no_downhole` is below 95% by well 1's false minimum and by well 6.
   - No recovery tolerance on `profile_scale` itself, since on a third of the sampled wells the data do not determine it.
-  - Well 1's false minimum is a finding for `plans/improvements.md` (§2.10), as 017's start search was.
+  - Well 1's false minimum is a finding for `plans/backlog.md` (§2.10), as 017's start search was.
 
 ## Out of scope
 

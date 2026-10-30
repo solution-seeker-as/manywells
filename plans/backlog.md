@@ -1,4 +1,4 @@
-# Improvements and corrections
+# Backlog
 
 The backlog of code-level findings on `develop`: from a review in June 2026, the
 bug review of 2026-10-16 (at `396db80`), and items found since.
