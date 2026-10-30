@@ -1,13 +1,16 @@
 # Sampler redesign — plan
 
-*Draft 2026-10-30. Owner: Bjarne Grimstad. Status: R1 done, the Goals confirmed by Bjarne on 2026-10-30; R2 first pass done; R3 next.*
+*Draft 2026-10-30. Owner: Bjarne Grimstad. Status: R1 done, the Goals confirmed by Bjarne on 2026-10-30; R2 first pass done; a geometry pass of R2 and R3 in progress.*
 
 ## Where we are (2026-10-30)
 
 - **Done before this plan:** the model-lock plan (`plans/model-lock-plan.md`). `v2.0.0` is named and pinned, the correlations' validity ranges are recorded, the correlations are checked against independent sources, and both backends pass the `v1.0.0` configuration's regression checks.
 - **R1 done:** the interview was held on 2026-10-30, and Bjarne confirmed the Goals below the same day, with the changes they make to `specs/goals.md` and `specs/constitution.md` (Where the goals change the specs).
 - **R2, first pass done** on the branch `sampler-redesign` (`.worktrees/sampler-redesign`), 2026-10-30: `plans/sampler-redesign/sources-reservoir-fluids.md` and `sources-wells-production.md`. Their proposed working assumptions enter the decision log when R3 takes them. A second pass follows R3, for the gaps the design finds.
-- **Asked of Bjarne** (the Goals' geometry, "ask where unsure"): the public trajectory statistics show offshore production wells as mostly directional, not mostly vertical.
+- **Geometry, asked of Bjarne** (the Goals' "ask where unsure"). The public trajectory statistics show offshore production wells as mostly directional, not mostly vertical. Bjarne ruled on 2026-10-30:
+  - wells with a horizontal drain are modelled from the heel up, with an inclination limit of about 75° (Goals, The wells);
+  - the shares of the geometries wait for more examples of real geometries. A second R2 pass on geometry runs now, alongside R3 on the other draws.
+- **R3 in progress:** the well draws other than the geometry's shares.
 
 This plan replaces v1's sampling procedure for the v2 datasets (`specs/goals.md`, limitation 5: unrealistic sampled wells). It ends with:
 
@@ -55,6 +58,7 @@ The research looks for public support for each (Data and sources):
 - **Fluid types:** black oil, volatile oil, gas condensate, and wet or dry gas. The research sets the mix from public statistics, with a floor of about 10% of the wells per type.
 - **Labels.** Each well carries a label for its fluid type, for its well type (for example offshore with a dry tree, offshore subsea, onshore), for its geometry, and for every other categorical choice, such as its life stage, inflow, gas lift and choke profile.
 - **Geometry.** Mostly vertical wells. Some are slightly deviated. Some have a highly deviated bottom section, like an L-shaped well whose last section is not horizontal. Inclinations stay where stratified flow is not expected, since no option models it. The shares and inclinations are checked against public statistics of real wells' geometries, and an agent asks Bjarne where unsure. This answers `validity.md`'s decision 5: no horizontal sections, with the inclination limit set in R3.
+  - *Ruled 2026-10-30, after R2:* a well with a horizontal drain is modelled from the heel up, its bottom section at most about 75° from vertical (R3 sets the limit between 70° and 80°), and its inflow stands for the drain. The shares of the geometries wait for more examples of real geometries (Where we are).
 - **Gas wells** flow in through a new gas-rate inflow: a feature spec in R5, whose option `v2.0.0`'s check accepts before the release.
 - **PVT tables.** Volatile oils and gas condensates enter as tables from a NeqSim flash. The compositions are synthetic, drawn per fluid class from published ranges, plus published example fluids, each cited.
 - **New draws:**
