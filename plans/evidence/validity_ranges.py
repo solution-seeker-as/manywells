@@ -169,7 +169,6 @@ RANGES = [
     ('Beggs and Robinson, Table 1', 'p_psia', 'points', None, 5250 + 14.696),
     ('Beggs and Robinson, Table 1', 'T_F', 'points', 70, 295),
     ('Beggs and Robinson, Table 1', 'rs', 'points', 20 * CF_RS, 2070 * CF_RS),
-    ('BlackOil today', 'api', 'cases', 10, 40),
     ('Gas condensates and leaner (Whitson and Brule)', 'gor_scf', 'cases', None, 3000),
     ('Beyond gas condensates (Whitson and Brule)', 'gor_scf', 'cases', None, 150000),
     ('Valko and McCain, Table 2.1', 'gor', 'cases', 10 * CF_RS, 2216 * CF_RS),
