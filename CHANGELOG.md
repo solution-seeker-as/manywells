@@ -24,6 +24,10 @@ v2.0.0 may break any part of the API; every break is listed here with an old→n
 - The slip law's profile parameter can be scaled towards no slip, $C_0 \to 1 + \kappa_0(C_0 - 1)$ with $\kappa_0 \ge 0$ (`SlipModel.profile_scale`, SLIP-18), and calibrated: `profile_scale` is a free parameter, with a prior centred on $C_0 = 1.1$. A holdup error then has a parameter of its own, rather than being absorbed by friction. The default, 1, leaves the model as it was (`specs/features/020-profile-scale.md`).
 - `scipy` is a declared dependency; it was installed before as scikit-learn's.
 
+### Versions
+
+- Releases follow semantic versioning, with one version number for `manywells`, the Rust core and the verifier (`specs/constitution.md`, Versions; `AGENTS.md`, Releases). `develop` is `2.0.0.dev0`. It said `1.0.0` before, so a dataset generated on `develop` before this change records a `code_version` of `1.0.0`, followed by a commit after the tag, as in `1.0.0 (v1.0.0-223-ge44bb54)`, or alone where it ran without git.
+
 ### API breaks
 
 **Simulator.** The well's system is built once; the boundary conditions go to `simulate`, which returns a `Root`. The old form still works, with a `DeprecationWarning`, until v2.0.0.

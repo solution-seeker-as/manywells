@@ -139,6 +139,16 @@ The specs, docs and plans are read on GitHub and in VS Code. VS Code's KaTeX see
 - **Operators.** GitHub refuses `\operatorname` ("macros are not allowed"): write `\mathop{\mathrm{smax}}(x, y)`.
 - **Thin spaces.** TeX spaces a product itself. Add `\thinspace` only where the symbols read differently without it: a symbol before a bracket (`4h\thinspace(T - T_a)`, so that it does not read as a function), next to `\text{...}`, before a differential (`c_{pl}\thinspace dT`) and between digit groups (`101\thinspace 325`).
 
+## Releases
+
+The version (constitution, Versions) is set in `pyproject.toml`, `verification/pyproject.toml` and `rust/Cargo.toml`, where Cargo writes `2.0.0.dev0` as `2.0.0-dev.0`; `tests/test_versions.py` checks that the three agree. Run `uv lock` after changing it. A release raises:
+
+- **MAJOR** for a break of the public API (any name in `manywells` without a leading `_`) or a configuration removed;
+- **MINOR** for new API, a model option, a configuration or a changed default, whose change of results goes in the CHANGELOG;
+- **PATCH** for anything else.
+
+Between releases, `develop` carries the next version with `.dev0`; the change that first breaks the API raises it to the next major one. Tag a release with an annotated tag, `git tag -a vX.Y.Z`: `datasets.io.code_version` reads only annotated tags.
+
 ## Done means
 
 - The relevant tests pass. `uv run pytest -m "not slow"` is fine while iterating; run the full suite before finishing changes to the solver, the physics or the public API, since only the slow tests run a full solve and the examples.
@@ -160,6 +170,7 @@ Draft these when the task calls for it, but say that they need sign-off and don'
 - Any tolerance or bound, and any change to what a verifier check tests (`specs/verification.md`, `verification/src/manywells_verify/`).
 - The case set and all reference data (the table above), and every new entry in `verification/expected_failures.csv`.
 - Any change to a dataset schema. The published v1 datasets are never modified.
+- A release and its version number.
 - New solver machinery, with its measured gain.
 - A new model feature. Its feature spec (`specs/features/NNN-<name>.md`) is approved before the implementation starts.
 
