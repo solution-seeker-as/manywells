@@ -1,17 +1,96 @@
 # Sampler redesign — plan
 
-*Draft 2026-10-30. Owner: Bjarne Grimstad. Status: draft for Bjarne's review; no step started.*
+*Draft 2026-10-30. Owner: Bjarne Grimstad. Status: R1 done, the Goals confirmed by Bjarne on 2026-10-30; R2 in progress.*
 
 ## Where we are (2026-10-30)
 
 - **Done before this plan:** the model-lock plan (`plans/model-lock-plan.md`). `v2.0.0` is named and pinned, the correlations' validity ranges are recorded, the correlations are checked against independent sources, and both backends pass the `v1.0.0` configuration's regression checks.
-- **Next:** Step R1, the interview.
+- **R1 done:** the interview was held on 2026-10-30, and Bjarne confirmed the Goals below the same day, with the changes they make to `specs/goals.md` and `specs/constitution.md` (Where the goals change the specs).
+- **R2 in progress** on the branch `sampler-redesign` (`.worktrees/sampler-redesign`): two research agents, one on reservoirs and fluids, one on wells and production.
 
 This plan replaces v1's sampling procedure for the v2 datasets (`specs/goals.md`, limitation 5: unrealistic sampled wells). It ends with:
 
 - a new version of `specs/sampling.md`, signed off, that draws realistic wells and operating points in the `v2.0.0` configuration;
 - the sampler implemented and tested, with the `v1.0.0` configuration's draws unchanged;
 - the v2 datasets generated and checked, ready for the release.
+
+## Goals
+
+*Set by Bjarne in the interview of 2026-10-30 (R1). A goal he based on his private checks is recorded as his decision (`AGENTS.md`, Data and sources).*
+
+### Purpose
+
+- **Tasks.** The datasets serve four machine-learning tasks: virtual flow metering, surrogate models of the simulator, learning across wells, and production optimisation (choke and gas lift).
+- **Datasets.** Two: `manywells-sol-2` (stationary) and `manywells-nsol-2` (non-stationary), each of 10,000 wells with 200 samples per well.
+- **Realism and coverage.** A realistic core of wells, and a labelled tail that stretches over the model's valid range for coverage. The research proposes the tail's share; 10% to 20% is the starting point.
+
+### Acceptance criteria
+
+The checkpoint judges the draft by these. The datasets fail if they have:
+
+1. **implausible wells:** combinations of depth, pressure, temperature, fluid, completion and rates that a production engineer would reject;
+2. **wells that would not be produced in practice,** with a small margin so that marginally economic wells stay in;
+3. **missing real conditions:** conditions common in real wells that the draws do not reach, including those of Bjarne's goals below;
+4. **solver-shaped distributions:** distributions shaped by solver failures or filters rather than by the physics and the draws.
+
+### The yardstick
+
+- **Population.** Realistic means global statistics weighted towards offshore production wells, on platforms and subsea, that flow naturally or on gas lift, counted by wells.
+- **Sources.** Published statistics first. Where they are thin, distributions are fitted to public per-well data (paper appendices, regulators' open databases) outside the repo, and only the fitted parameters, the method and the citation are committed.
+- **Judging.** Bjarne judges realism at the checkpoint, from the report and the prototype's samples in the datasets' row format, on which he may run his private comparisons. There is no earlier hand-over.
+
+### Bjarne's goals for the population
+
+The research looks for public support for each (Data and sources):
+
+1. depleted reservoirs, with $p_r$ below hydrostatic;
+2. separator pressures below 10 bar;
+3. overpressured, high-rate wells;
+4. some weight at a fully open choke, kept modest: the choke's distribution stays close to uniform, because a wide span is more informative to machine-learning models;
+5. a lift-gas rate scaled to the well, and gas lift in gassier wells too.
+
+### The wells
+
+- **Fluid types:** black oil, volatile oil, gas condensate, and wet or dry gas. The research sets the mix from public statistics, with a floor of about 10% of the wells per type.
+- **Labels.** Each well carries a label for its fluid type, for its well type (for example offshore with a dry tree, offshore subsea, onshore), for its geometry, and for every other categorical choice, such as its life stage, inflow, gas lift and choke profile.
+- **Geometry.** Mostly vertical wells. Some are slightly deviated. Some have a highly deviated bottom section, like an L-shaped well whose last section is not horizontal. Inclinations stay where stratified flow is not expected, since no option models it. The shares and inclinations are checked against public statistics of real wells' geometries, and an agent asks Bjarne where unsure. This answers `validity.md`'s decision 5: no horizontal sections, with the inclination limit set in R3.
+- **Gas wells** flow in through a new gas-rate inflow: a feature spec in R5, whose option `v2.0.0`'s check accepts before the release.
+- **PVT tables.** Volatile oils and gas condensates enter as tables from a NeqSim flash. The compositions are synthetic, drawn per fluid class from published ranges, plus published example fluids, each cited.
+- **New draws:**
+  - the surface temperature, by well type;
+  - the lift gas's injection depth (feature 021) and temperature;
+  - the fluid constants: the water density from salinity, heat capacities by fluid type, and separator conditions.
+
+### Variation within a well
+
+- **`sol-2`.** The controls vary between a well's samples: the choke position (close to uniform, with modest weight at fully open), a lift-gas rate scaled to the well, and the separator pressure. The reservoir pressure and the fractions drift slightly, as in v1 (±2% and ±5%).
+- **Life stage.** Each `sol-2` well is drawn at a stage of its life, such as initial, depleted or watered out. Its $p_r$, water cut and gas–oil ratio are consistent with that stage, and the stage is a label.
+- **`nsol-2`.** The reservoir evolves with linked trends: pressure decline, water breakthrough, and a gas–oil ratio that rises below the bubble point. The controls follow a mixed history: piecewise constant with occasional changes, as in operations, plus regular test periods that sweep the choke and the lift gas. The controls stay open loop. A well's 200 samples span its life.
+
+### The datasets
+
+- **Roots.** The operating point only; unstable roots are not published.
+- **Layout.** Two tables, joined by a well ID. The wells table holds every well input and the labels. The samples table holds each sample's inputs and its operating point.
+- **Filters.** No unrealistic wells, and no wells that would not be produced in practice, with a small margin. Failed solves are logged, not silently redrawn.
+- **Working assumptions** (not asked): a train–test split by well, and a datasheet for each dataset (Gebru et al. 2021).
+
+### The process
+
+- **Git.** Agents commit to `sampler-redesign` as they go, push it, and open a draft PR at the checkpoint. Nothing merges into `develop` without Bjarne's sign-off.
+- **Machine.** At most half the machine: 12 cores and 32 GB at a time, two agents at once, and every run capped in memory and time. The full generation (R11) waits for Bjarne's go-ahead.
+- **Checkpoint.** A private report page with the plots and the decision log, linking the drafts on the branch and the draft PR.
+- **Sources in hand.** Besides the field statistics under Starting point, the local papers library now holds McCain (1990), *The properties of petroleum fluids*; Pedersen, Christensen and Shaikh (2015), *Phase behavior of petroleum reservoir fluids*; Tewari, Dandekar and Moreno Ortiz (2019), *Petroleum fluid phase behavior*; Economides, Hill and Ehlig-Economides (1994), *Petroleum production systems*; and Golan and Whitson (1991), *Well performance*.
+
+### Where the goals change the specs
+
+Drafted with these goals, for sign-off:
+
+- `specs/goals.md`:
+  - v2.0's model: the gas-rate inflow, the well types, and no horizontal sections;
+  - Compatibility: the two datasets, their size, and the operating point only;
+  - Decided elsewhere: the schema's choice of roots.
+- `specs/constitution.md`, Dataset reproducibility: a row and its well's row together carry the inputs to re-solve it.
+- `specs/model/validity.md`, decision 5: ruled in R3, with the evidence on geometries.
 
 ## How the work runs
 
@@ -151,16 +230,19 @@ The rules are in `AGENTS.md` (Data and sources) and the constitution (Convention
 - **Goal.** For each input the sampler will draw: the public evidence on its distribution and on how it depends on the other inputs, with the population each source describes.
 - **Work.**
   - Search the local papers library first, then open-access sources, then the textbooks Bjarne holds.
+  - Catalogue the books added to the library on 2026-10-30 (Goals, The process).
   - The topics:
-    - *depth and trajectory:* the depth of producing reservoirs; the shares of vertical, deviated and horizontal wells; kickoff depth, inclination and horizontal length;
+    - *well types:* the shares of offshore wells with dry trees, subsea wells and onshore wells that flow naturally or on gas lift, and how their surface conditions differ;
+    - *depth and trajectory:* the depth of producing reservoirs; the shares of vertical, deviated and highly deviated wells; kickoff depth, build-up and inclination profiles; the inclination at which stratified flow sets in for the rates in question;
     - *pressure:* the hydrostatic gradient and its spread, overpressure, depletion;
     - *temperature:* the geothermal gradient, surface and seabed temperatures;
-    - *fluids:* classification by gas–oil ratio, API gravity and gas gravity; the joint distribution of API gravity, gas–oil ratio, gas gravity and bubble point; water cut; formation-water density; heat capacities;
+    - *fluids:* classification by gas–oil ratio, API gravity and gas gravity; the joint distribution of API gravity, gas–oil ratio, gas gravity and bubble point; compositions by fluid class, for the synthetic compositions; water cut; formation-water salinity and density; heat capacities;
     - *productivity:* oil wells' productivity index by well type, gas wells' deliverability;
     - *completion:* tubing size against rate (erosional velocity, liquid loading), roughness;
     - *surface:* choke sizes, wellhead and separator pressures, heat-transfer coefficients;
     - *gas lift:* which wells are lifted, lift-gas rates, injection depth;
-    - *a well's life:* the decline of rate and pressure, the trends of water cut and gas–oil ratio.
+    - *a well's life:* the decline of rate and pressure, the trends of water cut and gas–oil ratio;
+    - *economic limits:* the lowest rates at which wells are still produced, by well type, for the filter on wells that would not be produced.
   - For each number, record the source and its page, table or figure. Record the population too: region, onshore or offshore, era, fluid type, and whether it counts wells, fields, reservoirs or volumes. A share by volume needs reweighting before it can become a distribution per well.
   - Flag weak evidence: a single study, a web page, a narrow sample.
   - Keep the resource list: sources that matter but could not be reached.
@@ -299,12 +381,13 @@ R2 feeds the design steps, and its second pass follows R3. R3 to R5 and R7 can r
 
 ## Open decisions
 
-These are the interview's questions (R1). Those already open elsewhere:
+The interview settled the questions that were open elsewhere: the well types, horizontal sections in principle, the gas-rate inflow, and the schema's choice of roots (Goals). Still open, for the autonomous work:
 
-- the well types and their mix, and horizontal sections (`validity.md`, decision 5);
-- a gas-rate inflow, and whether `v2.0.0`'s check widens (`specs/goals.md`);
-- the QTOT filter's standard deviation (§1.11, SMP-28);
-- the v2 dataset schema: every root or the operating point only (`specs/goals.md`, Decided elsewhere).
+- the mix of fluid types and well types (R2, R3);
+- the inclination limit that keeps stratified flow out (R3; `validity.md`, decision 5);
+- the gas-rate inflow's form, backpressure or Forchheimer (R5);
+- the filter on wells that would not be produced, and with it the QTOT filter's standard deviation (§1.11, SMP-28), which lapses if that filter goes (R4);
+- the share of the coverage tail (R3).
 
 ## Out of scope
 
