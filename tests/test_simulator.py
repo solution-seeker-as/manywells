@@ -25,6 +25,7 @@ from manywells.pvt.dead_oil import DeadOil
 from manywells.pvt.fluid import FluidModel
 from manywells.slip import SlipModel
 from manywells.solution import Root, RootSet
+from manywells.thermal import ThermalModel
 
 
 def test_well_properties_defaults():
@@ -44,7 +45,7 @@ def test_well_properties_choke_default():
 
 
 def test_inputs_are_frozen():
-    """The simulator never writes to its inputs, and a typo in a field name fails (plans/improvements.md, 1.3)."""
+    """The simulator never writes to its inputs, and a typo in a field name fails (plans/backlog.md, 1.3)."""
     wp, bc = WellProperties(), BoundaryConditions()
     with pytest.raises(dataclasses.FrozenInstanceError):
         wp.choke = None
@@ -162,6 +163,59 @@ def test_row_order():
     assert ids[:6] == ('INF-6', 'INF-7', 'THM-5') + closures
     assert ids[6:13] == ('DISC-7', 'DISC-8', 'DISC-9', 'DISC-10') + closures
     assert ids[13:] == ('DISC-7', 'DISC-8', 'DISC-9', 'DISC-10', 'CHK-1') + closures
+
+
+def test_injection_md_is_validated():
+    """INF-9: a measured depth from 0 to the well's, or None for the bottomhole."""
+    geo = WellGeometry.vertical(2000.0, 10)
+    for md in (0, 0.0, 1234.5, 2000.0, np.float64(500.0)):
+        wp = WellProperties(geometry=geo, injection_md=md)
+        assert type(wp.injection_md) is float and wp.injection_md == md
+    assert WellProperties(geometry=geo).injection_md is None
+    for md in (-1.0, 2000.1, np.nan, np.inf, True, '500'):
+        with pytest.raises(ValueError, match='injection_md'):
+            WellProperties(geometry=geo, injection_md=md)
+
+
+def test_injection_point():
+    """INF-9: the grid point nearest the injection depth, the deeper of two equally near; 0 without one."""
+    geo = WellGeometry.vertical(2000.0, 10)  # Points every 200 m, point 0 at 2000 m
+    assert WellProperties(geometry=geo).injection_point == 0
+    assert [
+        WellProperties(geometry=geo, injection_md=md).injection_point
+        for md in (2000.0, 1900.0, 1899.0, 1000.0, 1100.0, 0.0)
+    ] == [0, 0, 1, 5, 4, 10]
+
+
+def test_row_order_with_an_injection_point():
+    """DISC-11 with the lift gas injected above the bottomhole: point 0's temperature row is THM-3, as no lift gas
+    enters there, and the injection cell's energy row DISC-12; with the mixing off, both are as without it."""
+    closures = ('SLIP-1', 'PVT-GAS-11', 'PVT-MIX-6')
+    wp = WellProperties(geometry=WellGeometry.vertical(300, 3, D=0.1), injection_md=100.0)  # Point 2
+    ids = SSDFSimulator(wp).system.row_ids
+    assert ids[:6] == ('INF-6', 'INF-7', 'THM-3') + closures
+    assert ids[6:13] == ('DISC-7', 'DISC-8', 'DISC-9', 'DISC-10') + closures
+    assert ids[13:20] == ('DISC-7', 'DISC-8', 'DISC-9', 'DISC-12') + closures
+    assert ids[20:] == ('DISC-7', 'DISC-8', 'DISC-9', 'DISC-10', 'CHK-1') + closures
+    off = dataclasses.replace(wp, thermal=ThermalModel(lift_gas_mixing=False))
+    assert 'DISC-12' not in SSDFSimulator(off).system.row_ids
+    at_bottom = dataclasses.replace(wp, injection_md=300.0)
+    without = dataclasses.replace(wp, injection_md=None)
+    assert SSDFSimulator(at_bottom).system.row_ids == SSDFSimulator(without).system.row_ids
+
+
+def test_the_lift_gas_temperature_defaults_to_the_ambient_temperature_at_the_injection_point():
+    """THM-9: T_lg = None is T_a at point k (THM-4), which at the bottomhole is T_r exactly; the solver's temperature
+    bounds take it in."""
+    geo = WellGeometry.vertical(2000.0, 10)
+    bc = BoundaryConditions(T_r=370.0, T_s=280.0)
+    for md, T_lg in ((None, 370.0), (2000.0, 370.0), (1000.0, 325.0), (0.0, 280.0)):
+        system = SSDFSimulator(WellProperties(geometry=geo, injection_md=md)).system
+        assert system.params(bc)[4] == pytest.approx(T_lg, abs=1e-12)
+    system = SSDFSimulator(WellProperties(geometry=geo, injection_md=1000.0)).system
+    assert system.params(dataclasses.replace(bc, T_lg=300.0))[4] == 300.0
+    lb, ub = system.bounds(dataclasses.replace(bc, T_lg=500.0))
+    assert ub[6] == 500.0 + 50.0
 
 
 def test_deprecated_two_argument_constructor():

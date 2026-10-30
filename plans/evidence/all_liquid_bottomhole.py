@@ -6,7 +6,7 @@ terms of the CC BY-NC 4.0 International Public License.
 Created 28 October 2026
 Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
-The CasADi search missed operating points where the bottomhole is all liquid (issue #10; plans/improvements.md §1.7;
+The CasADi search missed operating points where the bottomhole is all liquid (issue #10; plans/backlog.md §1.7;
 found with the prototype of feature 018, PVT tables), and the fix: the march retries point 0 from the no-slip void
 fraction where it fails (solvers/march.py, no_slip_guess and Marcher._bottom_point).
 

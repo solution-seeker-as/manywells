@@ -1043,7 +1043,7 @@ wheels = [
 
 [[package]]
 name = "manywells"
-version = "1.0.0"
+version = "2.0.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "casadi" },
@@ -1090,7 +1090,7 @@ lint = [{ name = "ruff", specifier = "==0.17.1" }]
 
 [[package]]
 name = "manywells-verify"
-version = "0.1.0"
+version = "2.0.0.dev0"
 source = { editable = "verification" }
 dependencies = [
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },

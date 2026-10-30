@@ -52,7 +52,7 @@ The row vectors of `specs/model/discretization.md` measure the gap. `tests/test_
 
 ### 5. Unified fluid model
 
-- **What.** `pvt/fluid.py`: `FluidModel` takes densities at standard conditions ($\rho_o$, $\rho_{g,\text{sc}}$, $\rho_w$), a gas–oil ratio and a water–liquid ratio, and derives $f_g$, $R_s$, $c_{pl}$ and $\rho_l$; `oil_model` and `ideal_gas` choose the options. The gas law row is now $\rho_g - c_\text{bar}p/(Z R_s T)$, equivalent to PVT-GAS-1 (the vectors convert it exactly). `p_sep` and `p_bubble` are in Pa while every method takes bar (`improvements.md` §1.6).
+- **What.** `pvt/fluid.py`: `FluidModel` takes densities at standard conditions ($\rho_o$, $\rho_{g,\text{sc}}$, $\rho_w$), a gas–oil ratio and a water–liquid ratio, and derives $f_g$, $R_s$, $c_{pl}$ and $\rho_l$; `oil_model` and `ideal_gas` choose the options. The gas law row is now $\rho_g - c_\text{bar}p/(Z R_s T)$, equivalent to PVT-GAS-1 (the vectors convert it exactly). `p_sep` and `p_bubble` are in Pa while every method takes bar (`backlog.md` §1.6).
 - **Off.** The mapping from v1's parameters is in `specs/sampling.md` (SMP-40).
 - **Commits.** `539fbd8`, `64bad4e`, `a77d02f`, `13c2ab5`, `28c5ca7`, `bbaafad`.
 
@@ -64,20 +64,20 @@ The row vectors of `specs/model/discretization.md` measure the gap. `tests/test_
 
 ### 7. Black oil
 
-- **What.** `pvt/black_oil.py`: Vazquez–Beggs $R_{so}$ and $B_o$ with the separator gas-gravity correction, API gravity 10–40 enforced; an optional bubble-point cap by smooth min; live-oil density $(\rho_o + R_{so}\rho_{g,\text{sc}})/B_o$; the liquid density mixes it with water by the water–liquid ratio at standard conditions, not the in-situ one. `water_fvf` has the wrong sign and is unused (`improvements.md` §1.2); fix it before specifying it.
+- **What.** `pvt/black_oil.py`: Vazquez–Beggs $R_{so}$ and $B_o$ with the separator gas-gravity correction, API gravity 10–40 enforced; an optional bubble-point cap by smooth min; live-oil density $(\rho_o + R_{so}\rho_{g,\text{sc}})/B_o$; the liquid density mixes it with water by the water–liquid ratio at standard conditions, not the in-situ one. `water_fvf` has the wrong sign and is unused (`backlog.md` §1.2); fix it before specifying it.
 - **Off.** `oil_model='dead_oil'`; with `wlr = 0` and `rho_o = rho_l`, PVT-MIX-1 rows match exactly.
 - **Commits.** `5708460`, `1e80f3a`.
 
 ### 8. Gas dissolving into oil
 
-- **What.** `SSDFSimulator._gas_and_liquid_flow_rate`: dissolved gas $w_d = \mathop{\mathrm{smin}}(R_{so}\rho_{g,\text{sc}}/\rho_o \cdot w_o,\ w_g)$, gas rate $\mathop{\mathrm{smax}}(w_g + w_{lg} - w_d,\ 0)$, liquid rate $w_l + w_d$. The mass rows become $A\alpha\rho_g v_g = w_g(p_i, T_i)$ and the liquid equivalent at every point, replacing the flux continuity of DISC-2 and DISC-3. The liquid inflow rate reaches those rows through hidden state, `self._w_l_inflow` (`improvements.md` §2.4).
+- **What.** `SSDFSimulator._gas_and_liquid_flow_rate`: dissolved gas $w_d = \mathop{\mathrm{smin}}(R_{so}\rho_{g,\text{sc}}/\rho_o \cdot w_o,\ w_g)$, gas rate $\mathop{\mathrm{smax}}(w_g + w_{lg} - w_d,\ 0)$, liquid rate $w_l + w_d$. The mass rows become $A\alpha\rho_g v_g = w_g(p_i, T_i)$ and the liquid equivalent at every point, replacing the flux continuity of DISC-2 and DISC-3. The liquid inflow rate reaches those rows through hidden state, `self._w_l_inflow` (`backlog.md` §2.4).
 - **Gap.** With dead oil ($R_{so} = 0$) the smooth min is $-\epsilon/(4 w_g) \approx -2.5\cdot10^{-7}/w_g$ kg/s, not 0, and with $w_g = 0$ it is $-5\cdot10^{-4}$ kg/s, which makes a gas rate of $8\cdot10^{-4}$ kg/s out of nothing. Measured: INF-6 rows differ by up to $2.3\cdot10^{-7}$ relative and INF-7 by $1.6\cdot10^{-8}$ (W1). The v1-compatibility configuration needs $\Gamma = 0$ exactly (BAL-3), so the path must be bypassed, not only fed $R_{so} = 0$. The mass rows' form also differs, so DISC-2 and DISC-3 vectors are skipped until the configuration exists.
 - **Commits.** `5708460`, `64bad4e`, `28c5ca7`.
 
 ### 9. Frictional heating and a gravity term in the energy balance
 
 - **What.** `_differential_equations`: $dT = dT_\text{heat} - dT_\text{fric} + dT_\text{grav}$ with $dT_\text{fric} = \Delta\text{MD}\thinspace(1-\alpha)v_l F/\text{cp\_flux}$ and $dT_\text{grav} = \Delta\text{TVD}\thinspace g\thinspace(\text{mass\_flux} - \text{liq\_flux}\thinspace\rho_m)/\text{cp\_flux}$. Derivation in `docs/thermal_energy_modeling.md`.
-- **Gap.** Always on; no switch. Measured: DISC-5 rows differ by up to 0.62 K per cell (W2). The v1-compatibility configuration needs a switch (plan, Step 7 item 2). Pin the terms with test vectors in `thermal.md` (`improvements.md` §3).
+- **Gap.** Always on; no switch. Measured: DISC-5 rows differ by up to 0.62 K per cell (W2). The v1-compatibility configuration needs a switch (plan, Step 7 item 2). Pin the terms with test vectors in `thermal.md` (`backlog.md` §3).
 - **Commits.** `82344c6`, `be80b70` (the TVD in the gravity term).
 
 ### 10. Lift-gas temperature
@@ -98,7 +98,7 @@ The row vectors of `specs/model/discretization.md` measure the gap. `tests/test_
 
 ### 13. Other
 
-- Defaults: black oil, real gas, roughness-based friction and productivity-index inflow. The default Bernoulli choke with $K_c = 0.1A$ is set in `SSDFSimulator.__init__`, which writes it into the caller's `WellProperties` (`improvements.md` §2.5).
+- Defaults: black oil, real gas, roughness-based friction and productivity-index inflow. The default Bernoulli choke with $K_c = 0.1A$ is set in `SSDFSimulator.__init__`, which writes it into the caller's `WellProperties` (`backlog.md` §2.5).
 - Validation: $T_r$, $T_s$, $T_{lg} > 0$; roughness $> 0$; $f_D > 0$ when set; the geometry checks of `WellGeometry`.
 - Units: `CF_PRES` became `CF_BAR`, with the same value, and the constants moved to `units.py`.
 - Output: `solution_as_df` adds `md` and `tvd` columns, drops `z`, and uses the inclination in the regime label.

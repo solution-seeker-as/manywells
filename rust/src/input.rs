@@ -18,7 +18,7 @@ use crate::pvt::oil::API_RANGE;
 use crate::slip::Slip;
 use crate::thermal::Thermal;
 
-/// A well: one part per model part, as WellProperties
+/// A well: one part per model part, as WellProperties, and the grid point at which the lift gas enters
 #[derive(Clone, Debug)]
 pub struct WellSpec {
     pub geometry: Geometry,
@@ -28,10 +28,16 @@ pub struct WellSpec {
     pub slip: Slip,
     pub inflow: Inflow,
     pub choke: Choke,
+    /// The injection point k of INF-9, 0 (the bottomhole) to N: WellProperties.injection_point
+    pub injection_point: usize,
 }
 
 impl WellSpec {
     pub fn check(&self) -> Result<(), String> {
+        if self.injection_point > self.n_cells() {
+            return Err(format!("the injection point must be a grid point, 0 to {}, got {}", self.n_cells(),
+                               self.injection_point));
+        }
         if !(self.fluid.f_g > 0.0 && self.fluid.f_g < 1.0) {
             return Err("the gas mass fraction must be in (0, 1)".into());
         }
@@ -76,9 +82,9 @@ pub struct OperatingPoint {
     pub p_s: f64,  // Separator pressure (bar)
     pub t_r: f64,  // Reservoir temperature (K)
     pub t_s: f64,  // Ambient temperature at the wellhead (K)
-    pub t_lg: f64, // Lift gas temperature (K) at the bottomhole
+    pub t_lg: f64, // Lift gas temperature (K) at the injection point
     pub u: f64,    // Choke position in [0, 1]
-    pub w_lg: f64, // Lift gas rate (kg/s), injected at the bottomhole
+    pub w_lg: f64, // Lift gas rate (kg/s), injected at the well's injection point (INF-9)
 }
 
 impl OperatingPoint {
@@ -125,6 +131,7 @@ pub mod test_wells {
             slip: Slip::fitted(),
             inflow: Inflow::Vogel { w_l_max: 80.0 },
             choke: Choke::new(ChokeModel::Simpson, 0.0015201224372924933, Profile::Sigmoid),
+            injection_point: 0,
         };
         (spec, OperatingPoint { p_r: 249.2, p_s: 30.0, t_r: 363.15, t_s: 277.15, t_lg: 363.15, u: 0.6, w_lg: 0.8 })
     }
@@ -138,6 +145,7 @@ pub mod test_wells {
             slip: Slip::fitted(),
             inflow: Inflow::ProductivityIndex { k_l: 0.6 },
             choke: Choke::new(ChokeModel::Bernoulli, 0.001824146924750992, Profile::Linear),
+            injection_point: 0,
         };
         (spec, OperatingPoint { p_r: 150.0, p_s: 20.0, t_r: 345.0, t_s: 277.15, t_lg: 345.0, u: 0.8, w_lg: 0.0 })
     }
@@ -307,6 +315,48 @@ pub mod test_wells {
         (spec, op)
     }
 
+    /// The grid point at a share of the measured depth from the surface, on a uniform grid of n cells: a quarter of
+    /// the cells above the bottomhole at three quarters of the depth
+    fn point_at(depth_share: f64, n_cells: usize) -> usize {
+        ((1.0 - depth_share) * n_cells as f64).round() as usize
+    }
+
+    /// W1 with develop's model and its lift gas (0.8 kg/s) injected at 300 K, mixing in at a valve halfway down (021)
+    pub fn w1_valve(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let (mut spec, op) = w1_cold_lift_gas(n_cells);
+        spec.injection_point = point_at(0.5, n_cells);
+        (spec, op)
+    }
+
+    /// W1 in the v1.0.0 configuration but for its lift gas (0.8 kg/s), injected at 420 K, hotter than the reservoir,
+    /// at a valve at three quarters of the depth, with the mixing on: the energy row is linear in T but at the
+    /// injection point (021)
+    pub fn w1_hot_valve(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let (mut spec, mut op) = w1(n_cells);
+        spec.thermal.lift_gas_mixing = true;
+        spec.injection_point = point_at(0.75, n_cells);
+        op.t_lg = 420.0;
+        (spec, op)
+    }
+
+    /// W2 L-shaped at its bubble point with Haaland friction, a real gas by DAK, the energy terms and Joule-Thomson
+    /// cooling, with 1.5 kg/s of lift gas at 290 K at a valve at three quarters of the depth, and the mixing on (021)
+    pub fn w2_valve(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let (mut spec, mut op) = w2_joule_thomson(n_cells);
+        spec.thermal.lift_gas_mixing = true;
+        spec.injection_point = point_at(0.75, n_cells);
+        (op.w_lg, op.t_lg) = (1.5, 290.0);
+        (spec, op)
+    }
+
+    /// W1 in the v1.0.0 configuration, with its lift gas at a valve halfway down and the mixing off: cell k's energy
+    /// row is DISC-10 (021)
+    pub fn w1_valve_no_mixing(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let (mut spec, op) = w1(n_cells);
+        spec.injection_point = point_at(0.5, n_cells);
+        (spec, op)
+    }
+
     /// Every test well
     pub fn all(n_cells: usize) -> Vec<(&'static str, WellSpec, OperatingPoint)> {
         let named = |name, (spec, op)| (name, spec, op);
@@ -319,7 +369,9 @@ pub mod test_wells {
              named("w2_joule_thomson", w2_joule_thomson(n_cells)), named("w1_five_regimes", w1_five_regimes(n_cells)),
              named("w2_five_regimes", w2_five_regimes(n_cells)), named("w1_table", w1_table(n_cells)),
              named("w2_table_one_temperature", w2_table_one_temperature(n_cells)),
-             named("w1_profile_scale", w1_profile_scale(n_cells)), named("w2_profile_scale", w2_profile_scale(n_cells))]
+             named("w1_profile_scale", w1_profile_scale(n_cells)), named("w2_profile_scale", w2_profile_scale(n_cells)),
+             named("w1_valve", w1_valve(n_cells)), named("w1_hot_valve", w1_hot_valve(n_cells)),
+             named("w2_valve", w2_valve(n_cells)), named("w1_valve_no_mixing", w1_valve_no_mixing(n_cells))]
     }
 }
 

@@ -108,12 +108,12 @@ def sutton_pseudo_critical(sg_gas):  # spec: PVT-GAS-5
     Pseudo-critical pressure and temperature from gas specific gravity.
 
     Reference: Sutton, R.P., "Compressibility Factors for High-Molecular-Weight
-    Reservoir Gases", SPE-14265, 1985.
+    Reservoir Gases", SPE-14265, 1985, Eqs. (14) and (15), with the coefficients as printed.
 
     :param sg_gas: Gas specific gravity relative to air (dimensionless)
     :return: (ppc, tpc) — pseudo-critical pressure (Pa) and temperature (K)
     """
-    ppc_psia = 756.8 - 131.07 * sg_gas - 3.6 * sg_gas**2
+    ppc_psia = 756.8 - 131.0 * sg_gas - 3.6 * sg_gas**2
     tpc_R = 169.2 + 349.5 * sg_gas - 74.0 * sg_gas**2
     return ppc_psia * CF_PSI, tpc_R / 1.8
 

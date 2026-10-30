@@ -7,7 +7,7 @@ where = ["src"]
 
 [project]
 name = "manywells-verify"
-version = "0.1.0"
+version = "2.0.0.dev0"
 description = "Verifier for ManyWells solutions against reference roots computed from ManyWells v1.0.0"
 license = "CC-BY-NC-4.0"
 requires-python = ">=3.11"

@@ -43,7 +43,7 @@ On top of them:
 
 - `discretization.py`: `build_system(wp)`, the rows of every point (DISC-11), built once per well with the operating point as parameters.
 - `solvers/`: the Ipopt adapter, the initial-guess march, and the multi-start root search with the stability label. `solution.py`: `Root`, `RootSet` and the operating point (SOL-4 to SOL-6).
-- `configurations.py`: the `v1.0.0` configuration (`v1_well`) and the check that a well is in a configuration.
+- `configurations.py`: the `v1.0.0` configuration (`v1_well`), the `v2.0.0` configuration, and the check that a well is in a configuration.
 - `sampling/`, `datasets/`: the ported dataset sampler (`specs/sampling.md`) and the rows and files of a dataset.
 - `calibration/`: calibrating a well to its production data (`specs/calibration.md`): the data and its noise (`data.py`), the free parameters and their priors (`parameters.py`), the residuals of each row's operating point (`objective.py`), the MAP fit (`fit.py`), and synthetic data at known parameters (`synthetic.py`). It sits on top of the simulator and works with either backend. Closed loop is out of v2; `closed_loop/` was retired (it remains in v1.0.0).
 
@@ -109,6 +109,7 @@ All reference data is built from v1.0.0, which is frozen. A rebuild reproduces t
 | `verification/expected_failures.csv` | `verification/build/expected_failures.py` | develop | after those stages |
 | `verification/data/distribution_reference.json` | `verification/build/distribution_reference.py --data-dir <dir>` | develop | its docstring; needs the published dataset rows |
 | test vectors in `specs/model/` and `specs/model/vectors/v1_rows.json` | `specs/tools/make_v1_vectors.py` | v1.0.0 | `specs/model/README.md`, Test vectors |
+| `specs/model/vectors/v2_rows.json`, the `v2.0.0` configuration's row vectors | `specs/tools/make_v2_vectors.py` | develop | `specs/model/README.md`, Test vectors |
 | `verification/tests/data/fixtures.npz` | `verification/build/make_test_fixtures.py` | v1.0.0 | `verification/build/README.md` |
 | `tests/data/pvt/vazquez_beggs.csv`, `synthetic_eos_oil_360K.csv` | `specs/tools/make_pvt_tables.py` | develop | `tests/data/pvt/README.md` |
 | `tests/data/pvt/synthetic_eos_oil.csv`, `synthetic_eos_oil_gor.csv` | `plans/evidence/pvt_table_eos.py` | NeqSim 3.4.0 and Java | its docstring |
@@ -139,6 +140,16 @@ The specs, docs and plans are read on GitHub and in VS Code. VS Code's KaTeX see
 - **Operators.** GitHub refuses `\operatorname` ("macros are not allowed"): write `\mathop{\mathrm{smax}}(x, y)`.
 - **Thin spaces.** TeX spaces a product itself. Add `\thinspace` only where the symbols read differently without it: a symbol before a bracket (`4h\thinspace(T - T_a)`, so that it does not read as a function), next to `\text{...}`, before a differential (`c_{pl}\thinspace dT`) and between digit groups (`101\thinspace 325`).
 
+## Releases
+
+The version (constitution, Versions) is set in `pyproject.toml`, `verification/pyproject.toml` and `rust/Cargo.toml`, where Cargo writes `2.0.0.dev0` as `2.0.0-dev.0`; `tests/test_versions.py` checks that the three agree. Run `uv lock` after changing it. A release raises:
+
+- **MAJOR** for a break of the public API (any name in `manywells` without a leading `_`) or a configuration removed;
+- **MINOR** for new API, a model option, a configuration or a changed default, whose change of results goes in the CHANGELOG;
+- **PATCH** for anything else.
+
+Between releases, `develop` carries the next version with `.dev0`; the change that first breaks the API raises it to the next major one. Tag a release with an annotated tag, `git tag -a vX.Y.Z`: `datasets.io.code_version` reads only annotated tags.
+
 ## Done means
 
 - The relevant tests pass. `uv run pytest -m "not slow"` is fine while iterating; run the full suite before finishing changes to the solver, the physics or the public API, since only the slow tests run a full solve and the examples.
@@ -151,6 +162,7 @@ The specs, docs and plans are read on GitHub and in VS Code. VS Code's KaTeX see
 - Your summary or PR description names every change that needs sign-off (next section).
 - `uv run ruff check` and `uv run ruff format --check` pass; the CI job `lint` runs both. The pre-commit hook fixes what it can and stops the commit, so stage its changes and commit again.
 - Commits use a short imperative subject line, matching the existing history.
+- Before pushing, merge `origin/develop` and rerun `uv run pytest -m "not slow"`: work merged meanwhile is what CI has caught that local runs had not. Don't wait for CI after pushing: it runs the full suite on every supported Python version and the verifier, which is slow. Carry on, and check the result (`gh pr checks`) before you finish; if it is still running, say so. Fix a red check with a follow-up commit, and never merge into `develop` or `main` on red.
 
 ## Needs Bjarne's sign-off
 
@@ -160,6 +172,7 @@ Draft these when the task calls for it, but say that they need sign-off and don'
 - Any tolerance or bound, and any change to what a verifier check tests (`specs/verification.md`, `verification/src/manywells_verify/`).
 - The case set and all reference data (the table above), and every new entry in `verification/expected_failures.csv`.
 - Any change to a dataset schema. The published v1 datasets are never modified.
+- A release and its version number.
 - New solver machinery, with its measured gain.
 - A new model feature. Its feature spec (`specs/features/NNN-<name>.md`) is approved before the implementation starts.
 
@@ -177,5 +190,5 @@ Real-well data is confidential. Some real-well data for validation resides in th
 - `docs/testing.md` for the test layout and pytest configuration.
 - `docs/datasets.md` when touching data generation, for the dataset feature definitions and the relations between them.
 - `docs/simulate.md` and `scripts/sim_examples/` for how a simulation is set up end to end.
-- `plans/manywells-v2-plan.md` for the current plan of work (the v2 foundation) and `plans/improvements.md` for the backlog of code-level findings, each tagged with the plan step that handles it.
+- `plans/manywells-v2-plan.md` for the current plan of work (the v2 foundation) and `plans/backlog.md` for the backlog of code-level findings, each tagged with the plan step that handles it.
 - The ManyWells paper (cited in `README.md`) documents release v1.0.0, which also generated the published HuggingFace datasets (`solution-seeker-as/manywells`). The code has changed since, so treat the paper as background rather than the spec for current behaviour; `git log v1.0.0..HEAD` shows what moved, and `docs/corrigendum.md` lists known typos in the paper.

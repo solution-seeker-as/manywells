@@ -1,6 +1,6 @@
 # Evidence for the v2 plan
 
-Scripts and results behind the numbers in `../manywells-v2-plan.md`: the "Known v1 defect" bullet, the "Multiple roots and stability" section, and Step 2.4. Feature specs 016 to 020 have their own sections below. The v2 plan's scripts were run on 2026-09-30 against v1.0.0 (Python 3.11.13, casadi 3.6.4, numpy 1.24.3, pandas 1.5.3), using the published `manywells-sol-1` data and configs.
+Scripts and results behind the numbers in `../manywells-v2-plan.md`: the "Known v1 defect" bullet, the "Multiple roots and stability" section, and Step 2.4. Feature specs 016 to 021 have their own sections below. The v2 plan's scripts were run on 2026-09-30 against v1.0.0 (Python 3.11.13, casadi 3.6.4, numpy 1.24.3, pandas 1.5.3), using the published `manywells-sol-1` data and configs.
 
 ## Setup
 
@@ -127,6 +127,18 @@ Scripts behind `../../specs/features/020-profile-scale.md`, run on 2026-10-29 on
 | `profile_scale_wells.py OUT.csv --casadi-wells 30` | The cases of `five_regime_default.py` with $\kappa_0$ = 1, 0.5 and 0: 263 on the Rust core, the 90 of the first 30 wells on the CasADi backend too | No operating point lost; 2 and 4 gained on the core at $\kappa_0$ = 0.5 and 0. At $\kappa_0 = 0$, PBH changes by −0.19 bar at the median and up to −15.3 bar, the rate by +0.6% and up to +75%. In one case (well 14, its second sampled point) the CasADi search finds a second stable root at $\kappa_0 \le 0.5$ that the core misses. About 20 minutes on one process. |
 | `profile_scale_twins.py OUT.json --wells 20 --detail 8 --workers 12` | The twin study's wells 0 to 19 with `profile_scale` free besides `K_c`, `w_l_max`, `roughness` and `h`, in every instrumentation; and on wells 0 to 7, data with `profile_scale` drawn calibrated with friction alone, the scale alone or both, held out at higher rates | Every fit converges. `profile_scale` is recovered where the data depend on it, and stays at its prior on the six wells where they do not. Its errors correlate with `roughness`'s by −0.22 to +0.28. 017's twin criteria hold in 89% to 100% of the fits, below 95% in `no_downhole` from well 1's false minimum and well 6. With the slip fixed, friction absorbs the holdup error and errs at higher rates (well 6: roughness −3.8 sd, held-out RMS 1.87 against 1.04). About 40 minutes on 12 threads. |
 
+## Feature 021: the lift gas's injection depth
+
+Scripts behind `../../specs/features/021-lift-gas-injection-depth.md`, run on 2026-10-29 on the branch `lift-gas-injection-depth` (`validity-refusals` at `8c66a60` with the feature; Python 3.14, casadi 3.8.1), with 24 CPUs shared with other work. Every well is synthetic, drawn by `develop`'s sampler.
+
+| Script | What it shows | Result |
+|---|---|---|
+| `injection_depth_rows.py dump OUT MODE`, `compare A B` | Acceptance 2: both backends' rows, parameters, bounds and root sets on the backend comparison's matrix and six sampled wells, before the feature and with it, with the lift gas at the bottomhole by `injection_md=None` and by its measured depth | The same to the bit: 31,192 row values and 202 roots, in both modes. A few minutes per dump |
+| `injection_depth_wells.py run 1000 OUT.csv --casadi-cases 90` | The 290 gas-lifted cases of 1000 wells (the sampled operating points of the wells with gas lift, `five_regime_default.py`'s draw), with the lift gas at the bottomhole and at a valve at 75% and 50% of the measured depth, on the core, and the first 90 on the CasADi backend | Operating points: 287, 286 and 283 on the core, 90, 90 and 89 on the CasADi backend, in the same cases. With the valve at 50% PBH rises by 1.44 bar at the median and up to 23.9 bar, and the rate falls by 5.7%; L-shaped wells gain. The core's time does not change; the CasADi backend's rises by 6 to 11% per case at the median. About 5 minutes on 12 processes |
+| `injection_depth_wells.py summary OUT.csv` | The tables of the feature spec's Measurements | |
+| `injection_depth_wells.py scan OUT.csv` | The core's $R(p_0)$ on 4000 samples for each case that loses its operating point with the valve | In all five (case, valve) pairs $R$ stays positive: the model has no root |
+| `injection_depth_wells.py run 1000 OUT.csv --casadi-cases 0 --processes 1`, on the core with each adaptation of its temperature solve at the injection cell undone in turn | The adaptations' effect (principle 7) | The chord iteration's slope saves 2 to 3% of the chord fallbacks and no measurable time; the widened bracket changes nothing on these cases. About 4 minutes per variant |
+
 ## Validity ranges
 
 The measurements behind `../../specs/model/validity.md`, run on 2026-10-29 on `develop` at `8874b7f` (Python 3.14), on the Rust core with 8 processes. `validity_ranges.py run` solves wells of `develop`'s sampler (seed 2026) at their nominal operating point and two sampled ones, as `gor_cap_wells.py` does, and records each correlation's inputs at every grid point of each operating point; `summary` compares them with the published ranges in its `RANGES`.
@@ -135,6 +147,53 @@ The measurements behind `../../specs/model/validity.md`, run on 2026-10-29 on `d
 |---|---|---|
 | `run 500 OUT --backend rust` | 1494 cases of 500 wells: the wells' inputs, and the state and each correlation's inputs along the 1453 operating points (146,753 grid points) | The solves take 436 s in total, a few minutes on 8 processes |
 | `summary OUT` | Per row of the table: the sampler's range, and the share of cases outside the published range | See the table in `validity.md` |
+
+Rerun on 2026-10-29 on the branch `independent-checks`, after the rulings on PVT-GAS-5 and PVT-MIX-9 (Independent checks, below) and, for comparison, with PVT-MIX-9's in-situ fraction restored: the same 1453 operating points. The flowing fraction moves one case below Beggs and Robinson's 5265 psia (101 cases above it before, 100 after: 7.0% to 6.9%). Below Chen's Re = 4000 lie 16 cases both before and after, 1.1%, where the table had 1.2% from `8874b7f`: the change is between that commit and the branch's base. No other share changes at the table's precision.
+
+## Independent checks
+
+The checks behind `../../specs/model/README.md`, Test vectors, Independent checks (`../model-lock-plan.md`, Step L3, which takes over Step V1 of the validation plan's draft), run on 2026-10-29 on `develop` at `f7f1218` (Python 3.14, casadi 3.8.1, numpy 2.5.3), with `fluids` 1.3.1 and scipy 1.18.1 in an overlay environment, so that neither is a dependency, and rerun on the branch `independent-checks` after each of Bjarne's two rulings of the same day (below):
+
+```console
+uv run --with fluids==1.3.1 python plans/evidence/independent_checks.py
+```
+
+It compares the CasADi backend's component functions; the vectors carry the result to the Rust core. It takes a few seconds. The worked examples are in `tests/test_worked_examples.py`, which runs with the test suite.
+
+| Check | Grid | Result |
+|---|---|---|
+| FRIC-4 against `fluids.friction.Chen_1979(Re, eD)` | Re from 4000 to $10^{8}$ (81 points, logarithmic), $\varepsilon/D$ 0 and $10^{-7}$ to 0.05 (42) | largest relative difference $5.9\cdot10^{-16}$ |
+| FRIC-5 against `fluids.friction.Haaland(Re, eD)` | the same | $6.5\cdot10^{-16}$ |
+| FRIC-4 and FRIC-5 against the exact Colebrook–White solution, `fluids.friction.Clamond(Re, eD)` | the same | FRIC-4 −0.32% to +0.33%, FRIC-5 −1.42% to +1.31% |
+| FRIC-4 against Chen's form of Colebrook's equation (3.7065, 2.5226), solved here | his range: Re from 4000 to $4\cdot10^{8}$ (61), $\varepsilon/D$ from $5\cdot10^{-7}$ to 0.05 (31) | Colebrook exceeds FRIC-4 by −0.28% to +0.4651%; his Table I gives at most +0.4651% and at least −0.2286% over 36 points |
+| CHK-4 against `fluids.compressible.P_critical_flow(1, k)` | $k$ from 1.05 to 1.67 | identical |
+| PVT-MIX-9 against `fluids.two_phase_voidage.gas_liquid_viscosity(x, mu_l, mu_g, Method='Cicchitti')` | $\alpha$ from 0 to 1, four gas and three liquid densities and viscosities, three pairs of phase velocities | identical. `fluids` is given `develop`'s gas mass fraction of the flow, so this checks the mixing rule; the worked example checks the fraction. Before the ruling the script gave it the in-situ fraction, with the same result |
+| PVT-GAS-9, PVT-GAS-11 against Dranchuk and Abou-Kassem's Eqs. (2) and (3), transcribed and solved by bisection | $p_{pr}$ from 0.2 to 15 (33), $T_{pr}$ from 1.05 to 3 (40) | $\rho_r$ within $7.7\cdot10^{-15}$, $Z$ within $1.3\cdot10^{-15}$ (relative) |
+| PVT-GAS-10 against a central difference of that transcription's $\ln Z$ in $T_{pr}$ along an isobar | the same | within $1.8\cdot10^{-7}$, the difference's truncation error |
+| PVT-GAS-5 against Sutton's Eqs. (14) and (15) as printed | $\gamma_g$ from 0.571 to 1.679, his data | $T_{pc}$ within $1.2\cdot10^{-16}$, $p_{pc}$ within $1.9\cdot10^{-16}$. Before the ruling, $p_{pc}$ was lower by $5.9\cdot10^{-5}$ to $2.2\cdot10^{-4}$, from 131.07 for 131.0 |
+| PVT-OIL-3 against Abdul-Majeed and Abu Al-Soof's Eqs. (1) and (3) | API 15 to 50, 0 to 150 °C | within $4.5\cdot10^{-16}$; against the 18 measurements of their Table 1, within 0.78 dyn/cm, 0.27 dyn/cm on average |
+| PVT-OIL-12 against their Eqs. (4) and (5) | $R_{so}$ from 0.5 to 20 and 80 to 400 Sm³/Sm³, where the blend has no weight | within $1.9\cdot10^{-7}$. At 50 Sm³/Sm³ the blend gives 0.400, between the two equations' 0.425 and 0.375 |
+
+The first run of Step V1 (2026-10-02) found the same agreement with `fluids`. Rerun the script when a vector of these IDs is regenerated.
+
+### The rulings that follow the sources
+
+The checks found two values that `develop` did not reproduce, and Bjarne ruled on 2026-10-29 to follow the source in each: PVT-GAS-5's coefficient 131.0 for 131.07 (`../../specs/model/pvt/gas.md`), and PVT-MIX-9's gas mass fraction of the flow for the in-situ one (`../../specs/model/pvt/mixture.md`). `source_rulings.py` measures each on the wells of `gor_cap_wells.py`: `develop`'s sampler (seed 2026), each well at its nominal operating point and two sampled ones, 1492 cases of 500 wells on the Rust core and 263 of 88 on the CasADi backend. `gor_cap_wells.py run` was run before the changes (`develop` at `ce1bb0e` with the branch's checks), after the first and after the second, each with 8 processes on 24 CPUs shared with other work, and `source_rulings.py compare` joins two runs.
+
+| Change | Backend | Operating points | PBH | PWH | Reservoir liquid rate |
+|---|---|---|---|---|---|
+| PVT-GAS-5, 131.0 for 131.07 | Rust core | 1444 before and after, the same cases | within $7.5\cdot10^{-4}$ bar; median $4.8\cdot10^{-5}$ | within $5.7\cdot10^{-3}$ bar | within 0.0074% |
+| PVT-GAS-5, 131.0 for 131.07 | CasADi | 253 before and after, the same cases | within $7.5\cdot10^{-4}$ bar; median $5.3\cdot10^{-5}$ | within $3.7\cdot10^{-3}$ bar | within 0.0032% |
+| PVT-MIX-9, the flowing fraction | Rust core | 1444 before and after, the same cases | falls in every case, by at most 0.19 bar; median $9.5\cdot10^{-4}$ | rises, by at most 0.27 bar but in one case, 13.9 bar | rises, by at most 0.35% but in one case, 109% |
+| PVT-MIX-9, the flowing fraction | CasADi | 253 before and after, the same cases | falls in every case, by at most 0.15 bar; median $2.0\cdot10^{-3}$ | rises, by at most 0.21 bar | rises, by at most 0.35% |
+
+After each change the two backends find an operating point in the same 253 cases, as before, and agree within $6.3\cdot10^{-7}$ bar in PBH after the first and $1.1\cdot10^{-7}$ bar after the second. The time per case is unchanged.
+
+With PVT-MIX-9's flowing fraction, the friction falls wherever the gas slips past the liquid, so PBH falls and PWH and the rate rise. The one large change is well 455's second sampled point: 0.02 kg/s of a gas-rich stream (GOR 2372 Sm³/Sm³) through a nearly closed choke ($u = 0.076$), of an oil of 21.8 °API whose Beggs–Robinson viscosity at the 274 K wellhead, below the correlation's range, is 290 Pa s. Its friction is laminar ($\text{Re} \approx 0.2$ at the wellhead), where $f_D = 64/\text{Re}$ is proportional to $\mu_m$, and its slip makes the flowing fraction 0.65 against an in-situ 0.04, so $\mu_m$ falls by a factor of 2.7. Its drawdown rises from 0.026 to 0.054 bar, its rate doubles and its PWH rises from 29.9 to 43.7 bar. Both backends agree there, before and after.
+
+`source_rulings.py zero_flow` backs the note on the flowing fraction in `pvt/mixture.md`, Safeguards, where it is $0/0$. On well 0's CasADi system, at states through which nothing flows at any point, DISC-10 and CHK-1 are NaN with the in-situ fraction, with the flowing one and with a guarded one (0 where $w_m \le 0$), and DISC-9 is NaN too with the unguarded flowing fraction, which the code takes. At `v1.0.0+chen#6`, the start that reached a state with a supersonic cell with the in-situ fraction ends with Ipopt's `Invalid_Number_Detected` with the flowing fraction, guarded or not, and the root set is the same single root (264.00 bar before, 263.95 after). Four tests pinned operating points of the old PVT-MIX-9. The Joule–Thomson gas wells of `tests/test_rust_backend.py` were re-solved: their $p_0$ fell by 0.004, 0.066 and 0.246 bar, and both backends agree to $10^{-6}$ bar. `tests/test_roots.py` showed SOL-8's rejection of a supersonic state at `v1.0.0+chen#6`; a scan of the comparison set's overlays, wells 0 to 7, found two cases where a start now reaches one, and the test takes `develop+dead oil#6`, whose one root, 261.24 bar, the core finds too.
+
+The `develop` vectors that the first change alters are those of PVT-GAS-3, PVT-GAS-4 and PVT-GAS-5, and PVT-GAS-11, by at most $10^{-4}$ (relative), and THM-8, by at most $1.2\cdot10^{-6}$ K/m, which is 2% of the third row's, near where the gas's Joule–Thomson factor changes sign. `tests/data/pvt/vazquez_beggs.csv`, regenerated by `specs/tools/make_pvt_tables.py`, changes in $Z$ only, by at most $5.9\cdot10^{-5}$ (relative). The second alters FRIC-3's, whose $f_D$ and $F$ fall by 0.18%, 8.3% and 0.41%, and PVT-MIX-9's, which take the phase velocities as inputs: its rows without gas and without slip keep their values, and the two with slip fall by 10% and 73%.
 
 ## Step L6: the Distributions check's noise and bias
 

@@ -11,7 +11,7 @@ bindings = "pyo3"
 
 [project]
 name = "manywells"
-version = "1.0.0"
+version = "2.0.0.dev0"
 description = "ManyWells: simulation of multiphase flow in vertical oil and gas wells"
 readme = "README.md"
 license = "CC-BY-NC-4.0"

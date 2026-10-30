@@ -139,6 +139,12 @@ class WellGeometry:
         """Cross-sectional area of the pipe (m²)."""
         return np.pi * (self.D / 2) ** 2
 
+    def nearest_point(self, md: float) -> int:
+        """The grid point nearest a measured depth md (m) from the surface, in simulator order (0 at the
+        bottomhole); of two equally near, the deeper."""
+        # argmin takes the first of equal distances, which in simulator order is the deeper point
+        return int(np.argmin(np.abs(np.asarray(self.md) - md)))
+
     # ----- factory methods -----------------------------------------------
 
     @classmethod

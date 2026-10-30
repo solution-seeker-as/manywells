@@ -1,6 +1,6 @@
 [package]
 name = "manywells-core"
-version = "0.1.1"
+version = "2.0.0-dev.0"
 edition = "2024"
 rust-version = "1.85"
 description = "The Rust core of ManyWells, built as the Python extension manywells._core"

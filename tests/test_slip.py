@@ -141,7 +141,7 @@ def test_inclined_cell_moves_bubbly_flow_to_slug_flow():
 
 
 def test_slip_parameters_are_fields():
-    """plans/improvements.md 2.7: the regime constants are fields, with v1.0.0's values as defaults; the five
+    """plans/backlog.md 2.7: the regime constants are fields, with v1.0.0's values as defaults; the five
     regimes' constants too (SLIP-12, SLIP-13), and the scale of the profile parameter (SLIP-18)."""
     model = SlipModel(C_0_slug=1.2)
     assert model.C_0_slug == 1.2 and SlipModel().C_0_slug == 1.175

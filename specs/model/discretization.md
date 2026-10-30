@@ -78,7 +78,7 @@ On the grid of GEO-3, for $i = 1, \dots, N$:
 
 $$r = (\alpha\rho_g v_g)_i - (\alpha\rho_g v_g)_{i-1} - \frac{w_g(p_i, T_i) - w_g(p_{i-1}, T_{i-1})}{A} \quad \text{[kg/(m² s)]}$$
 
-$w_g(p, T)$ is the gas mass rate of the fluid model at $(p, T)$, for the reservoir liquid rate $w_\text{res}$ of the case and its lift-gas rate (PVT-OIL-13; INF-5 for dead oil). This is BAL-1 with BAL-10, integrated exactly. Without mass transfer $w_g$ is the same at every point and the rate difference is identically zero, so this is DISC-2 as a function of the state. With mass transfer it has the same roots as the local rows $A(\alpha\rho_g v_g)_ i - w_g(p_i, T_i)$, because INF-6 fixes point 0 (decided by Bjarne, 2026-09-30, `specs/architecture.md`, decision 4; this text signed off 2026-10-01).
+$w_g(p, T)$ is the gas mass rate of the fluid model at $(p, T)$, for the reservoir liquid rate $w_\text{res}$ of the case and the lift-gas rate at the point (PVT-OIL-13; INF-5 for dead oil; INF-9). This is BAL-1 with BAL-10, integrated exactly. Without mass transfer $w_g$ is the same at every point and the rate difference is identically zero, so this is DISC-2 as a function of the state. With mass transfer it has the same roots as the local rows $A(\alpha\rho_g v_g)_ i - w_g(p_i, T_i)$, because INF-6 fixes point 0 (decided by Bjarne, 2026-09-30, `specs/architecture.md`, decision 4; this text signed off 2026-10-01).
 
 ### DISC-8 · Liquid mass row with mass transfer
 
@@ -111,10 +111,12 @@ The unknowns and the order of the points are those of DISC-6. At each point, in 
 | Point | Rows, in order | Count |
 |---|---|--:|
 | $i = 0$ | INF-6, INF-7, the inflow temperature row (THM-3 or THM-5), then the closures | 6 |
-| $0 < i < N$ | DISC-7, DISC-8, DISC-9, DISC-10, then the closures | 7 |
-| $i = N$ | DISC-7, DISC-8, DISC-9, DISC-10, CHK-1, then the closures | 8 |
+| $0 < i < N$ | DISC-7, DISC-8, DISC-9, DISC-10 (DISC-12 at the injection point), then the closures | 7 |
+| $i = N$ | DISC-7, DISC-8, DISC-9, DISC-10 (DISC-12 at the injection point), CHK-1, then the closures | 8 |
 
 The closures, in order, are SLIP-1, the gas law (PVT-GAS-1, PVT-GAS-3, PVT-GAS-11 or PVT-TAB-4) and the liquid density (PVT-MIX-1 or PVT-MIX-6). The closures at point $i > 0$ use the inclination of cell $i$, below the point; those at point 0 use cell 1's. The reservoir liquid rate $w_\text{res}$ is the inflow model's at $p_0$ (INF-1, INF-2 or INF-8), a function of the state that enters every point's mass rows; it is not hidden state.
+
+With an injection point $k > 0$ (INF-9), the lift gas enters the phase rates from point $k$ up, and cell $k$'s energy row is DISC-12 instead of DISC-10, where the thermal model mixes the lift gas in (`lift_gas_mixing`). Point 0's inflow temperature row is then THM-3: no lift gas enters there, and THM-5 without lift gas is THM-3. The mass rows need no change: over cell $k$ the rate difference in DISC-7 holds the step $w_{lg}/A$, the lift gas's source, and the momentum row DISC-9 accelerates the injected gas, which enters with no axial momentum. `discretization.row_ids` gives each row's ID. Without an injection depth, $k = 0$, and the rows are those above.
 
 In the `v1.0.0` configuration the rows are those of DISC-6, row for row: DISC-7 to DISC-10 are DISC-2 to DISC-5, the inflow temperature row is THM-3, and the closures are SLIP-1, PVT-GAS-1 and PVT-MIX-1. Canonical forms of the rows defined in other files, besides those of DISC-6:
 
@@ -124,12 +126,21 @@ In the `v1.0.0` configuration the rows are those of DISC-6, row for row: DISC-7 
 | PVT-GAS-3 | $p - \rho_g Z R_s T / c_\text{bar}$ | bar |
 | PVT-MIX-6 | $\rho_l - \rho_l(p, T)$ | kg/m³ |
 
+### DISC-12 · Energy row at the injection point
+
+For an injection point $k > 0$ (INF-9), cell $k$'s energy row is DISC-10's step followed by THM-9's mixing:
+
+$$r = T_k - \tilde T_k - \frac{H_{lg}\thinspace(T_{lg} - \tilde T_k)}{H_k + H_{lg}}, \qquad \tilde T_k = T_{k-1} + \Delta\text{MD}_k\left(\frac{dT}{d\text{MD}}\right)_k \quad \text{[K]}$$
+
+with $(dT/d\text{MD})_ k$ as in DISC-10, at point $k$, and $H_k$ and $H_{lg}$ as in THM-9. Without lift gas ($w_{lg} = 0$) it is DISC-10. With the thermal model's `lift_gas_mixing` off, cell $k$'s row is DISC-10.
+
 ## Options
 
 | Option | IDs | Used by |
 |---|---|---|
 | Uniform grid on a vertical pipe, constant phase mass fluxes | DISC-1 to DISC-6 | `v1.0.0`, which `develop` implements through DISC-7 to DISC-11 |
 | Survey grid; phase mass rates that vary with $(p, T)$ | DISC-7 to DISC-11 | `develop` |
+| Lift gas injected above the bottomhole | DISC-12 | `develop`, with an injection depth (INF-9) |
 
 Implicit Euler is the only integrator. Another scheme would be an option here, and would change the order of convergence the verifier's Convergence check expects (`specs/architecture.md`).
 
@@ -152,6 +163,21 @@ Paper §3.1–3.3, equations (16)–(19).
 
 Each state is a v1.0.0 root perturbed by a few per cent, so that every row is well away from zero and has a sign. For each point the file lists the rows in DISC-6's order, each with its ID and value in the canonical units above. The row vectors exercise every equation that v1.0.0 has no separate function for: the balances, friction, heat loss, the ambient profile, the boundary rows and the closures.
 
+The vectors below pin DISC-12: cell $k$'s energy row at a state of point $k$ and $T_{k-1}$, on a vertical well of 1000 m on 10 cells of $D$ = 0.1 m with the lift gas injected at 500 m ($k$ = 5), `develop`'s thermal model and friction, the black oil of API 35 with $\gamma_g$ = 0.65 and $R_{go}$ = 150 and DAK's gas law, $T_r$ = 370 K and $T_s$ = 280 K. The second row has no lift gas, where the row is DISC-10's.
+
+<!-- vectors:begin develop -->
+Generated by `specs/tools/make_develop_vectors.py` from develop (casadi 3.8.1): they pin develop's options. Do not edit by hand.
+
+### DISC-12
+
+| T_prev | p | v_g | v_l | alpha | rho_g | rho_l | T | w_res | w_lg | T_lg | → r |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 350.0 | 120.0 | 3.0 | 1.5 | 0.3 | 90.0 | 780.0 | 345.0 | 20.0 | 2.0 | 300.0 | 0.5040535549152878 |
+| 350.0 | 120.0 | 3.0 | 1.5 | 0.3 | 90.0 | 780.0 | 345.0 | 20.0 | 0.0 | 300.0 | -3.7956667289788584 |
+| 340.0 | 60.0 | 8.0 | 2.5 | 0.6 | 45.0 | 790.0 | 338.0 | 15.0 | 4.0 | 360.0 | -5.187602700666048 |
+| 355.0 | 180.0 | 1.0 | 1.2 | 0.1 | 140.0 | 760.0 | 352.0 | 25.0 | 1.0 | 330.0 | -0.7586048892647455 |
+<!-- vectors:end develop -->
+
 ## Coverage
 
 | ID | Paper | v1.0.0 code | Checked by |
@@ -167,3 +193,4 @@ Each state is a v1.0.0 root perturbed by a few per cent, so that every row is we
 | DISC-9 | — | — | rows (in the v1.0.0 configuration); property: tests/test_model_properties.py (deviated and L-shaped wells) |
 | DISC-10 | — | — | rows (in the v1.0.0 configuration); property: tests/test_thermal.py (the terms) and tests/test_model_properties.py (heat flows outwards) |
 | DISC-11 | — | — | rows (in the v1.0.0 configuration); property: tests/test_simulator.py (row order) |
+| DISC-12 | — | — | vectors; property: tests/test_model_properties.py (the energy balance across the injection point) |

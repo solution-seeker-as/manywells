@@ -70,11 +70,13 @@ by volume in situ, with the in-situ water fraction $\lambda_w = \alpha_{w,l}B_w/
 
 ### PVT-MIX-9 · Mixture viscosity
 
-Hasan, Kabir and Sayarpour (2010), Eq. (A-3), weighted by the in-situ mass fraction of gas:
+Hasan, Kabir and Sayarpour (2010), Eq. (A-3), weighted by the gas mass fraction of the flow, the $x$ of their Nomenclature:
 
-$$\mu_m = x\mu_g + (1 - x)\mu_l, \qquad x = \frac{\alpha\rho_g}{\alpha\rho_g + (1-\alpha)\rho_l},$$
+$$\mu_m = x_g\mu_g + (1 - x_g)\mu_l, \qquad x_g = \frac{w_g}{w_m} = \frac{\alpha\rho_g v_g}{\alpha\rho_g v_g + (1-\alpha)\rho_l v_l} = \frac{\rho_g v_{gs}}{\rho_g v_{gs} + \rho_l v_{ls}},$$
 
-with $\mu_g$ from PVT-GAS-7 at $(T, \rho_g)$. Used by FRIC-3.
+with the phase mass rates $w_g$ and $w_l$ of the point's state (`nomenclature.md`), and $\mu_g$ from PVT-GAS-7 at $(T, \rho_g)$. At a root the mass rows make $w_g$ and $w_l$ the phase rates of INF-5 or PVT-OIL-13, so $x_g$ is the gas's share of the flow there, as in CHK-5 at the wellhead. Used by FRIC-3.
+
+Decided by Bjarne, 2026-10-29: the gas mass fraction of the flow, as the source defines it. Until then PVT-MIX-9 took the in-situ mass fraction $\alpha\rho_g/(\alpha\rho_g + (1-\alpha)\rho_l)$, for which no source and no decision was recorded (`specs/features/004-friction.md`, `plans/develop_model_changes.md`). The two are equal without slip. With slip the in-situ fraction is the smaller, so $\mu_m$ was larger and the Reynolds number smaller: in Hasan and Kabir's Field Example 3.1 (2018), 0.032 against 0.066, and 12.67 cP against the printed 12.2 (Test vectors, Independent checks). $x_g$ is taken from the point's state, not from the phase rates of PVT-OIL-13, so that FRIC-3 stays a function of the point's state. The two agree at every root, and at every state the Rust core's march computes, since it builds each state from the phase rates; they differ only at the CasADi backend's trial states. On the wells of `develop`'s sampler, 1492 cases on the Rust core and 263 on the CasADi backend, the change finds an operating point in the same cases. With less friction, PBH falls in every case, by $10^{-3}$ bar at the median and at most 0.19 bar, and PWH and the reservoir liquid rate rise, by at most 0.27 bar and 0.35% but in one case. That case (well 455, its second sampled point) produces 0.02 kg/s of a gas-rich stream (GOR 2372 Sm³/Sm³) through a nearly closed choke, of an oil of 21.8 °API whose Beggs–Robinson viscosity is 290 Pa s at its wellhead, at 274 K, below the correlation's range. Its friction is laminar, where $f_D$ is proportional to $\mu_m$, and its slip makes the flowing fraction 0.65 against an in-situ 0.04, so $\mu_m$ falls by a factor of 2.7: PWH rises by 13.9 bar and the rate doubles. Both backends find the same single stable root there (`plans/evidence/README.md`, Independent checks).
 
 ### PVT-MIX-10 · Fluid at standard conditions
 
@@ -103,13 +105,19 @@ per unit volume of stock-tank oil, with $0 \le \alpha_{w,l} < 1$. The `v1.0.0` c
 
 `liquid_mix` returns the pure liquid for $x_o = 1$ and $x_o = 0$, and asserts $x_o \in [0, 1]$. The general formula would divide by zero at $x_o = 0$.
 
+PVT-MIX-9 has none. Its $x_g$ is $0/0$ at a point through which nothing flows, $w_m = 0$, as at $v_g = v_l = 0$, a state the CasADi backend's bounds admit ($v_g, v_l \ge 0$; `System.bounds` in `discretization.py`), and there FRIC-3 and the momentum row are NaN. They were finite there with the in-situ fraction, but the residual was not: at such a point THM-1 divides by the flow's heat capacity $c_{pg}w_g + c_{pl}w_l$ per unit area, which is zero with $w_m$, so the energy row is not finite there, and at the wellhead neither is CHK-5's $x_g$, as in v1.0.0. So $x_g$ adds no state at which the residual or its Jacobian is not finite: on a sampled well, at $v_g = v_l = 0$, at $\alpha = 0$ with $v_l = 0$ and at $\alpha = 1$ with $v_g = 0$ at every point, DISC-10 and CHK-1 are NaN with either fraction, and DISC-9 with the flowing one. A guard on $x_g$ would make the momentum row finite there and leave the residual NaN; at `v1.0.0+chen#6` of the comparison set, where one start of the CasADi search now ends with Ipopt's `Invalid_Number_Detected` instead of at a state with a supersonic cell (SOL-8), it does so with a guard too. No search starts there: the CasADi backend marches from $p_0 < p_r$, where the liquid flows, and the Rust core builds each state from the phase rates at $p_0 < p_r$.
+
 ## Sources
 
 - Paper §4.2, equations (28), (29) and (31); Appendix A.1 for the surface tension.
-- Hasan, Kabir and Sayarpour (2010), Eq. (A-3), for PVT-MIX-9.
+- Hasan, Kabir and Sayarpour (2010), Eq. (A-3) and the Nomenclature, for PVT-MIX-9.
+- Hasan and Kabir (2018), *Fluid flow and heat transfer in wellbores*, 2nd ed., Society of Petroleum Engineers, §3.4, Field Example 3.1, a worked example of PVT-MIX-9.
+- `fluids` 1.3.1 (Caleb Bell, MIT licence), for the independent checks of `plans/evidence/independent_checks.py`.
 - Feature specs `specs/features/003-surface-tension.md` and `005-fluid-model.md`.
 
 ## Test vectors
+
+**Independent checks**, on `develop` at `f7f1218` (2026-10-29; `README.md`, Test vectors), and rerun after Bjarne's ruling on PVT-MIX-9 the same day. PVT-MIX-9's mixing rule agrees with `fluids` 1.3.1 (`two_phase_voidage.gas_liquid_viscosity`, Cicchitti's rule) to rounding, given the gas mass fraction of the flow (`plans/evidence/independent_checks.py`). Both backends reproduce Hasan and Kabir's (2018) Field Example 3.1 at the precision printed, 12.2 cP, at the superficial velocities its solution carries (`tests/test_worked_examples.py`); until the ruling PVT-MIX-9 took the in-situ mass fraction and gave 12.67 cP, a finding of these checks (PVT-MIX-9). PVT-MIX-6, PVT-MIX-7, PVT-MIX-8 and PVT-MIX-10 are mixing rules and definitions, with no independent source.
 
 <!-- vectors:begin -->
 Generated by `specs/tools/make_v1_vectors.py` from ManyWells v1.0.0 (casadi 3.6.4). Do not edit by hand.
@@ -154,11 +162,12 @@ Generated by `specs/tools/make_develop_vectors.py` from develop (casadi 3.8.1): 
 
 ### PVT-MIX-9
 
-| mu_l | mu_g | alpha | rho_l | rho_g | → mu_m |
-|---|---|---|---|---|---|
-| 0.001 | 1.5e-05 | 0.0 | 800.0 | 50.0 | 0.001 |
-| 0.001 | 1.5e-05 | 0.5 | 800.0 | 50.0 | 0.0009420588235294118 |
-| 0.002 | 2e-05 | 0.9 | 850.0 | 100.0 | 0.0009817142857142858 |
+| mu_l | mu_g | alpha | rho_l | rho_g | v_g | v_l | → mu_m |
+|---|---|---|---|---|---|---|---|
+| 0.001 | 1.5e-05 | 0.0 | 800.0 | 50.0 | 0.0 | 2.0 | 0.001 |
+| 0.001 | 1.5e-05 | 0.5 | 800.0 | 50.0 | 6.0 | 2.0 | 0.0008444736842105262 |
+| 0.002 | 2e-05 | 0.9 | 850.0 | 100.0 | 20.0 | 3.0 | 0.0002656934306569343 |
+| 0.001 | 1.5e-05 | 0.5 | 800.0 | 50.0 | 2.0 | 2.0 | 0.0009420588235294118 |
 
 ### PVT-MIX-10
 

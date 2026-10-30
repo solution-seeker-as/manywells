@@ -227,6 +227,20 @@ def test_the_core_refuses_what_the_dataclasses_refuse():
     )
 
 
+def test_the_core_takes_the_injection_point_and_refuses_one_off_the_grid():
+    """INF-9: the core takes the injection point as its grid index, 0 to N."""
+    from manywells import _core
+    from manywells.solvers.rust import core_inputs
+
+    wp = WellProperties(geometry=WellGeometry.vertical(2000.0, 10), injection_md=1000.0)
+    inputs = core_inputs(wp)
+    assert inputs['injection_point'] == wp.injection_point == 5
+    assert core_inputs(replace(wp, injection_md=None))['injection_point'] == 0
+    _core.Well(**{**inputs, 'injection_point': 10})
+    with pytest.raises(ValueError, match='injection point must be a grid point, 0 to 10'):
+        _core.Well(**{**inputs, 'injection_point': 11})
+
+
 def test_the_v1_configuration_refuses_nothing_v1_accepts():
     """A v1.0.0 well of a liquid heavier than API 16 (well 977's is API 11.4) builds in both backends."""
     wp, bc = well_977()
@@ -309,7 +323,7 @@ def test_the_slope_has_the_sign_of_the_bracket_on_the_case_set():
 
     n = 0
     for cid, (wp, bc) in case_set().items():
-        found, _ = RustRootFinder(wp).core.root_set(operating_point(bc))
+        found, _ = RustRootFinder(wp).core.root_set(operating_point(wp, bc))
         for r in found:
             assert (r.slope > 0) == r.rising, (cid, r.x[0])
             n += 1
@@ -357,9 +371,10 @@ def test_the_slip_row_has_one_root_in_alpha_at_every_reference_point():
 # backend's operating point (specs/features/016-joule-thomson.md, design choice 5), with the fitted classifier:
 # (well, sample, p_0 in bar), with
 # the seed and the samples of plans/evidence/dak_jt_default.py, re-solved when PVT-MIX-6 came to mix oil and water by
-# in-situ volume (issue #8). At 44 the state at p_s cannot be computed and R is finite only just below the root; at 22
-# the energy row is U-shaped in T near the choked wellhead.
-GAS_WELLS = ((44, 0, 225.685), (22, 1, 156.267), (22, 2, 118.195))
+# in-situ volume (issue #8), and when PVT-MIX-9 came to take the gas mass fraction of the flow (2026-10-29). At 44 the
+# state at p_s cannot be computed and R is finite only just below the root; at 22 the energy row is U-shaped in T near
+# the choked wellhead.
+GAS_WELLS = ((44, 0, 225.681), (22, 1, 156.201), (22, 2, 117.949))
 
 
 def _gas_well(well, sample):

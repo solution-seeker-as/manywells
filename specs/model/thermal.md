@@ -12,9 +12,10 @@ The heat exchanged with the surroundings, the ambient temperature profile, the t
 | ambient temperature | $z$ (m), $L$, $T_r$, $T_s$; or $f_i$ (GEO-3), $T_r$, $T_s$ | $T_a$ (K) | no; yes in $T_r$, $T_s$ and $f_i$ in `develop` |
 | inflow temperature | $w_\text{res}$, $w_{lg}$ (kg/s), $T_r$, $T_{lg}$ (K), the fluid's $c_{pg}$, $c_{pl}$, $f_g$ | $T_\text{in}$ (K) | yes |
 | inflow temperature row | $T_0$ (state), $T_\text{in}$ | row (K) | yes |
+| lift-gas mixing at the injection point | $\tilde T_k$ (K), the phase rates at point $k$, $w_{lg}$ (kg/s), $T_{lg}$ (K), the fluid's $c_{pg}$, $c_{pl}$ | $T_k$ (K) | yes |
 | frictional heating, gravity term, Joule–Thomson term | the state, $F$ (Pa/m), $\cos\theta$, $c_{pg}$, $c_{pl}$; the gas's $J$ (PVT-GAS-10) | $\Phi_f$, $\Phi_g$, $\Phi_{JT}$ (K/m) | yes |
 
-In `develop` the thermal model is a `ThermalModel` with $h$ and one switch per option: `frictional_heating` (THM-6), `gravity_term` (THM-7), `joule_thomson` (THM-8) and `lift_gas_mixing` (THM-5). Its `temperature_gradient` returns $dT/d\text{MD} = -H + \Phi_f - \Phi_g - \Phi_{JT}$ with the terms that are on (BAL-13, DISC-10); it also takes the cell's pressure gradient, which no option uses (`specs/architecture.md`). The `v1.0.0` configuration has every switch off.
+In `develop` the thermal model is a `ThermalModel` with $h$ and one switch per option: `frictional_heating` (THM-6), `gravity_term` (THM-7), `joule_thomson` (THM-8) and `lift_gas_mixing` (THM-5 at the bottomhole, THM-9 at an injection point above it). Its `temperature_gradient` returns $dT/d\text{MD} = -H + \Phi_f - \Phi_g - \Phi_{JT}$ with the terms that are on (BAL-13, DISC-10); it also takes the cell's pressure gradient, which no option uses (`specs/architecture.md`). The `v1.0.0` configuration has every switch off.
 
 ## Equations
 
@@ -74,6 +75,20 @@ $$\Phi_{JT} = \frac{\alpha v_g J\thinspace (F + \rho_m g\cos\theta)}{C}$$
 
 in K/m, with $J$ the gas's Joule–Thomson factor (PVT-GAS-10) at the point, $F$ the viscous pressure gradient (FRIC-1), $\theta$ the cell's inclination and $C$ the heat-capacity flux of THM-1. A real gas's enthalpy changes with pressure, $dh_g = c_{pg}\thinspace dT - c_{pg}\mu_{JT}\thinspace dp$, and the gas's share of the enthalpy flux, $\alpha\rho_g v_g c_{pg}\mu_{JT}\thinspace dp/dz = \alpha v_g J\thinspace dp/dz$, enters the energy balance as THM-6 enters for the liquid, with $dp/dz = -(F + \rho_m g\cos\theta)$, neglecting acceleration as THM-6 and THM-7 do (`docs/thermal_energy_modeling.md`). The pressure gradient is positive at every admissible state, so $\Phi_{JT}$ has the sign of $J$: it cools where $Z$ rises with $T$, everywhere in the sampled range below about 300 bar, and heats above the inversion pressure. It is zero for an ideal gas and for pure liquid; for pure gas, $\Phi_{JT} = \mu_{JT}(F + \rho_g g\cos\theta)$, the gas's Joule–Thomson cooling along its pressure drop. Near a gas well's choked wellhead the term can give a cell's energy row two roots in $T_i$; only the one where the row rises in $T_i$ is a root of the model (SOL-9).
 
+### THM-9 · Lift-gas mixing at the injection point
+
+At the injection point $k > 0$ of INF-9, the flow arriving from below, at $\tilde T_k$, mixes with the lift gas at $T_{lg}$, weighted by their heat-capacity rates:
+
+$$T_k = \tilde T_k + \frac{H_{lg}\thinspace(T_{lg} - \tilde T_k)}{H_k + H_{lg}}, \qquad H_k = c_{pg}\big(w_g(p_k, T_k) - w_{lg}\big) + c_{pl}\thinspace w_l(p_k, T_k), \qquad H_{lg} = c_{pg} w_{lg},$$
+
+with the phase rates of PVT-OIL-13 (INF-5 with dead oil) at point $k$, which include the lift gas (INF-9); $H_k$ is the heat-capacity rate of the flow arriving from below. $\tilde T_k$ is DISC-10's step over cell $k$, and DISC-12 is the row.
+
+- When $T_{lg}$ is not given, it is the ambient temperature at point $k$, $T_{a,k}$ of THM-4: lift gas that has come down the annulus has had time to approach the formation's temperature. At $k = 0$ that is $T_r$, as THM-5 has it.
+- At $k = 0$ the mixing is THM-5's, unchanged.
+- The thermal model's switch `lift_gas_mixing` turns both off: then $T_k = \tilde T_k$, and the row is DISC-10.
+
+Mixing at constant heat capacities, with no heat of solution, as THM-5.
+
 ## Options
 
 | Option | IDs | Used by |
@@ -84,12 +99,13 @@ in K/m, with $J$ the gas's Joule–Thomson factor (PVT-GAS-10) at the point, $F$
 | Gravity term | THM-7 | `develop` default (`gravity_term`) |
 | Joule–Thomson term | THM-8 | `develop` default (`joule_thomson`); zero with an ideal gas |
 | Lift-gas mixing temperature at the bottomhole | THM-5 | `develop` default (`lift_gas_mixing`) |
+| Lift-gas mixing temperature at an injection point above the bottomhole | THM-9 | `develop` default (`lift_gas_mixing`), with an injection depth (INF-9) |
 
 The derivations of `develop`'s terms are in `docs/thermal_energy_modeling.md`.
 
 ## Safeguards
 
-None. The denominator of THM-1, THM-6, THM-7 and THM-8 is positive at every admissible state (SOL-1); THM-8 has the safeguards of PVT-GAS-10. The denominator of THM-5 is positive wherever the reservoir delivers fluid or there is lift gas; at $p_0 = p_r$ without lift gas it is zero, which no root reaches.
+None. The denominator of THM-1, THM-6, THM-7 and THM-8 is positive at every admissible state (SOL-1); THM-8 has the safeguards of PVT-GAS-10. The denominator of THM-5 is positive wherever the reservoir delivers fluid or there is lift gas; at $p_0 = p_r$ without lift gas it is zero, which no root reaches. So is THM-9's: $H_k \ge 0$, since the free gas at point $k$ is at least the lift gas (PVT-OIL-13's smooth maximum is at least its argument), and $H_k + H_{lg} > 0$ wherever there is lift gas or flow from below.
 
 ## Sources
 
@@ -100,7 +116,7 @@ None. The denominator of THM-1, THM-6, THM-7 and THM-8 is positive at every admi
 
 ## Test vectors
 
-The row vectors (`discretization.md`) exercise THM-1 and THM-2 through the energy row DISC-5, and THM-3 at point 0. The vectors below pin `develop`'s options (`specs/model/README.md`, Test vectors); `tests/test_thermal.py` checks their limiting cases.
+The row vectors (`discretization.md`) exercise THM-1 and THM-2 through the energy row DISC-5, and THM-3 at point 0. The vectors below pin `develop`'s options (`specs/model/README.md`, Test vectors); `tests/test_thermal.py` checks their limiting cases. THM-9 is also exercised through its row, DISC-12 (`discretization.md`).
 
 <!-- vectors:begin develop -->
 Generated by `specs/tools/make_develop_vectors.py` from develop (casadi 3.8.1): they pin develop's options. Do not edit by hand.
@@ -123,6 +139,16 @@ Generated by `specs/tools/make_develop_vectors.py` from develop (casadi 3.8.1): 
 | 2.0 | 3.0 | 380.0 | 290.0 | 0.3 | 2225.0 | 2500.0 | 335.7691296344991 |
 | 30.0 | 0.5 | 350.0 | 360.0 | 0.05 | 2225.0 | 4000.0 | 350.08926733216845 |
 
+### THM-9
+
+| T_tilde | w_g | w_l | w_lg | T_lg | cp_g | cp_l | → T_k |
+|---|---|---|---|---|---|---|---|
+| 350.0 | 3.0 | 20.0 | 1.0 | 300.0 | 2225.0 | 3000.0 | 348.331458567679 |
+| 350.0 | 3.0 | 20.0 | 0.0 | 300.0 | 2225.0 | 3000.0 | 350.0 |
+| 330.0 | 2.5 | 5.0 | 2.0 | 360.0 | 2225.0 | 2500.0 | 337.3910034602076 |
+| 360.0 | 10.0 | 30.0 | 5.0 | 290.0 | 2225.0 | 4000.0 | 354.52548330404215 |
+| 340.0 | 1.0 | 0.0 | 1.0 | 300.0 | 2225.0 | 3000.0 | 300.0 |
+
 ### THM-6
 
 | alpha | rho_g | v_g | rho_l | v_l | F | cp_g | cp_l | → Phi_f |
@@ -144,9 +170,9 @@ Generated by `specs/tools/make_develop_vectors.py` from develop (casadi 3.8.1): 
 
 | alpha | rho_g | v_g | rho_l | v_l | F | cos_incl | T | sg_gas | cp_g | cp_l | → Phi_JT |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| 1.0 | 60.0 | 10.0 | 850.0 | 2.0 | 300.0 | 1.0 | 350.0 | 0.65 | 2225.0 | 4180.0 | 0.002819369193135331 |
-| 0.5 | 80.0 | 6.0 | 800.0 | 2.5 | 900.0 | 0.7 | 330.0 | 0.7 | 2225.0 | 3000.0 | 0.002298249871027588 |
-| 0.9 | 300.0 | 3.0 | 820.0 | 1.0 | 1500.0 | 1.0 | 300.0 | 0.65 | 2225.0 | 2500.0 | -5.637110958810489e-05 |
+| 1.0 | 60.0 | 10.0 | 850.0 | 2.0 | 300.0 | 1.0 | 350.0 | 0.65 | 2225.0 | 4180.0 | 0.0028191977677500886 |
+| 0.5 | 80.0 | 6.0 | 800.0 | 2.5 | 900.0 | 0.7 | 330.0 | 0.7 | 2225.0 | 3000.0 | 0.0022981037734341628 |
+| 0.9 | 300.0 | 3.0 | 820.0 | 1.0 | 1500.0 | 1.0 | 300.0 | 0.65 | 2225.0 | 2500.0 | -5.521923798431832e-05 |
 | 0.0 | 50.0 | 10.0 | 850.0 | 2.0 | 500.0 | 1.0 | 350.0 | 0.65 | 2225.0 | 4180.0 | 0.0 |
 <!-- vectors:end develop -->
 
@@ -162,3 +188,4 @@ Generated by `specs/tools/make_develop_vectors.py` from develop (casadi 3.8.1): 
 | THM-6 | — | — | vectors; property: tests/test_thermal.py |
 | THM-7 | — | — | vectors; property: tests/test_thermal.py |
 | THM-8 | — | — | vectors; property: tests/test_thermal.py |
+| THM-9 | — | — | vectors; property: tests/test_thermal.py and tests/test_model_properties.py (the energy balance across the injection point) |

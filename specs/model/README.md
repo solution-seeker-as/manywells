@@ -53,24 +53,26 @@ Each component file lists its options: alternative equations for the same part o
 
 The `v1.0.0` configuration reproduces ManyWells v1.0.0, which generated the published datasets. It is the regression anchor: the verifier checks candidates in this configuration against reference root sets computed from v1.0.0 (`specs/verification.md`).
 
-| Part | `v1.0.0` | `develop` default |
-|---|---|---|
-| Geometry | GEO-1 (vertical), GEO-2 | GEO-3, GEO-4 (any survey), GEO-2 |
-| Mass transfer | BAL-3 (none) | BAL-10, PVT-OIL-13 (dissolved gas) |
-| Gas | PVT-GAS-1 (ideal gas) | PVT-GAS-5, PVT-GAS-6, PVT-GAS-9, PVT-GAS-11 (real gas, Dranchuk–Abou-Kassem); Papay's PVT-GAS-3, PVT-GAS-4 as an option |
-| Oil | PVT-OIL-1 (dead oil) | PVT-OIL-4 to PVT-OIL-9, PVT-OIL-15 (black oil, Vazquez–Beggs, capped at the gas–oil ratio) |
-| Liquid density | PVT-MIX-1 (constant) | PVT-MIX-6 (black oil and water) |
-| Fluid parameters | $\rho_l$, $R_s$, $c_{pg}$, $c_{pl}$, $f_g$ | PVT-MIX-10 ($\rho_o$, $\rho_{g,\text{sc}}$, $\rho_w$, gas–oil and water–liquid ratios), PVT-GAS-6 |
-| Surface tension | PVT-MIX-5 with PVT-OIL-3 | PVT-MIX-7 with PVT-OIL-3 and PVT-OIL-12 |
-| Slip | SLIP-1 to SLIP-8 | SLIP-1, SLIP-4, SLIP-5, SLIP-10, SLIP-12 to SLIP-16 (five regimes after Hasan et al.); the fitted classifier, SLIP-1 to SLIP-8 with SLIP-10, SLIP-11, as an option; with either, SLIP-18, the identity at its default |
-| Friction | FRIC-1 with FRIC-2 (fixed $f_D$) | FRIC-1, FRIC-3, FRIC-4, FRIC-6 (roughness, Chen), with PVT-MIX-8, PVT-MIX-9 |
-| Energy | BAL-5 with THM-1, THM-2; THM-3 at the bottom | BAL-13 with THM-1, THM-4, THM-6, THM-7, THM-8 (with PVT-GAS-10); THM-5 at the bottom |
-| Momentum | BAL-4, BAL-6 | BAL-11, BAL-6 |
-| Discretization | DISC-1 to DISC-6 | DISC-7 to DISC-11 |
-| Choke | CHK-1 to CHK-4, CHK-11, CHK-12; CHK-11 extends v1.0.0, whose row is NaN where it applies, a region no root reaches | same |
-| Solution | SOL-1 to SOL-6 | same |
+The `v2.0.0` configuration is the model that v2's datasets are drawn in: `develop`'s defaults of 2026-10-30, with the five regimes and not the fitted classifier (`slip.md`, Open question), and a PVT table as an alternative to the black oil. The row vectors of `vectors/v2_rows.json` pin it in both backends (Test vectors, below).
 
-`develop` implements the `v1.0.0` column through the general rows of the `develop` column, which reduce to it on a vertical uniform grid with dead oil, an ideal gas, a fixed $f_D$, the liquid-density surface tension and every thermal option off: DISC-11 gives DISC-6's rows as functions of the state, which the row vectors check (`discretization.md`). `manywells.configurations` builds a well in the `v1.0.0` configuration from v1.0.0's parameters (`v1_well`) and checks that a well is in a configuration (`check`); the `develop` configuration is the defaults of the dataclasses.
+| Part | `v1.0.0` | `v2.0.0` | Other options in `develop` |
+|---|---|---|---|
+| Geometry | GEO-1 (vertical), GEO-2 | GEO-3, GEO-4 (any survey), GEO-2 | |
+| Mass transfer | BAL-3 (none) | BAL-10, PVT-OIL-13 (dissolved gas) | |
+| Gas | PVT-GAS-1 (ideal gas) | PVT-GAS-5, PVT-GAS-6, PVT-GAS-9, PVT-GAS-11 (real gas, Dranchuk–Abou-Kassem); with a PVT table, PVT-TAB-4 | PVT-GAS-1 (ideal gas); Papay's PVT-GAS-3, PVT-GAS-4 |
+| Oil | PVT-OIL-1 (dead oil) | PVT-OIL-4 to PVT-OIL-9, PVT-OIL-15 (black oil, Vazquez–Beggs, capped at the gas–oil ratio); or, as the well's input, a PVT table or a set of them at several gas–oil ratios, PVT-TAB-1 to PVT-TAB-3, PVT-TAB-5, PVT-TAB-7 | PVT-OIL-1 (dead oil) |
+| Liquid density | PVT-MIX-1 (constant) | PVT-MIX-6 (black oil or a table, and water) | PVT-MIX-1, with dead oil |
+| Fluid parameters | $\rho_l$, $R_s$, $c_{pg}$, $c_{pl}$, $f_g$ | PVT-MIX-10 ($\rho_o$, $\rho_{g,\text{sc}}$, $\rho_w$, gas–oil and water–liquid ratios), PVT-GAS-6 | |
+| Surface tension | PVT-MIX-5 with PVT-OIL-3 | PVT-MIX-7 with PVT-OIL-3 and PVT-OIL-12 | PVT-MIX-5 |
+| Slip | SLIP-1 to SLIP-8 | SLIP-1, SLIP-4, SLIP-5, SLIP-10, SLIP-12 to SLIP-16 (five regimes after Hasan et al., with the constants of 2026-10-30); SLIP-18, a well's parameter, the identity at its default | the fitted classifier, SLIP-1 to SLIP-8 with SLIP-10, SLIP-11; other slip constants |
+| Friction | FRIC-1 with FRIC-2 (fixed $f_D$) | FRIC-1, FRIC-3, FRIC-4, FRIC-6 (roughness, Chen), with PVT-MIX-8, PVT-MIX-9 | FRIC-2 (fixed $f_D$); FRIC-5 (Haaland) |
+| Energy | BAL-5 with THM-1, THM-2; THM-3 at the bottom | BAL-13 with THM-1, THM-4, THM-6, THM-7, THM-8 (with PVT-GAS-10); THM-5 at the bottom, THM-9 at a lift-gas valve | each of THM-6, THM-7, THM-8 and the lift gas's mixing off |
+| Momentum | BAL-4, BAL-6 | BAL-11, BAL-6 | |
+| Discretization | DISC-1 to DISC-6 | DISC-7 to DISC-12 | |
+| Choke | CHK-1 to CHK-4, CHK-11, CHK-12; CHK-11 extends v1.0.0, whose row is NaN where it applies, a region no root reaches | same | |
+| Solution | SOL-1 to SOL-6 | same | |
+
+`develop` implements the `v1.0.0` column through the general rows of the `v2.0.0` column, which reduce to it on a vertical uniform grid with dead oil, an ideal gas, a fixed $f_D$, the liquid-density surface tension and every thermal option off: DISC-11 gives DISC-6's rows as functions of the state, which the row vectors check (`discretization.md`). `manywells.configurations` builds a well in the `v1.0.0` configuration from v1.0.0's parameters (`v1_well`) and checks that a well is in a configuration (`check`), with every option of `v2.0.0` written out, so that `develop`'s defaults can move on without moving it. The `develop` configuration is the defaults of the dataclasses; on 2026-10-30 they are `v2.0.0`'s, which `tests/test_configurations.py` reports when a default changes.
 
 Well options in every configuration:
 
@@ -79,6 +81,7 @@ Well options in every configuration:
 | Inflow | INF-1 Vogel, INF-2 productivity index, INF-3 fixed rate (`v1.0.0` only), INF-8 fixed liquid rate (`develop` only); with INF-4 to INF-7 | INF-1 |
 | Choke model | CHK-5 Simpson, CHK-6 Bernoulli | CHK-5 |
 | Choke profile | CHK-7 linear, CHK-8 sigmoid, CHK-9 convex, CHK-10 concave | all four |
+| Lift-gas injection point | INF-5 at the bottomhole (`injection_md=None`); INF-9 at a depth, with THM-9 and DISC-12 (`develop` only; the `v1.0.0` configuration injects at the bottomhole) | the bottomhole |
 
 Step 7 added `develop`'s changes to the component files as options with new IDs; each has a feature spec in `specs/features/`.
 
@@ -94,6 +97,7 @@ Test vectors are inputs with expected outputs, checked against `develop` by `tes
   - **From v1.0.0**, between `<!-- vectors:begin -->` and `<!-- vectors:end -->`, for the `v1.0.0` configuration. v1.0.0 is the reference, so they check that `develop` reproduces it.
   - **From `develop`**, between `<!-- vectors:begin develop -->` and `<!-- vectors:end develop -->`, for `develop`'s options. They pin each option as specified and implemented, so that a later change or a port (the Rust core, `specs/architecture.md`) that alters a value is caught. They do not show that the implementation is right; the sources and the property tests in the coverage tables do that.
 - **Row vectors**, in `vectors/v1_rows.json`, give v1.0.0's residual rows at perturbed states of two wells, in v1.0.0's row order (`discretization.md`). `develop` must reproduce them in its `v1.0.0` configuration.
+- **Row vectors of `v2.0.0`**, in `vectors/v2_rows.json`, give `develop`'s rows in the `v2.0.0` configuration at perturbed roots of four wells, in DISC-11's row order. Each well's inputs are written out in full, every option and slip constant included. Between them the wells take every choice the configuration leaves to a well: the black oil, with and without a bubble point, a PVT table and a table set; Vogel's inflow, a productivity index and a fixed liquid rate; both chokes and the four profiles; lift gas at the bottomhole and through a valve; a deviated well, a horizontal section and a non-uniform grid; and a profile scale. Both backends must reproduce them.
 - **Regenerate** the v1.0.0 vectors from the v1.0.0 worktree (`verification/build/README.md` sets it up), from the repository root:
 
   ```console
@@ -102,8 +106,62 @@ Test vectors are inputs with expected outputs, checked against `develop` by `tes
 
   The script rewrites the v1.0.0 blocks and the JSON file. v1.0.0 is frozen, so the output only changes if the script does.
 - **Regenerate** the `develop` vectors with `uv run python specs/tools/make_develop_vectors.py`, which rewrites the `develop` blocks. Their values change only if an option changes, and such a change needs Bjarne's sign-off like any change to these files.
+- **Regenerate** the `v2.0.0` row vectors with `uv run python specs/tools/make_v2_vectors.py`. A change of their values is a change of the `v2.0.0` configuration, which needs Bjarne's sign-off.
 
 A vector whose equation has no implementation on `develop` is skipped with the reason. A vector that `develop` is known not to reproduce is a strict expected failure in `tests/test_spec_vectors.py`, with the reason.
+
+### Independent checks
+
+The `develop` vectors pin `develop`, and the Rust core implements the same spec, so neither shows that a correlation is implemented as published. The independent checks compare `develop`'s values with sources independent of it (2026-10-29, on `develop` at `f7f1218`, and rerun after the rulings below; `plans/model-lock-plan.md`, Step L3). Bjarne signed off the record of these checks, this section and the notes in the component files, on 2026-10-29.
+
+- **Worked examples**, from the sources or from textbooks, compared at the precision printed: `tests/test_worked_examples.py`, on both backends, in every run of the test suite. A value that its own example's equation does not give at the example's inputs is the example's error; the test lists those and does not use them.
+- **`fluids`** 1.3.1 (Caleb Bell, MIT licence), and **the sources' equations, transcribed**, where no worked example is in hand: `plans/evidence/independent_checks.py`, run by hand (`plans/evidence/README.md`, Independent checks). From then on the vectors carry the check: a change that alters a checked value fails `tests/test_spec_vectors.py`, and the vectors change only with Bjarne's sign-off, which reruns the script.
+
+A value `develop` does not reproduce, after checking units and inputs, is a finding. It stays open until Bjarne rules on it, and is a strict expected failure in the test. The checks found two, and Bjarne ruled on both on 2026-10-29 to follow the source: PVT-GAS-5's coefficient of $\gamma_g$ in $p_{pc}$ is Sutton's 131.0, where `develop` had 131.07 (`pvt/gas.md`), and PVT-MIX-9 weights by the flowing mass fraction of gas, as Hasan et al. do, where `develop` took the in-situ one (`pvt/mixture.md`). Both backends now reproduce every example, and none is open. Bjarne signed off the two fixes the same day: the text and the measured effect of each ruling, PVT-MIX-9's fraction taken from the point's state with no guard (`pvt/mixture.md`, Safeguards), the regenerated vectors and table, and the re-pinned tests. Each component file's Test vectors section has the details.
+
+Every ID of `develop`'s configuration, of the options Papay, Haaland and the fitted classifier, and of the well options, with its independent check:
+
+| IDs | Independent check |
+|---|---|
+| GEO-2, GEO-3, GEO-4 | None: the trajectory and the cross-section, definitions |
+| BAL-6 to BAL-11, BAL-13 | None: balance laws |
+| DISC-7 to DISC-11 | None: ManyWells' discretization |
+| SOL-1 to SOL-6 | None: ManyWells' definitions of the root set, the stability label and the operating point |
+| SMO-1 to SMO-4 | None: ManyWells' smoothing |
+| PVT-GAS-2, PVT-GAS-6 | None: definitions, of standard conditions and of the gas's gravity and gas constant |
+| PVT-GAS-5 | Whitson and Brulé (2000), Appendix B, Problem 6, a worked example; Sutton (1985), Eqs. (14) and (15), transcribed. Ruled 2026-10-29: Sutton's 131.0 for 131.07 |
+| PVT-GAS-7 | Ahmed (2006), Example 2-14, a worked example |
+| PVT-GAS-9, PVT-GAS-11 | Dranchuk and Abou-Kassem (1975), Eqs. (2) and (3), transcribed; no worked example in hand |
+| PVT-GAS-10 | A central difference of that transcription along an isobar |
+| PVT-GAS-3, PVT-GAS-4 (Papay, an option) | None: Papay (1968) is not in hand, and no textbook in hand gives the correlation |
+| PVT-OIL-2 | None: a definition |
+| PVT-OIL-4, PVT-OIL-7, PVT-OIL-13, PVT-OIL-15 | None: the black oil's composition, its caps and its mass balance, ManyWells' own; the $B_o$ examples run through PVT-OIL-15's cap |
+| PVT-OIL-5 | Ahmed (2006), Example 2-25, a worked example |
+| PVT-OIL-6 | Ahmed (2006), Example 2-18, a worked example |
+| PVT-OIL-8 | Ahmed (2006), Example 2-29, Method 2, a worked example |
+| PVT-OIL-9 | None: the oil's mass over its volume |
+| PVT-OIL-10, PVT-OIL-11 | Ahmed (2006), Example 2-35, a worked example |
+| PVT-OIL-3, PVT-OIL-12 | Abdul-Majeed and Abu Al-Soof (2000), Eqs. (1) to (5), transcribed, and the data of their Table 1; no worked example in hand |
+| PVT-WAT-1 | None: constants |
+| PVT-WAT-3 | None: no source in hand (`validity.md`, note 5) |
+| PVT-MIX-6, PVT-MIX-7, PVT-MIX-8, PVT-MIX-10 | None: mixing rules and definitions |
+| PVT-MIX-9 | `fluids`' `gas_liquid_viscosity`, for the mixing rule; Hasan and Kabir (2018), Field Example 3.1, a worked example. Ruled 2026-10-29: the flowing mass fraction for the in-situ one |
+| SLIP-1 | None: the drift-flux law |
+| SLIP-4 | Hasan and Kabir (2018), Field Examples 3.1 and 4.1, worked examples |
+| SLIP-5 | Hasan and Kabir (2018), Field Example 3.1, a worked example |
+| SLIP-10 | None: the one example in hand, Hasan and Kabir's (2018) Field Example 4.1, prints a factor its own Eq. 4.33 does not give |
+| SLIP-12 to SLIP-16 | Hasan and Kabir (2018), Field Examples 3.1 and 4.1 and Appendix 7-E, §7-E.2, worked examples: the flow regime, and $C_0$ in slug flow; not their void fractions (`slip.md`, Test vectors) |
+| SLIP-18 | None: ManyWells' own (`specs/features/020-profile-scale.md`) |
+| SLIP-2, SLIP-3, SLIP-6 to SLIP-8, SLIP-11 (the fitted classifier, an option) | None: v1.0.0's own fit to SLIP-9; the `v1.0.0` vectors check that `develop` reproduces it |
+| FRIC-1, FRIC-3, FRIC-6 | None: Darcy–Weisbach, the Reynolds number and a blend |
+| FRIC-4 | `fluids`' `Chen_1979`; Chen (1979), Table I, the largest deviation from his form of Colebrook's equation |
+| FRIC-5 (Haaland, an option) | `fluids`' `Haaland`; Haaland (1983), the stated 1.5% from Colebrook–White |
+| THM-1, THM-4 to THM-8 | None: the energy balance's terms and its bottom boundary, derived in `docs/thermal_energy_modeling.md`; THM-8's factor is PVT-GAS-10 |
+| CHK-1 to CHK-3, CHK-6 to CHK-12 | None: ManyWells' wellhead boundary, paper (11) to (14) |
+| CHK-4 | `fluids`' `P_critical_flow` |
+| CHK-5 | None: Simpson, Rooney and Grattan (1983) is not in hand |
+| INF-1 | Guo et al. (2007), Example Problem 3.2, a worked example |
+| INF-2, INF-4 to INF-8 | None: definitions and balances |
 
 ## Coverage tables
 

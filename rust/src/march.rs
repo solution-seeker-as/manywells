@@ -122,25 +122,41 @@ impl<'a> Marcher<'a> {
         self.counts.set(c);
     }
 
+    /// The lift-gas rate (kg/s) in the phase rates at point i (INF-9)
+    fn lift_gas(&self, i: usize) -> f64 {
+        discretization::lift_gas_rate(self.spec, self.op.w_lg, i)
+    }
+
     /// The temperature at point i that zeroes the energy row of cell i, given the state at point i - 1, where the row
     /// is linear in the temperature and does not depend on the pressure (Thermal::is_linear): heat loss alone, with
-    /// a heat flux capacity that the phase rates fix (thermal::energy_step). None where the row depends on the state.
+    /// a heat flux capacity that the phase rates at point i fix (thermal::energy_step). None where the row depends on
+    /// the state, and at the injection point where the lift gas mixes in (DISC-12), which the general solve takes.
     fn linear_temperature(&self, cell: geometry::Cell, prev: &State, w_res: f64) -> Option<f64> {
         let (spec, op) = (self.spec, self.op);
-        if !spec.thermal.is_linear(&spec.fluid) {
+        if !spec.thermal.is_linear(&spec.fluid) || discretization::mixes_lift_gas(spec, cell) {
             return None;
         }
         let a = spec.a();
-        let (w_g, w_l) = spec.fluid.phase_rates(prev.p, prev.t, w_res, op.w_lg);
+        let (w_g, w_l) = spec.fluid.phase_rates(prev.p, prev.t, w_res, self.lift_gas(cell.index));
         let capacity = spec.fluid.cp_g * (w_g / a) + spec.fluid.cp_l * (w_l / a);
         let t_a = thermal::ambient_temperature(cell.tvd_frac, op.t_r, op.t_s);
         Some(thermal::energy_step(prev.t, t_a, cell.delta_md, spec.thermal.h, spec.geometry.d, capacity))
     }
 
-    /// The slope of cell i's energy row in the temperature from the heat loss alone, 1 + ΔMD 4h / (D cp_flux), at s
-    fn heat_loss_slope(&self, cell: geometry::Cell, s: &State) -> f64 {
+    /// The slope of cell i's energy row in the temperature from the heat loss alone, 1 + ΔMD 4h / (D cp_flux), at s.
+    /// At the injection point where the lift gas mixes in, DISC-12's row is (1 - λ) times DISC-10's plus λ (T - T_lg),
+    /// with λ the lift gas's share of the heat-capacity rate at s (thermal::lift_gas_share), and the slope is
+    /// (1 - λ) times the heat loss's plus λ.
+    fn heat_loss_slope(&self, cell: geometry::Cell, s: &State, w_res: f64) -> f64 {
         let spec = self.spec;
-        1.0 + cell.delta_md * 4.0 * spec.thermal.h / (spec.geometry.d * thermal::heat_flux_capacity(&spec.fluid, s))
+        let slope = 1.0 + cell.delta_md * 4.0 * spec.thermal.h
+            / (spec.geometry.d * thermal::heat_flux_capacity(&spec.fluid, s));
+        if !discretization::mixes_lift_gas(spec, cell) {
+            return slope;
+        }
+        let (w_g, w_l) = spec.fluid.phase_rates(s.p, s.t, w_res, self.op.w_lg);
+        let lambda = thermal::lift_gas_share(w_g, w_l, self.op.w_lg, &spec.fluid);
+        (1.0 - lambda) * slope + lambda
     }
 
     /// The state at point i at pressure p whose temperature zeroes the energy row of cell i, given the state prev at
@@ -159,6 +175,11 @@ impl<'a> Marcher<'a> {
     /// make r_T U-shaped in T, with two roots; the solve takes the one on the rising side of its minimum, which
     /// continues the root without the term (specs/features/016-joule-thomson.md).
     ///
+    /// At the injection point where the lift gas mixes in, the row is DISC-12, (1 - λ) times DISC-10's row plus
+    /// λ (T - T_lg) with λ in [0, 1] (heat_loss_slope): both parts are at most zero at min(T_lo, T_lg), and at least
+    /// zero at max(T_{i-1}, T_a, T_lg) without frictional heating, so the bracket takes in T_lg, and the step-outs are
+    /// as above (specs/features/021-lift-gas-injection-depth.md).
+    ///
     /// Where the row jumps across zero instead of crossing it, as where the slip law switches between several void
     /// fractions, Brent converges onto the jump: the state there is returned, as not solved, so that the march can
     /// continue at it, as at a cell whose momentum row is not solved (CellStep::Unsolved). None if there is no state.
@@ -166,11 +187,13 @@ impl<'a> Marcher<'a> {
                          -> Option<(State, bool)> {
         self.count(|c| c.temperature_solves += 1);
         let (spec, op) = (self.spec, self.op);
+        let w_lg = self.lift_gas(cell.index);
         let mut t = guess;
         let mut last_step = f64::INFINITY;
         for _ in 0..CHORD_MAXITER {
-            let Some(s) = self.point_state(p, t, w_res, cell.cos_incl) else { break };
-            let step = discretization::energy_row(spec, op, cell, &s, prev) / self.heat_loss_slope(cell, &s);
+            let Some(s) = self.point_state(p, t, w_res, w_lg, cell.cos_incl) else { break };
+            let step = discretization::energy_row(spec, op, cell, &s, prev, w_res)
+                / self.heat_loss_slope(cell, &s, w_res);
             if step.abs() <= RTOL * t.abs() {
                 return Some((s, true));
             }
@@ -181,12 +204,16 @@ impl<'a> Marcher<'a> {
         }
         self.count(|c| c.chord_fallbacks += 1);
         let mut row = |t: f64| -> Result<f64, RootError> {
-            let s = self.point_state(p, t, w_res, cell.cos_incl).ok_or(RootError::NoSignChange)?;
-            Ok(discretization::energy_row(spec, op, cell, &s, prev))
+            let s = self.point_state(p, t, w_res, w_lg, cell.cos_incl).ok_or(RootError::NoSignChange)?;
+            Ok(discretization::energy_row(spec, op, cell, &s, prev, w_res))
         };
         let t_a = thermal::ambient_temperature(cell.tvd_frac, op.t_r, op.t_s);
         let t_lo = prev.t.min(t_a) - cell.delta_md * spec.thermal.gravity_term_bound(&spec.fluid, cell.cos_incl);
-        let (mut a, mut b) = (t_lo, prev.t.max(t_a));
+        let (mut a, mut b) = if discretization::mixes_lift_gas(spec, cell) {
+            (t_lo.min(op.t_lg), prev.t.max(t_a).max(op.t_lg))
+        } else {
+            (t_lo, prev.t.max(t_a))
+        };
         let mut f_a = row(a).ok()?;
         let mut f_b = row(b).ok()?;
         if f_b < 0.0 {
@@ -238,8 +265,8 @@ impl<'a> Marcher<'a> {
             }
         }
         let (t, f) = brentq(&mut row, a, b, 0.0, RTOL, 100).ok()?;
-        let s = self.point_state(p, t, w_res, cell.cos_incl)?;
-        let solved = f.abs() <= TEMPERATURE_TOL * self.heat_loss_slope(cell, &s);
+        let s = self.point_state(p, t, w_res, w_lg, cell.cos_incl)?;
+        let solved = f.abs() <= TEMPERATURE_TOL * self.heat_loss_slope(cell, &s, w_res);
         if !solved {
             self.count(|c| c.temperature_failures += 1);
         }
@@ -251,7 +278,7 @@ impl<'a> Marcher<'a> {
     fn state_at(&self, p: f64, cell: geometry::Cell, t_fixed: Option<f64>, prev: &State, w_res: f64, guess: f64)
                 -> Option<(State, bool)> {
         match t_fixed {
-            Some(t) => self.point_state(p, t, w_res, cell.cos_incl).map(|s| (s, true)),
+            Some(t) => self.point_state(p, t, w_res, self.lift_gas(cell.index), cell.cos_incl).map(|s| (s, true)),
             None => self.solve_temperature(p, cell, prev, w_res, guess),
         }
     }
@@ -276,13 +303,14 @@ impl<'a> Marcher<'a> {
         brentq(&mut h, 0.0, 1.0, 0.0, RTOL, 100).ok().map(|(alpha, _)| alpha)
     }
 
-    /// The state at a point at pressure p and temperature t, in a cell of inclination cos_incl: the phase rates there,
-    /// the densities, the surface tension, the void fraction from the slip law, and the velocities that carry the
-    /// rates. So the inflow and mass rows (INF-6, INF-7, DISC-7, DISC-8) and the closure rows hold by construction.
-    fn point_state(&self, p: f64, t: f64, w_res: f64, cos_incl: f64) -> Option<State> {
+    /// The state at a point at pressure p and temperature t, in a cell of inclination cos_incl, where the lift gas's
+    /// rate in the phase rates is w_lg (INF-9): the phase rates there, the densities, the surface tension, the void
+    /// fraction from the slip law, and the velocities that carry the rates. So the inflow and mass rows (INF-6, INF-7,
+    /// DISC-7, DISC-8) and the closure rows hold by construction.
+    fn point_state(&self, p: f64, t: f64, w_res: f64, w_lg: f64, cos_incl: f64) -> Option<State> {
         self.count(|c| c.states += 1);
         let (a, fluid) = (self.spec.a(), &self.spec.fluid);
-        let (w_g, w_l) = fluid.phase_rates(p, t, w_res, self.op.w_lg);
+        let (w_g, w_l) = fluid.phase_rates(p, t, w_res, w_lg);
         let rho_g = fluid.gas_density(p, t);
         let rho_l = fluid.liquid_density(p, t);
         let sigma = fluid.surface_tension(p, t, rho_l);
@@ -315,8 +343,8 @@ impl<'a> Marcher<'a> {
         let mut failed = false;
         let cos_0 = self.spec.geometry.point_cos(0);
         let (spec, op) = (self.spec, self.op);
-        let t_0 = spec.thermal.inflow_temperature(w_res, op.w_lg, op.t_r, op.t_lg, &spec.fluid);
-        let Some(mut prev) = self.point_state(p_0, t_0, w_res, cos_0) else {
+        let t_0 = discretization::inflow_temperature(spec, op, w_res);
+        let Some(mut prev) = self.point_state(p_0, t_0, w_res, self.lift_gas(0), cos_0) else {
             x.extend_from_slice(&[f64::NAN; DIM_X]);
             return March { x, w_res, failed: true, below_separator: false };
         };
@@ -345,7 +373,8 @@ impl<'a> Marcher<'a> {
     }
 
     /// The shooting residual R(p_0) (kg/s), the choke row at the wellhead, and whether the march failed; None if R
-    /// is not finite. Below p_s the choke passes no flow, and R is the rate at the last point reached.
+    /// is not finite. Below p_s the choke passes no flow, and R is the rate at the last point reached, with the lift
+    /// gas, which the flow carries from the injection point to the wellhead.
     pub fn residual(&self, p_0: f64) -> Option<(f64, bool)> {
         let m = self.march(p_0);
         let last = State::of(&m.x[m.x.len() - DIM_X..]);
@@ -501,8 +530,8 @@ mod tests {
                     assert!(row(prev.p).unwrap() > 0.0, "{name}, root {}, cell {i}: row at p_prev", root.x[0]);
                     if t_fixed.is_none() {
                         let r_t: Vec<f64> = (0..=200).map(|k| s.t - 40.0 + 80.0 * k as f64 / 200.0)
-                            .filter_map(|t| m.point_state(s.p, t, root.w_res, cell.cos_incl))
-                            .map(|st| discretization::energy_row(&spec, &op, cell, &st, &prev))
+                            .filter_map(|t| m.point_state(s.p, t, root.w_res, m.lift_gas(i), cell.cos_incl))
+                            .map(|st| discretization::energy_row(&spec, &op, cell, &st, &prev, root.w_res))
                             .filter(|r| r.is_finite()).collect();
                         let crossings = r_t.windows(2).filter(|w| (w[0] < 0.0) != (w[1] < 0.0)).count();
                         assert_eq!(crossings, 1, "{name}, root {}, cell {i}: energy row", root.x[0]);

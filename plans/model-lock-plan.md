@@ -1,17 +1,12 @@
 # Lock the model for the new sampler — plan
 
-*Draft 2026-10-29. Owner: Bjarne Grimstad. Status: in progress; L2, L4, L7 and L8 done; L1 and L3 signed off, in PRs #31 and #32; L6 not started; L5 next (Where we stopped, 2026-10-29).*
+*Draft 2026-10-29. Owner: Bjarne Grimstad. Status: in progress; L1 to L4, L7 and L8 done; L5 in review; L6 measuring (Where we are, 2026-10-30).*
 
-## Where we stopped (2026-10-29)
+## Where we are (2026-10-30)
 
-- **Merged:** L2's validity refusals (PR #30), and the records of L1, L4, L7 and L8.
-- **Open PRs, signed off by Bjarne, waiting for his merge:**
-  - **PR #31**, feature 021, the lift gas through a valve (L1). Branch `lift-gas-injection-depth`, worktree `.worktrees/lift-gas-injection-depth`.
-  - **PR #32**, the independent checks and the two source fixes (L3). Branch `independent-checks`, worktree `.worktrees/independent-checks`.
-
-  Both edit `specs/tools/make_develop_vectors.py`, `thermal.md`'s vectors and the Rust bindings. Whichever is merged second needs `develop` merged into it, its vectors regenerated (`uv run python specs/tools/make_develop_vectors.py`; with `specs/tools/make_pvt_tables.py` for #32's table), and its checks rerun before it merges.
-- **L6** was stopped before it measured anything. Its branch and worktree, `distribution-margin` at `681e04b`, are empty. The work is as below, and it starts by giving `scripts/verification/regenerate_distributions.py` a seed option, so that the draws can be repeated to measure the gaps' noise. The CasADi regenerations take about 35 minutes each on 12 processes.
-- **L5** follows once #31 and #32 are merged. It needs Bjarne's choice of the configuration's name (`v2.0` proposed).
+- **Merged:** L2's validity refusals (PR #30), feature 021 (L1, PR #31), the independent checks and the two source fixes (L3, PR #32), and the records of L4, L7 and L8.
+- **L5** is on branch `v2-configuration` (worktree `.worktrees/v2-configuration`), for Bjarne's sign-off: the `v2.0.0` configuration, its check and its row vectors. Bjarne chose the name on 2026-10-30, and left the rule for changing a configuration to the v2.0.0 release (Out of scope).
+- **L6** is measuring on branch `distribution-margin` (worktree `.worktrees/distribution-margin`): `scripts/verification/regenerate_distributions.py` has a seed option, and the gaps at the default seed are measured in both backends. The noise across seeds and the options for the bound are next.
 
 The next step towards v2 is a new sampling procedure: synthetic wells and data that are more realistic than v1's (`specs/goals.md`, limitation 5). The sampler draws the inputs of a model, so the model should not move under it. This plan brings `develop` to the point where the sampler can be implemented:
 
@@ -33,7 +28,7 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
   - PVT tables (018), five flow regimes after Hasan et al. (019) and a profile scale for calibration (020) are merged.
   - Bjarne signed off the feature specs 001 to 011, 013, 019 and 020 on 2026-10-29.
   - PR #29 fixed the two open model bugs: the live-oil density (#16, PVT-OIL-15) and the CasADi backend's temperature bounds (#13). Bjarne signed off what it left open the same day (`823de32`).
-  - `plans/improvements.md` holds the backlog, merged with the review of 2026-10-16.
+  - `plans/backlog.md` holds the backlog, merged with the review of 2026-10-16.
 - **`develop`'s model is the defaults of the dataclasses** (`specs/model/README.md`). Nothing names it, so a changed default changes the model a dataset is drawn from without any check noticing.
 - **The sampler is v1's procedure ported to `develop`** (`specs/sampling.md`): independent draws, extended to the trajectory, roughness and black-oil inputs, with Step 4's starting points (SMP-41 to SMP-43).
   - Its wells are often outside the correlations' ranges (`specs/model/validity.md`, Where the sampler leaves the ranges). 69% of the sampled cases have a gas–oil ratio above 534 Sm³/Sm³, the lower end of gas condensates. 42% lie outside Hasan et al.'s gas–liquid ratios, and 24% have horizontal cells, which no option models with stratified flow.
@@ -96,7 +91,7 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
 ### Step L3 — Check the correlations against independent sources
 
 - **Status.** Implemented on the branch `independent-checks` and signed off by Bjarne on 2026-10-29: `tests/test_worked_examples.py`, the notes in the specs and the list in `specs/model/README.md`. It found two differences from the sources, both ruled the same day to follow the source, and fixed on the same branch before its PR: Sutton's $p_{pc}$ has 131.0 where the code had 131.07 (PVT-GAS-5), and the mixture viscosity weights by the flowing gas fraction of Hasan et al.'s Eq. (A-3), where the code took the in-situ one (PVT-MIX-9).
-- **Goal.** Independent evidence that each correlation in the v2 configuration is implemented as published. Today the `develop` vectors come from `develop` itself, and the two backends implement the same spec, so agreement between them does not check the values. This step takes over Step V1 of a draft validation plan, since retired (its Step V2 is `plans/improvements.md` §2.16).
+- **Goal.** Independent evidence that each correlation in the v2 configuration is implemented as published. Today the `develop` vectors come from `develop` itself, and the two backends implement the same spec, so agreement between them does not check the values. This step takes over Step V1 of a draft validation plan, since retired (its Step V2 is `plans/backlog.md` §2.16).
 - **Work.**
   - **Against `fluids`** (Caleb Bell, MIT licence), run by hand with `uv run --with fluids==1.3.1`, so it is not a dependency. A script in `plans/evidence/` compares:
     - Chen and Haaland (FRIC-4, FRIC-5);
@@ -136,15 +131,20 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
 
 ### Step L5 — Name and pin the v2 configuration
 
+- **Status.** In review, 2026-10-30, on branch `v2-configuration`:
+  - the `v2.0.0` column in `specs/model/README.md`;
+  - `V2` in `configurations.py`. Its `check` fixes every model option and the slip law's constants, and leaves the well's inputs free, a PVT table among them (Bjarne, 2026-10-30). There is no constructor: the sampler redesign adds one if it needs it;
+  - `specs/model/vectors/v2_rows.json`, four wells written by `specs/tools/make_v2_vectors.py`, which `tests/test_spec_vectors.py` checks in both backends.
+  - Bjarne signed off the configuration's choices on 2026-10-30: `profile_scale` free, as a well's parameter; the slip constants fixed at their values; Papay's gas law, Haaland's friction factor and the fitted classifier left out. Whether a gas-rate inflow added later widens `v2.0.0`'s check (`specs/goals.md` calls it a well option) is decided with the sampling distribution.
 - **Goal.** The lock: a named configuration that the sampler draws in and that a test pins, so that later work on `develop` cannot change it unnoticed.
 - **Work** (after Steps L1 to L4, and the feature specs that L1 adds):
-  1. In `specs/model/README.md`, a column for the configuration next to `v1.0.0`, one option per part, with the five regimes and not the fitted classifier (L4). The name is Bjarne's to choose; `v2.0` is proposed. `develop`'s defaults can then move on without moving it.
+  1. In `specs/model/README.md`, a column for the configuration next to `v1.0.0`, one option per part, with the five regimes and not the fitted classifier (L4). Bjarne named it `v2.0.0` on 2026-10-30, after `v1.0.0`. `develop`'s defaults can then move on without moving it.
   2. In `configurations.py`:
      - add the name to `CONFIGURATIONS`;
-     - have `check(wp, name)` test every option, with exact types (`plans/improvements.md` §2.11, Step L7);
+     - have `check(wp, name)` test every option, with exact types (`plans/backlog.md` §2.11, Step L7);
      - add a constructor for its wells if the sampler needs one.
   3. Pin it with row vectors from `develop` in that configuration, in both backends: rows at perturbed states of a few wells, as `specs/model/vectors/v1_rows.json` pins `v1.0.0`.
-  4. Write the rule for changing it: a change to a pinned configuration is a new configuration (`v2.1`), never an edit. Datasets already record their configuration and code version (SMP-31).
+  4. Write the rule for changing it: a change to a pinned configuration is a new configuration (`v2.1`), never an edit. Datasets already record their configuration and code version (SMP-31). **Left out** (Bjarne, 2026-10-30): the rule is v2.0.0 release work (Out of scope), and the versioning rule (`specs/constitution.md`, Versions) does without it.
 - **Output.** The configuration in the spec and the code, its vectors and the test, and the rule in `specs/constitution.md` or `specs/model/README.md`.
 - **Done when.** `check` passes on wells built in the configuration, both backends' rows match its vectors, and CI runs the test.
 - **Who.** An agent implements; Bjarne signs off the configuration and the rule.
@@ -192,7 +192,7 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
 ### Step L7 — Fix the sampler's and the inputs' known bugs
 
 - **Goal.** No known bug on the sampler's code path or in the validation of its inputs.
-- **Work.** The backlog items, one PR, each with a test, each moved to the Done table of `plans/improvements.md`:
+- **Work.** The backlog items, one PR, each with a test, each moved to the Done table of `plans/backlog.md`:
   - §1.10, `write_dataset` truncates a dotted name;
   - §1.11, the QTOT filter's standard deviation (needs sign-off; or left to the redesign, if it replaces the filter);
   - §1.4, `cpr` silently overwritten;
@@ -205,7 +205,7 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
 
 ### Step L8 — Housekeeping
 
-- `plans/validation-plan.md` (untracked): Step V1 moves into Step L3. Commit it with Step V2 alone, the fixed wellhead pressure, which the sampler does not need. Or drop it. **Done 2026-10-29:** Step V2 is `plans/improvements.md` §2.16, and the draft is deleted (Bjarne).
+- `plans/validation-plan.md` (untracked): Step V1 moves into Step L3. Commit it with Step V2 alone, the fixed wellhead pressure, which the sampler does not need. Or drop it. **Done 2026-10-29:** Step V2 is `plans/backlog.md` §2.16, and the draft is deleted (Bjarne).
 - Issue #2, "Add dataset generation test and bump numpy version to >=2.0", is from 2025. Check it against `tests/test_sampling.py` and `pyproject.toml`, then close or update it. **Done 2026-10-29:** closed; `develop` runs numpy 2, and the ported sampler seeds every draw (SMP-31).
 
 ## Sequencing
@@ -230,12 +230,12 @@ Steps L1 to L4 can run in parallel: L1, L2 and L4 are mostly Bjarne's decisions,
 
 ## Out of scope, after this plan
 
-- **Roots each backend's search misses** (`plans/improvements.md` §2.9).
+- **Roots each backend's search misses** (`plans/backlog.md` §2.9).
 - **Verifier cases** for wells whose roots lie near $p_r$, and for wells with more than two roots.
 - **The Rust core's performance target,** and the batch API (§4.3), which belongs with the v2 dataset generation.
-- **The fixed-wellhead-pressure boundary** (`plans/improvements.md` §2.16).
+- **The fixed-wellhead-pressure boundary** (`plans/backlog.md` §2.16).
 - **Calibration's open items:** the false minimum (§2.10), whether $p_r$ is free, and the default noise.
-- **v2.0.0 release work:** prebuilt wheels, the license, the v2 dataset schema.
+- **v2.0.0 release work:** prebuilt wheels, the license, the v2 dataset schema, and the rule for changing a configuration once a release ships it or a published dataset uses it (left out of the versioning rule, Bjarne, 2026-10-30; constitution, Versions).
 
 ## Needs Bjarne's sign-off
 
@@ -243,11 +243,10 @@ Steps L1 to L4 can run in parallel: L1, L2 and L4 are mostly Bjarne's decisions,
 - `specs/model/validity.md`: its rules and five decisions, and the follow-ups in the component files (L1, L2);
 - the independent-check notes, and a ruling on any finding (L3);
 - the several-void-fractions ruling (L4): done 2026-10-29;
-- the v2 configuration, its name, and the rule for changing it (L5);
+- the `v2.0.0` configuration and its row vectors (L5); its name was chosen on 2026-10-30, and the rule for changing it was left to the release;
 - the distribution check's margin (L6);
 - the QTOT filter's standard deviation (L7, §1.11): left to the redesign, 2026-10-29.
 
 ## Open decisions
 
 - **Which well types the datasets draw, and horizontal sections** (`validity.md`'s decision 5): with the sampling distribution, in the redesign.
-- **The configuration's name** (L5).

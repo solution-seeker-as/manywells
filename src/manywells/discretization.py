@@ -14,6 +14,10 @@ grid points, from the bottomhole (point 0) to the wellhead (point N), in this or
     [p, v_g, v_l, alpha, rho_g, rho_l, T]
 (bar, m/s, m/s, -, kg/m³, kg/m³, K). Cell i lies between points i - 1 and i. Each row is defined once, below, and
 build_system assembles it into the full residual and into the per-point functions the initial-guess march solves.
+
+The lift gas enters at the well's injection point k (INF-9; WellProperties.injection_point), the bottomhole by default:
+the phase rates of the points from k up carry it, and above the bottomhole cell k's energy row mixes it in (DISC-12).
+Where k = 0 the rows are built exactly as without an injection depth.
 """
 
 from dataclasses import dataclass
@@ -97,11 +101,40 @@ class OperatingPoint:
 # Rows
 
 
+def lifts(wp) -> np.ndarray:  # spec: INF-9
+    """Whether the lift gas flows at each point, 0 to N: 1 from the injection point up, 0 below it."""
+    return (np.arange(wp.geometry.n_cells + 1) >= wp.injection_point).astype(float)
+
+
+def lift_gas_rate(w_lg, lift):  # spec: INF-9
+    """The lift-gas rate in a point's phase rates, for the lift-gas rate w_lg: w_lg where the lift gas flows
+    (lift = 1), 0 below the injection point (lift = 0). lift is a number, or a symbol in the functions that serve every
+    cell."""
+    return lift * w_lg
+
+
+def inflow_temperature(wp, w_res, op):
+    """The temperature of the fluid entering at the bottomhole: THM-3 or THM-5, and THM-3 where the lift gas enters
+    above the bottomhole (INF-9), so that none mixes in there."""
+    if wp.injection_point > 0:
+        return op.T_r  # spec: THM-3
+    return wp.thermal.inflow_temperature(w_res, op.w_lg, op.T_r, op.T_lg, wp.fluid)
+
+
+def lift_gas_temperature(wp, bc) -> float:  # spec: THM-9
+    """The lift gas's temperature T_lg at an operating point bc, or where it is None, the ambient temperature at the
+    injection point (THM-4), which at the bottomhole is T_r exactly."""
+    if bc.T_lg is not None:
+        return bc.T_lg
+    k = wp.injection_point
+    return bc.T_r if k == 0 else float(wp.thermal.ambient_temperature(wp.geometry.tvd_frac[k], bc.T_r, bc.T_s))
+
+
 def bottom_rows(wp, s, w_res, op):
     """Rows at the bottomhole, point 0: the inflow rows and the inflow temperature."""
     fluid, A = wp.fluid, wp.geometry.A
-    w_g, w_l = fluid.phase_rates(s.p, s.T, w_res, op.w_lg)
-    T_in = wp.thermal.inflow_temperature(w_res, op.w_lg, op.T_r, op.T_lg, fluid)
+    w_g, w_l = fluid.phase_rates(s.p, s.T, w_res, lift_gas_rate(op.w_lg, int(wp.injection_point == 0)))
+    T_in = inflow_temperature(wp, w_res, op)
     return [
         A * s.alpha * s.rho_g * s.v_g - w_g,  # spec: INF-6
         A * (1 - s.alpha) * s.rho_l * s.v_l - w_l,  # spec: INF-7
@@ -109,13 +142,18 @@ def bottom_rows(wp, s, w_res, op):
     ]
 
 
-def cell_rows(wp, s, s_prev, w_res, op, delta_md, cos_incl, tvd_frac):
-    """Balance rows of cell i, between points i - 1 (s_prev) and i (s)."""
+def cell_rows(wp, s, s_prev, w_res, op, delta_md, cos_incl, tvd_frac, lift=1, lift_prev=1):
+    """
+    Balance rows of cell i, between points i - 1 (s_prev) and i (s). lift and lift_prev are 1 where the lift gas flows
+    at points i and i - 1 and 0 below the injection point (lifts): numbers, or symbols in point_rows, which serves every
+    cell. Where the lift gas starts to flow, at the injection point k > 0, the energy row mixes it in (DISC-12).
+    """
     fluid, D, A = wp.fluid, wp.geometry.D, wp.geometry.A
 
-    # Mass: the change in mass flux equals the change in the phase rates, which is zero without mass transfer
-    w_g, w_l = fluid.phase_rates(s.p, s.T, w_res, op.w_lg)
-    w_g_prev, w_l_prev = fluid.phase_rates(s_prev.p, s_prev.T, w_res, op.w_lg)
+    # Mass: the change in mass flux equals the change in the phase rates, which is zero without mass transfer; over
+    # the injection cell it holds the lift gas's source
+    w_g, w_l = fluid.phase_rates(s.p, s.T, w_res, lift_gas_rate(op.w_lg, lift))
+    w_g_prev, w_l_prev = fluid.phase_rates(s_prev.p, s_prev.T, w_res, lift_gas_rate(op.w_lg, lift_prev))
     r_g = s.gas_flux - s_prev.gas_flux - (w_g - w_g_prev) / A  # spec: DISC-7
     r_l = s.liquid_flux - s_prev.liquid_flux - (w_l - w_l_prev) / A  # spec: DISC-8
 
@@ -133,6 +171,15 @@ def cell_rows(wp, s, s_prev, w_res, op, delta_md, cos_incl, tvd_frac):
     dp_dmd = CF_BAR * (s.p - s_prev.p) / delta_md
     dT_dmd = wp.thermal.temperature_gradient(s, fluid, T_a, F, dp_dmd, cos_incl, D)
     r_T = s.T - s_prev.T - delta_md * dT_dmd  # spec: DISC-10
+    if wp.thermal.lift_gas_mixing:
+        # DISC-10's step, then the mix with the lift gas (THM-9), where the lift gas starts to flow: chosen here where
+        # lift and lift_prev are numbers, and by the symbols where they are symbols
+        T_k = wp.thermal.injection_temperature(s_prev.T + delta_md * dT_dmd, w_g, w_l, op.w_lg, op.T_lg, fluid)
+        inject = lift - lift_prev
+        if isinstance(inject, ca.SX):
+            r_T = ca.if_else(inject, s.T - T_k, r_T)  # spec: DISC-12
+        elif inject:
+            r_T = s.T - T_k  # spec: DISC-12
 
     return [r_g, r_l, r_p, r_T]
 
@@ -158,14 +205,15 @@ def closure_rows(wp, s, cos_incl):
 
 def row_ids(wp) -> tuple:
     """The spec ID of every row of the system of wp, in order (DISC-11)."""
-    fluid, N = wp.fluid, wp.geometry.n_cells
-    bottom = ('INF-6', 'INF-7', 'THM-5' if wp.thermal.lift_gas_mixing else 'THM-3')
+    fluid, N, k = wp.fluid, wp.geometry.n_cells, wp.injection_point
+    bottom = ('INF-6', 'INF-7', 'THM-5' if wp.thermal.lift_gas_mixing and k == 0 else 'THM-3')
     cell = ('DISC-7', 'DISC-8', 'DISC-9', 'DISC-10')
+    injection = cell[:3] + ('DISC-12' if wp.thermal.lift_gas_mixing else 'DISC-10',)
     gas_law = {'ideal': 'PVT-GAS-1', 'dak': 'PVT-GAS-11', 'papay': 'PVT-GAS-3', 'table': 'PVT-TAB-4'}[fluid.pvt.gas_law]
     closures = ('SLIP-1', gas_law, 'PVT-MIX-6' if fluid.pvt.dissolves_gas else 'PVT-MIX-1')
     ids = bottom + closures
     for i in range(1, N + 1):
-        ids += cell + (('CHK-1',) if i == N else ()) + closures
+        ids += (injection if i == k else cell) + (('CHK-1',) if i == N else ()) + closures
     return ids
 
 
@@ -181,12 +229,14 @@ class System:
     Functions (CasADi), with params the parameter vector of params(bc):
         residual(x, params) -> r                 every row, in row_ids order
         bottom_rows(x_0, params) -> r_0          the six rows of point 0
-        point_rows(x_i, x_prev, w_res, params, delta_md, cos_incl, tvd_frac) -> r_i
-                                                 the seven rows of a point i > 0, without CHK-1
-        cell_slope(x_i, x_prev, w_res, params, delta_md, cos_incl, tvd_frac) -> s
+        point_rows(x_i, x_prev, w_res, params, delta_md, cos_incl, tvd_frac, lift, lift_prev) -> r_i
+                                                 the seven rows of a point i > 0, without CHK-1; lift and lift_prev
+                                                 are 1 where the lift gas flows at points i and i - 1, 0 below the
+                                                 injection point (lifts), and are not used where it is the bottomhole
+        cell_slope(x_i, x_prev, w_res, params, delta_md, cos_incl, tvd_frac, lift, lift_prev) -> s
                                                  the slope of cell i's momentum row in p_i with the point's other
                                                  rows held at zero, positive where the cell is subsonic (SOL-8)
-        energy_slope(x_i, x_prev, w_res, params, delta_md, cos_incl, tvd_frac) -> s
+        energy_slope(x_i, x_prev, w_res, params, delta_md, cos_incl, tvd_frac, lift, lift_prev) -> s
                                                  the slope of cell i's energy row in T_i at fixed p_i with the point's
                                                  mass rows and closures held at zero, positive at a root (SOL-9)
         reservoir_rate(p_0, params) -> w_res     the reservoir liquid rate (kg/s)
@@ -215,11 +265,16 @@ class System:
     def n_cells(self) -> int:
         return self.wp.geometry.n_cells
 
-    @staticmethod
-    def params(bc) -> np.ndarray:
-        """The parameter vector of an operating point, with T_lg = T_r when it is None."""
-        T_lg = bc.T_r if bc.T_lg is None else bc.T_lg
-        return np.array([bc.p_r, bc.p_s, bc.T_r, bc.T_s, T_lg, bc.u, bc.w_lg], dtype=float)
+    def params(self, bc) -> np.ndarray:
+        """The parameter vector of an operating point, with T_lg, when it is None, the ambient temperature at the
+        injection point: T_r at the bottomhole (lift_gas_temperature)."""
+        return np.array([bc.p_r, bc.p_s, bc.T_r, bc.T_s, lift_gas_temperature(self.wp, bc), bc.u, bc.w_lg], dtype=float)
+
+    def cell_inputs(self) -> list:
+        """The inputs of point_rows, cell_slope and energy_slope after params, for cells 1 to N, each as a 1 x N row:
+        delta_md, cos_incl, the tvd_frac of the cell's upper point, lift and lift_prev."""
+        geo, lift = self.wp.geometry, lifts(self.wp)
+        return [ca.DM(v).T for v in (geo.delta_md, geo.cos_incl, geo.tvd_frac[1:], lift[1:], lift[:-1])]
 
     def flow_regimes(self, x) -> tuple:
         """The flow-regime label at each point of a state (SLIP-8, or SLIP-16 with the five regimes)."""
@@ -238,23 +293,17 @@ class System:
 
     def subsonic(self, x, params) -> bool:  # spec: SOL-8
         """Whether every cell of state x is subsonic: its momentum row rises with p_i along the point's other rows."""
-        geo, X = self.wp.geometry, np.reshape(x, (-1, DIM_X))
+        X = np.reshape(x, (-1, DIM_X))
         w_res = float(self.reservoir_rate(X[0, 0], params))
-        N = self.n_cells
-        slopes = self.cell_slope.map(N)(
-            X[1:].T, X[:-1].T, w_res, params, ca.DM(geo.delta_md).T, ca.DM(geo.cos_incl).T, ca.DM(geo.tvd_frac[1:]).T
-        )
+        slopes = self.cell_slope.map(self.n_cells)(X[1:].T, X[:-1].T, w_res, params, *self.cell_inputs())
         return bool(np.all(np.asarray(slopes) > 0))
 
     def energy_rows_rise(self, x, params) -> bool:  # spec: SOL-9
         """Whether every cell's energy row of state x rises with T_i at fixed p_i, along the point's mass rows and
         closures."""
-        geo, X = self.wp.geometry, np.reshape(x, (-1, DIM_X))
+        X = np.reshape(x, (-1, DIM_X))
         w_res = float(self.reservoir_rate(X[0, 0], params))
-        N = self.n_cells
-        slopes = self.energy_slope.map(N)(
-            X[1:].T, X[:-1].T, w_res, params, ca.DM(geo.delta_md).T, ca.DM(geo.cos_incl).T, ca.DM(geo.tvd_frac[1:]).T
-        )
+        slopes = self.energy_slope.map(self.n_cells)(X[1:].T, X[:-1].T, w_res, params, *self.cell_inputs())
         return bool(np.all(np.asarray(slopes) > 0))
 
     def bounds(self, bc):
@@ -274,11 +323,12 @@ class System:
         lower bound is 1.05 T_pc where that is lower: the lower end of the Dranchuk-Abou-Kassem equation of state's
         range, below which the Joule-Thomson factor has a pole (PVT-GAS-10; specs/features/016-joule-thomson.md).
         """
-        T_low = min(bc.T_r, bc.T_s) if bc.T_lg is None else min(bc.T_r, bc.T_s, bc.T_lg)
+        T_lg = lift_gas_temperature(self.wp, bc)  # T_r or the ambient temperature at the injection point if None
+        T_low = min(bc.T_r, bc.T_s, T_lg)
         if self.wp.thermal.joule_thomson and self.wp.fluid.pvt.gas_law != 'ideal':
             T_low = min(T_low, JT_T_PR_MIN * self.wp.fluid.pseudo_critical[1])
         lb = np.array([bc.p_s, 0, 0, 0, 0, 0, T_low], dtype=float)
-        T_high = max(bc.T_r, bc.T_s) if bc.T_lg is None else max(bc.T_r, bc.T_s, bc.T_lg)
+        T_high = max(bc.T_r, bc.T_s, T_lg)
         ub = np.array([bc.p_r, np.inf, np.inf, 1, np.inf, np.inf, T_high + T_MARGIN], dtype=float)
         n = self.n_cells + 1
         return np.tile(lb, n), np.tile(ub, n)
@@ -289,6 +339,7 @@ def build_system(wp) -> System:  # spec: DISC-11
     geo = wp.geometry
     N = geo.n_cells
     n_x = DIM_X * (N + 1)
+    lift = lifts(wp)  # spec: INF-9
 
     x = ca.SX.sym('x', n_x)
     prm = ca.SX.sym('params', len(PARAMS))
@@ -300,7 +351,18 @@ def build_system(wp) -> System:  # spec: DISC-11
 
     rows = bottom_rows(wp, S[0], w_res, op) + closure_rows(wp, S[0], geo.cos_incl[0])
     for i in range(1, N + 1):
-        rows += cell_rows(wp, S[i], S[i - 1], w_res, op, geo.delta_md[i - 1], geo.cos_incl[i - 1], geo.tvd_frac[i])
+        rows += cell_rows(
+            wp,
+            S[i],
+            S[i - 1],
+            w_res,
+            op,
+            geo.delta_md[i - 1],
+            geo.cos_incl[i - 1],
+            geo.tvd_frac[i],
+            int(lift[i]),
+            int(lift[i - 1]),
+        )
         if i == N:
             rows.append(choke_row(wp, S[N], op))
         rows += closure_rows(wp, S[i], geo.cos_incl[i - 1])
@@ -313,43 +375,33 @@ def build_system(wp) -> System:  # spec: DISC-11
     r_0 = bottom_rows(wp, s_0, w_res_0, op) + closure_rows(wp, s_0, geo.cos_incl[0])
     bottom = ca.Function('bottom_rows', [x_0, prm], [ca.vertcat(*r_0)], ['x_0', 'params'], ['r_0'])
 
-    # A point i > 0, with the cell's geometry as inputs, so one function serves every cell
+    # A point i > 0, with the cell's geometry and whether the lift gas flows at its points as inputs, so one function
+    # serves every cell. Where the lift gas enters at the bottomhole it flows at every point, and the inputs lift and
+    # lift_prev are not used, so that the rows are built as without an injection depth
     x_i, x_prev = ca.SX.sym('x_i', DIM_X), ca.SX.sym('x_prev', DIM_X)
     w, d_md, cos_i, frac = ca.SX.sym('w_res'), ca.SX.sym('delta_md'), ca.SX.sym('cos_incl'), ca.SX.sym('tvd_frac')
+    lg, lg_prev = ca.SX.sym('lift'), ca.SX.sym('lift_prev')
     s_i, s_prev = PointState.of(x_i), PointState.of(x_prev)
-    r_i = cell_rows(wp, s_i, s_prev, w, op, d_md, cos_i, frac) + closure_rows(wp, s_i, cos_i)
-    point = ca.Function(
-        'point_rows',
-        [x_i, x_prev, w, prm, d_md, cos_i, frac],
-        [ca.vertcat(*r_i)],
-        ['x_i', 'x_prev', 'w_res', 'params', 'delta_md', 'cos_incl', 'tvd_frac'],
-        ['r_i'],
+    flows = (lg, lg_prev) if wp.injection_point > 0 else (1, 1)
+    r_i = cell_rows(wp, s_i, s_prev, w, op, d_md, cos_i, frac, *flows) + closure_rows(wp, s_i, cos_i)
+    cell_args, cell_names = (
+        [x_i, x_prev, w, prm, d_md, cos_i, frac, lg, lg_prev],
+        ['x_i', 'x_prev', 'w_res', 'params', 'delta_md', 'cos_incl', 'tvd_frac', 'lift', 'lift_prev'],
     )
+    point = ca.Function('point_rows', cell_args, [ca.vertcat(*r_i)], cell_names, ['r_i'])
 
     # The momentum row's slope in p_i along the curve on which the point's six other rows are zero (SOL-8):
     # ds = ∂r_p/∂p - ∂r_p/∂y (∂r_o/∂y)^-1 ∂r_o/∂p, with y the other six unknowns and r_o the other six rows
     J = ca.jacobian(ca.vertcat(*r_i), x_i)
     other = [0, 1, 3, 4, 5, 6]  # the rows of point i but DISC-9, the third of cell_rows
     slope = J[2, 0] - ca.mtimes(J[2, 1:], ca.solve(J[other, 1:], J[other, 0]))
-    cell_slope = ca.Function(
-        'cell_slope',
-        [x_i, x_prev, w, prm, d_md, cos_i, frac],
-        [slope],
-        ['x_i', 'x_prev', 'w_res', 'params', 'delta_md', 'cos_incl', 'tvd_frac'],
-        ['s'],
-    )
+    cell_slope = ca.Function('cell_slope', cell_args, [slope], cell_names, ['s'])
 
     # The energy row's slope in T_i at fixed p_i along the curve on which the point's mass rows and closures are zero
     # (SOL-9): ∂r_T/∂T - ∂r_T/∂y (∂r_c/∂y)^-1 ∂r_c/∂T, with y the five unknowns between p and T
     held, y = [0, 1, 4, 5, 6], [1, 2, 3, 4, 5]  # DISC-7, DISC-8 and the closures; v_g, v_l, alpha, rho_g, rho_l
     t_slope = J[3, 6] - ca.mtimes(J[3, y], ca.solve(J[held, y], J[held, 6]))
-    energy_slope = ca.Function(
-        'energy_slope',
-        [x_i, x_prev, w, prm, d_md, cos_i, frac],
-        [t_slope],
-        ['x_i', 'x_prev', 'w_res', 'params', 'delta_md', 'cos_incl', 'tvd_frac'],
-        ['s'],
-    )
+    energy_slope = ca.Function('energy_slope', cell_args, [t_slope], cell_names, ['s'])
 
     # Reservoir rate, and a starting point for point 0: the densities and the inflow temperature at p_0, half gas
     # by volume, and the velocities that carry the phase rates
@@ -357,9 +409,9 @@ def build_system(wp) -> System:  # spec: DISC-11
     w_p0 = wp.inflow.liquid_mass_flow_rate(p_0, op.p_r)
     reservoir_rate = ca.Function('reservoir_rate', [p_0, prm], [w_p0], ['p_0', 'params'], ['w_res'])
     fluid, A = wp.fluid, geo.A
-    T_in = wp.thermal.inflow_temperature(w_p0, op.w_lg, op.T_r, op.T_lg, fluid)
+    T_in = inflow_temperature(wp, w_p0, op)
     rho_g, rho_l = fluid.gas_density(p_0, T_in), fluid.liquid_density(p_0, T_in)
-    w_g, w_l = fluid.phase_rates(p_0, T_in, w_p0, op.w_lg)
+    w_g, w_l = fluid.phase_rates(p_0, T_in, w_p0, lift_gas_rate(op.w_lg, int(lift[0])))
     alpha = 0.5
     guess = ca.vertcat(p_0, w_g / (A * alpha * rho_g), w_l / (A * (1 - alpha) * rho_l), alpha, rho_g, rho_l, T_in)
     bottom_guess = ca.Function('bottom_guess', [p_0, prm], [guess], ['p_0', 'params'], ['x_0'])

@@ -155,6 +155,6 @@ class RoughnessFriction(FrictionModel):
             raise ValueError(f'Friction correlation {self.correlation!r} is not one of {CORRELATIONS}')
 
     def friction_factor(self, s, fluid, D):
-        mu_m = fluid.mixture_viscosity(s.p, s.T, s.alpha, s.rho_g, s.rho_l)
+        mu_m = fluid.mixture_viscosity(s.p, s.T, s.alpha, s.rho_g, s.rho_l, s.v_g, s.v_l)
         Re = s.rho_m * ca.fabs(s.v_m) * D / mu_m  # spec: FRIC-3
         return friction_factor(Re, self.roughness / D, self.correlation)

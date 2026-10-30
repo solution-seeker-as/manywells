@@ -15,7 +15,7 @@ The drift-flux slip law that sets the gas velocity relative to the mixture, with
 
 With the fitted classifier, `regime_model='fitted'`, the regimes are `('annular', 'slug-churn', 'bubbly')`, and $p_a$, $p_s$ and $p_b$ are their probabilities; it does not use $D$. With the five regimes, `regime_model='hasan'`, they are `('annular', 'churn', 'dispersed-bubbly', 'slug', 'bubbly')`, with the probabilities $p_a$, $p_c$, $p_d$, $p_s$ and $p_b$. $\sigma$ comes from PVT-MIX-5 (or PVT-MIX-7 in `develop`'s default) and is evaluated at the same point. v1.0.0's functions take $T$ and compute $\sigma$ themselves; `develop`'s take $\sigma$ and the inclination $\cos\theta$ of the point's cell (DISC-11). The vectors below give $\sigma$.
 
-In `develop` the four regime constants of SLIP-2 and SLIP-3 (1.0, 1.175 and 1.2 for $C_0$, and 0 for the annular drift velocity) are parameters of the fitted classifier, fields of `SlipModel` with these values as defaults (`plans/improvements.md` §2.7). The `v1.0.0` configuration uses the fitted classifier with the defaults. The five regimes' constants $f_{ms}$, $w$ and $\epsilon_\lambda$ of SLIP-12 and SLIP-13 are fields too (`f_ms`, `transition_width`, `lambda_floor`); Table 1's values in SLIP-15 are constants. The scale $\kappa_0$ of SLIP-18 is the field `profile_scale` of either classifier, 1 by default, which leaves $C_0$ as it is; it is a free parameter of a calibration (CAL-5).
+In `develop` the four regime constants of SLIP-2 and SLIP-3 (1.0, 1.175 and 1.2 for $C_0$, and 0 for the annular drift velocity) are parameters of the fitted classifier, fields of `SlipModel` with these values as defaults (`plans/backlog.md` §2.7). The `v1.0.0` configuration uses the fitted classifier with the defaults. The five regimes' constants $f_{ms}$, $w$ and $\epsilon_\lambda$ of SLIP-12 and SLIP-13 are fields too (`f_ms`, `transition_width`, `lambda_floor`); Table 1's values in SLIP-15 are constants. The scale $\kappa_0$ of SLIP-18 is the field `profile_scale` of either classifier, 1 by default, which leaves $C_0$ as it is; it is a free parameter of a calibration (CAL-5).
 
 ## Equations
 
@@ -190,7 +190,7 @@ At fixed superficial velocities $j_g = \alpha v_g$ and $j_l = (1 - \alpha) v_l$,
 - **The case set.** At every point of every reference root, the root is unique (`tests/test_rust_backend.py`).
 - **Consequence for the Rust core.** Where the void fraction a march takes switches branch between neighbouring $p_0$, $R(p_0)$ jumps across zero, and the core can accept the jump as a root: at `v1.0.0+deviated#17` of Step 9's comparison set, its choke row is $-7.5 \cdot 10^{-4}$ kg/s, under the acceptance bound of $10^{-3} w_m$. A known finding, not changed (Bjarne, 2026-10-02, `specs/features/015-rust-develop-model.md`, Finding 3).
 - **The five regimes.** With `regime_model='hasan'` the probabilities, $C_0$ and $v_\infty$ (SLIP-12 to SLIP-15) depend on the state only through $j_g$, $j_l$ and the fluid's properties, which the mass rows fix at a point. $h$ is then linear in $\alpha$, with the one root $\alpha = j_g/(C_0 j_m + v_\infty)$.
-- **Status.** Settled for `develop`'s default, the five regimes (`specs/features/019-five-flow-regimes.md`); open for the fitted classifier (Bjarne, 2026-10-01), which the `v1.0.0` configuration keeps. The new sampler uses `develop`'s default only, and the v2 configuration leaves the fitted classifier out, so the question stays open for the fitted classifier alone and is not ruled for v2 (Bjarne, 2026-10-29; `plans/model-lock-plan.md`, Step L4).
+- **Status.** Settled for `develop`'s default, the five regimes (`specs/features/019-five-flow-regimes.md`); open for the fitted classifier (Bjarne, 2026-10-01), which the `v1.0.0` configuration keeps. The new sampler uses `develop`'s default only, and the `v2.0.0` configuration leaves the fitted classifier out, so the question stays open for the fitted classifier alone and is not ruled for v2 (Bjarne, 2026-10-29; `plans/model-lock-plan.md`, Step L4).
 
 ## Sources
 
@@ -201,10 +201,18 @@ At fixed superficial velocities $j_g = \alpha v_g$ and $j_l = (1 - \alpha) v_l$,
 - Taitel, Barnea and Dukler (1980), "Modelling flow pattern transitions for steady upward gas–liquid flow in vertical tubes", *AIChE Journal* 26, 345–354: the source of (A-17) to (A-19). Not consulted.
 - Feature specs `specs/features/002-slip-inclination.md`, `specs/features/019-five-flow-regimes.md` and `specs/features/020-profile-scale.md` (SLIP-18, with the published range of $C_0$ that motivates it).
 - Harmathy (1960), "Velocity of large drops and bubbles in media of infinite or restricted extent", *AIChE Journal* 6, 281–288.
+- Hasan and Kabir (2018): Field Examples 3.1 (§3.4) and 4.1 (§4.2.4) and Appendix 7-E, §7-E.2, worked examples of SLIP-4, SLIP-5 and SLIP-12 to SLIP-16.
 
 ## Test vectors
 
 The $\sigma$ column is $\sigma_{od}(\rho_l, T)$ (PVT-MIX-5), and the `T` column records the temperature it was computed at; the functions under test take $\sigma$, not $T$.
+
+**Independent checks**, on `develop` at `f7f1218` (2026-10-29; `README.md`, Test vectors). Both backends reproduce Hasan and Kabir's field examples (2018) at the precision printed (`tests/test_worked_examples.py`):
+
+- the five regimes give each example's flow regime: slug flow in Field Example 3.1 (§3.4), churn flow in Field Example 4.1 (§4.2.4) and annular flow in Appendix 7-E, §7-E.2 (SLIP-12 to SLIP-14, SLIP-16), and $C_0 = 1.2$ in slug flow (SLIP-15);
+- SLIP-4 gives their bubble-rise velocities, 0.680 and 0.675 ft/s, and SLIP-5 the Taylor-bubble rise velocity of Example 3.1, 0.971 ft/s.
+
+Their void fractions are not checked. The examples blend the rise velocities within slug and churn flow, (A-13) of Hasan et al. (2010), which SLIP-15 leaves out, and the points of Examples 4.1 and 7-E.2 lie within a few percent of a transition, which SLIP-13 smooths: $\alpha$ is 0.451 (at Example 3.1's $v_{sg}$ of 2.845 ft/s in its solution, 2.784 in its data), 0.626 and 0.815, against the printed 0.457, 0.583 and 0.927. Example 4.1 prints a deviation factor of 1.208, which its own Eq. 4.33 does not give (1.339, SLIP-10's), so no example checks SLIP-10. The fitted classifier's weights (SLIP-7) are v1.0.0's own fit to SLIP-9, with no source outside ManyWells; its vectors from v1.0.0 check that `develop` reproduces them.
 
 <!-- vectors:begin -->
 Generated by `specs/tools/make_v1_vectors.py` from ManyWells v1.0.0 (casadi 3.6.4). Do not edit by hand.

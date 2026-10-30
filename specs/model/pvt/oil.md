@@ -104,7 +104,7 @@ With the reservoir liquid rate $w_\text{res}$ (INF-1, INF-2 or INF-8), the reser
 
 $$w_d = \mathop{\mathrm{smin}}\big(R_{so},\ R_{go}\big)\frac{\rho_{g,\text{sc}}}{\rho_o} x_o w_\text{res}, \qquad w_g = \mathop{\mathrm{smax}}\big(w_{g,\text{res}} + w_{lg} - w_d,\ 0\big), \qquad w_l = w_\text{res} + w_d,$$
 
-with $R_{so}$ and the gas–oil ratio $R_{go}$ in Sm³/Sm³, $x_o$ the oil mass fraction of the liquid at standard conditions (PVT-MIX-10), SMO-2 evaluated in scf/STB with $\epsilon = 10^{-6}$ (scf/STB)², as in PVT-OIL-7 and PVT-OIL-15, and SMO-1 with $\epsilon = 10^{-6}$ (kg/s)². Since $w_{g,\text{res}} = R_{go}(\rho_{g,\text{sc}}/\rho_o) x_o w_\text{res}$ (INF-4, PVT-MIX-10), $w_d$ is the smaller of the gas the oil can dissolve and the reservoir gas, and never exceeds the latter. With black oil PVT-OIL-15 has already capped $R_{so}$; the min is for a PVT table, whose $R_{so}$ is not capped (PVT-TAB-3). Only reservoir gas dissolves, not the lift gas.
+with $R_{so}$ and the gas–oil ratio $R_{go}$ in Sm³/Sm³, $x_o$ the oil mass fraction of the liquid at standard conditions (PVT-MIX-10), SMO-2 evaluated in scf/STB with $\epsilon = 10^{-6}$ (scf/STB)², as in PVT-OIL-7 and PVT-OIL-15, and SMO-1 with $\epsilon = 10^{-6}$ (kg/s)². Since $w_{g,\text{res}} = R_{go}(\rho_{g,\text{sc}}/\rho_o) x_o w_\text{res}$ (INF-4, PVT-MIX-10), $w_d$ is the smaller of the gas the oil can dissolve and the reservoir gas, and never exceeds the latter. With black oil PVT-OIL-15 has already capped $R_{so}$; the min is for a PVT table, whose $R_{so}$ is not capped (PVT-TAB-3). Only reservoir gas dissolves, not the lift gas. $w_{lg}$ is the lift-gas rate at the point: zero below the injection point (INF-9).
 
 Until 2026-10-29 the smooth min was of the mass rates, $\mathop{\mathrm{smin}}(R_{so}(\rho_{g,\text{sc}}/\rho_o) x_o w_\text{res},\ w_{g,\text{res}})$ with $\epsilon = 10^{-6}$ (kg/s)². Its smoothing scaled with the rate: it left $\sqrt\epsilon/2 = 5\cdot10^{-4}$ kg/s of reservoir gas undissolved where its arguments are equal, which with PVT-OIL-15 is wherever the oil is undersaturated, and made $5\cdot10^{-4}$ kg/s of gas at $w_\text{res} = 0$. Evaluated in scf/STB, the offset is in proportion to the rate, $10^{-6}$ kg/s at 10 to 30 kg/s of liquid, and $w_d = 0$ at $w_\text{res} = 0$. The free gas where all the reservoir gas is dissolved is SMO-1's floor, $5\cdot10^{-4}$ kg/s, as before (decided by Bjarne, 2026-10-29, with PVT-OIL-15; issue #16). With dead oil the phase rates are INF-5's exactly, with no smoothing: the smooth min of PVT-OIL-13 would be $-\epsilon/(4 w_{g,\text{res}})$ at $R_{so} = 0$, not 0 (`plans/develop_model_changes.md`, change 8). The total $w_g + w_l$ is $w_{g,\text{res}} + w_{lg} + w_\text{res}$ wherever neither smoothing is active.
 
@@ -145,13 +145,25 @@ A PVT table (PVT-TAB-3) is not capped: its $R_{so}$ and $B_o$ come together from
 ## Sources
 
 - Paper §4.2 (oil density range) and Appendix A.1 (surface tension).
-- Abdul-Majeed and Abu Al-Soof (2000), "Estimation of gas–oil surface tension", *Journal of Petroleum Science and Engineering* 27, 197–200 (`papers/`).
+- Abdul-Majeed and Abu Al-Soof (2000), "Estimation of gas–oil surface tension", *Journal of Petroleum Science and Engineering* 27, 197–200.
 - Vazquez and Beggs (1980), "Correlations for fluid physical property prediction", *Journal of Petroleum Technology* 32, 968–970.
 - Beggs and Robinson (1975), "Estimating the viscosity of crude oil systems", *Journal of Petroleum Technology* 27, 1140–1141.
 - Standing (1947), "A pressure-volume-temperature correlation for mixtures of California oils and gases", *Drilling and Production Practice*, API, 275–287.
+- Ahmed (2006), *Reservoir engineering handbook*, 3rd ed., Gulf Professional Publishing: Examples 2-17, 2-18, 2-25, 2-29 and 2-35, worked examples of PVT-OIL-5, PVT-OIL-6, PVT-OIL-8, PVT-OIL-10 and PVT-OIL-11.
 - Feature specs `specs/features/007-black-oil.md` and `008-dissolved-gas.md`.
 
 ## Test vectors
+
+**Independent checks**, on `develop` at `f7f1218` (2026-10-29; `README.md`, Test vectors). Both backends reproduce Ahmed's worked examples (2006), on six oils of 27.3 to 48.6 °API (Example 2-17), at the precision printed (`tests/test_worked_examples.py`):
+
+- the separator gas gravity of PVT-OIL-5 (Example 2-25, six oils);
+- $R_{so}$ at the bubble point by PVT-OIL-6 (Example 2-18, five oils);
+- $B_o$ at the measured $R_{so}$ by PVT-OIL-8, through the cap of PVT-OIL-15 (Example 2-29, Method 2, five oils);
+- the dead-oil and live-oil viscosities of PVT-OIL-10 and PVT-OIL-11 (Example 2-35, six oils).
+
+Oil 4's printed $R_{so}$ and $B_o$, 820 scf/STB and 1.542, are not what the equations give at its inputs, 782 and 1.556 by hand, and are left out. Five of the oils lie above `BlackOilPVT`'s API range (Safeguards; Ahmed applies the correlations up to 48.6 °API, `validity.md`, decision 2). The test evaluates the correlations at their API gravity on the CasADi backend. The 27.3 °API oil runs through `BlackOil` from its separator on both backends, and the Rust core's separator gravity takes all six.
+
+No worked example of Abdul-Majeed and Abu Al-Soof's surface tension is in hand. Their Eqs. (1) to (5), transcribed, give PVT-OIL-3 to rounding, and PVT-OIL-12 to within $2\cdot10^{-7}$ where the blend of their Eqs. (4) and (5) has no weight, below 20 and above 80 Sm³/Sm³ (`plans/evidence/independent_checks.py`). PVT-OIL-3 lies within 0.78 dyn/cm of the 18 measurements of their Table 1, and 0.27 dyn/cm on average.
 
 <!-- vectors:begin -->
 Generated by `specs/tools/make_v1_vectors.py` from ManyWells v1.0.0 (casadi 3.6.4). Do not edit by hand.

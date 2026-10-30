@@ -104,7 +104,7 @@ With a fixed rate, every march that falls below $p_s$ gives the same $R$, the ra
 
 **Result**, 520 cases: all pass.
 - **Roots.** The CasADi backend finds 630, the core 620. All 31 the core misses are in cases with several void fractions or on another branch.
-- **Core-only roots.** The core finds 21 roots the CasADi search misses, and 20 of them zero every CasADi row (`plans/improvements.md` §2.9).
+- **Core-only roots.** The core finds 21 roots the CasADi search misses, and 20 of them zero every CasADi row (`plans/backlog.md` §2.9).
 - **Labels and rows.** No label differs, with a fixed rate either. Rows agree to $8.8 \cdot 10^{-12}$.
 
 Per configuration (CasADi roots / core roots / missed / core-only):
@@ -151,4 +151,4 @@ Per configuration (CasADi roots / core roots / missed / core-only):
 
 ## Out of scope
 
-The batch API (`root_sets`, `plans/improvements.md` §4.3), prebuilt wheels, the CasADi search's missed roots (§2.9), a ruling on either branch question, the four-regime flow-regime model, and making the fluid's fractions parameters of the CasADi system (§4.5), which the core makes unnecessary for dataset generation unless datasets are generated on the CasADi backend.
+The batch API (`root_sets`, `plans/backlog.md` §4.3), prebuilt wheels, the CasADi search's missed roots (§2.9), a ruling on either branch question, the four-regime flow-regime model, and making the fluid's fractions parameters of the CasADi system (§4.5), which the core makes unnecessary for dataset generation unless datasets are generated on the CasADi backend.
