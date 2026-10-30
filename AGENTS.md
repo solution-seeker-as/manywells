@@ -139,6 +139,22 @@ The specs, docs and plans are read on GitHub and in VS Code. VS Code's KaTeX see
 - **Operators.** GitHub refuses `\operatorname` ("macros are not allowed"): write `\mathop{\mathrm{smax}}(x, y)`.
 - **Thin spaces.** TeX spaces a product itself. Add `\thinspace` only where the symbols read differently without it: a symbol before a bracket (`4h\thinspace(T - T_a)`, so that it does not read as a function), next to `\text{...}`, before a differential (`c_{pl}\thinspace dT`) and between digit groups (`101\thinspace 325`).
 
+## Releases
+
+A release has one version number for the whole repository (constitution, Versions), set in `pyproject.toml`, `verification/pyproject.toml` and `rust/Cargo.toml`; `tests/test_versions.py` checks that the three agree. Cargo spells a pre-release with a hyphen: `2.0.0-dev.0` for `2.0.0.dev0`. A release raises one part of the last release's version:
+
+- **MAJOR** for a break of the public API (any name in `manywells` without a leading `_`; `scripts/` is not API), a configuration removed, or a change to the dataset files the package writes that breaks code reading them. The CHANGELOG lists each break with an old→new snippet (`specs/goals.md`). A deprecated name warns from a minor release on and is removed in the next major one.
+- **MINOR** for new API, a model option, a configuration, a deprecation or a changed default. The CHANGELOG lists every change of results.
+- **PATCH** for a fix that changes no API, no default and no configuration's rows, and for docs and speed.
+
+Between releases, `develop` carries the next minor version with `.dev0`; the change that first breaks the API raises it to the next major one (`3.0.0.dev0`). To release, on a branch from `develop`:
+
+1. Set the three versions to the release's, run `uv lock` and build once (`uv sync`), so that `uv.lock` and `rust/Cargo.lock` follow, and give the CHANGELOG's Unreleased heading the version and the date.
+2. Merge into `develop`, then `develop` into `main`, and tag the merge on `main` with an annotated tag, `git tag -a vX.Y.Z`: `datasets.io.code_version` describes a commit from annotated tags only.
+3. Set `develop` to the next version with `.dev0`, run `uv lock`, and open a new Unreleased heading.
+
+A pre-release (`2.0.0a1`, `2.0.0b1`, `2.0.0rc1`) follows the same steps with its own tag.
+
 ## Done means
 
 - The relevant tests pass. `uv run pytest -m "not slow"` is fine while iterating; run the full suite before finishing changes to the solver, the physics or the public API, since only the slow tests run a full solve and the examples.
@@ -160,6 +176,7 @@ Draft these when the task calls for it, but say that they need sign-off and don'
 - Any tolerance or bound, and any change to what a verifier check tests (`specs/verification.md`, `verification/src/manywells_verify/`).
 - The case set and all reference data (the table above), and every new entry in `verification/expected_failures.csv`.
 - Any change to a dataset schema. The published v1 datasets are never modified.
+- A release and its version number.
 - New solver machinery, with its measured gain.
 - A new model feature. Its feature spec (`specs/features/NNN-<name>.md`) is approved before the implementation starts.
 
