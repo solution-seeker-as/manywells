@@ -135,6 +135,7 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
   - the `v2.0.0` column in `specs/model/README.md`;
   - `V2` in `configurations.py`. Its `check` fixes every model option and the slip law's constants, and leaves the well's inputs free, a PVT table among them (Bjarne, 2026-10-30). There is no constructor: the sampler redesign adds one if it needs it;
   - `specs/model/vectors/v2_rows.json`, four wells written by `specs/tools/make_v2_vectors.py`, which `tests/test_spec_vectors.py` checks in both backends.
+  - Bjarne signed off the configuration's choices on 2026-10-30: `profile_scale` free, as a well's parameter; the slip constants fixed at their values; Papay's gas law, Haaland's friction factor and the fitted classifier left out. Whether a gas-rate inflow added later widens `v2.0.0`'s check (`specs/goals.md` calls it a well option) is decided with the sampling distribution.
 - **Goal.** The lock: a named configuration that the sampler draws in and that a test pins, so that later work on `develop` cannot change it unnoticed.
 - **Work** (after Steps L1 to L4, and the feature specs that L1 adds):
   1. In `specs/model/README.md`, a column for the configuration next to `v1.0.0`, one option per part, with the five regimes and not the fitted classifier (L4). Bjarne named it `v2.0.0` on 2026-10-30, after `v1.0.0`. `develop`'s defaults can then move on without moving it.
