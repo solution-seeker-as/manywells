@@ -13,10 +13,14 @@ pub fn liquid_density_row(rho_l_state: f64, rho_l: f64) -> f64 {  // spec: PVT-M
     rho_l_state - rho_l
 }
 
-/// Gas-liquid mixture viscosity (Pa s), mass-weighted, Hasan, Kabir and Sayarpour (2010), Eq. A-3
-pub fn mixture_viscosity(mu_l: f64, mu_g: f64, alpha: f64, rho_l: f64, rho_g: f64) -> f64 {  // spec: PVT-MIX-9
-    let x = alpha * rho_g / (alpha * rho_g + (1.0 - alpha) * rho_l);
-    mu_g * x + mu_l * (1.0 - x)
+/// Gas-liquid mixture viscosity (Pa s), Hasan, Kabir and Sayarpour (2010), Eq. A-3, weighted by the gas mass fraction
+/// of the flow x_g = w_g / w_m, from the phase mass rates of the state per unit area: 0/0 where nothing flows
+/// (pvt/mixture.md, Safeguards)
+pub fn mixture_viscosity(mu_l: f64, mu_g: f64, alpha: f64, rho_l: f64, rho_g: f64, v_g: f64,
+                         v_l: f64) -> f64 {  // spec: PVT-MIX-9
+    let (w_g, w_l) = (alpha * rho_g * v_g, (1.0 - alpha) * rho_l * v_l);
+    let x_g = w_g / (w_g + w_l);
+    mu_g * x_g + mu_l * (1.0 - x_g)
 }
 
 /// Gas-liquid surface tension (J/m²): the dead-oil correlation at the local liquid density

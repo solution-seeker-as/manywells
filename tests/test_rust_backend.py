@@ -371,9 +371,10 @@ def test_the_slip_row_has_one_root_in_alpha_at_every_reference_point():
 # backend's operating point (specs/features/016-joule-thomson.md, design choice 5), with the fitted classifier:
 # (well, sample, p_0 in bar), with
 # the seed and the samples of plans/evidence/dak_jt_default.py, re-solved when PVT-MIX-6 came to mix oil and water by
-# in-situ volume (issue #8). At 44 the state at p_s cannot be computed and R is finite only just below the root; at 22
-# the energy row is U-shaped in T near the choked wellhead.
-GAS_WELLS = ((44, 0, 225.685), (22, 1, 156.267), (22, 2, 118.195))
+# in-situ volume (issue #8), and when PVT-MIX-9 came to take the gas mass fraction of the flow (2026-10-29). At 44 the
+# state at p_s cannot be computed and R is finite only just below the root; at 22 the energy row is U-shaped in T near
+# the choked wellhead.
+GAS_WELLS = ((44, 0, 225.681), (22, 1, 156.201), (22, 2, 117.949))
 
 
 def _gas_well(well, sample):

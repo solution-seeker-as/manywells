@@ -65,7 +65,7 @@ impl Friction {
         match *self {
             Friction::FixedFactor { f_d } => f_d, // spec: FRIC-2
             Friction::Roughness { roughness, correlation } => {
-                let mu_m = fluid.mixture_viscosity(s.p, s.t, s.alpha, s.rho_g, s.rho_l);
+                let mu_m = fluid.mixture_viscosity(s.p, s.t, s.alpha, s.rho_g, s.rho_l, s.v_g, s.v_l);
                 let re = s.rho_m() * s.v_m().abs() * d / mu_m; // spec: FRIC-3
                 friction_factor_of_re(re, roughness / d, correlation)
             }

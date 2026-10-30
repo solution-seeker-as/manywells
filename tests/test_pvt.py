@@ -173,22 +173,37 @@ def test_gas_viscosity_positive():
 def test_mixture_viscosity_pure_liquid():
     """With alpha=0 (no gas), mixture viscosity equals liquid viscosity."""
     mu_l, mu_g = 1e-3, 1e-5
-    mu = float(mixture_viscosity(mu_l, mu_g, 0.0, 800.0, 1.2))
+    mu = float(mixture_viscosity(mu_l, mu_g, 0.0, 800.0, 1.2, 0.5, 1.0))
     assert mu == pytest.approx(mu_l)
 
 
 def test_mixture_viscosity_pure_gas():
     """With alpha=1 (all gas), mixture viscosity equals gas viscosity."""
     mu_l, mu_g = 1e-3, 1e-5
-    mu = float(mixture_viscosity(mu_l, mu_g, 1.0, 800.0, 1.2))
+    mu = float(mixture_viscosity(mu_l, mu_g, 1.0, 800.0, 1.2, 5.0, 1.0))
     assert mu == pytest.approx(mu_g)
 
 
 def test_mixture_viscosity_between():
     """Mass-weighted mixture viscosity is between gas and liquid."""
     mu_l, mu_g = 1e-3, 1e-5
-    mu = float(mixture_viscosity(mu_l, mu_g, 0.5, 800.0, 1.2))
+    mu = float(mixture_viscosity(mu_l, mu_g, 0.5, 800.0, 1.2, 5.0, 1.0))
     assert mu_g < mu < mu_l
+
+
+def test_mixture_viscosity_weights_by_the_flowing_mass_fraction():
+    """PVT-MIX-9: x is the gas's share of the mass flux, rho_g v_gs / (rho_g v_gs + rho_l v_ls); without slip it is
+    the in-situ mass fraction alpha rho_g / rho_m, and with the gas faster than the liquid it is larger."""
+    mu_l, mu_g, alpha, rho_l, rho_g = 1e-3, 1.5e-5, 0.4, 800.0, 60.0
+    v_gs, v_ls = alpha * 6.0, (1 - alpha) * 2.0
+    x = rho_g * v_gs / (rho_g * v_gs + rho_l * v_ls)
+    mu = float(mixture_viscosity(mu_l, mu_g, alpha, rho_l, rho_g, 6.0, 2.0))
+    assert mu == pytest.approx(x * mu_g + (1 - x) * mu_l, rel=1e-14)
+    x_in_situ = alpha * rho_g / (alpha * rho_g + (1 - alpha) * rho_l)
+    assert float(mixture_viscosity(mu_l, mu_g, alpha, rho_l, rho_g, 2.0, 2.0)) == pytest.approx(
+        x_in_situ * mu_g + (1 - x_in_situ) * mu_l, rel=1e-14
+    )
+    assert mu < float(mixture_viscosity(mu_l, mu_g, alpha, rho_l, rho_g, 2.0, 2.0))
 
 
 # ---- Dead oil viscosity tests ----
@@ -322,7 +337,7 @@ class TestSuttonPseudoCritical:
         from manywells.units import CF_PSI
 
         ppc, _ = sutton_pseudo_critical(0.554)
-        ppc_psia = 756.8 - 131.07 * 0.554 - 3.6 * 0.554**2
+        ppc_psia = 756.8 - 131.0 * 0.554 - 3.6 * 0.554**2
         assert ppc == pytest.approx(ppc_psia * CF_PSI)
 
     def test_methane_tpc(self):

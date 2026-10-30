@@ -424,8 +424,8 @@ mod _core {
                 table.columns(p, t)
             }
             "mixture_viscosity" => {
-                let [mu_l, mu_g, alpha, rho_l, rho_g] = take(name, a)?;
-                vec![mixture::mixture_viscosity(mu_l, mu_g, alpha, rho_l, rho_g)]
+                let [mu_l, mu_g, alpha, rho_l, rho_g, v_g, v_l] = take(name, a)?;
+                vec![mixture::mixture_viscosity(mu_l, mu_g, alpha, rho_l, rho_g, v_g, v_l)]
             }
             "ideal_gas_density" => { let [p, t, r_s] = take(name, a)?; vec![gas::ideal_gas_density(p, t, r_s)] }
             "api_from_density" => { let [rho] = take(name, a)?; vec![oil::api_from_density(rho)] }

@@ -106,6 +106,59 @@ Test vectors are inputs with expected outputs, checked against `develop` by `tes
 
 A vector whose equation has no implementation on `develop` is skipped with the reason. A vector that `develop` is known not to reproduce is a strict expected failure in `tests/test_spec_vectors.py`, with the reason.
 
+### Independent checks
+
+The `develop` vectors pin `develop`, and the Rust core implements the same spec, so neither shows that a correlation is implemented as published. The independent checks compare `develop`'s values with sources independent of it (2026-10-29, on `develop` at `f7f1218`, and rerun after the rulings below; `plans/model-lock-plan.md`, Step L3). Bjarne signed off the record of these checks, this section and the notes in the component files, on 2026-10-29.
+
+- **Worked examples**, from the sources or from textbooks, compared at the precision printed: `tests/test_worked_examples.py`, on both backends, in every run of the test suite. A value that its own example's equation does not give at the example's inputs is the example's error; the test lists those and does not use them.
+- **`fluids`** 1.3.1 (Caleb Bell, MIT licence), and **the sources' equations, transcribed**, where no worked example is in hand: `plans/evidence/independent_checks.py`, run by hand (`plans/evidence/README.md`, Independent checks). From then on the vectors carry the check: a change that alters a checked value fails `tests/test_spec_vectors.py`, and the vectors change only with Bjarne's sign-off, which reruns the script.
+
+A value `develop` does not reproduce, after checking units and inputs, is a finding. It stays open until Bjarne rules on it, and is a strict expected failure in the test. The checks found two, and Bjarne ruled on both on 2026-10-29 to follow the source: PVT-GAS-5's coefficient of $\gamma_g$ in $p_{pc}$ is Sutton's 131.0, where `develop` had 131.07 (`pvt/gas.md`), and PVT-MIX-9 weights by the flowing mass fraction of gas, as Hasan et al. do, where `develop` took the in-situ one (`pvt/mixture.md`). Both backends now reproduce every example, and none is open. Bjarne signed off the two fixes the same day: the text and the measured effect of each ruling, PVT-MIX-9's fraction taken from the point's state with no guard (`pvt/mixture.md`, Safeguards), the regenerated vectors and table, and the re-pinned tests. Each component file's Test vectors section has the details.
+
+Every ID of `develop`'s configuration, of the options Papay, Haaland and the fitted classifier, and of the well options, with its independent check:
+
+| IDs | Independent check |
+|---|---|
+| GEO-2, GEO-3, GEO-4 | None: the trajectory and the cross-section, definitions |
+| BAL-6 to BAL-11, BAL-13 | None: balance laws |
+| DISC-7 to DISC-11 | None: ManyWells' discretization |
+| SOL-1 to SOL-6 | None: ManyWells' definitions of the root set, the stability label and the operating point |
+| SMO-1 to SMO-4 | None: ManyWells' smoothing |
+| PVT-GAS-2, PVT-GAS-6 | None: definitions, of standard conditions and of the gas's gravity and gas constant |
+| PVT-GAS-5 | Whitson and Brulé (2000), Appendix B, Problem 6, a worked example; Sutton (1985), Eqs. (14) and (15), transcribed. Ruled 2026-10-29: Sutton's 131.0 for 131.07 |
+| PVT-GAS-7 | Ahmed (2006), Example 2-14, a worked example |
+| PVT-GAS-9, PVT-GAS-11 | Dranchuk and Abou-Kassem (1975), Eqs. (2) and (3), transcribed; no worked example in hand |
+| PVT-GAS-10 | A central difference of that transcription along an isobar |
+| PVT-GAS-3, PVT-GAS-4 (Papay, an option) | None: Papay (1968) is not in hand, and no textbook in hand gives the correlation |
+| PVT-OIL-2 | None: a definition |
+| PVT-OIL-4, PVT-OIL-7, PVT-OIL-13, PVT-OIL-15 | None: the black oil's composition, its caps and its mass balance, ManyWells' own; the $B_o$ examples run through PVT-OIL-15's cap |
+| PVT-OIL-5 | Ahmed (2006), Example 2-25, a worked example |
+| PVT-OIL-6 | Ahmed (2006), Example 2-18, a worked example |
+| PVT-OIL-8 | Ahmed (2006), Example 2-29, Method 2, a worked example |
+| PVT-OIL-9 | None: the oil's mass over its volume |
+| PVT-OIL-10, PVT-OIL-11 | Ahmed (2006), Example 2-35, a worked example |
+| PVT-OIL-3, PVT-OIL-12 | Abdul-Majeed and Abu Al-Soof (2000), Eqs. (1) to (5), transcribed, and the data of their Table 1; no worked example in hand |
+| PVT-WAT-1 | None: constants |
+| PVT-WAT-3 | None: no source in hand (`validity.md`, note 5) |
+| PVT-MIX-6, PVT-MIX-7, PVT-MIX-8, PVT-MIX-10 | None: mixing rules and definitions |
+| PVT-MIX-9 | `fluids`' `gas_liquid_viscosity`, for the mixing rule; Hasan and Kabir (2018), Field Example 3.1, a worked example. Ruled 2026-10-29: the flowing mass fraction for the in-situ one |
+| SLIP-1 | None: the drift-flux law |
+| SLIP-4 | Hasan and Kabir (2018), Field Examples 3.1 and 4.1, worked examples |
+| SLIP-5 | Hasan and Kabir (2018), Field Example 3.1, a worked example |
+| SLIP-10 | None: the one example in hand, Hasan and Kabir's (2018) Field Example 4.1, prints a factor its own Eq. 4.33 does not give |
+| SLIP-12 to SLIP-16 | Hasan and Kabir (2018), Field Examples 3.1 and 4.1 and Appendix 7-E, §7-E.2, worked examples: the flow regime, and $C_0$ in slug flow; not their void fractions (`slip.md`, Test vectors) |
+| SLIP-18 | None: ManyWells' own (`specs/features/020-profile-scale.md`) |
+| SLIP-2, SLIP-3, SLIP-6 to SLIP-8, SLIP-11 (the fitted classifier, an option) | None: v1.0.0's own fit to SLIP-9; the `v1.0.0` vectors check that `develop` reproduces it |
+| FRIC-1, FRIC-3, FRIC-6 | None: Darcy–Weisbach, the Reynolds number and a blend |
+| FRIC-4 | `fluids`' `Chen_1979`; Chen (1979), Table I, the largest deviation from his form of Colebrook's equation |
+| FRIC-5 (Haaland, an option) | `fluids`' `Haaland`; Haaland (1983), the stated 1.5% from Colebrook–White |
+| THM-1, THM-4 to THM-8 | None: the energy balance's terms and its bottom boundary, derived in `docs/thermal_energy_modeling.md`; THM-8's factor is PVT-GAS-10 |
+| CHK-1 to CHK-3, CHK-6 to CHK-12 | None: ManyWells' wellhead boundary, paper (11) to (14) |
+| CHK-4 | `fluids`' `P_critical_flow` |
+| CHK-5 | None: Simpson, Rooney and Grattan (1983) is not in hand |
+| INF-1 | Guo et al. (2007), Example Problem 3.2, a worked example |
+| INF-2, INF-4 to INF-8 | None: definitions and balances |
+
 ## Coverage tables
 
 Every component file ends with a coverage table, one row per ID defined in the file:

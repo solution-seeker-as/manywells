@@ -57,7 +57,7 @@ def point_rows(wp, op):
     for i, (p, v_g, v_l, alpha, rho_g, rho_l, T) in enumerate(op.state):
         rho_m = alpha * rho_g + (1 - alpha) * rho_l
         v_m = alpha * v_g + (1 - alpha) * v_l
-        mu_m = float(fl.mixture_viscosity(p, T, alpha, rho_g, rho_l))
+        mu_m = float(fl.mixture_viscosity(p, T, alpha, rho_g, rho_l, v_g, v_l))
         rows.append(
             dict(
                 i=i,

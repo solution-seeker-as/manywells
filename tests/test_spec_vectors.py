@@ -536,7 +536,9 @@ RUST_ADAPTERS = {
         'surface_tension', p, T, rho_l, fluid=oil(api, sg_gas, surface_tension_model='oil')
     ),
     'PVT-MIX-8': lambda api, sg_gas, wlr, p, T: rust('liquid_viscosity', p, T, fluid=oil(api, sg_gas, wlr=wlr)),
-    'PVT-MIX-9': lambda mu_l, mu_g, alpha, rho_l, rho_g: rust('mixture_viscosity', mu_l, mu_g, alpha, rho_l, rho_g),
+    'PVT-MIX-9': lambda mu_l, mu_g, alpha, rho_l, rho_g, v_g, v_l: rust(
+        'mixture_viscosity', mu_l, mu_g, alpha, rho_l, rho_g, v_g, v_l
+    ),
     'PVT-MIX-10': lambda rho_o, rho_g_sc, rho_w, gor, wlr, cp_o, cp_w: rust(
         'fluid_parameters',
         fluid=dead_fluid(rho_o=rho_o, rho_g=rho_g_sc, rho_w=rho_w, gor=gor, wlr=wlr, cp_o=cp_o, cp_w=cp_w),
