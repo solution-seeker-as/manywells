@@ -118,7 +118,7 @@ Model changes made on `develop` since v1.0.0 are not discrepancies; they are lis
 
 - **Paper.** (11)–(12) with the momentum density $\rho_e$.
 - **v1.0.0.** $\rho_l$ with Simpson's multiplier $\Phi$ inside the square root (`choke.py:112,184`), which equals $\rho_e = \rho_l/\Phi$ (paper, footnote 1). The class docstring has $\Phi$ outside the square root (`choke.py:28,99`).
-- **Ruling.** Both are right. CHK-2 and CHK-5 give both forms. The docstring is fixed on `develop` in this step (`plans/improvements.md` §1.5).
+- **Ruling.** Both are right. CHK-2 and CHK-5 give both forms. The docstring is fixed on `develop` in this step (`plans/backlog.md` §1.5).
 
 ### D-14 · Seven unknowns per point, not eight
 
@@ -164,10 +164,10 @@ Model changes made on `develop` since v1.0.0 are not discrepancies; they are lis
 
 ### D-21 · Defects in the code that do not change the model
 
-- `ChokeModel.cpr` is a constructor argument that `__post_init__` always overwrites with CHK-4 (`choke.py:58`; `plans/improvements.md` §1.4). The `v1.0.0` configuration takes $r_c$ from CHK-4 always.
+- `ChokeModel.cpr` is a constructor argument that `__post_init__` always overwrites with CHK-4 (`choke.py:58`; `plans/backlog.md` §1.4). The `v1.0.0` configuration takes $r_c$ from CHK-4 always.
 - `FixedFlowRate.__post_init__` checks `w_l_const >= 0` twice and never checks `w_g_const` (`inflow.py:143-144`).
 - The comment in `liquid_mix` calls the oil volume fraction the water fraction (D-2).
-- **Ruling.** None changes the `v1.0.0` model. Fix them on `develop` any time (`plans/improvements.md` §1.4 for the first).
+- **Ruling.** None changes the `v1.0.0` model. Fix them on `develop` any time (`plans/backlog.md` §1.4 for the first).
 - **Status.** All three are fixed on `develop`: `cpr` is a property from CHK-4, not a constructor argument (2026-10-29), `FixedFlowRate` checks its one rate once, and the comment in `liquid_mix` names the volume fraction of the first liquid (2026-10-29).
 
 ### D-22 · Observations where the paper and the code agree

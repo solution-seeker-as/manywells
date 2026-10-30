@@ -12,7 +12,7 @@ The foundation plan (`plans/manywells-v2-plan.md`) defers calibration until afte
   - `src/manywells/calibration/choke_cal.py` fits `K_c` of a Bernoulli or Simpson choke by least squares, and `inflow_cal.py` fits `k_l` or `w_l_max`.
     - The choke fit needs the mixture density or gas mass fraction upstream of the choke, which is not measured; only a simulation gives it.
     - Neither has priors or handles a missing value.
-    - Only `tests/test_calibration.py` uses them. `plans/improvements.md` §2.8 lists their bare `Exception` and `print`.
+    - Only `tests/test_calibration.py` uses them. `plans/backlog.md` §2.8 lists their bare `Exception` and `print`.
   - `scripts/wellbore_cal.py` (untracked, March 2026) fits the pipe roughness to PWH from marches anchored at the measured PBH. It cannot run on `develop`: it sets fields on frozen inputs and calls `_simulate_cellwise`, which `d8f015f` removed.
 - **What a calibration can build on.**
   - `SSDFSimulator(wp, backend=...).simulate(bc)` returns the operating point as a `Root` (`solution.py`), or raises `NoOperatingPoint`.
@@ -270,7 +270,7 @@ src/manywells/calibration/
 - **Work.**
   - `calibrate(wp, data, free=[...], priors=..., backend='rust')` returns a `CalibrationResult`: θ̂, the calibrated `WellProperties`, residuals, diagnostics and solver status.
   - `least_squares` starts from z = 0.
-  - Failures raise a `CalibrationError` and are reported through logging, not `print` (`plans/improvements.md` §2.8).
+  - Failures raise a `CalibrationError` and are reported through logging, not `print` (`plans/backlog.md` §2.8).
   - **Synthetic wells** (`synthetic.py`). For a well and known parameters θ*, simulate rows at operating points spread over CHK, WGL and PDC. Then add noise at the default σ's, from a seeded generator (constitution, Determinism), and mask the observations by instrumentation:
     - full;
     - no downhole gauge;
@@ -330,7 +330,7 @@ src/manywells/calibration/
   - **A false minimum.** 2 fits converged to a false minimum at a roughness of about 140 m, a valley of the friction correlation far outside its range.
   - **The fix.** The start search (CAL-9) removes both failures, for 34% more solves at the median.
   - **Model error.** It is absorbed silently in some wells and shows in the held-out residuals in others.
-  - **Backends.** On the same data the backends agree; where they differ, the CasADi search found another root or none (`plans/improvements.md` §2.9).
+  - **Backends.** On the same data the backends agree; where they differ, the CasADi search found another root or none (`plans/backlog.md` §2.9).
 
 ### Step C7 — Retire, document, example
 
@@ -365,7 +365,7 @@ In rough order of value:
 - **Change over time.** Sequential recalibration that carries the posterior forward as the next prior, which needs the Laplace step, and parameters that drift (Hotvedt et al. 2022).
 - **Many wells.** Hierarchical priors that pool information across similar wells (Notz et al., in the discussion of Kennedy and O'Hagan; Sandnes et al. 2021).
 - **More parameters.** The choke profile's exponent, r_c, the slip parameters, and friction per section.
-- **Speed.** A tracked operating-point solve on the core, or sensitivities from the implicit-function theorem with the parameters as symbols of the CasADi system. The second changes the `System` contract, as in `plans/improvements.md` §4.5. Each needs a measured gain (principle 7).
+- **Speed.** A tracked operating-point solve on the core, or sensitivities from the implicit-function theorem with the parameters as symbols of the CasADi system. The second changes the `System` contract, as in `plans/backlog.md` §4.5. Each needs a measured gain (principle 7).
 - **Modular fits** that cut a suspect module's influence on the others (Liu, Bayarri and Berger 2009), if C6 shows contamination.
 - **Data preparation.** Detecting steady periods and averaging MPFM data, as Nemoto et al. (2023) do for well tests.
 

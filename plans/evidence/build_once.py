@@ -6,7 +6,7 @@ terms of the CC BY-NC 4.0 International Public License.
 Created 01 October 2026
 Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
-The build-once measurement of specs/architecture.md (plans/improvements.md, 4.1), repeated on the verifier's case
+The build-once measurement of specs/architecture.md (plans/backlog.md, 4.1), repeated on the verifier's case
 set in Step 7: the time of one solve of a well, before Step 7 (develop at c5fedf2, which rebuilt the system, the NLP
 and the march's rootfinders on every call) and after (built once per well, with the operating point as parameters).
 

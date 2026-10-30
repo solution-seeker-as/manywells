@@ -190,5 +190,5 @@ Real-well data is confidential. Some real-well data for validation resides in th
 - `docs/testing.md` for the test layout and pytest configuration.
 - `docs/datasets.md` when touching data generation, for the dataset feature definitions and the relations between them.
 - `docs/simulate.md` and `scripts/sim_examples/` for how a simulation is set up end to end.
-- `plans/manywells-v2-plan.md` for the current plan of work (the v2 foundation) and `plans/improvements.md` for the backlog of code-level findings, each tagged with the plan step that handles it.
+- `plans/manywells-v2-plan.md` for the current plan of work (the v2 foundation) and `plans/backlog.md` for the backlog of code-level findings, each tagged with the plan step that handles it.
 - The ManyWells paper (cited in `README.md`) documents release v1.0.0, which also generated the published HuggingFace datasets (`solution-seeker-as/manywells`). The code has changed since, so treat the paper as background rather than the spec for current behaviour; `git log v1.0.0..HEAD` shows what moved, and `docs/corrigendum.md` lists known typos in the paper.

@@ -28,7 +28,7 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
   - PVT tables (018), five flow regimes after Hasan et al. (019) and a profile scale for calibration (020) are merged.
   - Bjarne signed off the feature specs 001 to 011, 013, 019 and 020 on 2026-10-29.
   - PR #29 fixed the two open model bugs: the live-oil density (#16, PVT-OIL-15) and the CasADi backend's temperature bounds (#13). Bjarne signed off what it left open the same day (`823de32`).
-  - `plans/improvements.md` holds the backlog, merged with the review of 2026-10-16.
+  - `plans/backlog.md` holds the backlog, merged with the review of 2026-10-16.
 - **`develop`'s model is the defaults of the dataclasses** (`specs/model/README.md`). Nothing names it, so a changed default changes the model a dataset is drawn from without any check noticing.
 - **The sampler is v1's procedure ported to `develop`** (`specs/sampling.md`): independent draws, extended to the trajectory, roughness and black-oil inputs, with Step 4's starting points (SMP-41 to SMP-43).
   - Its wells are often outside the correlations' ranges (`specs/model/validity.md`, Where the sampler leaves the ranges). 69% of the sampled cases have a gas–oil ratio above 534 Sm³/Sm³, the lower end of gas condensates. 42% lie outside Hasan et al.'s gas–liquid ratios, and 24% have horizontal cells, which no option models with stratified flow.
@@ -91,7 +91,7 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
 ### Step L3 — Check the correlations against independent sources
 
 - **Status.** Implemented on the branch `independent-checks` and signed off by Bjarne on 2026-10-29: `tests/test_worked_examples.py`, the notes in the specs and the list in `specs/model/README.md`. It found two differences from the sources, both ruled the same day to follow the source, and fixed on the same branch before its PR: Sutton's $p_{pc}$ has 131.0 where the code had 131.07 (PVT-GAS-5), and the mixture viscosity weights by the flowing gas fraction of Hasan et al.'s Eq. (A-3), where the code took the in-situ one (PVT-MIX-9).
-- **Goal.** Independent evidence that each correlation in the v2 configuration is implemented as published. Today the `develop` vectors come from `develop` itself, and the two backends implement the same spec, so agreement between them does not check the values. This step takes over Step V1 of a draft validation plan, since retired (its Step V2 is `plans/improvements.md` §2.16).
+- **Goal.** Independent evidence that each correlation in the v2 configuration is implemented as published. Today the `develop` vectors come from `develop` itself, and the two backends implement the same spec, so agreement between them does not check the values. This step takes over Step V1 of a draft validation plan, since retired (its Step V2 is `plans/backlog.md` §2.16).
 - **Work.**
   - **Against `fluids`** (Caleb Bell, MIT licence), run by hand with `uv run --with fluids==1.3.1`, so it is not a dependency. A script in `plans/evidence/` compares:
     - Chen and Haaland (FRIC-4, FRIC-5);
@@ -141,7 +141,7 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
   1. In `specs/model/README.md`, a column for the configuration next to `v1.0.0`, one option per part, with the five regimes and not the fitted classifier (L4). Bjarne named it `v2.0.0` on 2026-10-30, after `v1.0.0`. `develop`'s defaults can then move on without moving it.
   2. In `configurations.py`:
      - add the name to `CONFIGURATIONS`;
-     - have `check(wp, name)` test every option, with exact types (`plans/improvements.md` §2.11, Step L7);
+     - have `check(wp, name)` test every option, with exact types (`plans/backlog.md` §2.11, Step L7);
      - add a constructor for its wells if the sampler needs one.
   3. Pin it with row vectors from `develop` in that configuration, in both backends: rows at perturbed states of a few wells, as `specs/model/vectors/v1_rows.json` pins `v1.0.0`.
   4. Write the rule for changing it: a change to a pinned configuration is a new configuration (`v2.1`), never an edit. Datasets already record their configuration and code version (SMP-31). **Left out** (Bjarne, 2026-10-30): the rule is v2.0.0 release work (Out of scope), and the versioning rule (`specs/constitution.md`, Versions) does without it.
@@ -172,7 +172,7 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
 ### Step L7 — Fix the sampler's and the inputs' known bugs
 
 - **Goal.** No known bug on the sampler's code path or in the validation of its inputs.
-- **Work.** The backlog items, one PR, each with a test, each moved to the Done table of `plans/improvements.md`:
+- **Work.** The backlog items, one PR, each with a test, each moved to the Done table of `plans/backlog.md`:
   - §1.10, `write_dataset` truncates a dotted name;
   - §1.11, the QTOT filter's standard deviation (needs sign-off; or left to the redesign, if it replaces the filter);
   - §1.4, `cpr` silently overwritten;
@@ -185,7 +185,7 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
 
 ### Step L8 — Housekeeping
 
-- `plans/validation-plan.md` (untracked): Step V1 moves into Step L3. Commit it with Step V2 alone, the fixed wellhead pressure, which the sampler does not need. Or drop it. **Done 2026-10-29:** Step V2 is `plans/improvements.md` §2.16, and the draft is deleted (Bjarne).
+- `plans/validation-plan.md` (untracked): Step V1 moves into Step L3. Commit it with Step V2 alone, the fixed wellhead pressure, which the sampler does not need. Or drop it. **Done 2026-10-29:** Step V2 is `plans/backlog.md` §2.16, and the draft is deleted (Bjarne).
 - Issue #2, "Add dataset generation test and bump numpy version to >=2.0", is from 2025. Check it against `tests/test_sampling.py` and `pyproject.toml`, then close or update it. **Done 2026-10-29:** closed; `develop` runs numpy 2, and the ported sampler seeds every draw (SMP-31).
 
 ## Sequencing
@@ -210,10 +210,10 @@ Steps L1 to L4 can run in parallel: L1, L2 and L4 are mostly Bjarne's decisions,
 
 ## Out of scope, after this plan
 
-- **Roots each backend's search misses** (`plans/improvements.md` §2.9).
+- **Roots each backend's search misses** (`plans/backlog.md` §2.9).
 - **Verifier cases** for wells whose roots lie near $p_r$, and for wells with more than two roots.
 - **The Rust core's performance target,** and the batch API (§4.3), which belongs with the v2 dataset generation.
-- **The fixed-wellhead-pressure boundary** (`plans/improvements.md` §2.16).
+- **The fixed-wellhead-pressure boundary** (`plans/backlog.md` §2.16).
 - **Calibration's open items:** the false minimum (§2.10), whether $p_r$ is free, and the default noise.
 - **v2.0.0 release work:** prebuilt wheels, the license, the v2 dataset schema, and the rule for changing a configuration once a release ships it or a published dataset uses it (left out of the versioning rule, Bjarne, 2026-10-30; constitution, Versions).
 

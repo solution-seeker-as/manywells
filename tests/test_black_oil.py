@@ -253,7 +253,7 @@ class TestWaterFVF:
         assert bw == pytest.approx(1.0)
 
     def test_high_pressure_slightly_below_one(self):
-        """Water at 200 bar is compressed: Bw barely below 1.0 (plans/improvements.md, 1.2)."""
+        """Water at 200 bar is compressed: Bw barely below 1.0 (plans/backlog.md, 1.2)."""
         bw = float(water_fvf(200e5, T_REF))
         assert 0.99 < bw < 1.0
 
