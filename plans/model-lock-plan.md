@@ -158,6 +158,26 @@ It ends when Step L5 is done and Steps L6 and L7 are merged. The redesign itself
   - 0.008 for the reference's own rows.
 
   The bound is 0.02. Step 8's gap 5 adds that the check counts against a solver every row v1.0.0 failed to solve.
+
+  **Measured 2026-10-30, for Bjarne's ruling** (branch `distribution-margin`; `plans/evidence/README.md`, Step L6; `plans/evidence/distribution_noise.py`). The statistic is the largest CDF gap over the features, and the largest rank-correlation gap.
+  - **Today, at Step 7's draws:** the CasADi backend 0.0191 (PWH) and 0.030, PASS; the Rust core 0.0210 and 0.035, FAIL. The change from Step 7 is the CasADi search's: it now solves all 2,000 published wells at u = 0.5 (Step 7: 1,998). The rows themselves equal v1.0.0's wherever both reach the same root (below).
+  - **Over seeds:** the Rust core 0.0218 ± 0.0030 over 11 seeds, at most 0.0285, and it passes 0.02 at only 3 of them; correlation 0.0365 ± 0.0042, at most 0.0418. The CasADi backend 0.0180 ± 0.0015 over 3 seeds, at most 0.0191, passing at all three; correlation at most 0.0393. The reference's own rows, 5 per well and weighted: 0.0085 ± 0.0021 and 0.0166 ± 0.0049.
+  - **A bias, not noise:** at 10, 20 and 50 samples per well the Rust core stays at 0.020, 0.020 and 0.019, while the reference's own noise falls to 0.0025.
+  - **v1.0.0's bias, not `develop`'s.** The same draws, replayed with v1.0.0's generator, match the reference within its noise. `develop`'s rows equal v1.0.0's wherever both reach the same root (within $2\cdot10^{-3}$ bar). The gap is two v1.0.0 defects:
+    - the draws v1.0.0 failed (3.5%, at small openings), which its generator drew again, so the published data lack them. This is gap 5: without these draws the PWH gap falls from 0.021 to 0.007.
+    - its trickle rows that the 10 mbar signature misses (1.3%), which the reference keeps. Alone they give WTOT 0.017 and correlation 0.043.
+  - **The weights blunt the check against the trickle root.** Weighted, the published rows with every trickle row left in give 0.005 and 0.020, and pass. The 0.034 and 0.092 in `specs/verification.md` are unweighted. Trickle roots spread over all wells are caught once they are about 2.5% of the rows (by the correlation bound) or 4% (by a CDF bound of 0.035).
+- **Options for Bjarne** (each needs sign-off):
+  1. **A bound from the noise: CDF 0.035; rank correlation 0.05 as now; 5 samples per well.**
+     - 0.035 is the Rust core's largest gap over the seeds plus two standard deviations. Both backends pass at every seed measured.
+     - It still catches trickle roots in 2.5% to 4% of the rows, and a choke drawn from U(0.1, 1) (CHK 0.037).
+     - It does not catch v1.0.0's own trickle defect, which no bound can while the weights stand: v1.0.0's replay passes at 0.008 and 0.027.
+     - It is coarse for the drawn inputs, at any bound in play, because the wells' nominal values smooth each input's marginal. Lift gas from U(0, 4) gives 0.034, a doubled separator-pressure range 0.010, and ±10% gas fractions 0.004. `tests/test_sampling.py` checks that the draws stay in their ranges, which catches a widened range but not a narrowed one.
+  2. **More samples per well.** No help: the gap does not fall with more samples (0.019 at 50 per well), and at 50 per well the CasADi backend would take about 3 hours on 12 processes (the Rust core 12 minutes).
+  3. **Keep 0.02 and record the failure.** The Rust core fails at 8 of 11 seeds, and the CasADi backend passes by 0.0009 at the default seed (0.0037 and 0.0013 at seeds 1 and 2). The verdict would be the seed's. A solver that solves more of v1.0.0's failed draws scores worse: the core's extra 50 rows at small openings are why it fails where the CasADi backend passes.
+  4. **Remove gap 5 at its source** (not asked for; after the plan). Store v1.0.0's replay of the default seed's draws as reference data, and check a candidate draw by draw against it. The comparison with the published data becomes the replay's own calibration (0.0063 and 0.0136). This is stricter than any bound (`develop` matches all 9,150 shared draws), but it is a new check, with new reference data.
+
+  **Recommended: option 1.** With it, `specs/verification.md`'s calibration sentence should be replaced by the weighted numbers and the table of what the check catches, and gap 5 recorded as measured.
 - **Work.**
   - Rerun both regenerations on today's `develop` (`scripts/verification/regenerate_distributions.py`, about 17 minutes on 24 cores).
   - Measure the gap's spread over repeated draws.

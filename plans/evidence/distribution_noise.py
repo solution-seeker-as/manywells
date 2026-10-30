@@ -27,6 +27,8 @@ which regenerated rows the reference lacks because v1.0.0 failed them or put the
              trickle root's (the unstable root with the highest p_0), for power
   power      what the check catches: candidates that take the trickle root instead of the stable one in a share of
              the draws that have one, spread over the wells as a solver's defect would be
+  inputs     what the check catches of a sampler error: one drawn input's column of a regeneration redrawn from a
+             wrong range (the solved features, which would move too, are left as they are)
 
 From the repository root, with the sol-1 files of the public Hugging Face dataset solution-seeker-as/manywells:
 
@@ -41,6 +43,8 @@ From the repository root, with the sol-1 files of the public Hugging Face datase
         --data manywells-sol-1.zip [--feature PWH]
     uv run python plans/evidence/distribution_noise.py roots roots.parquet --config manywells-sol-1_config.zip
     uv run python plans/evidence/distribution_noise.py power roots.parquet
+    uv run python plans/evidence/distribution_noise.py inputs DIR/rust-n5-seed20261001.parquet \
+        --config manywells-sol-1_config.zip
 
 The draws of regen, draws and v1 do not depend on the backend (SMP-31), so a row's ID and sample index k identify
 it in every file.
@@ -432,6 +436,29 @@ def power(args):
             )
 
 
+def inputs(args):
+    from manywells_verify.distributions import compare, well_weights
+
+    reference, rows = reference_summary(), pd.read_parquet(args.rows)
+    cfg = pd.read_csv(args.config, compression='zip').set_index('ID').loc[rows['ID']]
+    rng, n = np.random.default_rng(SEED), len(rows)
+    lift = cfg['has_gas_lift'].to_numpy(dtype=bool)
+    errors = [
+        ('choke U(0.05, 1), redrawn (no error: the control)', 'CHK', rng.uniform(0.05, 1, n)),
+        ('choke U(0.1, 1) (SMP-18: U(0.05, 1))', 'CHK', rng.uniform(0.1, 1, n)),
+        ('lift gas U(0, 4) (SMP-19: U(0, 5))', 'WGL', np.where(lift, rng.uniform(0, 4, n), 0.0)),
+        ('separator pressure +-20% (SMP-20: +-10%)', 'PDC', cfg['bc.p_s'].to_numpy() * rng.uniform(0.8, 1.2, n)),
+        (
+            'gas fraction +-10% (SMP-22: +-5%)',
+            'FGAS',
+            np.minimum(0.99, cfg['fraction.gas'].to_numpy() * rng.uniform(0.9, 1.1, n)),
+        ),
+    ]
+    for name, f, x in errors:
+        r = compare(reference, rows.assign(**{f: x}), well_weights(reference, rows))
+        print(f'{name:50s} {f} CDF gap {r["cdf_gaps"][f]:.4f}; largest {r["worst_cdf"][1]:.4f} ({r["worst_cdf"][0]})')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[1])
     sub = parser.add_subparsers(dest='command', required=True)
@@ -488,6 +515,10 @@ def main():
     p.add_argument('--shares', type=float, nargs='+', default=[0.1, 0.25, 0.5, 1.0])
     p.add_argument('--draws', type=int, default=3)
     p.set_defaults(run=power)
+    p = sub.add_parser('inputs')
+    p.add_argument('rows', type=Path)
+    p.add_argument('--config', type=Path, required=True)
+    p.set_defaults(run=inputs)
     args = parser.parse_args()
     args.run(args)
 
