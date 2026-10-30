@@ -32,7 +32,7 @@ class ThermalModel:
     h: float = 20.0  # Overall heat transfer coefficient (W/m²/K)
     frictional_heating: bool = True  # Viscous dissipation heats the liquid
     gravity_term: bool = True  # Work against gravity cools the flow
-    lift_gas_mixing: bool = True  # Lift gas at T_lg mixes with the reservoir fluid at the bottomhole
+    lift_gas_mixing: bool = True  # Lift gas at T_lg mixes with the flow where it is injected (THM-5, THM-9)
     joule_thomson: bool = True  # A real gas cools as it expands (zero for an ideal gas)
 
     def __post_init__(self):
@@ -74,6 +74,24 @@ class ThermalModel:
         H_res = w_res * fluid.cp_l + fluid.reservoir_gas_rate(w_res) * fluid.cp_g
         H_lg = w_lg * fluid.cp_g
         return T_r + H_lg * (T_lg - T_r) / (H_res + H_lg)  # spec: THM-5
+
+    @staticmethod
+    def injection_temperature(T_tilde, w_g, w_l, w_lg, T_lg, fluid):  # spec: THM-9
+        """
+        Temperature at an injection point above the bottomhole, where the flow arriving from below at T_tilde mixes
+        with the lift gas at T_lg, weighted by their heat-capacity rates (the switch lift_gas_mixing is the caller's).
+
+        :param T_tilde: Temperature of the flow arriving from below (K): DISC-10's step over the injection cell
+        :param w_g: Gas mass flow rate at the injection point (kg/s), the lift gas included
+        :param w_l: Liquid mass flow rate at the injection point (kg/s)
+        :param w_lg: Lift gas mass flow rate (kg/s)
+        :param T_lg: Lift gas temperature (K)
+        :param fluid: Fluid model (FluidModel), for the heat capacities
+        :return: Temperature (K)
+        """
+        H_k = fluid.cp_g * (w_g - w_lg) + fluid.cp_l * w_l  # The flow arriving from below, without the lift gas
+        H_lg = fluid.cp_g * w_lg
+        return T_tilde + H_lg * (T_lg - T_tilde) / (H_k + H_lg)
 
     def temperature_gradient(self, s, fluid, T_a, F, dp_dmd, cos_incl, D):
         """

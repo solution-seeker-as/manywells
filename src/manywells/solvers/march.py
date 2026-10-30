@@ -40,7 +40,7 @@ points for 11 to 20% more Ipopt iterations.
 import casadi as ca
 import numpy as np
 
-from manywells.discretization import DIM_X, PARAMS
+from manywells.discretization import DIM_X, PARAMS, lifts
 
 QUIET = {'show_eval_warnings': False}  # A failed solve raises MarchFailed; CasADi need not warn as well
 IPOPT = {'ipopt.print_level': 0, 'ipopt.sb': 'yes', 'print_time': 0, 'show_eval_warnings': False, 'calc_lam_p': False}
@@ -106,11 +106,14 @@ class Marcher:
         r_0 = system.bottom_rows(ca.vertcat(q[0], y), q[1:])
         self._bottom = _PointSolver('march_bottom', y, q, r_0, LOWER[1:], UPPER[1:])
 
-        # Point i > 0: parameters [x_prev, w_res, params, delta_md, cos_incl, tvd_frac]
-        x_i, q = ca.SX.sym('x_i', DIM_X), ca.SX.sym('q', DIM_X + 1 + n_p + 3)
+        # Point i > 0: parameters [x_prev, w_res, params, delta_md, cos_incl, tvd_frac, lift, lift_prev]
+        x_i, q = ca.SX.sym('x_i', DIM_X), ca.SX.sym('q', DIM_X + 1 + n_p + 5)
         k = DIM_X + 1 + n_p
-        r_i = system.point_rows(x_i, q[:DIM_X], q[DIM_X], q[DIM_X + 1 : k], q[k], q[k + 1], q[k + 2])
+        r_i = system.point_rows(
+            x_i, q[:DIM_X], q[DIM_X], q[DIM_X + 1 : k], q[k], q[k + 1], q[k + 2], q[k + 3], q[k + 4]
+        )
         self._cell = _PointSolver('march_cell', x_i, q, r_i, LOWER, UPPER)
+        self._lift = lifts(system.wp)  # Whether the lift gas flows at each point (INF-9)
 
     def __call__(self, params, p_0) -> np.ndarray:
         system, geo = self._system, self._system.wp.geometry
@@ -122,7 +125,12 @@ class Marcher:
             w_res = float(system.reservoir_rate(p_0, params))
             for i in range(1, system.n_cells + 1):
                 q = np.concatenate(
-                    [x[-1], [w_res], params, [geo.delta_md[i - 1], geo.cos_incl[i - 1], geo.tvd_frac[i]]]
+                    [
+                        x[-1],
+                        [w_res],
+                        params,
+                        [geo.delta_md[i - 1], geo.cos_incl[i - 1], geo.tvd_frac[i], self._lift[i], self._lift[i - 1]],
+                    ]
                 )
                 x.append(self._cell(x[-1], q))
         except MarchFailed as e:

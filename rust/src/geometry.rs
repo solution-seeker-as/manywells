@@ -29,6 +29,7 @@ pub struct Geometry {
 /// What the rows of cell i use of the geometry
 #[derive(Clone, Copy, Debug)]
 pub struct Cell {
+    pub index: usize, // i, 1 <= i <= N
     pub delta_md: f64,
     pub cos_incl: f64,
     pub tvd_frac: f64, // of the cell's upper point, point i
@@ -66,7 +67,7 @@ impl Geometry {
 
     /// The geometry of cell i, 1 <= i <= N
     pub fn cell(&self, i: usize) -> Cell {
-        Cell { delta_md: self.delta_md[i - 1], cos_incl: self.cos_incl[i - 1], tvd_frac: self.tvd_frac[i] }
+        Cell { index: i, delta_md: self.delta_md[i - 1], cos_incl: self.cos_incl[i - 1], tvd_frac: self.tvd_frac[i] }
     }
 
     /// The inclination of point i's closures: its cell's, and cell 1's at the bottomhole (DISC-11)

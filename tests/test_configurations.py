@@ -101,6 +101,15 @@ def test_check_rejects_subclasses():
     ]
 
 
+def test_check_rejects_an_injection_depth():
+    """v1.0.0 injects the lift gas at the bottomhole (INF-5): any injection depth is a difference, even the
+    bottomhole's; develop takes any."""
+    for md in (1000.0, 2500.0):  # 2500 m is v1()'s bottomhole
+        diff = differences(dataclasses.replace(v1(), injection_md=md), V1)
+        assert diff == [f'injection_md is {md}, not None: v1.0.0 injects the lift gas at the bottomhole (INF-5)']
+    assert differences(dataclasses.replace(WellProperties(), injection_md=1000.0), DEVELOP) == []
+
+
 def test_unknown_configuration():
     with pytest.raises(ValueError, match='unknown configuration'):
         differences(v1(), 'v0.9')

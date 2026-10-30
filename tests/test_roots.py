@@ -175,6 +175,8 @@ def test_the_energy_slope_with_heat_loss_alone():
             geo.delta_md[0],
             geo.cos_incl[0],
             geo.tvd_frac[1],
+            1.0,
+            1.0,
         )
     )
     p, v_g, v_l, alpha, rho_g, rho_l, T = X[0]

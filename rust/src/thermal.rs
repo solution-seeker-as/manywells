@@ -18,7 +18,7 @@ pub struct Thermal {
     pub h: f64,                   // Overall heat transfer coefficient (W/(m² K))
     pub frictional_heating: bool, // Viscous dissipation heats the liquid (THM-6)
     pub gravity_term: bool,       // Work against gravity cools the flow (THM-7)
-    pub lift_gas_mixing: bool,    // Lift gas at T_lg mixes with the reservoir fluid at the bottomhole (THM-5)
+    pub lift_gas_mixing: bool,    // Lift gas at T_lg mixes with the flow where it is injected (THM-5, THM-9)
     pub joule_thomson: bool,      // A real gas cools as it expands (THM-8)
 }
 
@@ -92,6 +92,24 @@ impl Thermal {
         let h_lg = w_lg * fluid.cp_g;
         t_r + h_lg * (t_lg - t_r) / (h_res + h_lg) // spec: THM-5
     }
+}
+
+/// Temperature (K) at an injection point above the bottomhole, where the flow arriving from below at t_tilde (K)
+/// mixes with the lift gas at t_lg (K), weighted by their heat-capacity rates: w_g and w_l are the phase rates at the
+/// point (kg/s), the lift gas's rate w_lg included in w_g. Whether the thermal model mixes is the caller's.
+pub fn injection_temperature(t_tilde: f64, w_g: f64, w_l: f64, w_lg: f64, t_lg: f64, fluid: &Fluid) -> f64 {
+    let h_k = fluid.cp_g * (w_g - w_lg) + fluid.cp_l * w_l; // The flow arriving from below, without the lift gas
+    let h_lg = fluid.cp_g * w_lg;
+    t_tilde + h_lg * (t_lg - t_tilde) / (h_k + h_lg) // spec: THM-9
+}
+
+/// The share λ = H_lg / (H_k + H_lg) of the lift gas in the heat-capacity rate at the injection point (THM-9), for
+/// the phase rates w_g and w_l there (kg/s), the lift gas's w_lg included in w_g. DISC-12's row is (1 - λ) times
+/// DISC-10's plus λ (T_k - T_lg).
+pub fn lift_gas_share(w_g: f64, w_l: f64, w_lg: f64, fluid: &Fluid) -> f64 {
+    let h_k = fluid.cp_g * (w_g - w_lg) + fluid.cp_l * w_l;
+    let h_lg = fluid.cp_g * w_lg;
+    h_lg / (h_k + h_lg)
 }
 
 #[cfg(test)]

@@ -86,7 +86,8 @@ mod _core {
         /// A well from the fields of WellProperties' components (src/manywells/solvers/rust.py, core_well), each
         /// option by its name, as in the Python classes. With oil_model 'table', the PVT table replaces the oil model
         /// and the gas law: its grid and columns by name, p, T, R_so, B_o, Z and optionally mu_o, mu_g and sigma, each
-        /// column with one value per node, the pressure varying fastest
+        /// column with one value per node, the pressure varying fastest. The lift gas's injection point is its grid
+        /// index k, WellProperties.injection_point (INF-9)
         #[new]
         #[pyo3(signature = (
             *,
@@ -98,7 +99,8 @@ mod _core {
             regime_model, C_0_annular, C_0_slug, C_0_bubbly, v_inf_annular, f_ms, transition_width, lambda_floor,
             profile_scale,
             inflow, inflow_coefficient,
-            choke, K_c, profile
+            choke, K_c, profile,
+            injection_point=0
         ))]
         #[allow(non_snake_case, clippy::too_many_arguments)]
         fn new(md: Vec<f64>, tvd: Vec<f64>, D: f64,
@@ -110,7 +112,7 @@ mod _core {
                regime_model: &str, C_0_annular: f64, C_0_slug: f64, C_0_bubbly: f64, v_inf_annular: f64, f_ms: f64,
                transition_width: f64, lambda_floor: f64, profile_scale: f64,
                inflow: &str, inflow_coefficient: f64,
-               choke: &str, K_c: f64, profile: &str) -> PyResult<Self> {
+               choke: &str, K_c: f64, profile: &str, injection_point: usize) -> PyResult<Self> {
             let (black_oil, table) = match (oil_model, table) {
                 ("dead_oil", None) => (false, None),
                 ("black_oil", None) => (true, None),
@@ -168,6 +170,7 @@ mod _core {
                              v_inf_annular, f_ms, transition_width, lambda_floor, profile_scale },
                 inflow,
                 choke: Choke::new(model, K_c, profile),
+                injection_point,
             };
             spec.check().map_err(PyValueError::new_err)?;
             Ok(Self { spec })
@@ -322,6 +325,26 @@ mod _core {
             "inflow_temperature" => {
                 let [w_res, w_lg, t_r, t_lg] = take(name, a)?;
                 vec![spec.thermal.inflow_temperature(w_res, w_lg, t_r, t_lg, &spec.fluid)]
+            }
+            "injection_temperature" => {
+                let [t_tilde, w_g, w_l, w_lg, t_lg] = take(name, a)?;
+                vec![thermal::injection_temperature(t_tilde, w_g, w_l, w_lg, t_lg, &spec.fluid)]
+            }
+            "injection_point" => { take::<0>(name, a)?; vec![spec.injection_point as f64] }
+            "point_phase_rates" => {
+                let [i, p, t, w_res, w_lg] = take(name, a)?;
+                let w_lg = discretization::lift_gas_rate(spec, w_lg, i as usize); // spec: INF-9
+                let (w_g, w_l) = spec.fluid.phase_rates(p, t, w_res, w_lg);
+                vec![w_g, w_l]
+            }
+            "energy_row" => {
+                // Cell i's energy row at the state s of point i, with T_prev at point i - 1 (no other value of point
+                // i - 1 enters the row), at the operating point's temperatures and lift gas
+                let [i, t_prev, p, v_g, v_l, alpha, rho_g, rho_l, t, w_res, t_r, t_s, t_lg, w_lg] = take(name, a)?;
+                let s = State { p, v_g, v_l, alpha, rho_g, rho_l, t };
+                let op = OperatingPoint { p_r: f64::NAN, p_s: f64::NAN, t_r, t_s, t_lg, u: f64::NAN, w_lg };
+                let cell = spec.geometry.cell(i as usize);
+                vec![discretization::energy_row(spec, &op, cell, &s, &State { t: t_prev, ..s }, w_res)]
             }
             "temperature_gradient" => {
                 let [p, v_g, v_l, alpha, rho_g, rho_l, t, t_a, f, cos_incl] = take(name, a)?;

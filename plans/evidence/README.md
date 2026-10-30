@@ -1,6 +1,6 @@
 # Evidence for the v2 plan
 
-Scripts and results behind the numbers in `../manywells-v2-plan.md`: the "Known v1 defect" bullet, the "Multiple roots and stability" section, and Step 2.4. Feature specs 016 to 020 have their own sections below. The v2 plan's scripts were run on 2026-09-30 against v1.0.0 (Python 3.11.13, casadi 3.6.4, numpy 1.24.3, pandas 1.5.3), using the published `manywells-sol-1` data and configs.
+Scripts and results behind the numbers in `../manywells-v2-plan.md`: the "Known v1 defect" bullet, the "Multiple roots and stability" section, and Step 2.4. Feature specs 016 to 021 have their own sections below. The v2 plan's scripts were run on 2026-09-30 against v1.0.0 (Python 3.11.13, casadi 3.6.4, numpy 1.24.3, pandas 1.5.3), using the published `manywells-sol-1` data and configs.
 
 ## Setup
 
@@ -126,6 +126,18 @@ Scripts behind `../../specs/features/020-profile-scale.md`, run on 2026-10-29 on
 |---|---|---|
 | `profile_scale_wells.py OUT.csv --casadi-wells 30` | The cases of `five_regime_default.py` with $\kappa_0$ = 1, 0.5 and 0: 263 on the Rust core, the 90 of the first 30 wells on the CasADi backend too | No operating point lost; 2 and 4 gained on the core at $\kappa_0$ = 0.5 and 0. At $\kappa_0 = 0$, PBH changes by −0.19 bar at the median and up to −15.3 bar, the rate by +0.6% and up to +75%. In one case (well 14, its second sampled point) the CasADi search finds a second stable root at $\kappa_0 \le 0.5$ that the core misses. About 20 minutes on one process. |
 | `profile_scale_twins.py OUT.json --wells 20 --detail 8 --workers 12` | The twin study's wells 0 to 19 with `profile_scale` free besides `K_c`, `w_l_max`, `roughness` and `h`, in every instrumentation; and on wells 0 to 7, data with `profile_scale` drawn calibrated with friction alone, the scale alone or both, held out at higher rates | Every fit converges. `profile_scale` is recovered where the data depend on it, and stays at its prior on the six wells where they do not. Its errors correlate with `roughness`'s by −0.22 to +0.28. 017's twin criteria hold in 89% to 100% of the fits, below 95% in `no_downhole` from well 1's false minimum and well 6. With the slip fixed, friction absorbs the holdup error and errs at higher rates (well 6: roughness −3.8 sd, held-out RMS 1.87 against 1.04). About 40 minutes on 12 threads. |
+
+## Feature 021: the lift gas's injection depth
+
+Scripts behind `../../specs/features/021-lift-gas-injection-depth.md`, run on 2026-10-29 on the branch `lift-gas-injection-depth` (`validity-refusals` at `8c66a60` with the feature; Python 3.14, casadi 3.8.1), with 24 CPUs shared with other work. Every well is synthetic, drawn by `develop`'s sampler.
+
+| Script | What it shows | Result |
+|---|---|---|
+| `injection_depth_rows.py dump OUT MODE`, `compare A B` | Acceptance 2: both backends' rows, parameters, bounds and root sets on the backend comparison's matrix and six sampled wells, before the feature and with it, with the lift gas at the bottomhole by `injection_md=None` and by its measured depth | The same to the bit: 31,192 row values and 202 roots, in both modes. A few minutes per dump |
+| `injection_depth_wells.py run 1000 OUT.csv --casadi-cases 90` | The 290 gas-lifted cases of 1000 wells (the sampled operating points of the wells with gas lift, `five_regime_default.py`'s draw), with the lift gas at the bottomhole and at a valve at 75% and 50% of the measured depth, on the core, and the first 90 on the CasADi backend | Operating points: 287, 286 and 283 on the core, 90, 90 and 89 on the CasADi backend, in the same cases. With the valve at 50% PBH rises by 1.44 bar at the median and up to 23.9 bar, and the rate falls by 5.7%; L-shaped wells gain. The core's time does not change; the CasADi backend's rises by 6 to 11% per case at the median. About 5 minutes on 12 processes |
+| `injection_depth_wells.py summary OUT.csv` | The tables of the feature spec's Measurements | |
+| `injection_depth_wells.py scan OUT.csv` | The core's $R(p_0)$ on 4000 samples for each case that loses its operating point with the valve | In all five (case, valve) pairs $R$ stays positive: the model has no root |
+| `injection_depth_wells.py run 1000 OUT.csv --casadi-cases 0 --processes 1`, on the core with each adaptation of its temperature solve at the injection cell undone in turn | The adaptations' effect (principle 7) | The chord iteration's slope saves 2 to 3% of the chord fallbacks and no measurable time; the widened bracket changes nothing on these cases. About 4 minutes per variant |
 
 ## Validity ranges
 
