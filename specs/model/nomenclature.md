@@ -59,7 +59,7 @@ Well and fluid parameters of the `v1.0.0` configuration (v1.0.0's `WellPropertie
 
 Here $R_s$ is the specific gas constant, as in the paper. The black-oil correlations also use a solution gas–oil ratio; its symbol is $R_{so}$ (`rs` in the code) to avoid the clash.
 
-Parameters and quantities of `develop`'s options, in addition (the dataclass fields of `FluidModel`, `WellGeometry`, `RoughnessFriction`, `ThermalModel`, `SlipModel` and `BoundaryConditions`):
+Parameters and quantities of `develop`'s options, in addition (the dataclass fields of `FluidModel`, `WellGeometry`, `RoughnessFriction`, `ThermalModel`, `SlipModel`, `WellProperties` and `BoundaryConditions`):
 
 | Symbol | Code | Unit | Meaning |
 |---|---|---|---|
@@ -79,7 +79,9 @@ Parameters and quantities of `develop`'s options, in addition (the dataclass fie
 | $\varepsilon$, Re | `roughness`, `Re` | m, – | pipe wall roughness and Reynolds number |
 | $w_\text{res}$ | `w_res` | kg/s | liquid mass rate from the reservoir (the inflow model's) |
 | $w_{g,\text{res}}$, $w_d$ | `w_g_res` | kg/s | reservoir gas rate, gas dissolved in the oil |
-| $T_{lg}$ | `T_lg` | K | lift-gas temperature at injection; `None` means $T_r$ |
+| $T_{lg}$ | `T_lg` | K | lift-gas temperature at injection; `None` means the ambient temperature at the injection point (THM-4, THM-9), which at the bottomhole is $T_r$ |
+| $z_\text{inj}$ | `injection_md` | m | measured depth of the lift gas's injection point from the surface, a field of `WellProperties`; `None` means the bottomhole (INF-9) |
+| $k$ | `injection_point` | – | the injection point: the grid point nearest $z_\text{inj}$, the deeper of two equally near; 0 at the bottomhole (INF-9) |
 | $\Phi_f$, $\Phi_g$, $\Phi_{JT}$ | – | K/m | frictional heating, gravity and Joule–Thomson terms of the temperature gradient |
 | $J$ | `jt_factor` | – | the gas's Joule–Thomson factor $T(\partial \ln Z/\partial T)_ p$; $\mu_{JT} = J/(\rho_g c_{pg})$ (PVT-GAS-10) |
 | $\rho_r$ | `reduced_density` | – | the gas's reduced density of the Dranchuk–Abou-Kassem equation of state (PVT-GAS-9) |
@@ -102,7 +104,7 @@ Boundary conditions and controls (v1.0.0's `BoundaryConditions`):
 | $T_r$ | `T_r` | K | reservoir temperature | – |
 | $T_s$ | `T_s` | K | ambient temperature at the surface, $z = L$ | – |
 | $u$ | `u` | – | choke position | $[0, 1]$ |
-| $w_{lg}$ | `w_lg` | kg/s | lift-gas rate, injected at $z = 0$ | $\ge 0$ |
+| $w_{lg}$ | `w_lg` | kg/s | lift-gas rate, injected at $z = 0$; in `develop`, at the injection point (INF-9) | $\ge 0$ |
 
 Input validation belongs in the dataclasses' `__post_init__`, not in the solver.
 

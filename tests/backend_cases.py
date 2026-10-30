@@ -16,8 +16,8 @@ against the CasADi backend, which is independent code:
 
 A configuration is a base well with overlays, each of which switches one option on or off. The sampler draws
 deviated and L-shaped wells, black oil, real gas and friction from roughness (SMP-40 to SMP-44), but not the others,
-so the overlays add them: lift-gas temperature, a fixed rate, PI inflow, a Bernoulli choke, and the options of
-develop's model switched off one at a time.
+so the overlays add them: lift-gas temperature, a valve above the bottomhole, a fixed rate, PI inflow, a Bernoulli
+choke, and the options of develop's model switched off one at a time.
 
 This module is a helper, not a test module: test_backend_comparison.py and the script import it.
 """
@@ -32,7 +32,7 @@ import numpy as np
 
 from manywells.choke import BernoulliChokeModel, SimpsonChokeModel
 from manywells.configurations import DEVELOP, V1, v1_well
-from manywells.discretization import DIM_X, build_system
+from manywells.discretization import DIM_X, build_system, lifts
 from manywells.friction import FixedFrictionFactor, RoughnessFriction
 from manywells.geometry import WellGeometry
 from manywells.inflow import FixedFlowRate, ProductivityIndex, Vogel
@@ -51,7 +51,24 @@ ROOT_ROW = 1e-8  # a core-only root zeroes every CasADi row but the choke row to
 ROOT_CHOKE_REL = 1e-6  # and the choke row to this fraction of the wellhead rate, or to what p_0's resolution allows,
 ROOT_P0_ULPS = 8  # this many ulp of p_r times |dR/dp_0|, if more (steep at the trickle roots next to p_r)
 SEED = 20261002  # the comparison set's seed (SMP-31)
-FEATURES = ('001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011', '016', '018', '019', '020')
+FEATURES = (
+    '001',
+    '002',
+    '003',
+    '004',
+    '005',
+    '006',
+    '007',
+    '008',
+    '009',
+    '010',
+    '011',
+    '016',
+    '018',
+    '019',
+    '020',
+    '021',
+)
 
 
 def features(wp) -> frozenset:
@@ -91,6 +108,8 @@ def features(wp) -> frozenset:
         out.add('016')
     if type(fluid.pvt) in (PVTTable, PVTTableSet):
         out.add('018')
+    if wp.injection_point > 0:
+        out.add('021')
     return frozenset(out)
 
 
@@ -202,6 +221,11 @@ def lift_gas_temperature(wp, bc):
     return wp, replace(bc, w_lg=max(bc.w_lg, 1.0), T_lg=bc.T_s + 0.3 * (bc.T_r - bc.T_s))
 
 
+def valve(share):
+    """Lift gas at least 1 kg/s, injected at a valve at share of the measured depth from the surface (021)."""
+    return lambda wp, bc: (replace(wp, injection_md=share * wp.geometry.L), replace(bc, w_lg=max(bc.w_lg, 1.0)))
+
+
 def fixed_rate(wp, bc):
     """The liquid rate the inflow gives at 85% of the way from p_s to p_r, fixed: a rate the well can lift."""
     w = float(wp.inflow.liquid_mass_flow_rate(bc.p_s + 0.85 * (bc.p_r - bc.p_s), bc.p_r))
@@ -254,6 +278,8 @@ OVERLAYS = {
     'chen': lambda wp, bc: (replace(wp, friction=RoughnessFriction(roughness=4.5e-5, correlation='chen')), bc),
     'haaland': lambda wp, bc: (replace(wp, friction=RoughnessFriction(roughness=4.5e-5, correlation='haaland')), bc),
     'lift-gas temperature': lift_gas_temperature,
+    'valve at 50%': valve(0.5),
+    'valve at 75%': valve(0.75),
     'fixed rate': fixed_rate,
     'productivity index': productivity_index,
     'vogel': vogel,
@@ -331,6 +357,8 @@ V1_OVERLAYS = (
     'lift-gas temperature',
     'fixed rate',
     'five regimes',
+    'valve at 50%',
+    'valve at 75%',
 )
 DEVELOP_OVERLAYS = (
     'dead oil',
@@ -358,6 +386,8 @@ DEVELOP_OVERLAYS = (
     'pvt table, one temperature',
     'profile scale',
     'no profile slip',
+    'valve at 50%',
+    'valve at 75%',
 )
 
 
@@ -390,6 +420,13 @@ def matrix() -> list:
         Configuration('W1', ('deviated', 'five regimes', 'profile scale')),
         Configuration('W2', ('L-shaped', 'no profile slip')),
     ]
+    out += [
+        Configuration('W1', ('lift-gas temperature', 'valve at 75%')),
+        Configuration('W2', ('energy terms', 'joule-thomson', 'lift-gas temperature', 'valve at 50%')),
+        Configuration('develop', ('lift-gas temperature', 'valve at 50%')),
+        Configuration('develop', ('deviated', 'valve at 75%')),
+        Configuration('develop', ('no lift-gas mixing', 'valve at 50%')),
+    ]
     return out
 
 
@@ -417,10 +454,11 @@ def trial_state(wp, bc) -> np.ndarray:
     T = np.linspace(T_in, 0.5 * (T_in + bc.T_s), n)
     alpha = np.linspace(0.15, 0.85, n)
     w_res = float(system.reservoir_rate(p[0], params))
+    lift = lifts(wp)  # The lift gas from the injection point up (INF-9)
     X = np.zeros((n, DIM_X))
     for i in range(n):
         rho_g, rho_l = float(fl.gas_density(p[i], T[i])), float(fl.liquid_density(p[i], T[i]))
-        w_g, w_l = (float(ca.DM(w)) for w in fl.phase_rates(p[i], T[i], w_res, bc.w_lg))
+        w_g, w_l = (float(ca.DM(w)) for w in fl.phase_rates(p[i], T[i], w_res, lift[i] * bc.w_lg))
         X[i] = p[i], w_g / (A * alpha[i] * rho_g), w_l / (A * (1 - alpha[i]) * rho_l), alpha[i], rho_g, rho_l, T[i]
     return perturb(X)
 
@@ -467,6 +505,7 @@ COMPARISON = {
         'lift-gas temperature',
         'fixed rate',
         'five regimes',
+        'valve at 50%',
     ),
     DEVELOP: (
         '',
@@ -489,6 +528,8 @@ COMPARISON = {
         'pvt table, one temperature',
         'profile scale',
         'no profile slip',
+        'valve at 50%',
+        'valve at 75%',
     ),
 }
 
@@ -616,6 +657,8 @@ def point_jacobians(system):
             ('delta_md', 1),
             ('cos_incl', 1),
             ('tvd_frac', 1),
+            ('lift', 1),
+            ('lift_prev', 1),
         )
     ]
     return ca.Function('det', args, [ca.det(ca.jacobian(system.point_rows(*args), args[0]))])
@@ -628,14 +671,10 @@ def other_branch(system, det, bc, x) -> list:
     rows are singular, at a fold: past the sonic point of the cell's momentum row, which is U-shaped in p_i, or across
     a fold of the slip law. The core's march takes the subsonic root of each cell.
     """
-    geo, X, params = system.wp.geometry, np.reshape(x, (-1, DIM_X)), system.params(bc)
+    X, params = np.reshape(x, (-1, DIM_X)), system.params(bc)
     w_res = float(system.reservoir_rate(X[0, 0], params))
-    sign = np.sign(
-        [
-            float(det(X[i], X[i - 1], w_res, params, geo.delta_md[i - 1], geo.cos_incl[i - 1], geo.tvd_frac[i]))
-            for i in range(1, len(X))
-        ]
-    )
+    cells = np.vstack([np.asarray(v).ravel() for v in system.cell_inputs()])  # One column per cell
+    sign = np.sign([float(det(X[i], X[i - 1], w_res, params, *cells[:, i - 1])) for i in range(1, len(X))])
     most = 1.0 if np.sum(sign > 0) >= np.sum(sign < 0) else -1.0
     return [i + 1 for i in np.flatnonzero(sign != most)]
 

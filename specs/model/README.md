@@ -79,6 +79,7 @@ Well options in every configuration:
 | Inflow | INF-1 Vogel, INF-2 productivity index, INF-3 fixed rate (`v1.0.0` only), INF-8 fixed liquid rate (`develop` only); with INF-4 to INF-7 | INF-1 |
 | Choke model | CHK-5 Simpson, CHK-6 Bernoulli | CHK-5 |
 | Choke profile | CHK-7 linear, CHK-8 sigmoid, CHK-9 convex, CHK-10 concave | all four |
+| Lift-gas injection point | INF-5 at the bottomhole (`injection_md=None`); INF-9 at a depth, with THM-9 and DISC-12 (`develop` only; the `v1.0.0` configuration injects at the bottomhole) | the bottomhole |
 
 Step 7 added `develop`'s changes to the component files as options with new IDs; each has a feature spec in `specs/features/`.
 
