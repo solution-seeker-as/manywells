@@ -36,6 +36,10 @@ computed with v1.0.0.
 To run the code as it was for the paper, use the `v1.0.0` tag. The closed-loop simulator, which generated
 `manywells-nscl-1`, is only in v1.0.0.
 
+Releases follow [semantic versioning](https://semver.org): the package, the Rust core and the verifier share one
+version number, and between releases `develop` carries the next release's version with `.dev0`. A minor release may
+change the defaults, and with them the results; the CHANGELOG lists every such change.
+
 ## Getting started
 
 ### Installation

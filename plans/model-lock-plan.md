@@ -215,7 +215,7 @@ Steps L1 to L4 can run in parallel: L1, L2 and L4 are mostly Bjarne's decisions,
 - **The Rust core's performance target,** and the batch API (§4.3), which belongs with the v2 dataset generation.
 - **The fixed-wellhead-pressure boundary** (`plans/improvements.md` §2.16).
 - **Calibration's open items:** the false minimum (§2.10), whether $p_r$ is free, and the default noise.
-- **v2.0.0 release work:** prebuilt wheels, the license, the v2 dataset schema.
+- **v2.0.0 release work:** prebuilt wheels, the license, the v2 dataset schema, and the rule for changing a configuration once a release ships it or a published dataset uses it (left out of the versioning rule, Bjarne, 2026-10-30; constitution, Versions).
 
 ## Needs Bjarne's sign-off
 
