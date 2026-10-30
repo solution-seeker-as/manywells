@@ -141,19 +141,13 @@ The specs, docs and plans are read on GitHub and in VS Code. VS Code's KaTeX see
 
 ## Releases
 
-A release has one version number for the whole repository (constitution, Versions), set in `pyproject.toml`, `verification/pyproject.toml` and `rust/Cargo.toml`; `tests/test_versions.py` checks that the three agree. Cargo spells a pre-release with a hyphen: `2.0.0-dev.0` for `2.0.0.dev0`. A release raises one part of the last release's version:
+The version (constitution, Versions) is set in `pyproject.toml`, `verification/pyproject.toml` and `rust/Cargo.toml`, where Cargo writes `2.0.0.dev0` as `2.0.0-dev.0`; `tests/test_versions.py` checks that the three agree. Run `uv lock` after changing it. A release raises:
 
-- **MAJOR** for a break of the public API (any name in `manywells` without a leading `_`; `scripts/` is not API), a configuration removed, or a change to the dataset files the package writes that breaks code reading them. The CHANGELOG lists each break with an old→new snippet (`specs/goals.md`). A deprecated name warns from a minor release on and is removed in the next major one.
-- **MINOR** for new API, a model option, a configuration, a deprecation or a changed default. The CHANGELOG lists every change of results.
-- **PATCH** for a fix that changes no API, no default and no configuration's rows, and for docs and speed.
+- **MAJOR** for a break of the public API (any name in `manywells` without a leading `_`) or a configuration removed;
+- **MINOR** for new API, a model option, a configuration or a changed default, whose change of results goes in the CHANGELOG;
+- **PATCH** for anything else.
 
-Between releases, `develop` carries the next minor version with `.dev0`; the change that first breaks the API raises it to the next major one (`3.0.0.dev0`). To release, on a branch from `develop`:
-
-1. Set the three versions to the release's, run `uv lock` and build once (`uv sync`), so that `uv.lock` and `rust/Cargo.lock` follow, and give the CHANGELOG's Unreleased heading the version and the date.
-2. Merge into `develop`, then `develop` into `main`, and tag the merge on `main` with an annotated tag, `git tag -a vX.Y.Z`: `datasets.io.code_version` describes a commit from annotated tags only.
-3. Set `develop` to the next version with `.dev0`, run `uv lock`, and open a new Unreleased heading.
-
-A pre-release (`2.0.0a1`, `2.0.0b1`, `2.0.0rc1`) follows the same steps with its own tag.
+Between releases, `develop` carries the next version with `.dev0`; the change that first breaks the API raises it to the next major one. Tag a release with an annotated tag, `git tag -a vX.Y.Z`: `datasets.io.code_version` reads only annotated tags.
 
 ## Done means
 

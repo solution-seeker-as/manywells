@@ -7,7 +7,7 @@ Created 30 October 2026
 Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
 A release has one version number, shared by the package, the Rust core and the verifier (constitution, Versions;
-AGENTS.md, Releases). Cargo spells a pre-release with a hyphen, 2.0.0-dev.0 for 2.0.0.dev0; packaging reads both.
+AGENTS.md, Releases). Cargo writes 2.0.0.dev0 as 2.0.0-dev.0; packaging reads both.
 """
 
 import pathlib
