@@ -1,12 +1,13 @@
 # Sampler redesign — plan
 
-*Draft 2026-10-30. Owner: Bjarne Grimstad. Status: R1 done, the Goals confirmed by Bjarne on 2026-10-30; R2 in progress.*
+*Draft 2026-10-30. Owner: Bjarne Grimstad. Status: R1 done, the Goals confirmed by Bjarne on 2026-10-30; R2 first pass done; R3 next.*
 
 ## Where we are (2026-10-30)
 
 - **Done before this plan:** the model-lock plan (`plans/model-lock-plan.md`). `v2.0.0` is named and pinned, the correlations' validity ranges are recorded, the correlations are checked against independent sources, and both backends pass the `v1.0.0` configuration's regression checks.
 - **R1 done:** the interview was held on 2026-10-30, and Bjarne confirmed the Goals below the same day, with the changes they make to `specs/goals.md` and `specs/constitution.md` (Where the goals change the specs).
-- **R2 in progress** on the branch `sampler-redesign` (`.worktrees/sampler-redesign`): two research agents, one on reservoirs and fluids, one on wells and production.
+- **R2, first pass done** on the branch `sampler-redesign` (`.worktrees/sampler-redesign`), 2026-10-30: `plans/sampler-redesign/sources-reservoir-fluids.md` and `sources-wells-production.md`. Their proposed working assumptions enter the decision log when R3 takes them. A second pass follows R3, for the gaps the design finds.
+- **Asked of Bjarne** (the Goals' geometry, "ask where unsure"): the public trajectory statistics show offshore production wells as mostly directional, not mostly vertical.
 
 This plan replaces v1's sampling procedure for the v2 datasets (`specs/goals.md`, limitation 5: unrealistic sampled wells). It ends with:
 
@@ -129,7 +130,7 @@ An agent stops and asks before:
 ### Where the work lives
 
 - **A branch, `sampler-redesign`**, in a worktree (`.worktrees/sampler-redesign`), holds the drafts:
-  - `plans/sampler-redesign/sources.md`: the public sources, each number with its page, table or figure, and the population it describes;
+  - `plans/sampler-redesign/sources-reservoir-fluids.md` and `sources-wells-production.md`: the public sources, each number with its page, table or figure, and the population it describes;
   - `plans/sampler-redesign/sampling-draft.md`: the draft procedure, in the form of `specs/sampling.md`, without SMP IDs;
   - `plans/sampler-redesign/datasets-draft.md`: the dataset design;
   - `plans/sampler-redesign/decisions.md`: the decision log;
