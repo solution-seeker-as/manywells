@@ -257,3 +257,11 @@ With every row, the failed draws dominate (PWH, CHK); without them, the missed t
 More than half of the trickle roots carry less than 0.1 kg/s and are dropped, as the generator drops them, so the rows on the trickle root are fewer than the draws.
 
 **Sampler errors are caught coarsely** (`inputs`, which redraws one input's column of the default seed's Rust rows from a wrong range, leaving the solved features as they are). The control, CHK redrawn from SMP-18's U(0.05, 1), gives 0.022: the reference's own bias. A choke from U(0.1, 1) gives 0.037, and lift gas from U(0, 4) 0.034. A separator pressure within ±20% gives 0.010 and gas fractions within ±10% give 0.004: the wells' nominal values differ so much that a per-well range barely moves the marginal.
+
+## Sampler redesign: the draft well draws
+
+The draw-only check of Step R3 of `../sampler-redesign-plan.md` (`../sampler-redesign/sampling-draft.md`), run on 2026-10-30 on the branch `sampler-redesign`, in about 2 s for 2000 wells on one process. It draws wells without solving them; R6 extends it to solve them. The geometry shares in it are placeholders, pending the geometry evidence.
+
+| Script | What it shows | Result |
+|---|---|---|
+| `sampler_draft_draws.py 2000 [--seed 2026] [--csv OUT]` | The draft's labels, marginals and rank correlations, the shares behind Bjarne's goals, every truncation and bound, and `configurations.check` of each well in the draft's interim mapping to `v2.0.0` | No bound violated and every well in `v2.0.0`. Gradients and temperatures by fluid class within 0.008 bar/m and 6 K of BOEM's medians by wells; rank correlations of black oils within 0.12 of the Gulf's but for $R_{si}$–$T_r$ (0.32 against 0.56). 46.7% of core wells below hydrostatic, 15.6% with a nominal separator pressure below 10 bar, 20.4% above 0.6 psi/ft. Oils' design liquid rates 33 / 451 / 6411 Sm³/d (P10 / P50 / P90), which R6 checks against the Gulf's brackets |
