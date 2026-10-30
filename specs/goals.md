@@ -59,7 +59,7 @@ The new flow-regime model comes after the plan; it is `specs/features/019-five-f
 - Anything downstream of the choke: flowlines, risers, manifolds, networks.
 - Oil–water slip. Oil and water stay one mixed liquid phase.
 - Complex completions: annulus flow, multilaterals, multiple tubing strings. A well has one flow path from bottomhole to wellhead.
-- Publishing real-well data. It stays in the private `manywells-validation-data`.
+- Publishing real-well data (`specs/constitution.md`, Confidential data).
 
 ## Decided elsewhere
 

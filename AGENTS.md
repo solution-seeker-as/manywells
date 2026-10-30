@@ -176,9 +176,25 @@ Draft these when the task calls for it, but say that they need sign-off and don'
 - New solver machinery, with its measured gain.
 - A new model feature. Its feature spec (`specs/features/NNN-<name>.md`) is approved before the implementation starts.
 
-## Private real-well data
+## Data and sources
 
-Real-well data is confidential. Some real-well data for validation resides in the private Hugging Face dataset `solution-seeker-as/manywells-validation-data`. Never access real-well data: don't download, read or ask for it, even where credentials are available, and never put values derived from it in the repo, a PR or a log. Bjarne runs the checks that use it. Everything the tests and the verifier need is synthetic and in this repo.
+The maintainer (`pyproject.toml`, `maintainers`) holds the private data and decides which results from it become public. The constitution states the rules (Conventions, Confidential data and Sources); this section says how to apply them.
+
+**Real-well data.**
+
+- Real-well data is confidential. Some real-well data for validation resides in the private Hugging Face dataset `solution-seeker-as/manywells-validation-data`. It is named here and in the constitution so that you can avoid it.
+- Never access real-well data: don't download, read or ask for it, even where credentials are available.
+- Never put real-well data, or a value derived from it, in the repo, the datasets, a PR, an issue or a log. Only the maintainer decides to publish a result of a private check, aggregate or qualitative, and the file that gives it says so, as `specs/features/018-pvt-tables.md` does.
+- The maintainer runs the checks that use it. Everything the tests and the verifier need is synthetic and in this repo.
+- The maintainer may point you to a report of a private check's results. Read it only to frame questions for the maintainer; nothing from it goes into the repo.
+- Refer to private material only in general terms, such as "a private comparison with field data" or "the local papers library". Name no field, well, operator, private dataset or file, and give no path, link or identifier.
+- A decision that the maintainer bases on a private check is recorded as the maintainer's decision. It may say in general terms that a private check informed it, and gives nothing more from it.
+
+**Sources.**
+
+- A spec's evidence is published work, cited by reference (authors, year, title, venue) with the page, table, figure or equation that a number comes from. The number may be committed with its citation. The documents are copyrighted: never commit, upload or publish them, and name no local path to them.
+- Fetch only open-access copies: from the publisher, the authors' pages, an institutional repository or a preprint server, never from a shadow library or a file-sharing site.
+- The maintainer obtains paywalled papers and books. Ask for one when it matters to a decision, and say which decision it bears on and what you assume without it.
 
 ## Where to look for more
 

@@ -62,12 +62,12 @@ An agent stops and asks before:
 
 ## Data and sources
 
-- **No real-well data is ever committed** to this repo. That means no rows, no per-well values and no number derived from real-well data, however aggregated. The rule covers the drafts, the scripts, logs, PRs and the datasets.
-- **The sampler's evidence is public:** published field statistics, correlations and textbooks, cited by reference with page, table or figure. A number taken from them may be committed with its citation; the PDFs may not.
-- **Private material is referred to in general terms only.** Plans and drafts may mention the local papers library and Bjarne's private comparisons with field data. They name no field, operator, dataset, file, path or link, and give no number from them.
-- **Bjarne's private checks inform his goals and rulings, not the evidence.** A goal or ruling that comes from them is recorded as his decision, without its source. The research then looks for public support for it. If it finds none, the spec records the goal as a design choice.
-- **Getting sources.** Agents fetch only open-access copies: from the publisher, the authors, a repository or a preprint server, never from a shadow library. Bjarne obtains paywalled papers and books. A source that the agents could not reach and that matters to a decision goes on the checkpoint's resource list. The entry names the decision it bears on and the assumption made in its place.
-- **The ManyWells paper** is public and may be cited, as for v1's sampling (§4 and §5).
+The rules are in `AGENTS.md` (Data and sources) and the constitution (Conventions, Confidential data and Sources). For this plan they mean:
+
+- **The draws rest on public sources.** Each distribution cites published field statistics, correlations or textbooks (R2). No agent fits a distribution to real-well data, or to results derived from it.
+- **Bjarne's private checks enter as his decisions.** He may set goals in R1, and rule in R8, from his private comparisons with field data. Each is recorded as his decision. The research then looks for public support for it; if it finds none, the spec records it as a design choice.
+- **Samples for his checks.** R6 and R11 write their samples in the datasets' row format, so that Bjarne can run his private comparisons on them. What comes back into the repo is his ruling.
+- **Missing sources.** A source that the agents could not reach and that matters to a decision goes on the checkpoint's resource list (R8), with the decision it bears on and the assumption made in its place.
 
 ## Starting point
 
