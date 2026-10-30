@@ -161,6 +161,7 @@ Between releases, `develop` carries the next version with `.dev0`; the change th
 - Your summary or PR description names every change that needs sign-off (next section).
 - `uv run ruff check` and `uv run ruff format --check` pass; the CI job `lint` runs both. The pre-commit hook fixes what it can and stops the commit, so stage its changes and commit again.
 - Commits use a short imperative subject line, matching the existing history.
+- Before pushing, merge `origin/develop` and rerun `uv run pytest -m "not slow"`: work merged meanwhile is what CI has caught that local runs had not. Don't wait for CI after pushing: it runs the full suite on every supported Python version and the verifier, which is slow. Carry on, and check the result (`gh pr checks`) before you finish; if it is still running, say so. Fix a red check with a follow-up commit, and never merge into `develop` or `main` on red.
 
 ## Needs Bjarne's sign-off
 
