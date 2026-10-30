@@ -43,7 +43,7 @@ On top of them:
 
 - `discretization.py`: `build_system(wp)`, the rows of every point (DISC-11), built once per well with the operating point as parameters.
 - `solvers/`: the Ipopt adapter, the initial-guess march, and the multi-start root search with the stability label. `solution.py`: `Root`, `RootSet` and the operating point (SOL-4 to SOL-6).
-- `configurations.py`: the `v1.0.0` configuration (`v1_well`) and the check that a well is in a configuration.
+- `configurations.py`: the `v1.0.0` configuration (`v1_well`), the `v2.0.0` configuration, and the check that a well is in a configuration.
 - `sampling/`, `datasets/`: the ported dataset sampler (`specs/sampling.md`) and the rows and files of a dataset.
 - `calibration/`: calibrating a well to its production data (`specs/calibration.md`): the data and its noise (`data.py`), the free parameters and their priors (`parameters.py`), the residuals of each row's operating point (`objective.py`), the MAP fit (`fit.py`), and synthetic data at known parameters (`synthetic.py`). It sits on top of the simulator and works with either backend. Closed loop is out of v2; `closed_loop/` was retired (it remains in v1.0.0).
 
@@ -109,6 +109,7 @@ All reference data is built from v1.0.0, which is frozen. A rebuild reproduces t
 | `verification/expected_failures.csv` | `verification/build/expected_failures.py` | develop | after those stages |
 | `verification/data/distribution_reference.json` | `verification/build/distribution_reference.py --data-dir <dir>` | develop | its docstring; needs the published dataset rows |
 | test vectors in `specs/model/` and `specs/model/vectors/v1_rows.json` | `specs/tools/make_v1_vectors.py` | v1.0.0 | `specs/model/README.md`, Test vectors |
+| `specs/model/vectors/v2_rows.json`, the `v2.0.0` configuration's row vectors | `specs/tools/make_v2_vectors.py` | develop | `specs/model/README.md`, Test vectors |
 | `verification/tests/data/fixtures.npz` | `verification/build/make_test_fixtures.py` | v1.0.0 | `verification/build/README.md` |
 | `tests/data/pvt/vazquez_beggs.csv`, `synthetic_eos_oil_360K.csv` | `specs/tools/make_pvt_tables.py` | develop | `tests/data/pvt/README.md` |
 | `tests/data/pvt/synthetic_eos_oil.csv`, `synthetic_eos_oil_gor.csv` | `plans/evidence/pvt_table_eos.py` | NeqSim 3.4.0 and Java | its docstring |

@@ -15,12 +15,15 @@ reproduce it and the entry has to go.
 
 The row vectors are checked on develop's v1.0.0 configuration (manywells.configurations), which must
 reproduce v1.0.0's rows as functions of the state (specs/model/discretization.md, Interface), with each backend:
-the CasADi system and the Rust core's rows.
+the CasADi system and the Rust core's rows. The v2.0.0 configuration's row vectors, from develop
+(specs/model/vectors/v2_rows.json), pin that configuration in both backends.
 
 Both backends implement each equation (specs/goals.md), so the Rust core is checked against the same component
 vectors, through a test-only binding that calls its function by name on a well built from the table's inputs.
 """
 
+import functools
+import json
 import math
 from dataclasses import replace
 
@@ -48,19 +51,18 @@ from manywells.units import CF_BAR
 from .spec_parse import ROOT, row_vectors, vector_tables
 
 
-def _develop_vectors():
-    """specs/tools/make_develop_vectors.py, whose tables' calls are the adapters of the develop vectors."""
+def _tool(name):
+    """A script of specs/tools/ as a module."""
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location(
-        'make_develop_vectors', ROOT / 'specs' / 'tools' / 'make_develop_vectors.py'
-    )
+    spec = importlib.util.spec_from_file_location(name, ROOT / 'specs' / 'tools' / f'{name}.py')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
-DEVELOP = _develop_vectors()
+DEVELOP = _tool('make_develop_vectors')  # its tables' calls are the adapters of the develop vectors
+V2_VECTORS = _tool('make_v2_vectors')  # its v2_inputs builds the wells of the v2.0.0 row vectors
 DEVELOP_ADAPTERS = {t.heading: t.fn for t in DEVELOP.TABLES}
 
 REL, ABS = 1e-12, 1e-15  # component vectors: the same arithmetic, so agreement to rounding
@@ -705,3 +707,73 @@ def test_row_vectors_follow_row_order():
             ids = [eq_id for eq_id, _ in point]
             first = ROW_IDS['first'] if i == 0 else ROW_IDS['cell'] + (ROW_IDS['last'] if i == n else [])
             assert ids == first + ROW_IDS['closure'], (well['name'], i, ids)
+
+
+# Row vectors of the v2.0.0 configuration (specs/model/vectors/v2_rows.json), from develop: they pin the configuration,
+# so that a change of develop that moves it is caught, in either backend.
+
+
+@functools.cache
+def v2_vectors():
+    return json.loads(V2_VECTORS.OUT.read_text())
+
+
+@functools.cache
+def v2_rows(name, backend):
+    """A v2.0.0 well's rows at its perturbed state, as (IDs, values), from the CasADi system or the Rust core."""
+    well = next(w for w in v2_vectors()['wells'] if w['name'] == name)
+    wp, bc = V2_VECTORS.v2_inputs(well['params'])
+    x = np.array(well['x'])
+    if backend == 'rust':
+        from manywells.solvers.rust import RustRootFinder
+
+        ids, values = RustRootFinder(wp).rows(bc, x)
+        return list(ids), np.asarray(values, dtype=float)
+    system = build_system(wp)
+    return list(system.row_ids), np.asarray(system.residual(np.ravel(x), system.params(bc))).ravel()
+
+
+def v2_row_params():
+    params = []
+    for well in v2_vectors()['wells']:
+        expected = {}
+        for eq_id, value in well['rows']:
+            expected.setdefault(eq_id, []).append(value)
+        params += [
+            pytest.param(well['name'], eq_id, values, id=f'{well["name"]} {eq_id}')
+            for eq_id, values in expected.items()
+        ]
+    return params
+
+
+@pytest.mark.parametrize('backend', ['casadi', 'rust'])
+@pytest.mark.parametrize('name, eq_id, expected', v2_row_params())
+def test_v2_row_vector(name, eq_id, expected, backend):
+    ids, values = v2_rows(name, backend)
+    got = values[np.asarray(ids) == eq_id]
+    np.testing.assert_allclose(got, expected, rtol=ROW_REL, atol=0)
+
+
+@pytest.mark.parametrize('backend', ['casadi', 'rust'])
+def test_v2_rows_follow_the_row_order(backend):
+    """Each backend's rows of a v2.0.0 well are the vectors' rows, in their order."""
+    for well in v2_vectors()['wells']:
+        assert v2_rows(well['name'], backend)[0] == [eq_id for eq_id, _ in well['rows']], well['name']
+
+
+def test_v2_vectors_cover_the_configuration():
+    """The wells exercise every option v2.0.0 lets a well choose: both PVT models and the table set, the three
+    inflows, both chokes, the four profiles, a valve, lift gas at the bottomhole, a horizontal cell, a non-uniform
+    grid and a profile scale."""
+    wells = [V2_VECTORS.v2_inputs(w['params'])[0] for w in v2_vectors()['wells']]
+    bcs = [V2_VECTORS.v2_inputs(w['params'])[1] for w in v2_vectors()['wells']]
+    assert {type(wp.fluid.pvt).__name__ for wp in wells} == {'BlackOil', 'PVTTable', 'PVTTableSet'}
+    assert {type(wp.inflow).__name__ for wp in wells} == {'Vogel', 'ProductivityIndex', 'FixedFlowRate'}
+    assert {type(wp.choke).__name__ for wp in wells} == {'SimpsonChokeModel', 'BernoulliChokeModel'}
+    assert {wp.choke.chk_profile for wp in wells} == {'linear', 'sigmoid', 'convex', 'concave'}
+    assert any(wp.injection_md is not None and bc.w_lg > 0 for wp, bc in zip(wells, bcs))
+    assert any(wp.injection_md is None and bc.w_lg > 0 for wp, bc in zip(wells, bcs))
+    assert any(min(wp.geometry.cos_incl) == 0.0 for wp in wells)
+    assert any(len(set(np.round(wp.geometry.delta_md, 9))) > 1 for wp in wells)
+    assert any(wp.slip.profile_scale != 1.0 for wp in wells)
+    assert any(wp.fluid.pvt.p_bubble is not None for wp in wells if type(wp.fluid.pvt).__name__ == 'BlackOil')
