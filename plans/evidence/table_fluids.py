@@ -6,10 +6,12 @@ terms of the CC BY-NC 4.0 International Public License.
 Created 02 November 2026
 Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
-A proof of the table fluids of the sampler redesign (Step R5; plans/sampler-redesign/fluids-draft.md): synthetic
-compositions drawn per fluid class and matched to a well's drawn descriptors, published example fluids, and their PVT
-tables from NeqSim's Peng-Robinson equation of state with the Peneloux volume correction, as PVT-TAB-6 turns a phase
-split into a table (specs/model/pvt/table.md). Nothing here is a real fluid. Three modes:
+The table fluids of the sampler redesign (plans/sampler-redesign/fluids-draft.md): synthetic compositions drawn per
+fluid class and matched to a well's drawn descriptors, published example fluids, and their PVT tables from NeqSim's
+Peng-Robinson equation of state with the Peneloux volume correction, as PVT-TAB-6 turns a phase split into a table
+(specs/model/pvt/table.md). Nothing here is a real fluid. R5's proof is three modes, pick, make and check; R9's build
+of every table well's table set for the prototype (sampler_prototype.py --tables) is three more, wells, build and
+axes, below.
 
     pick OUT.json [--n 2000] [--seed 2026] [--per-class 2]
         ManyWells' environment. The first core volatile oils and gas condensates among R3's draws
@@ -40,14 +42,50 @@ NeqSim needs Java. From the repository root, with the JVM sized to fit the memor
         uv run --no-project --python 3.12 --with neqsim==3.4.0 --with numpy --with pandas \\
         python plans/evidence/table_fluids.py make picked.json TABLES)
     (ulimit -v 4000000; OMP_NUM_THREADS=1 timeout 900 .venv/bin/python plans/evidence/table_fluids.py check TABLES)
+
+R9's build (D-63 to D-68). Every volatile oil and gas condensate among the draw indices, core and tail, takes a table
+set: with probability 0.2 a published example of its class, recombined to the drawn GOR (D-66), else a synthetic
+composition matched to the drawn descriptors (D-63, J2's offsets), both drawn from rng_for(seed, k, 'v2',
+'composition'); the saturated-at-discovery rule at T_r (D-65); the well's own grid (well_axes) and a GOR axis with
+ratios of at most 1.25 over every GOR its samples reach (D-67). The axis needs the table's saturation pressure and
+initial GOR, which change the well's state, so the build runs in four steps, the NeqSim side importing no ManyWells:
+
+    wells KIND DIR [--seed S] [--wells K0 K1]
+        ManyWells' environment. The table wells among draw indices K0 to K1 - 1 of the dataset KIND (sol or nsol),
+        their descriptors, grid and the composition's source and seed: DIR/wells.json.
+    build DIR [--processes 8]
+        NeqSim's environment, a process pool. First each well's fluid: the matched composition or example, its
+        saturation pressure at T_r and D-65's rule (DIR/fluids/kK.json). Once DIR/axes.json exists, each well's table
+        set at the GORs of its axis, by PVT-TAB-6 with the liquid trace DELTA (K1): DIR/kK.csv in PVT-TAB-1's format
+        with a gor column (PVTTable.read_csv reads it as a PVTTableSet), and its manifest DIR/kK.json. A well whose
+        step fails is written with status 'failed' and its error. Resumes: a well whose output exists is skipped.
+    axes DIR
+        ManyWells' environment. Each fluid's GOR axis, from its life (sampler_draft_samples.Life) with the table's
+        p_sat, initial GOR and densities in the well (draw_well's fluid): sol-2, every GOR its samples reach at its
+        date, the drift of p_r and the GOR at their ends (D-40); nsol-2, every GOR of its life's trend, times the
+        GOR's drift: DIR/axes.json.
+
+    (ulimit -v 3000000; OMP_NUM_THREADS=1 timeout 900 .venv/bin/python plans/evidence/table_fluids.py wells sol DIR \
+        --seed 2026 --wells 0 200)
+    (ulimit -v 8000000; export MALLOC_ARENA_MAX=2 JAVA_TOOL_OPTIONS="-Xmx1g -XX:+UseSerialGC \
+        -XX:ActiveProcessorCount=2 -XX:ReservedCodeCacheSize=128m -XX:MaxMetaspaceSize=256m"; timeout 3600 \
+        uv run --no-project --offline --python 3.12 --with neqsim==3.4.0 --with numpy --with pandas \
+        python plans/evidence/table_fluids.py build DIR --processes 8)
+    (ulimit -v 3000000; OMP_NUM_THREADS=1 timeout 900 .venv/bin/python plans/evidence/table_fluids.py axes DIR)
+    ... build DIR --processes 8, again: the tables
+
+The pool needs the command sandbox off (Unix sockets), as uv's cache does.
 """
 
 import argparse
 import json
 import math
+import multiprocessing
 import os
 import time
+import traceback
 import zlib
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -60,6 +98,8 @@ P_SC = P_REF / CF_BAR
 M_AIR = 28.97
 V_M_SC = R_UNIVERSAL * T_REF / P_REF  # m3/kmol of an ideal gas at standard conditions
 DELTA = 1e-4  # liquid mass fraction kept where the stream is all vapour
+P_EXAMPLE = 0.2  # a table well's probability of a published example fluid of its class, D-66
+GOR_STEP = 1.25  # the largest ratio of neighbouring GORs on a table set's axis, D-67
 
 LIGHT = (
     'nitrogen',
@@ -221,7 +261,7 @@ class Flash:
         """fractions: [(name, M g/mol, specific gravity)] of the heptanes-plus, after LIGHT."""
         from neqsim import jneqsim
 
-        self.j = jneqsim
+        self.j, self.fractions = jneqsim, [(name, float(M), float(g)) for name, M, g in fractions]
         s = jneqsim.thermo.system.SystemPrEos(T_REF, P_SC)
         for name in LIGHT:
             s.addComponent(name, 1.0)
@@ -607,6 +647,168 @@ def make(picked, outdir):
         json.dump(summary, fh, indent=1, default=float)
 
 
+# --- R9's build, NeqSim's side ----------------------------------------------------------------------------------------
+def example_matched(w, passes=2):
+    """
+    D-66: the published example w['source'] recombined along its own single-stage tie line, its GOR matched to the
+    drawn one in the field by J2's offsets, as field_matched does a synthetic fluid's: the stream flashed through the
+    well's separator and a stock tank (Flash.field), and the single-stage GOR shifted by the difference, in passes.
+    Its stock-tank oil and separator gas are the example's, so its API and gas gravity are its own. Returns
+    field_matched's four values.
+    """
+    fr, z0 = example_stream(w['source'])
+    fl = Flash(fr)
+    sep = fl.separation(z0)
+    rec = dict(example=w['source'], reference=EXAMPLES[w['source']]['ref'])
+    target = w['R_si']
+    for k in range(passes + 1):
+        z = fl.recombine(sep, target)
+        f = fl.field(z, w['p_sep'], w['T_sep'])
+        if f is None:
+            rec |= dict(field=None, offsets=None, passes=k)
+            break
+        single = dict(api=api_of(sep['rho_o']), sg_gas=sep['rho_g'] / RHO_AIR, R_si=target)
+        offsets = dict(api=f['api'] - single['api'], sg_gas=f['sg_gas'] - single['sg_gas'], gor=f['gor'] / target)
+        rec |= dict(field=f, offsets=offsets, single_stage=single, passes=k)
+        if k == passes:
+            break
+        target = w['R_si'] / offsets['gor']
+    rec['field_error'] = None if rec['field'] is None else dict(gor=rec['field']['gor'] / w['R_si'] - 1)
+    return fl, z, sep, rec
+
+
+def build_fluid(w):
+    """
+    A table well's fluid (fluids-draft.md): the example or the synthetic composition, matched; its saturation
+    pressure at T_r; and D-65's rule where it lies above p_i: the GOR moved along the tie line to p_sat(T_r) = p_i,
+    else the class's phase in equilibrium at (p_i, T_r). Returns the record that build_tables and the prototype read:
+    the stream (its fractions, its composition and its separation), the labels, and hook, the values that replace the
+    fluid block's in draw_well (the table's p_sat and initial GOR, its single-stage rho_o and rho_g, and the fluid's
+    field-reported API and gas gravity where they are not the drawn ones).
+    """
+    t0 = time.time()
+    fl, z, sep, rec = field_matched(w) if w['source'] == 'synthetic' else example_matched(w)
+    t_match = time.time() - t0
+    gor = rec['single_stage']['R_si'] if rec.get('single_stage') else w['R_si']
+    sat = fl.saturation(z, w['T_r'], 1.3 * w['p_i'])
+    moved, rule = None, 'matched'
+    if sat and sat['p'] > w['p_i']:  # above its saturation pressure at p_i: saturated at discovery (D-65)
+        g = saturated_at(fl, sep, gor, w['T_r'], w['p_i'])
+        if g is not None:
+            moved, gor, rule = g / gor, g, 'gor_moved'
+            z = fl.recombine(sep, gor)
+        else:  # no GOR on the line will do: the phase of the class in equilibrium at (p_i, T_r)
+            phases, _ = fl.flash(z, w['p_i'], w['T_r'], properties=False)
+            if len(phases) != 2:
+                raise ValueError(f'p_sat {sat["p"]:.1f} bar above p_i, and one phase at (p_i, T_r)')
+            z = np.array(phases[0 if w['fluid_class'] == 'gas_condensate' else 1][5])
+            sep = fl.separation(z)
+            moved, gor, rule = sep['gor'] / gor, sep['gor'], 'equilibrium_phase'
+        sat = fl.saturation(z, w['T_r'], 1.3 * w['p_i'])
+    t_sat = time.time() - t0 - t_match
+    field = fl.field(z, w['p_sep'], w['T_sep'])
+    # No two phases anywhere from 1 bar to 1.3 p_i at T_r: the fluid has no saturation pressure above 1 bar there
+    p_sat, kind = (sat['p'], sat['kind']) if sat and sat['kind'] != 'above_grid' else (1.0, 'none')
+    if sat and sat['kind'] == 'above_grid':
+        raise ValueError(f'two phases at 1.3 p_i at T_r after the rule {rule}')
+    hook = dict(p_sat=p_sat, R_i=gor, rho_o=sep['rho_o'], rho_g=sep['rho_g'])
+    if (w['source'] != 'synthetic' or rule == 'equilibrium_phase') and field is not None:
+        hook |= dict(api=field['api'], sg_gas=field['sg_gas'])
+    return dict(
+        well=w['well'], status='ok', fluid_class=w['fluid_class'], source=w['source'], composition=rec,
+        saturation_kind=kind, saturation_rule=rule, gor_moved=moved, p_sat=p_sat, R_i=gor, field=field,
+        single_stage=dict(api=api_of(sep['rho_o']), sg_gas=sep['rho_g'] / RHO_AIR, gor=gor),
+        c7_mol=float(np.sum(z[len(LIGHT):])), c1_mol=float(z[2]), hook=hook,
+        drawn={k: w[k] for k in ('api', 'sg_gas', 'R_si', 'p_sat')},
+        stream=dict(fractions=fl.fractions, z=[float(v) for v in z], sep=dict(
+            rho_o=sep['rho_o'], rho_g=sep['rho_g'], gor=sep['gor'], M_o=sep['M_o'], y=[float(v) for v in sep['y']],
+            x=[float(v) for v in sep['x']])),
+        seconds=dict(match=t_match, saturation=t_sat),
+    )  # fmt: skip
+
+
+def build_tables(w, fluid, axis, path):
+    """The well's table set at the GORs of its axis, each on the well's own grid with its saturation pressures as
+    nodes (tabulate, PVT-TAB-6), written as one CSV with a gor column (PVTTableSet's format). Returns the nodes."""
+    fl = Flash(fluid['stream']['fractions'])
+    sep = fluid['stream']['sep']
+    T_axis = np.array(w['T_axis'], dtype=float)
+    frames = []
+    for g in axis['gors']:
+        df, _ = tabulate(fl, fl.recombine(sep, g), (sep['rho_o'], sep['rho_g'], g), T_axis, w['p_top'])
+        frames.append(df.assign(gor=g))
+    df = pd.concat(frames, ignore_index=True)
+    src = fluid['source'] if fluid['source'] != 'synthetic' else f'synthetic, draw index {w["well"]}'
+    header = [
+        '# ManyWells PVT table (specs/model/pvt/table.md)',
+        f'# name: k{w["well"]:06d}_{w["fluid_class"]}',
+        f'# source: plans/evidence/table_fluids.py; NeqSim 3.4.0, Peng-Robinson with Peneloux; {src}',
+        '# separation: single stage at 1.01325 bar and 288.15 K',
+        f'# rho_o: {sep["rho_o"]!r}',
+        f'# rho_g: {sep["rho_g"]!r}',
+    ]
+    with open(path, 'w') as fh:
+        fh.write('\n'.join(header) + '\n')
+        df[['gor', 'p', 'T', 'R_so', 'B_o', 'Z', 'mu_o', 'mu_g', 'sigma']].to_csv(fh, index=False, float_format='%.10g')
+    return len(df)
+
+
+def _write_json(path, obj):
+    tmp = Path(str(path) + '.tmp')
+    tmp.write_text(json.dumps(obj, indent=1, default=float))
+    tmp.rename(path)
+
+
+def build_task(task):
+    """One well's next step of the build: its fluid, or, once its axis exists, its table set and manifest."""
+    outdir, w, axis = task
+    outdir, k = Path(outdir), w['well']
+    fpath, mpath = outdir / 'fluids' / f'k{k:06d}.json', outdir / f'k{k:06d}.json'
+    t0 = time.time()
+    if not fpath.exists():
+        try:
+            rec = build_fluid(w)
+        except Exception:  # noqa: BLE001 - a failed fluid is recorded, and its well is not solved
+            rec = dict(well=k, status='failed', step='fluid', error=traceback.format_exc()[-1500:])
+        rec['seconds'] = rec.get('seconds', {}) | dict(fluid=time.time() - t0)
+        _write_json(fpath, rec)
+        return k, 'fluid', rec['status'], time.time() - t0
+    fluid = json.loads(fpath.read_text())
+    if mpath.exists() or (axis is None and fluid['status'] == 'ok'):
+        return k, 'skip', fluid['status'], 0.0
+    man = {key: v for key, v in fluid.items() if key != 'stream'} | dict(kind=w['kind'], seed=w['seed'])
+    if fluid['status'] == 'ok' and 'error' in axis:
+        man |= dict(status='failed', step='axis', error=axis['error'])
+    elif fluid['status'] == 'ok':
+        try:
+            nodes = build_tables(w, fluid, axis, outdir / f'k{k:06d}.csv')
+            man |= dict(csv=f'k{k:06d}.csv', gors=axis['gors'], nodes=nodes, n_T=len(w['T_axis']), p_top=w['p_top'])
+        except Exception:  # noqa: BLE001
+            man |= dict(status='failed', step='tables', error=traceback.format_exc()[-1500:])
+    man['seconds'] = fluid['seconds'] | dict(tables=time.time() - t0)
+    _write_json(mpath, man)
+    return k, 'tables', man['status'], time.time() - t0
+
+
+def build(outdir, processes):
+    """Both steps of every well in DIR/wells.json, in a pool: the fluids, and the tables of the wells in DIR/axes.json."""
+    outdir = Path(outdir)
+    (outdir / 'fluids').mkdir(parents=True, exist_ok=True)
+    spec = json.loads((outdir / 'wells.json').read_text())
+    axes = json.loads((outdir / 'axes.json').read_text()) if (outdir / 'axes.json').exists() else {}
+    tasks = [
+        (str(outdir), w | dict(kind=spec['kind'], seed=spec['seed']), axes.get(str(w['well']))) for w in spec['wells']
+    ]
+    t0, done = time.time(), {}
+    with multiprocessing.get_context('forkserver').Pool(processes) as pool:
+        for k, step, status, sec in pool.imap_unordered(build_task, tasks):
+            done[k] = (step, status)
+            if step != 'skip':
+                print(f'well {k}: {step} {status} in {sec:.1f} s', flush=True)
+    steps = pd.Series([f'{a} {b}' for a, b in done.values()]).value_counts().to_dict()
+    print(f'{len(tasks)} wells in {time.time() - t0:.0f} s on {processes} processes: {steps}')
+
+
 # --- ManyWells' side ----------------------------------------------------------------------------------------------------
 def pick(out, n, seed, per_class):
     from sampler_draft_draws import draw_well
@@ -695,6 +897,77 @@ def check(outdir):
                 )
 
 
+def table_wells(kind, outdir, seed, k0, k1):
+    """R9's build input: every volatile oil and gas condensate among draw indices k0 to k1 - 1, core and tail, with
+    the descriptors of R3's draws, the well's grid and its composition's source and seed (fluids-draft.md)."""
+    from sampler_draft_draws import draw_well
+
+    wells = []
+    for k in range(k0, k1):
+        w, _ = draw_well(seed, k)
+        if w['fluid_class'] not in CLASSES:
+            continue
+        r = rng_for(seed, k, 'v2', 'composition')  # the composition's own generator: the source, then the draw
+        comp_seed, u_source, u_key = int(r.integers(2**63)), r.random(), r.random()
+        keys = [name for name, ex in EXAMPLES.items() if ex['cls'] == w['fluid_class']]
+        T_axis, p_top = well_axes(w)
+        keep = ('well', 'fluid_class', 'tail', 'api', 'sg_gas', 'p_sat', 'p_i', 'p_r', 'T_r', 'T_s', 'p_sep', 'T_sep')
+        wells.append(
+            {key: w[key] for key in keep}
+            | dict(R_si=w['R_i'], composition_seed=comp_seed, T_axis=[float(T) for T in T_axis], p_top=float(p_top))
+            | dict(source=keys[int(u_key * len(keys))] if u_source < P_EXAMPLE else 'synthetic')
+        )
+    Path(outdir).mkdir(parents=True, exist_ok=True)
+    _write_json(Path(outdir) / 'wells.json', dict(kind=kind, seed=seed, wells_range=[k0, k1], wells=wells))
+    n_ex = sum(w['source'] != 'synthetic' for w in wells)
+    print(f'{len(wells)} table wells among draw indices {k0} to {k1 - 1} ({n_ex} published examples)')
+
+
+def gor_axis(kind, seed, k, hook):
+    """A table well's GOR axis (D-67): the smallest and largest GOR its samples can reach, with the table's p_sat,
+    initial GOR and densities in the well, and GORs at most GOR_STEP apart between them. The GOR is piecewise linear
+    in p_r/p_sat (gor_curve's grid), so its extremes over a pressure range lie at the ends or at a node."""
+    from sampler_draft_draws import OILS, gor_curve
+    from sampler_draft_samples import PR_DRIFT, RATIO_DRIFT, Life, producing_gor, sol2_well_at
+
+    life = Life(seed, k, fluid=hook)
+    if kind == 'sol':  # the date's state, p_r drifting by +-2% (D-40)
+        w, _, _ = sol2_well_at(seed, k, life)
+        p_lo, p_hi = (1 - PR_DRIFT) * w['p_r'], (1 + PR_DRIFT) * w['p_r']
+    else:  # the life's trend, from its start to its end (D-44)
+        w = life.w0
+        p_lo, p_hi = life.p_r(life.T), life.p_r(0.0)
+    p = [p_lo, p_hi, w['p_sat']]
+    if w['fluid_type'] in OILS:
+        keys = ('rho_o', 'rho_g', 'p_sep', 'T_sep', 'T_r', 'p_sat', 'w_kgko')
+        p += list(gor_curve(*(float(w[key]) for key in keys))[0] * w['p_sat'])
+    g = [producing_gor(w, x) for x in p if p_lo <= x <= p_hi]
+    g_lo = min(g) * (1 - RATIO_DRIFT) * (1 - 1e-6)  # the GOR's drift (D-40), and a margin for the CSV's rounding
+    g_hi = max(g) * (1 + RATIO_DRIFT) * (1 + 1e-6)
+    n = max(1, math.ceil(math.log(g_hi / g_lo) / math.log(GOR_STEP) - 1e-9))
+    gors = [g_lo * (g_hi / g_lo) ** (i / n) for i in range(n + 1)]
+    return dict(gors=gors, p_r_range=[p_lo, p_hi], gor_range=[min(g), max(g)], R_i=hook['R_i'])
+
+
+def axes(outdir):
+    outdir = Path(outdir)
+    spec = json.loads((outdir / 'wells.json').read_text())
+    out = {}
+    for w in spec['wells']:
+        k = w['well']
+        fluid = json.loads((outdir / 'fluids' / f'k{k:06d}.json').read_text())
+        if fluid['status'] == 'ok':
+            try:
+                out[str(k)] = gor_axis(spec['kind'], spec['seed'], k, fluid['hook'])
+            except Exception:  # noqa: BLE001 - the well's tables are not built, and its manifest says why
+                out[str(k)] = dict(error=traceback.format_exc()[-1500:])
+    _write_json(outdir / 'axes.json', out)
+    n = pd.Series([len(a.get('gors', [])) for a in out.values()])
+    print(
+        f'{len(out)} axes of {len(spec["wells"])} table wells; GORs per axis {n.value_counts().sort_index().to_dict()}'
+    )
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest='mode', required=True)
@@ -708,14 +981,30 @@ def main():
     a.add_argument('outdir')
     a = sub.add_parser('check')
     a.add_argument('outdir')
+    a = sub.add_parser('wells')
+    a.add_argument('kind', choices=('sol', 'nsol'))
+    a.add_argument('outdir')
+    a.add_argument('--seed', type=int, default=2026)
+    a.add_argument('--wells', type=int, nargs=2, default=(0, 200))
+    a = sub.add_parser('build')
+    a.add_argument('outdir')
+    a.add_argument('--processes', type=int, default=8)
+    a = sub.add_parser('axes')
+    a.add_argument('outdir')
     args = ap.parse_args()
     if args.mode == 'pick':
         pick(args.out, args.n, args.seed, args.per_class)
     elif args.mode == 'make':
         with open(args.picked) as fh:
             make(json.load(fh), args.outdir)
-    else:
+    elif args.mode == 'check':
         check(args.outdir)
+    elif args.mode == 'wells':
+        table_wells(args.kind, args.outdir, args.seed, *args.wells)
+    elif args.mode == 'build':
+        build(args.outdir, min(args.processes, 8))
+    else:
+        axes(args.outdir)
 
 
 if __name__ == '__main__':

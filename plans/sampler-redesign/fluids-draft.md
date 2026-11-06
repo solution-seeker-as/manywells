@@ -120,6 +120,14 @@ These are scaled from the proof's four fluids, not measured on a dataset. Neithe
 
   The rerun of R6's pilots with the tables (R9) measures what these do to the operating points.
 - **The gas-rate inflow** of a condensate takes $\mu_g Z$ of the table's gas at $(p, T_r)$ for its pseudo-pressure (`specs/features/022-gas-rate-inflow.md`, Units).
+- **What R9's integration settled** (2026-11-06; `table_fluids.py` modes `wells`, `build` and `axes`, and `sampler_prototype.py --tables`):
+  - *The build's order.* The GOR axis needs the table's saturation pressure and initial GOR, which change the well's state, so the build has four steps: the table wells and their descriptors (ManyWells); each fluid, its saturation pressure and D-65's rule (NeqSim); each well's GOR axis from its life with the table's values in it (ManyWells); the tables at the axis's GORs (NeqSim). NeqSim imports no ManyWells.
+  - *The source.* The composition's generator draws the synthetic composition's seed first, as R5's proof did, then the source (an example with probability 0.2) and the example, so that the proof's and J2's synthetic fluids are the build's.
+  - *The fluid in the well.* The table's $p_\text{sat}$ at $T_r$ and its initial GOR replace R3's after the fluid block's draws (`draw_well`'s `fluid`), so every later block follows them and no draw moves. Both, and the table's $\rho_o$ and $\rho_{g,\text{sc}}$, are single-stage values on the table's tie line (D-63), the basis of `FluidModel(gor=…)` on the table set: a table well's `R_si`, nominal GOR and samples' `GOR` are single-stage GORs. The drawn API and gas gravity stay the well's labels, matched in the field (J2); a published example or an equilibrium phase, which is not matched to them, reports its own through the well's separator, and those replace them. The drawn values are kept beside them (`api_drawn`, `sg_gas_drawn`, `R_si_drawn`, `p_sat_r3`).
+  - *The oils' productivity.* A volatile oil's $J$ takes $\mu_o$ and $B_o$ from its table at the state's GOR, the well's own PVT model, as a black oil's takes them from its black oil.
+  - *The GOR axis* spans the GORs the samples reach, the GOR's drift of ±5% (D-40) included: `sol-2` from the smallest to the largest producing GOR over $p_r$ within ±2% of the date's, `nsol-2` over the life's trend from $p_r(0)$ to $p_r(T_\text{life})$; each times $U(0.95, 1.05)$'s ends. The GOR is piecewise linear in $p_r/p_\text{sat}$, so the extremes are found at the range's ends and the curve's nodes.
+  - *No saturation pressure.* A fluid with two phases nowhere from 1 bar to $1.3\thinspace p_i$ at $T_r$ takes $p_\text{sat}$ = 1 bar and `saturation_kind` `none`.
+  - *A table that fails.* A build step that fails, or a table that PVT-TAB-1's checks refuse when the prototype reads it, makes the well `table_failed`; it is not solved, and the next drawn well takes its place.
 
 ## Validity
 

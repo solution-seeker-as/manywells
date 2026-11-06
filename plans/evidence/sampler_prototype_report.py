@@ -715,23 +715,49 @@ def compare_sol1(t, sol1):
 
 
 # --- Re-solving samples from the tables -----------------------------------------------------------------------------------
-def case_from_rows(w, s, survey):
-    """A sample's well and boundary conditions from its rows, as datasets-draft.md (Section 3) builds them, in the
-    interim mapping: the black oil for every class, and the gas wells' interim productivity index (k_l)."""
+def table_from_rows(rows):
+    """A table well's PVTTableSet from its `pvt` rows, through PVTTable.read_csv as datasets-draft.md has it."""
+    import tempfile
+
+    from manywells.pvt.table import PVTTable
+
+    r0 = rows.iloc[0]
+    with tempfile.NamedTemporaryFile('w', suffix='.csv', delete=False) as fh:
+        fh.write(f'# rho_o: {float(r0.rho_o)!r}\n# rho_g: {float(r0.rho_g)!r}\n')
+        rows[['gor', 'p', 'T', 'R_so', 'B_o', 'Z', 'mu_o', 'mu_g', 'sigma']].to_csv(
+            fh, index=False, float_format='%.17g'
+        )
+    try:
+        return PVTTable.read_csv(fh.name)
+    finally:
+        Path(fh.name).unlink()
+
+
+def case_from_rows(w, s, survey, pvt_rows=None):
+    """A sample's well and boundary conditions from its rows, as datasets-draft.md (Section 3) builds them: the black
+    oil, or a table well's table set from its `pvt` rows; Vogel, a productivity index or Forchheimer's gas inflow
+    (R9). Tables of the interim mapping (before R9) have no table and gas wells on a productivity index (k_l)."""
     from manywells.choke import SimpsonChokeModel
     from manywells.configurations import V2, V2_SLIP, check
     from manywells.friction import RoughnessFriction
     from manywells.geometry import WellGeometry
-    from manywells.inflow import ProductivityIndex, Vogel
+    from manywells.inflow import Forchheimer, ProductivityIndex, Vogel
     from manywells.pvt.black_oil import BlackOil
     from manywells.pvt.fluid import FluidModel
     from manywells.simulator import BoundaryConditions, WellProperties
     from manywells.thermal import ThermalModel
 
     nsol = 'HTC' in s
-    hc = BlackOil(rho_o=w.rho_o, rho_g=w.rho_g, gas_law='dak', p_sep=w.p_sep, T_sep=w.T_sep)
+    if w.get('pvt_model') == 'table':
+        hc = table_from_rows(pvt_rows)
+    else:
+        hc = BlackOil(rho_o=w.rho_o, rho_g=w.rho_g, gas_law='dak', p_sep=w.p_sep, T_sep=w.T_sep)
     k_l, w_l_max = (s.KL, s.WLMAX) if nsol else (w.k_l, w.w_l_max)
-    inflow = Vogel(w_l_max=w_l_max) if w.inflow == 'vogel' else ProductivityIndex(k_l=k_l)
+    if w.inflow == 'forchheimer':
+        a, b = (s.FORCHA, s.FORCHB) if nsol else (w.forchheimer_a, w.forchheimer_b)
+        inflow = Forchheimer(a=a, b=b)
+    else:
+        inflow = Vogel(w_l_max=w_l_max) if w.inflow == 'vogel' else ProductivityIndex(k_l=k_l)
     lifted = bool(s.LIFT) if nsol else w.lift == 'gas_lift'
     wp = WellProperties(
         geometry=WellGeometry.from_survey(survey.md.values, survey.tvd.values, n_cells=int(w.n_cells), D=w.D),
@@ -756,11 +782,11 @@ def _resolve_task(task):
 
     from manywells.simulator import SSDFSimulator
 
-    w, s, survey, backend, with_points = task
+    w, s, survey, backend, with_points, pvt_rows = task
     t0 = time.perf_counter()
     out = dict(ID=int(s.ID), slot=int(s.slot), backend=backend)
     try:
-        wp, bc = case_from_rows(w, s, survey)
+        wp, bc = case_from_rows(w, s, survey, pvt_rows)
         rs = SSDFSimulator(wp, backend=backend).root_set(bc)
     except Exception as e:  # noqa: BLE001
         out.update(found=False, error=f'{type(e).__name__}: {e}'[:200], seconds=time.perf_counter() - t0)
@@ -798,9 +824,13 @@ def resolve(out_dir, n, backend, processes, seed, with_points=False):
     w = pd.read_parquet(out_dir / 'wells.parquet').set_index('ID')
     s = pd.read_parquet(out_dir / 'samples.parquet')
     geo = pd.read_parquet(out_dir / 'geometry.parquet')
+    pvt = pd.read_parquet(out_dir / 'pvt.parquet')
     pick = s.sample(n=min(n, len(s)), random_state=seed)
     tasks = [(w.loc[r.ID], r, geo[geo.ID == r.ID], backend, with_points) for r in pick.itertuples(index=False)]
-    tasks = [(wr, pd.Series(r._asdict()), g, b, p) for wr, r, g, b, p in tasks]
+    tasks = [
+        (wr, pd.Series(r._asdict()), g, b, p, pvt[pvt.pvt_table_id == wr.get('pvt_table_id')])
+        for wr, r, g, b, p in tasks
+    ]
     t0 = time.perf_counter()
     with multiprocessing.get_context('forkserver').Pool(processes) as pool:
         res = pool.map(_resolve_task, tasks, chunksize=1)

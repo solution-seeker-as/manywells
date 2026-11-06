@@ -136,12 +136,12 @@ def expit(x):
 
 class Life:
     """An nsol-2 well: R3's well at its initial, mid-life and late stages (the same generators), and the trend
-    parameters drawn from its own generator."""
+    parameters drawn from its own generator. fluid is a table well's built table (draw_well's), or None."""
 
-    def __init__(self, seed, k):
-        self.w0, _ = draw_well(seed, k, 'initial')
-        self.wm, _ = draw_well(seed, k, 'mid_life')
-        self.wL, _ = draw_well(seed, k, 'late')
+    def __init__(self, seed, k, fluid=None):
+        self.w0, _ = draw_well(seed, k, 'initial', fluid=fluid)
+        self.wm, _ = draw_well(seed, k, 'mid_life', fluid=fluid)
+        self.wL, _ = draw_well(seed, k, 'late', fluid=fluid)
         w0 = self.w0
         self.oil = w0['fluid_type'] in OILS
         self.gas_depletion = not self.oil and w0['drive'] == 'depletion'

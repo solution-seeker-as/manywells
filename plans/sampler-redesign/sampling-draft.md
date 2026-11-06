@@ -422,6 +422,8 @@ Every categorical choice is stored with the well. All are drawn or set before th
 
 **Interim mapping**, used by R6's prototype until feature 022 and the table fluids exist: volatile oils and condensates as `BlackOil` with their API gravity, gas gravity, separator and $R_{go}$ (decision 4 accepts any GOR), so that their bubble or dew point is Vazquez–Beggs's rather than $p_\text{sat}$; gas and condensate wells with the `ProductivityIndex` of the Inflow section. Every one of the 2000 drawn wells built in the interim mapping passes `configurations.check(wp, 'v2.0.0')`, and its boundary conditions build. The final mapping passes it once feature 022's inflow is an option that `v2.0.0`'s check accepts (the Goals).
 
+**R9's mapping** (2026-11-06). The prototype builds gas and condensate wells on `Forchheimer(a, b)` fitted by D-61 at every reservoir state (Inflow), and, given the table sets that `table_fluids.py` builds for the dataset (`--tables`), every volatile oil and condensate on its own `PVTTableSet`, with the table's saturation pressure, initial GOR and densities in the well's draws (`fluids-draft.md`, How a table replaces the interim mapping). Without the tables it keeps the interim black oil for those classes.
+
 ## The economic floor (for R4's filter)
 
 A well that would not be produced in practice is one whose best rate at its nominal conditions lies below the floor of its well type, with a margin (D-34):
