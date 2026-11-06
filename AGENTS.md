@@ -190,6 +190,11 @@ The maintainer (`pyproject.toml`, `maintainers`) holds the private data and deci
 - Refer to private material only in general terms, such as "a private comparison with field data" or "the local papers library". Name no field, well, operator, private dataset or file, and give no path, link or identifier.
 - A decision that the maintainer bases on a private check is recorded as the maintainer's decision. It may say in general terms that a private check informed it, and gives nothing more from it.
 
+**Open real-well data.**
+
+- Statistics computed from real-well data that a publisher releases openly, such as production by well, well tests or surveys, are kept outside the repo by the maintainer, with their scripts and the publishers' licences (the maintainer's decision, 2026-11-06). No value computed from real-well data, open or confidential, is published in the repo.
+- The repo may state what such an analysis shows, in words or as a comparison ("above the draft's range", "within it"), and a design value chosen with it. Cite it by its public source, as `[own analysis of BOEM's OGOR-A production]`. Figures that a publisher publishes itself, such as EIA's counts of wells by rate, are published work: cite them under Sources.
+
 **Sources.**
 
 - A spec's evidence is published work, cited by reference (authors, year, title, venue) with the page, table, figure or equation that a number comes from. The number may be committed with its citation. The documents are copyrighted: never commit, upload or publish them, and name no local path to them.

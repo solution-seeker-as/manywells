@@ -1,18 +1,34 @@
 # Sampler redesign — plan
 
-*Draft 2026-10-30. Owner: Bjarne Grimstad. Status: R1 done, the Goals confirmed by Bjarne on 2026-10-30; R2 in progress.*
+*Draft 2026-10-30. Owner: Bjarne Grimstad. Status: R1 to R7 done on the branch; R8, the checkpoint, ready for Bjarne on 2026-11-02.*
 
-## Where we are (2026-10-30)
+## Where we are (2026-11-02)
 
 - **Done before this plan:** the model-lock plan (`plans/model-lock-plan.md`). `v2.0.0` is named and pinned, the correlations' validity ranges are recorded, the correlations are checked against independent sources, and both backends pass the `v1.0.0` configuration's regression checks.
 - **R1 done:** the interview was held on 2026-10-30, and Bjarne confirmed the Goals below the same day, with the changes they make to `specs/goals.md` and `specs/constitution.md` (Where the goals change the specs).
-- **R2 in progress** on the branch `sampler-redesign` (`.worktrees/sampler-redesign`): two research agents, one on reservoirs and fluids, one on wells and production.
+- **On the branch `sampler-redesign`** (`.worktrees/sampler-redesign`, pushed):
+  - **R2 done:** `plans/sampler-redesign/sources-reservoir-fluids.md`, `sources-wells-production.md` and, after Bjarne asked for more real geometries, `sources-geometry.md`.
+  - **R3 done:** the well draws in `plans/sampler-redesign/sampling-draft.md`, D-1 to D-36, and the draw-only script `plans/evidence/sampler_draft_draws.py`.
+  - **R4 done:** the samples and generation rules in the same draft, and `plans/evidence/sampler_draft_samples.py`.
+  - **R5 done:** the draft feature spec `specs/features/022-gas-rate-inflow.md` (Forchheimer in $p^2$, not implemented), the table fluids in `fluids-draft.md` (NeqSim proof tables made), and the proposed edits to decided specs in `spec-changes.md`.
+  - **R7 done:** the dataset design in `datasets-draft.md`, with R4's rules revised for redraws.
+  - **R6 done:** the prototype `plans/evidence/sampler_prototype.py`, pilots of 400 `sol-2` and 100 `nsol-2` wells of 200 operating points in the interim mapping, and the measurements in `r6-measurements.md`; it changed the draft in D-100 to D-103.
+  - **The decision log** `decisions.md` holds D-1 to D-103, the entries of every step.
+- **Bjarne's rulings since the Goals** (each in the decision log and the Goals):
+  - 2026-10-30: wells with a horizontal drain are modelled from the heel up, with a limit of about 75° (D-10).
+  - 2026-11-02: the geometry is an even mix of four classes, and the highly deviated class is half drains to the heel and half high-angle tangents (D-9, D-57). The public evidence shows offshore wells as mostly directional; the even mix is a design choice for coverage.
+  - 2026-11-02: "200 samples per well" means 200 operating points; failed draws are redrawn, and every redraw is logged (D-52).
+  - 2026-11-05: feature 022 approved as drafted, Forchheimer's law in the pressure squared with constant $a$ and $b$ (D-60, checkpoint J1); implemented in R9.
+- **The condensate research is done:** `sources-condensate-tables.md`. Bjarne asked on 2026-11-02 how other simulators represent condensates before ruling on D-64; its options and recommendation are in the checkpoint's K1.
+- **R8, the checkpoint, is ready** (2026-11-02): `plans/sampler-redesign/checkpoint.md`, a private report page built from it with R6's figures and the decision log, and a draft PR of the branch into `develop`. It waits for Bjarne's rulings; nothing is implemented before them.
+- **The checkpoint's evidence from per-well data and physics** (2026-11-05, at Bjarne's ask: "let data and physics decide"): BOEM's production by completion and ANP's and NSTA's production by well, summarised by setting, years on production and stage of life [own analysis of BOEM's OGOR-A production, ANP's production by well and NSTA's production by well], and the tubing's erosional capacity (`plans/evidence/erosional_capacity.py`), revise C1, D1, D2, D3, E1, F1 and D-41; the checkpoint's Section 6 now sorts the resources by who can get them.
+- **The checkpoint's evidence from open data** (2026-11-06, at Bjarne's go-ahead): BSEE's well tests (choke sizes, tubing and casing pressures), Petrobras' 3W (40 subsea satellite wells' operation: pressures, lift gas, choke histories) and NOAA's ocean atlas (seabed temperatures at wells) [own analysis of BSEE's well tests, Petrobras' 3W Dataset and NOAA's World Ocean Atlas 2023]; they revise E1, F2, D-14, D-15, D-29, D-37 and D-47; USGS's produced-water database, which Bjarne downloaded the same day [own analysis of USGS's produced-water database], revises D-11. The analyses are kept outside the repo (the maintainer's decision, 2026-11-06).
 
 This plan replaces v1's sampling procedure for the v2 datasets (`specs/goals.md`, limitation 5: unrealistic sampled wells). It ends with:
 
 - a new version of `specs/sampling.md`, signed off, that draws realistic wells and operating points in the `v2.0.0` configuration;
 - the sampler implemented and tested, with the `v1.0.0` configuration's draws unchanged;
-- the v2 datasets generated and checked, ready for the release.
+- the v2 datasets generated and checked, and handed to Bjarne, who validates and checks them privately and publishes them himself.
 
 ## Goals
 
@@ -23,6 +39,7 @@ This plan replaces v1's sampling procedure for the v2 datasets (`specs/goals.md`
 - **Tasks.** The datasets serve four machine-learning tasks: virtual flow metering, surrogate models of the simulator, learning across wells, and production optimisation (choke and gas lift).
 - **Datasets.** Two: `manywells-sol-2` (stationary) and `manywells-nsol-2` (non-stationary), each of 10,000 wells with 200 samples per well.
 - **Realism and coverage.** A realistic core of wells, and a labelled tail that stretches over the model's valid range for coverage. The research proposes the tail's share; 10% to 20% is the starting point.
+- **Coverage first, shape second** (Bjarne, 2026-11-05). First, the distribution covers almost all real wells and holds no unrealistic ones. Second, it puts more weight on typical wells than on rare ones. A sample of real wells, public or private, represents some fields and areas only: the Gulf of Mexico has some very deep wells that are not typical, and no Brazilian field is in hand. So a sample's range is a lower bound on what the draws must cover, and its shape is weak evidence of what is typical.
 
 ### Acceptance criteria
 
@@ -32,6 +49,8 @@ The checkpoint judges the draft by these. The datasets fail if they have:
 2. **wells that would not be produced in practice,** with a small margin so that marginally economic wells stay in;
 3. **missing real conditions:** conditions common in real wells that the draws do not reach, including those of Bjarne's goals below;
 4. **solver-shaped distributions:** distributions shaped by solver failures or filters rather than by the physics and the draws.
+
+Criteria 1 and 3 are the coverage of the support, and come first. Within it, the draws should weigh typical wells more than rare ones (Coverage first, shape second, above).
 
 ### The yardstick
 
@@ -54,6 +73,8 @@ The research looks for public support for each (Data and sources):
 - **Fluid types:** black oil, volatile oil, gas condensate, and wet or dry gas. The research sets the mix from public statistics, with a floor of about 10% of the wells per type.
 - **Labels.** Each well carries a label for its fluid type, for its well type (for example offshore with a dry tree, offshore subsea, onshore), for its geometry, and for every other categorical choice, such as its life stage, inflow, gas lift and choke profile.
 - **Geometry.** Mostly vertical wells. Some are slightly deviated. Some have a highly deviated bottom section, like an L-shaped well whose last section is not horizontal. Inclinations stay where stratified flow is not expected, since no option models it. The shares and inclinations are checked against public statistics of real wells' geometries, and an agent asks Bjarne where unsure. This answers `validity.md`'s decision 5: no horizontal sections, with the inclination limit set in R3.
+  - *Ruled 2026-10-30, after R2:* a well with a horizontal drain is modelled from the heel up, its bottom section at most about 75° from vertical (R3 sets the limit between 70° and 80°), and its inflow stands for the drain. The shares of the geometries wait for more examples of real geometries (Where we are).
+  - *Ruled 2026-11-02, after the geometry evidence:* an even mix of four classes, a quarter each: vertical, slightly deviated (5° to 20°), deviated (20° to 60°) and highly deviated bottom (60° to 75°), the last half drains to the heel and half high-angle tangents. This replaces "mostly vertical" (D-9).
 - **Gas wells** flow in through a new gas-rate inflow: a feature spec in R5, whose option `v2.0.0`'s check accepts before the release.
 - **PVT tables.** Volatile oils and gas condensates enter as tables from a NeqSim flash. The compositions are synthetic, drawn per fluid class from published ranges, plus published example fluids, each cited.
 - **New draws:**
@@ -71,8 +92,9 @@ The research looks for public support for each (Data and sources):
 
 - **Roots.** The operating point only; unstable roots are not published.
 - **Layout.** Two tables, joined by a well ID. The wells table holds every well input and the labels. The samples table holds each sample's inputs and its operating point.
-- **Filters.** No unrealistic wells, and no wells that would not be produced in practice, with a small margin. Failed solves are logged, not silently redrawn.
+- **Filters.** No unrealistic wells, and no wells that would not be produced in practice, with a small margin. Failed solves are logged, not silently redrawn. *Ruled 2026-11-02:* each well has 200 operating points; a failed draw is redrawn, and every redraw is logged with its inputs and reason (D-52).
 - **Working assumptions** (not asked): a train–test split by well, and a datasheet for each dataset (Gebru et al. 2021).
+- **Publishing** (Bjarne, 2026-11-05). Not a step of this plan. The plan hands Bjarne the generated and checked datasets; he validates and checks them privately and publishes them himself.
 
 ### The process
 
@@ -129,7 +151,7 @@ An agent stops and asks before:
 ### Where the work lives
 
 - **A branch, `sampler-redesign`**, in a worktree (`.worktrees/sampler-redesign`), holds the drafts:
-  - `plans/sampler-redesign/sources.md`: the public sources, each number with its page, table or figure, and the population it describes;
+  - `plans/sampler-redesign/sources-reservoir-fluids.md` and `sources-wells-production.md`: the public sources, each number with its page, table or figure, and the population it describes;
   - `plans/sampler-redesign/sampling-draft.md`: the draft procedure, in the form of `specs/sampling.md`, without SMP IDs;
   - `plans/sampler-redesign/datasets-draft.md`: the dataset design;
   - `plans/sampler-redesign/decisions.md`: the decision log;
@@ -143,7 +165,8 @@ An agent stops and asks before:
 
 The rules are in `AGENTS.md` (Data and sources) and the constitution (Conventions, Confidential data and Sources). For this plan they mean:
 
-- **The draws rest on public sources.** Each distribution cites published field statistics, correlations or textbooks (R2). No agent fits a distribution to real-well data, or to results derived from it.
+- **The draws rest on public sources.** Each distribution cites published field statistics, correlations or textbooks (R2). No agent fits a distribution to confidential real-well data, or to results derived from it.
+- **Open real-well data.** Statistics computed from publishers' open per-well data (BOEM, ANP, NSTA, Sodir, NLOG, BSEE, Petrobras' 3W, NOAA's ocean atlas at well locations, USGS's produced waters) are the maintainer's analyses, kept outside the repo since 2026-11-06. The plans state what they show in words or as comparisons and cite them as [own analysis of …] (`AGENTS.md`, Data and sources).
 - **Bjarne's private checks enter as his decisions.** He may set goals in R1, and rule in R8, from his private comparisons with field data. Each is recorded as his decision. The research then looks for public support for it; if it finds none, the spec records it as a design choice.
 - **Samples for his checks.** R6 and R11 write their samples in the datasets' row format, so that Bjarne can run his private comparisons on them. What comes back into the repo is his ruling.
 - **Missing sources.** A source that the agents could not reach and that matters to a decision goes on the checkpoint's resource list (R8), with the decision it bears on and the assumption made in its place.
@@ -355,7 +378,7 @@ The rules are in `AGENTS.md` (Data and sources) and the constitution (Convention
   - *Pilot.* Generate a small dataset and check it against the spec's checks. Bjarne reviews it, and may run his private comparisons on it.
   - *Full generation*, with the same checks.
   - The datasheet, the v2 schema in `docs/datasets.md`, and the CHANGELOG entry.
-- **Done when.** The datasets pass their checks and Bjarne accepts the pilot. Publishing them is release work and needs his sign-off.
+- **Done when.** The datasets pass their checks, Bjarne accepts the pilot, and the full datasets are handed to him. Publishing them is not a step: Bjarne validates and checks them privately and publishes them himself.
 - **Who.** An agent generates; Bjarne reviews.
 
 ## Sequencing
@@ -376,8 +399,7 @@ R2 feeds the design steps, and its second pass follows R3. R3 to R5 and R7 can r
 - each feature spec (R5, R8), and whether `v2.0.0`'s check widens;
 - `validity.md`'s decision 5, on horizontal sections;
 - the dataset design: schema, sizes and filters, §1.11 among them (R7, R8);
-- any solver machinery the redesign needs, with its measured gain;
-- publishing the datasets (R11).
+- any solver machinery the redesign needs, with its measured gain.
 
 ## Open decisions
 
@@ -394,5 +416,6 @@ The interview settled the questions that were open elsewhere: the well types, ho
 - The `v1.0.0` configuration's sampling, and the published v1 datasets.
 - Closed loop: there is no `nscl-2`.
 - The model changes that wait for v2.x: a changing tubing diameter, $c_p(p, T)$, and a varying $h$.
-- Release work beyond the datasets: prebuilt wheels, the license, and the rule for changing a configuration.
+- Publishing the v2 datasets: Bjarne publishes them himself, after validating and checking them privately (Goals, The datasets).
+- Other release work: prebuilt wheels, the license, and the rule for changing a configuration.
 - Roots the searches miss (§2.9). If the prototype shows that they bias a dataset, that is a finding for the checkpoint.
