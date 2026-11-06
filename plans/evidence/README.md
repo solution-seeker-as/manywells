@@ -258,6 +258,14 @@ More than half of the trickle roots carry less than 0.1 kg/s and are dropped, as
 
 **Sampler errors are caught coarsely** (`inputs`, which redraws one input's column of the default seed's Rust rows from a wrong range, leaving the solved features as they are). The control, CHK redrawn from SMP-18's U(0.05, 1), gives 0.022: the reference's own bias. A choke from U(0.1, 1) gives 0.037, and lift gas from U(0, 4) 0.034. A separator pressure within ±20% gives 0.010 and gas fractions within ±10% give 0.004: the wells' nominal values differ so much that a per-well range barely moves the marginal.
 
+## Sampler redesign: the inclination limit (R2)
+
+The scan behind the 75° limit of `../../specs/model/validity.md`'s decision 5 and D-10 (`../sampler-redesign/decisions.md`), from Step R2 of `../sampler-redesign-plan.md` (`../sampler-redesign/sources-wells-production.md`, Section 3), run on 2026-10-30 and again on 2026-11-06 with the same result. No data is read; it runs in a few seconds on one process.
+
+| Script | What it shows | Result |
+|---|---|---|
+| `stratified_flow_limit.py` | Where Taitel and Dukler's (1976) stratified to non-stratified transition, as Gomez et al. (1999) restate it, predicts stratified flow in upward-inclined tubing: the largest in-situ $v_{SL}$ with a stratified point, by inclination above horizontal, for oil at 10, 60 and 200 bar and water at 60 bar in 62, 100 and 157 mm tubing | Stratified flow up to 0.11 to 0.24 m/s when horizontal, but only below about 0.006 m/s at 10° above horizontal (80° from vertical) and 0.004 m/s at 15° (75°), and none from 30° |
+
 ## Sampler redesign: the draft well draws and samples
 
 The draw-only checks of Steps R3 and R4 of `../sampler-redesign-plan.md` (`../sampler-redesign/sampling-draft.md`), run on 2026-10-30 on the branch `sampler-redesign` on one process: about 2 s for 2000 wells (R3) and 10 s for the samples of 1000 wells (R4). They draw without solving; R6's `sampler_prototype.py` solves them (below). The results in this table are R3's and R4's runs; R6 then brought `sampler_draft_draws.py` in line with the geometry ruled on 2026-11-02 and with D-100 and D-103 (`../sampler-redesign/decisions.md`), so a rerun now gives R6's draws. `sampler_draft_samples.py` imports `sampler_draft_draws.py`, whose `draw_well` takes a life stage to set after the draw (R4's `nsol-2` wells), with the same draws.
