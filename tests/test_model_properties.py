@@ -10,7 +10,8 @@ Property and spot checks of develop's full model, which has no reference root se
 "New model versions", and Step 7 item 5). The wells exercise develop's options: deviated and L-shaped trajectories,
 black oil with dissolved gas, real gas by the Dranchuk-Abou-Kassem equation of state, friction from roughness,
 frictional heating, the gravity term and Joule-Thomson cooling, and lift gas colder than the reservoir, injected at
-the bottomhole or at a valve above it (specs/features/021-lift-gas-injection-depth.md).
+the bottomhole or at a valve above it (specs/features/021-lift-gas-injection-depth.md); and gas wells with
+Forchheimer's gas inflow (specs/features/022-gas-rate-inflow.md), one of them loaded with liquid.
 
 Checked at every root: the verifier's Invariants that do not assume dead oil (total mass rate constant instead of
 each phase's, below the injection point and from it up); spot checks of the relations that need no closure (the
@@ -28,6 +29,7 @@ import pytest
 
 from manywells.discretization import DIM_X, PointState, lifts
 from manywells.geometry import WellGeometry
+from manywells.inflow import Forchheimer
 from manywells.pvt import density_from_api, gas_density_from_sg
 from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.dead_oil import DeadOil
@@ -45,11 +47,11 @@ TOL_T = 1e-6  # K
 GAS_FLOOR = 1e-3  # kg/s: the free gas of PVT-OIL-13 where all the reservoir gas is dissolved, SMO-1's 5e-4
 
 
-def deviated(n_cells, tvd=2500.0, kickoff=0.3, theta_deg=45.0):
+def deviated(n_cells, tvd=2500.0, kickoff=0.3, theta_deg=45.0, D=WellGeometry.D):
     """Vertical to the kickoff depth, then straight at theta to the bottomhole's true vertical depth."""
     k = kickoff * tvd
     md = k + (tvd - k) / np.cos(np.radians(theta_deg))
-    return WellGeometry.from_survey([0.0, k, md], [0.0, k, tvd], n_cells=n_cells)
+    return WellGeometry.from_survey([0.0, k, md], [0.0, k, tvd], n_cells=n_cells, D=D)
 
 
 def l_shaped(n_cells, tvd=2200.0, horizontal=800.0, radius=300.0):
@@ -70,6 +72,26 @@ def with_valve(geometry, share, **kw):
 
 BLACK_OIL = FluidModel(pvt=BlackOil(rho_o=density_from_api(35.0), rho_g=gas_density_from_sg(0.7)), gor=120.0, wlr=0.3)
 VALVE_WELLS = ('deviated, cold lift gas at a valve halfway', 'L-shaped, lift gas at a valve at three quarters')
+
+
+def gas_fluid(gor, wlr):
+    """A gas well's black oil: a condensate of API 50 and a gas of gravity 0.65, at the gas-oil ratio 1/CGR and the
+    water-liquid ratio WGR / (WGR + CGR)."""
+    return FluidModel(pvt=BlackOil(rho_o=density_from_api(50.0), rho_g=gas_density_from_sg(0.65)), gor=gor, wlr=wlr)
+
+
+# Forchheimer's coefficients (bar2 s/kg, bar2 s2/kg2) at about the medians of the sampler draft's gas wells
+# (specs/tools/make_develop_vectors.py, FORCHHEIMER_P50): about 4 kg/s of gas at 20% drawdown from 270 bar
+GAS_INFLOW = Forchheimer(a=3500.0, b=810.0)
+# A gas well loaded with liquid: CGR 100 and WGR 400 Sm3 per 1e6 Sm3, late in life, with a stable root at the higher
+# rate and an unstable one at the lower; at p_r = 40 bar it cannot flow without lift gas
+LOADED = (
+    lambda n, **kw: WellProperties(
+        geometry=WellGeometry.vertical(2500.0, n, D=0.1), fluid=gas_fluid(10_000.0, 0.8), inflow=GAS_INFLOW, **kw
+    ),
+    BoundaryConditions(p_r=80.0, p_s=15.0, T_r=360.0, T_s=280.0, u=1.0),
+)
+GAS_WELLS = ('deviated gas well', 'gas well loaded with liquid')
 WELLS = {
     'deviated black oil': (
         lambda n: WellProperties(geometry=deviated(n), fluid=BLACK_OIL),
@@ -100,6 +122,12 @@ WELLS = {
         lambda n: with_valve(l_shaped(n), 0.75, fluid=BLACK_OIL),
         BoundaryConditions(p_r=240.0, p_s=20.0, T_r=365.0, T_s=280.0, u=0.7, w_lg=1.5),
     ),
+    # A condensate-like gas well (CGR 200 and WGR 86 Sm3 per 1e6 Sm3) in 0.1 m tubing, with Joule-Thomson cooling
+    GAS_WELLS[0]: (
+        lambda n: WellProperties(geometry=deviated(n, D=0.1), fluid=gas_fluid(5000.0, 0.3), inflow=GAS_INFLOW),
+        BoundaryConditions(p_r=250.0, p_s=40.0, T_r=370.0, T_s=280.0, u=0.6),
+    ),
+    GAS_WELLS[1]: LOADED,
 }
 
 
@@ -174,7 +202,7 @@ def test_spot_checks(solved, name, backend):
     A, D, fluid, lift = wp.geometry.A, wp.geometry.D, wp.fluid, lifts(wp)
     for root in rs.roots:
         S = points(sim, root.x)
-        w_res = float(wp.inflow.liquid_mass_flow_rate(S[0].p, bc.p_r))
+        w_res = float(wp.inflow.liquid_mass_flow_rate(S[0].p, bc.p_r, fluid))
         assert root.w_res == pytest.approx(w_res, rel=1e-12)
         for i, s in enumerate(S):
             w_g, w_l = (float(v) for v in fluid.phase_rates(s.p, s.T, w_res, lift[i] * bc.w_lg))  # INF-9
@@ -186,7 +214,7 @@ def test_spot_checks(solved, name, backend):
 
 
 @pytest.mark.parametrize('backend', BACKENDS)
-@pytest.mark.parametrize('name', [n for n in WELLS if WELLS[n][1].w_lg == 0])
+@pytest.mark.parametrize('name', [n for n in WELLS if WELLS[n][1].w_lg == 0 and n not in GAS_WELLS])
 def test_heat_flows_from_the_fluid_to_the_surroundings(solved, name, backend):
     """Without lift gas the fluid enters at T_r, the ambient temperature at the bottomhole, and is warmer than its
     surroundings everywhere above: the heat loss carries heat outwards, against frictional heating and gravity. The
@@ -306,13 +334,13 @@ def test_two_root_well_stability_with_a_valve(backend, share):
 
 
 @pytest.mark.parametrize('backend', BACKENDS)
-@pytest.mark.parametrize('name', ['deviated black oil', 'L-shaped black oil'] + list(VALVE_WELLS))
+@pytest.mark.parametrize('name', ['deviated black oil', 'L-shaped black oil', GAS_WELLS[0]] + list(VALVE_WELLS))
 def test_convergence(name, backend):
     """Outputs change at first order as the grid is refined (implicit Euler), within the verifier's order bounds. The
     valve wells' grids have a point at the valve (INF-9) at each refinement."""
     make, bc = WELLS[name]
     outputs = []
-    for n in (40, 80, 160) if name in VALVE_WELLS else (50, 100, 200):
+    for n in (40, 80, 160) if name in VALVE_WELLS + GAS_WELLS else (50, 100, 200):
         op = SSDFSimulator(make(n), backend=backend).simulate(bc)
         X = op.state
         outputs.append(np.array([X[0, 0], X[-1, 0], X[-1, 6], op.w_res]))  # PBH, PWH, TWH, liquid rate
@@ -332,3 +360,47 @@ def test_the_backends_find_the_same_roots(solved, name):
         casadi.wp, bc, casadi.system, rs_casadi.roots, rs_rust.roots, lambda x: rust._roots.rows(bc, x)[1]
     )
     assert c.ok, c
+
+
+@pytest.mark.parametrize('backend', BACKENDS)
+@pytest.mark.parametrize('name', GAS_WELLS)
+def test_the_gas_inflow_holds_at_the_bottomhole(solved, name, backend):
+    """INF-10 and INF-11 at p_0 of every root: the reservoir gas rate solves Forchheimer's law, and the liquid comes
+    with it in the fluid's ratios, so that INF-4 gives the gas rate back, to rounding."""
+    sim, bc, rs = solved[name, backend]
+    inflow, fluid = sim.wp.inflow, sim.wp.fluid
+    assert rs.roots
+    for root in rs.roots:
+        w_g, p_0 = root.w_g_res, root.p_0
+        delta = (bc.p_r - p_0) * (bc.p_r + p_0)
+        assert inflow.a * w_g + inflow.b * w_g**2 == pytest.approx(delta, rel=1e-12)
+        assert w_g == pytest.approx(inflow.gas_mass_flow_rate(p_0, bc.p_r), rel=1e-14)
+        assert root.w_res == pytest.approx((1 - fluid.f_g) / fluid.f_g * w_g, rel=1e-14)
+
+
+@pytest.mark.parametrize('backend', BACKENDS)
+def test_a_gas_well_loaded_with_liquid_has_two_roots(solved, backend):
+    """Liquid loading (specs/features/022-gas-rate-inflow.md, the root search): at a low gas rate the liquid held up in
+    the tubing makes the bottomhole pressure fall as the rate rises, so the well has a stable root at the higher rate,
+    the operating point, and an unstable one at the lower, the gas well's counterpart of SOL-7's two roots."""
+    sim, bc, rs = solved[GAS_WELLS[1], backend]
+    assert [r.label for r in rs.roots] == ['stable', 'unstable'], [(r.p_0, r.label) for r in rs.roots]
+    stable, unstable = rs.roots
+    assert rs.operating_point is stable
+    assert stable.p_0 < unstable.p_0 and stable.w_g_res > unstable.w_g_res
+    assert stable.slope < 0 < unstable.slope
+
+
+@pytest.mark.parametrize('backend', BACKENDS)
+def test_lift_gas_unloads_a_gas_well(backend):
+    """Lift gas at the bottomhole lightens the loaded column: the loaded well's unstable root moves towards p_r, and at
+    p_r = 40 bar, where the well cannot flow without it, 0.2 kg/s gives it a stable root, so the gas rate rises from
+    zero. Where the stable root's friction dominates, as in the loaded well at 80 bar, more lift gas lowers its rate."""
+    make, bc = LOADED
+    sim = SSDFSimulator(make(60), backend=backend)
+    unstable = [sim.root_set(dataclasses.replace(bc, w_lg=w_lg)).roots[-1] for w_lg in (0.0, 0.1)]
+    assert [r.label for r in unstable] == ['unstable', 'unstable'] and unstable[0].p_0 < unstable[1].p_0
+    dead = dataclasses.replace(bc, p_r=40.0)
+    assert sim.root_set(dead).operating_point is None
+    lifted = sim.root_set(dataclasses.replace(dead, w_lg=0.2)).operating_point
+    assert lifted is not None and lifted.label == 'stable' and lifted.w_g_res > 0.1

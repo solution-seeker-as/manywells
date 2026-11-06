@@ -78,7 +78,7 @@ Well options in every configuration:
 
 | Part | Options | Used by the published datasets |
 |---|---|---|
-| Inflow | INF-1 Vogel, INF-2 productivity index, INF-3 fixed rate (`v1.0.0` only), INF-8 fixed liquid rate (`develop` only); with INF-4 to INF-7 | INF-1 |
+| Inflow | INF-1 Vogel, INF-2 productivity index, INF-3 fixed rate (`v1.0.0` only), INF-8 fixed liquid rate and INF-10 Forchheimer gas rate (`develop`; INF-10 in `v2.0.0` too); with INF-4 to INF-7, and INF-11 for INF-10 | INF-1 |
 | Choke model | CHK-5 Simpson, CHK-6 Bernoulli | CHK-5 |
 | Choke profile | CHK-7 linear, CHK-8 sigmoid, CHK-9 convex, CHK-10 concave | all four |
 | Lift-gas injection point | INF-5 at the bottomhole (`injection_md=None`); INF-9 at a depth, with THM-9 and DISC-12 (`develop` only; the `v1.0.0` configuration injects at the bottomhole) | the bottomhole |
@@ -97,7 +97,7 @@ Test vectors are inputs with expected outputs, checked against `develop` by `tes
   - **From v1.0.0**, between `<!-- vectors:begin -->` and `<!-- vectors:end -->`, for the `v1.0.0` configuration. v1.0.0 is the reference, so they check that `develop` reproduces it.
   - **From `develop`**, between `<!-- vectors:begin develop -->` and `<!-- vectors:end develop -->`, for `develop`'s options. They pin each option as specified and implemented, so that a later change or a port (the Rust core, `specs/architecture.md`) that alters a value is caught. They do not show that the implementation is right; the sources and the property tests in the coverage tables do that.
 - **Row vectors**, in `vectors/v1_rows.json`, give v1.0.0's residual rows at perturbed states of two wells, in v1.0.0's row order (`discretization.md`). `develop` must reproduce them in its `v1.0.0` configuration.
-- **Row vectors of `v2.0.0`**, in `vectors/v2_rows.json`, give `develop`'s rows in the `v2.0.0` configuration at perturbed roots of four wells, in DISC-11's row order. Each well's inputs are written out in full, every option and slip constant included. Between them the wells take every choice the configuration leaves to a well: the black oil, with and without a bubble point, a PVT table and a table set; Vogel's inflow, a productivity index and a fixed liquid rate; both chokes and the four profiles; lift gas at the bottomhole and through a valve; a deviated well, a horizontal section and a non-uniform grid; and a profile scale. Both backends must reproduce them.
+- **Row vectors of `v2.0.0`**, in `vectors/v2_rows.json`, give `develop`'s rows in the `v2.0.0` configuration at perturbed roots of five wells, in DISC-11's row order. Each well's inputs are written out in full, every option and slip constant included. Between them the wells take every choice the configuration leaves to a well: the black oil, with and without a bubble point, a PVT table and a table set; Vogel's inflow, a productivity index, a fixed liquid rate and Forchheimer's gas inflow; both chokes and the four profiles; lift gas at the bottomhole and through a valve; a deviated well, a horizontal section and a non-uniform grid; and a profile scale. Both backends must reproduce them.
 - **Regenerate** the v1.0.0 vectors from the v1.0.0 worktree (`verification/build/README.md` sets it up), from the repository root:
 
   ```console
@@ -162,6 +162,8 @@ Every ID of `develop`'s configuration, of the options Papay, Haaland and the fit
 | CHK-5 | None: Simpson, Rooney and Grattan (1983) is not in hand |
 | INF-1 | Guo et al. (2007), Example Problem 3.2, a worked example |
 | INF-2, INF-4 to INF-8 | None: definitions and balances |
+| INF-10 | Golan and Whitson (1991), Example 2.4, the Medicine Lodge well's IPR (Table E2.4), and Economides et al. (1994), Example 4-7, its AOF, worked examples |
+| INF-11 | None: a mass balance |
 
 ## Coverage tables
 

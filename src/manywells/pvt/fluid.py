@@ -294,6 +294,16 @@ class FluidModel:
         """
         return (self.f_g / (1 - self.f_g)) * w_res
 
+    def reservoir_liquid_rate(self, w_g_res):  # spec: INF-11
+        """
+        Liquid mass flow rate from the reservoir that comes with a reservoir gas rate, by the gas mass fraction at
+        standard conditions: INF-4 read backwards, for a gas-rate inflow (Forchheimer). Needs gas, f_g > 0.
+
+        :param w_g_res: Gas mass flow rate from the reservoir (kg/s), may be CasADi symbolic
+        :return: Liquid mass flow rate from the reservoir (kg/s)
+        """
+        return ((1 - self.f_g) / self.f_g) * w_g_res
+
     def phase_rates(self, p, T, w_res, w_lg):
         """
         Gas and liquid mass flow rates at (p, T), given the reservoir liquid rate and the lift gas rate.

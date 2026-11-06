@@ -27,7 +27,7 @@ df = sim.solution_as_df(op)  # one row per grid point, from the bottomhole
 | `friction` | `RoughnessFriction` or `FixedFrictionFactor` (`friction.py`) | pipe roughness, Chen's correlation |
 | `thermal` | `ThermalModel` (`thermal.py`) | heat loss, frictional heating, gravity term, lift-gas mixing |
 | `slip` | `SlipModel` (`slip.py`) | drift-flux closure per flow regime |
-| `inflow` | `ProductivityIndex`, `Vogel` or `FixedFlowRate` (`inflow.py`) | `ProductivityIndex(k_l=0.5)` |
+| `inflow` | `ProductivityIndex`, `Vogel` or `FixedFlowRate` (`inflow.py`), or `Forchheimer` for a gas well | `ProductivityIndex(k_l=0.5)` |
 | `choke` | `BernoulliChokeModel` or `SimpsonChokeModel` (`choke.py`) | Bernoulli, `K_c` 10% of the pipe's cross-section |
 | `injection_md` | the measured depth (m) from the surface at which the lift gas enters | `None`: the bottomhole |
 
@@ -49,6 +49,34 @@ from manywells.geometry import WellGeometry
 wp = WellProperties(geometry=WellGeometry.vertical(length=2500, n_cells=100), injection_md=1800.0)
 op = SSDFSimulator(wp).simulate(BoundaryConditions(p_r=150, p_s=20, u=0.8, w_lg=2.0))
 ```
+
+An oil well's inflow gives the liquid rate, and the gas comes with it in the fluid's ratios. A gas well's inflow
+gives the gas rate: `Forchheimer(a, b)` is Forchheimer's law in the pressure squared, $p_r^2 - p_0^2 = a w_g + b w_g^2$,
+with the gas's mass rate $w_g$ in kg/s (INF-10 in [`specs/model/inflow.md`](../specs/model/inflow.md)), and the
+condensate and water come with the gas in the fluid's ratios (INF-11). The fluid holds a gas well's condensate–gas and
+water–gas ratios as `gor` $= 1/\text{CGR}$ and `wlr` $= \text{WGR}/(\text{WGR} + \text{CGR})$. A well test gives the
+coefficients for the standard volume rate of the separator gas in Sm³/d; `Forchheimer.from_gas_rate` converts them with
+the fluid's gas density at standard conditions. From field units, 1 psi² is 4.7537·10⁻³ bar² and 1 Mscf about
+28.3 Sm³. The pressure-squared form holds best below about 138 bar (2000 psia); above, fit $a$ and $b$ over the
+well's own drawdowns ([`specs/model/validity.md`](../specs/model/validity.md), note 12).
+
+```python
+from manywells.inflow import Forchheimer
+from manywells.pvt import density_from_api
+from manywells.pvt.black_oil import BlackOil
+from manywells.pvt.fluid import FluidModel
+
+CGR, WGR = 50e-6, 30e-6  # Sm³/Sm³: 50 and 30 Sm³ per 10⁶ Sm³ of gas
+fluid = FluidModel(pvt=BlackOil(rho_o=density_from_api(55)), gor=1 / CGR, wlr=WGR / (WGR + CGR))
+inflow = Forchheimer.from_gas_rate(a_q=0.032, b_q=7.0e-8, rho_g=fluid.rho_g)  # bar² per Sm³/d and per (Sm³/d)²
+wp = WellProperties(fluid=fluid, inflow=inflow)
+op = SSDFSimulator(wp).simulate(BoundaryConditions(p_r=270, p_s=40, u=0.5))
+print(f'gas {op.w_g_res * 86400 / fluid.rho_g:.0f} Sm³/d, liquid {op.w_res:.2f} kg/s')
+```
+
+Late in a gas well's life, the liquid held up in the tubing can give it a second root at a lower rate, an unstable one
+(liquid loading), and at a lower reservoir pressure no root at all; lift gas at the bottomhole can make it flow again
+([`gas_well.py`](../scripts/sim_examples/gas_well.py)).
 
 The inputs are frozen dataclasses, validated when they are built, and the simulator does not change them. To vary
 one part, build a new object, for instance with `dataclasses.replace`. Pressures are in bar and temperatures in
@@ -158,6 +186,7 @@ Run the examples as modules from the project root, for instance
 | [`fixed_rate.py`](../scripts/sim_examples/fixed_rate.py) | A fixed liquid rate (`FixedFlowRate`), where the bottomhole pressure follows from the rate |
 | [`gl_temp.py`](../scripts/sim_examples/gl_temp.py) | A gas-lift study, with the lift-gas temperature's effect on the wellhead temperature |
 | [`gl_valve.py`](../scripts/sim_examples/gl_valve.py) | Gas lift through a valve at three depths, against the lift gas at the bottomhole |
+| [`gas_well.py`](../scripts/sim_examples/gas_well.py) | A gas well with Forchheimer's inflow from a well test: operating points on its inflow curve, and liquid loading late in life |
 | [`backends.py`](../scripts/sim_examples/backends.py) | One well with each backend, and their roots compared |
 
 ## Generating datasets

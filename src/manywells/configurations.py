@@ -26,7 +26,7 @@ import numpy as np
 from manywells.choke import BernoulliChokeModel, SimpsonChokeModel
 from manywells.friction import FixedFrictionFactor, RoughnessFriction
 from manywells.geometry import WellGeometry
-from manywells.inflow import FixedFlowRate, ProductivityIndex, Vogel
+from manywells.inflow import FixedFlowRate, Forchheimer, ProductivityIndex, Vogel
 from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.dead_oil import DeadOil
 from manywells.pvt.fluid import FluidModel
@@ -181,8 +181,10 @@ def differences(wp: WellProperties, configuration: str) -> list:
         out += [f'thermal: {k} is on, not in v2.0.0' for k, v in thermal.items() if k not in V2_THERMAL and v]
         if replace(wp.slip, profile_scale=V2_SLIP.profile_scale) != V2_SLIP:
             out.append(f"slip: not v2.0.0's five regimes with their constants ({wp.slip})")
-        if type(wp.inflow) not in (Vogel, ProductivityIndex, FixedFlowRate):
-            out.append(f'inflow: {type(wp.inflow).__name__}, not Vogel, ProductivityIndex or FixedFlowRate')
+        if type(wp.inflow) not in (Vogel, ProductivityIndex, FixedFlowRate, Forchheimer):
+            out.append(
+                f'inflow: {type(wp.inflow).__name__}, not Vogel, ProductivityIndex, FixedFlowRate or Forchheimer'
+            )
         if type(wp.choke) not in (SimpsonChokeModel, BernoulliChokeModel):
             out.append(f'choke: {type(wp.choke).__name__}, not SimpsonChokeModel or BernoulliChokeModel')
     else:

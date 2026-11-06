@@ -347,7 +347,7 @@ def build_system(wp) -> System:  # spec: DISC-11
     S = [PointState.of(x[DIM_X * i : DIM_X * (i + 1)]) for i in range(N + 1)]
 
     # The reservoir liquid rate is a function of x_0 and the parameters, passed to every point's rows
-    w_res = wp.inflow.liquid_mass_flow_rate(S[0].p, op.p_r)
+    w_res = wp.inflow.liquid_mass_flow_rate(S[0].p, op.p_r, wp.fluid)
 
     rows = bottom_rows(wp, S[0], w_res, op) + closure_rows(wp, S[0], geo.cos_incl[0])
     for i in range(1, N + 1):
@@ -371,7 +371,7 @@ def build_system(wp) -> System:  # spec: DISC-11
     # Point 0 alone (the closures at point 0 use the inclination of cell 1)
     x_0 = ca.SX.sym('x_0', DIM_X)
     s_0 = PointState.of(x_0)
-    w_res_0 = wp.inflow.liquid_mass_flow_rate(s_0.p, op.p_r)
+    w_res_0 = wp.inflow.liquid_mass_flow_rate(s_0.p, op.p_r, wp.fluid)
     r_0 = bottom_rows(wp, s_0, w_res_0, op) + closure_rows(wp, s_0, geo.cos_incl[0])
     bottom = ca.Function('bottom_rows', [x_0, prm], [ca.vertcat(*r_0)], ['x_0', 'params'], ['r_0'])
 
@@ -406,7 +406,7 @@ def build_system(wp) -> System:  # spec: DISC-11
     # Reservoir rate, and a starting point for point 0: the densities and the inflow temperature at p_0, half gas
     # by volume, and the velocities that carry the phase rates
     p_0 = ca.SX.sym('p_0')
-    w_p0 = wp.inflow.liquid_mass_flow_rate(p_0, op.p_r)
+    w_p0 = wp.inflow.liquid_mass_flow_rate(p_0, op.p_r, wp.fluid)
     reservoir_rate = ca.Function('reservoir_rate', [p_0, prm], [w_p0], ['p_0', 'params'], ['w_res'])
     fluid, A = wp.fluid, geo.A
     T_in = inflow_temperature(wp, w_p0, op)

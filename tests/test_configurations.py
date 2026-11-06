@@ -16,7 +16,7 @@ import pytest
 from manywells.choke import BernoulliChokeModel, SimpsonChokeModel
 from manywells.configurations import V1, V2, DEVELOP, check, differences, v1_fluid, v1_well
 from manywells.geometry import WellGeometry
-from manywells.inflow import FixedFlowRate, ProductivityIndex, Vogel
+from manywells.inflow import FixedFlowRate, Forchheimer, ProductivityIndex, Vogel
 from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.dead_oil import DeadOil, dead_oil_surface_tension
 from manywells.pvt.table import PVTTable
@@ -158,6 +158,19 @@ def test_v2_rejects_other_options():
     ):
         diff = differences(dataclasses.replace(wp, **change), V2)
         assert len(diff) == 1 and part in diff[0], (change, diff)
+
+
+def test_the_gas_inflow_is_in_v2_and_not_in_v1():
+    """Forchheimer's gas inflow (022) is a well option of v2.0.0, which its check accepts (the Goals of 2026-10-30),
+    and not in the v1.0.0 configuration; develop has no inflow check."""
+    gas = Forchheimer(a=300.0, b=10.0)
+    assert differences(dataclasses.replace(v2(), inflow=gas), V2) == []
+    assert differences(dataclasses.replace(v1(), inflow=gas), V1) == [
+        'inflow: Forchheimer, not Vogel or ProductivityIndex (INF-1, INF-2)'
+    ]
+    assert differences(dataclasses.replace(WellProperties(), inflow=gas), DEVELOP) == []
+    with pytest.raises(ValueError, match='Forchheimer, not Vogel or ProductivityIndex'):
+        v1_well(**PARAMS, inflow=gas, choke=SimpsonChokeModel(K_c=0.002), n_cells=40)
 
 
 def test_unknown_configuration():

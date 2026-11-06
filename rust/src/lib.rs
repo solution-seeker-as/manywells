@@ -87,7 +87,8 @@ mod _core {
         /// option by its name, as in the Python classes. With oil_model 'table', the PVT table replaces the oil model
         /// and the gas law: its grid and columns by name, p, T, R_so, B_o, Z and optionally mu_o, mu_g and sigma, each
         /// column with one value per node, the pressure varying fastest. The lift gas's injection point is its grid
-        /// index k, WellProperties.injection_point (INF-9)
+        /// index k, WellProperties.injection_point (INF-9). Forchheimer's inflow takes a as inflow_coefficient and b as
+        /// inflow_b
         #[new]
         #[pyo3(signature = (
             *,
@@ -98,7 +99,7 @@ mod _core {
             h, frictional_heating, gravity_term, lift_gas_mixing, joule_thomson,
             regime_model, C_0_annular, C_0_slug, C_0_bubbly, v_inf_annular, f_ms, transition_width, lambda_floor,
             profile_scale,
-            inflow, inflow_coefficient,
+            inflow, inflow_coefficient, inflow_b=None,
             choke, K_c, profile,
             injection_point=0
         ))]
@@ -111,7 +112,7 @@ mod _core {
                h: f64, frictional_heating: bool, gravity_term: bool, lift_gas_mixing: bool, joule_thomson: bool,
                regime_model: &str, C_0_annular: f64, C_0_slug: f64, C_0_bubbly: f64, v_inf_annular: f64, f_ms: f64,
                transition_width: f64, lambda_floor: f64, profile_scale: f64,
-               inflow: &str, inflow_coefficient: f64,
+               inflow: &str, inflow_coefficient: f64, inflow_b: Option<f64>,
                choke: &str, K_c: f64, profile: &str, injection_point: usize) -> PyResult<Self> {
             let (black_oil, table) = match (oil_model, table) {
                 ("dead_oil", None) => (false, None),
@@ -146,11 +147,13 @@ mod _core {
                 "hasan" => RegimeModel::Hasan,
                 m => return Err(PyValueError::new_err(format!("regime model {m:?} is not 'hasan' or 'fitted'"))),
             };
-            let inflow = match inflow {
-                "vogel" => Inflow::Vogel { w_l_max: inflow_coefficient },
-                "pi" => Inflow::ProductivityIndex { k_l: inflow_coefficient },
-                "fixed" => Inflow::FixedRate { w_l: inflow_coefficient },
-                m => return Err(PyValueError::new_err(format!("inflow {m:?} is not 'vogel', 'pi' or 'fixed'"))),
+            let inflow = match (inflow, inflow_b) {
+                ("vogel", None) => Inflow::Vogel { w_l_max: inflow_coefficient },
+                ("pi", None) => Inflow::ProductivityIndex { k_l: inflow_coefficient },
+                ("fixed", None) => Inflow::FixedRate { w_l: inflow_coefficient },
+                ("forchheimer", Some(b)) => Inflow::Forchheimer { a: inflow_coefficient, b },
+                (m, _) => return Err(PyValueError::new_err(format!(
+                    "inflow {m:?} is not 'vogel', 'pi' or 'fixed' without inflow_b, or 'forchheimer' with it"))),
             };
             let model = match choke {
                 "simpson" => ChokeModel::Simpson,
@@ -281,8 +284,19 @@ mod _core {
                 vec![spec.choke.mass_flow_rate(u, p_in, p_s, w_g, w_l, alpha, rho_g, rho_l)]
             }
             "is_choked" => { let [p_in, p_out] = take(name, a)?; vec![spec.choke.is_choked(p_in, p_out) as u8 as f64] }
-            "liquid_rate" => { let [p, p_r] = take(name, a)?; vec![spec.inflow.liquid_rate(p, p_r)] }
+            "liquid_rate" => { let [p, p_r] = take(name, a)?; vec![spec.inflow.liquid_rate(p, p_r, &spec.fluid)] }
+            "gas_rate" => {
+                let [p, p_r] = take(name, a)?;
+                let Inflow::Forchheimer { a: c_a, b: c_b } = spec.inflow else {
+                    return Err("the well's inflow is not Forchheimer's gas inflow".into());
+                };
+                vec![crate::inflow::forchheimer_gas_rate(c_a, c_b, p, p_r)] // spec: INF-10
+            }
             "reservoir_gas_rate" => { let [w_res] = take(name, a)?; vec![spec.fluid.reservoir_gas_rate(w_res)] }
+            "reservoir_liquid_rate" => {
+                let [w_g_res] = take(name, a)?;
+                vec![spec.fluid.reservoir_liquid_rate(w_g_res)]
+            }
             "gas_parameters" => { take::<0>(name, a)?; vec![spec.fluid.sg_gas, spec.fluid.m_g, spec.fluid.r_s] }
             "fluid_parameters" => {
                 take::<0>(name, a)?;

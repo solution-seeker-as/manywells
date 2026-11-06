@@ -27,7 +27,7 @@ from manywells.choke import BernoulliChokeModel, SimpsonChokeModel
 from manywells.discretization import lift_gas_temperature
 from manywells.friction import FixedFrictionFactor, RoughnessFriction
 from manywells.geometry import WellGeometry
-from manywells.inflow import FixedFlowRate, ProductivityIndex, Vogel
+from manywells.inflow import FixedFlowRate, Forchheimer, ProductivityIndex, Vogel
 from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.dead_oil import DeadOil
 from manywells.pvt.fluid import FluidModel
@@ -44,7 +44,7 @@ CORE_CLASSES = {
     'friction': (FixedFrictionFactor, RoughnessFriction),
     'thermal': (ThermalModel,),
     'slip': (SlipModel,),
-    'inflow': (Vogel, ProductivityIndex, FixedFlowRate),
+    'inflow': (Vogel, ProductivityIndex, FixedFlowRate, Forchheimer),
     'choke': (SimpsonChokeModel, BernoulliChokeModel),
 }
 PVT_CLASSES = (DeadOil, BlackOil, PVTTable, PVTTableSet)  # The fluid's PVT models that the core implements, exactly
@@ -156,10 +156,13 @@ def _pvt(fluid) -> dict:
 
 
 def _inflow(inflow) -> dict:
+    """The core's inflow: its name and coefficient, and Forchheimer's second coefficient b as inflow_b."""
     if type(inflow) is Vogel:
         return {'inflow': 'vogel', 'inflow_coefficient': inflow.w_l_max}
     if type(inflow) is ProductivityIndex:
         return {'inflow': 'pi', 'inflow_coefficient': inflow.k_l}
+    if type(inflow) is Forchheimer:
+        return {'inflow': 'forchheimer', 'inflow_coefficient': inflow.a, 'inflow_b': inflow.b}
     return {'inflow': 'fixed', 'inflow_coefficient': inflow.w_l_const}
 
 

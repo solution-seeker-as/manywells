@@ -74,9 +74,10 @@ impl State {
     }
 }
 
-/// The reservoir liquid rate (kg/s) at bottomhole pressure p_0 (bar)
+/// The reservoir liquid rate (kg/s) at bottomhole pressure p_0 (bar): the gas inflow's liquid comes with its gas in the
+/// fluid's ratios (INF-11)
 pub fn reservoir_rate(spec: &WellSpec, op: &OperatingPoint, p_0: f64) -> f64 {
-    spec.inflow.liquid_rate(p_0, op.p_r)
+    spec.inflow.liquid_rate(p_0, op.p_r, &spec.fluid)
 }
 
 /// The lift-gas rate (kg/s) in the phase rates at point i, for a lift-gas rate w_lg: w_lg from the injection point
