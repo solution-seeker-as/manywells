@@ -20,7 +20,7 @@ The strict positivity rules out the zero-flow state, a static liquid column with
 
 ### SOL-2 · Root set
 
-The root set of a case is the set of admissible states at which every row of DISC-6 is zero, every cell is subsonic (SOL-8), and every cell's energy row rises in its temperature (SOL-9). At every root $w_m > 0$, so the choke row (CHK-1) needs $p_N > p_c \ge p_s$, and the inflow (INF-1, INF-2) needs $p_0 < p_r$.
+The root set of a case is the set of admissible states at which every row of DISC-6 is zero, every cell is subsonic (SOL-8), and every cell's energy row rises in its temperature (SOL-9). At every root $w_m > 0$, so the choke row (CHK-1) needs $p_N > p_c \ge p_s$, and the inflow (INF-1, INF-2, INF-10) needs $p_0 < p_r$.
 
 ### SOL-3 · Stability label
 

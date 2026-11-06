@@ -176,7 +176,7 @@ def test_casadi_rows_vanish_at_the_cores_roots(name):
 class LinearInflow(InflowModel):
     """A user's inflow model: the core cannot run Python code, so the CasADi backend solves such a well."""
 
-    def liquid_mass_flow_rate(self, p, p_r):
+    def liquid_mass_flow_rate(self, p, p_r, fluid=None):
         return 0.5 * (p_r - p)
 
 

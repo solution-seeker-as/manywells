@@ -37,7 +37,7 @@ from manywells.configurations import v1_fluid, v1_well
 from manywells.discretization import PointState, build_system
 from manywells.friction import RoughnessFriction
 from manywells.geometry import WellGeometry
-from manywells.inflow import ProductivityIndex, Vogel
+from manywells.inflow import Forchheimer, ProductivityIndex, Vogel
 from manywells.pvt import LiquidProperties, api_from_density, density_from_api, gas_density_from_sg, liquid_mix
 from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.dead_oil import DeadOil, dead_oil_surface_tension
@@ -359,6 +359,15 @@ RUST_ADAPTERS = {
         w_res,
         w_lg,
         **{c: getattr(DEVELOP.injection_well(int(k)), c) for c in ('geometry', 'fluid', 'injection_md')},
+    ),
+    'INF-10': lambda a, b, p, p_r: rust('gas_rate', p, p_r, inflow=Forchheimer(a=a, b=b)),
+    'INF-11': lambda f_g, w_g: rust(
+        'reservoir_liquid_rate', w_g, fluid=v1_fluid(rho_l=850.0, R_s=420.0, cp_g=2225.0, cp_l=2000.0, f_g=f_g)
+    ),
+    'INF-11 (gas well)': lambda gor, wlr, rho_o, rho_g, rho_w, w_g: rust(
+        'reservoir_liquid_rate',
+        w_g,
+        fluid=FluidModel(pvt=BlackOil(rho_o=rho_o, rho_g=rho_g), rho_w=rho_w, gor=gor, wlr=wlr),
     ),
     'THM-9': lambda T_tilde, w_g, w_l, w_lg, T_lg, cp_g, cp_l: rust(
         'injection_temperature',
@@ -762,13 +771,13 @@ def test_v2_rows_follow_the_row_order(backend):
 
 
 def test_v2_vectors_cover_the_configuration():
-    """The wells exercise every option v2.0.0 lets a well choose: both PVT models and the table set, the three
+    """The wells exercise every option v2.0.0 lets a well choose: both PVT models and the table set, the four
     inflows, both chokes, the four profiles, a valve, lift gas at the bottomhole, a horizontal cell, a non-uniform
     grid and a profile scale."""
     wells = [V2_VECTORS.v2_inputs(w['params'])[0] for w in v2_vectors()['wells']]
     bcs = [V2_VECTORS.v2_inputs(w['params'])[1] for w in v2_vectors()['wells']]
     assert {type(wp.fluid.pvt).__name__ for wp in wells} == {'BlackOil', 'PVTTable', 'PVTTableSet'}
-    assert {type(wp.inflow).__name__ for wp in wells} == {'Vogel', 'ProductivityIndex', 'FixedFlowRate'}
+    assert {type(wp.inflow).__name__ for wp in wells} == {'Vogel', 'ProductivityIndex', 'FixedFlowRate', 'Forchheimer'}
     assert {type(wp.choke).__name__ for wp in wells} == {'SimpsonChokeModel', 'BernoulliChokeModel'}
     assert {wp.choke.chk_profile for wp in wells} == {'linear', 'sigmoid', 'convex', 'concave'}
     assert any(wp.injection_md is not None and bc.w_lg > 0 for wp, bc in zip(wells, bcs))

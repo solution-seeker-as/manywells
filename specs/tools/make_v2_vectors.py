@@ -7,7 +7,7 @@ Created 30 October 2026
 Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
 Row vectors of the v2.0.0 configuration (specs/model/README.md, "Test vectors"): develop's residual rows in that
-configuration, at perturbed roots of four wells, written to specs/model/vectors/v2_rows.json. They pin the
+configuration, at perturbed roots of five wells, written to specs/model/vectors/v2_rows.json. They pin the
 configuration as implemented, so that later work on develop cannot change it unnoticed; tests/test_spec_vectors.py
 checks both backends against them. From the repository root:
 
@@ -29,7 +29,7 @@ from manywells.configurations import V2, check
 from manywells.discretization import build_system
 from manywells.friction import RoughnessFriction
 from manywells.geometry import WellGeometry
-from manywells.inflow import FixedFlowRate, ProductivityIndex, Vogel
+from manywells.inflow import FixedFlowRate, Forchheimer, ProductivityIndex, Vogel
 from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.fluid import FluidModel
 from manywells.pvt.table import PVTTable
@@ -132,6 +132,22 @@ WELLS = {
         injection_md=1200.0,
         bc=dict(p_r=250.0, p_s=20.0, T_r=365.0, T_s=277.15, u=0.6, w_lg=1.2, T_lg=None),
     ),
+    # A deviated gas well (022): a condensate-like black oil (CGR 333 and WGR 143 Sm3 per 1e6 Sm3), Forchheimer's gas
+    # inflow with coefficients at about the sampler draft's medians, Simpson choke with the sigmoid profile
+    'V5': dict(
+        grid=_grid([0.0, 800.0, 3300.0], [0.0, 800.0, 2900.0]),
+        D=0.1005,
+        fluid=dict(pvt='black_oil', rho_o=780.0, rho_g=0.85, p_sep=30.0, T_sep=300.0, p_bubble=None)
+        | dict(gor=3000.0, wlr=0.3)
+        | STREAM,
+        friction=dict(roughness=3e-5, correlation='chen'),
+        thermal=dict(h=20.0) | THERMAL,
+        slip=SLIP,
+        inflow=dict(model='forchheimer', a=3500.0, b=810.0),
+        choke=dict(model='simpson', K_c=_K_c(0.1005, 0.15), profile='sigmoid'),
+        injection_md=None,
+        bc=dict(p_r=270.0, p_s=40.0, T_r=380.0, T_s=277.15, u=0.5, w_lg=0.0, T_lg=None),
+    ),
 }
 
 
@@ -148,6 +164,8 @@ def _inflow(w):
         return Vogel(w_l_max=w['w_l_max'])
     if w['model'] == 'pi':
         return ProductivityIndex(k_l=w['k_l'])
+    if w['model'] == 'forchheimer':
+        return Forchheimer(a=w['a'], b=w['b'])
     return FixedFlowRate(w_l_const=w['w_l_const'])
 
 

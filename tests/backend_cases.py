@@ -16,8 +16,8 @@ against the CasADi backend, which is independent code:
 
 A configuration is a base well with overlays, each of which switches one option on or off. The sampler draws
 deviated and L-shaped wells, black oil, real gas and friction from roughness (SMP-40 to SMP-44), but not the others,
-so the overlays add them: lift-gas temperature, a valve above the bottomhole, a fixed rate, PI inflow, a Bernoulli
-choke, and the options of develop's model switched off one at a time.
+so the overlays add them: lift-gas temperature, a valve above the bottomhole, a fixed rate, PI inflow, Forchheimer's
+gas inflow and a gas well, a Bernoulli choke, and the options of develop's model switched off one at a time.
 
 This module is a helper, not a test module: test_backend_comparison.py and the script import it.
 """
@@ -35,7 +35,7 @@ from manywells.configurations import DEVELOP, V1, v1_well
 from manywells.discretization import DIM_X, build_system, lifts
 from manywells.friction import FixedFrictionFactor, RoughnessFriction
 from manywells.geometry import WellGeometry
-from manywells.inflow import FixedFlowRate, ProductivityIndex, Vogel
+from manywells.inflow import FixedFlowRate, Forchheimer, ProductivityIndex, Vogel
 from manywells.pvt import api_from_density, density_from_api
 from manywells.pvt.black_oil import API_RANGE, BlackOil
 from manywells.pvt.dead_oil import DeadOil
@@ -68,6 +68,7 @@ FEATURES = (
     '019',
     '020',
     '021',
+    '022',
 )
 
 
@@ -110,6 +111,8 @@ def features(wp) -> frozenset:
         out.add('018')
     if wp.injection_point > 0:
         out.add('021')
+    if type(wp.inflow) is Forchheimer:
+        out.add('022')
     return frozenset(out)
 
 
@@ -228,14 +231,14 @@ def valve(share):
 
 def fixed_rate(wp, bc):
     """The liquid rate the inflow gives at 85% of the way from p_s to p_r, fixed: a rate the well can lift."""
-    w = float(wp.inflow.liquid_mass_flow_rate(bc.p_s + 0.85 * (bc.p_r - bc.p_s), bc.p_r))
+    w = float(wp.inflow.liquid_mass_flow_rate(bc.p_s + 0.85 * (bc.p_r - bc.p_s), bc.p_r, wp.fluid))
     return replace(wp, inflow=FixedFlowRate(w_l_const=w)), bc
 
 
 def productivity_index(wp, bc):
     """Linear inflow with the same rate as the inflow at half the drawdown."""
     d = 0.5 * (bc.p_r - bc.p_s)
-    k_l = float(wp.inflow.liquid_mass_flow_rate(bc.p_r - d, bc.p_r)) / d
+    k_l = float(wp.inflow.liquid_mass_flow_rate(bc.p_r - d, bc.p_r, wp.fluid)) / d
     return replace(wp, inflow=ProductivityIndex(k_l=k_l)), bc
 
 
@@ -243,8 +246,33 @@ def vogel(wp, bc):
     """Vogel inflow with the same rate as the inflow at half the drawdown."""
     p = bc.p_s + 0.5 * (bc.p_r - bc.p_s)
     r = p / bc.p_r
-    w_l_max = float(wp.inflow.liquid_mass_flow_rate(p, bc.p_r)) / (1 - 0.2 * r - 0.8 * r**2)
+    w_l_max = float(wp.inflow.liquid_mass_flow_rate(p, bc.p_r, wp.fluid)) / (1 - 0.2 * r - 0.8 * r**2)
     return replace(wp, inflow=Vogel(w_l_max=w_l_max)), bc
+
+
+def forchheimer(wp, bc):
+    """
+    Forchheimer's gas inflow (022) with the same gas rate w_h as the inflow at half the drawdown, half of its drop
+    non-Darcy there: a = Δ_h / (2 w_h), b = Δ_h / (2 w_h²), with Δ_h = p_r² - p_h². INF-11 then gives the liquid in
+    the fluid's ratios, the same rate as the inflow's at p_h.
+    """
+    p_h = bc.p_r - 0.5 * (bc.p_r - bc.p_s)
+    w_h = float(wp.fluid.reservoir_gas_rate(wp.inflow.liquid_mass_flow_rate(p_h, bc.p_r, wp.fluid)))
+    delta = (bc.p_r - p_h) * (bc.p_r + p_h)
+    return replace(wp, inflow=Forchheimer(a=delta / (2 * w_h), b=delta / (2 * w_h**2))), bc
+
+
+def gas_well(wp, bc):
+    """
+    A gas well (022): Forchheimer's inflow fitted to the well's own (forchheimer), then the fluid at a gas-oil ratio of
+    3000 Sm³/Sm³ and a water-liquid ratio of 0.3. The gas rate is the oil well's, at half the drawdown, and the liquid
+    a gas well's share of it; an oil fluid of API gravity outside the black oil's range becomes API 50.
+    """
+    wp, bc = forchheimer(wp, bc)
+    pvt = wp.fluid.pvt
+    if type(pvt) is BlackOil and not API_RANGE[0] <= api_from_density(pvt.rho_o) <= API_RANGE[1]:
+        wp = with_pvt(wp, replace(pvt, rho_o=density_from_api(50.0)))
+    return replace(wp, fluid=replace(wp.fluid, gor=3000.0, wlr=0.3)), bc
 
 
 def choke(model):
@@ -283,6 +311,8 @@ OVERLAYS = {
     'fixed rate': fixed_rate,
     'productivity index': productivity_index,
     'vogel': vogel,
+    'forchheimer': forchheimer,
+    'gas well': gas_well,
     'bernoulli': choke(BernoulliChokeModel),
     'simpson': choke(SimpsonChokeModel),
     # develop's options switched off one at a time
@@ -359,6 +389,7 @@ V1_OVERLAYS = (
     'five regimes',
     'valve at 50%',
     'valve at 75%',
+    'forchheimer',
 )
 DEVELOP_OVERLAYS = (
     'dead oil',
@@ -388,6 +419,8 @@ DEVELOP_OVERLAYS = (
     'no profile slip',
     'valve at 50%',
     'valve at 75%',
+    'forchheimer',
+    'gas well',
 )
 
 
@@ -426,6 +459,12 @@ def matrix() -> list:
         Configuration('develop', ('lift-gas temperature', 'valve at 50%')),
         Configuration('develop', ('deviated', 'valve at 75%')),
         Configuration('develop', ('no lift-gas mixing', 'valve at 50%')),
+    ]
+    out += [
+        Configuration('develop', ('gas well', 'joule-thomson')),
+        Configuration('develop', ('gas well', 'valve at 50%')),
+        Configuration('develop', ('gas well', 'pvt table')),
+        Configuration('develop', ('deviated', 'gas well')),
     ]
     return out
 
@@ -506,6 +545,7 @@ COMPARISON = {
         'fixed rate',
         'five regimes',
         'valve at 50%',
+        'forchheimer',
     ),
     DEVELOP: (
         '',
@@ -530,6 +570,8 @@ COMPARISON = {
         'no profile slip',
         'valve at 50%',
         'valve at 75%',
+        'forchheimer',
+        'gas well',
     ),
 }
 
