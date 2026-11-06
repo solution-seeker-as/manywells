@@ -30,7 +30,7 @@ import casadi as ca
 import pytest
 
 from manywells.geometry import WellGeometry
-from manywells.inflow import Vogel
+from manywells.inflow import Forchheimer, Vogel
 from manywells.pvt import density_from_api, gas_density_from_sg, mixture_viscosity
 from manywells.pvt.black_oil import BlackOil, BlackOilPVT, live_oil_viscosity
 from manywells.pvt.dead_oil import dead_oil_viscosity
@@ -477,7 +477,48 @@ def other_examples():
     return out
 
 
-EXAMPLES = black_oil_examples() + gas_examples() + slip_examples() + other_examples()
+def gas_inflow_examples():
+    """
+    Forchheimer's gas inflow, INF-10. The law p_r^2 - p^2 = a q + b q^2 is the same in any consistent units, so the
+    examples' coefficients enter as printed, with the pressures in psia and the rate in their unit, as INF-1's example
+    above does; the absolute open flow (AOF) is the rate at 14.7 psia.
+    """
+    out = []
+    # Golan and Whitson (1991), Example 2.4, Table E2.4: the Medicine Lodge (Kansas) well's IPR from its four-point
+    # test, A = 0.1095 psia2/(scf/D) and B = 3.58e-9 psia2/(scf/D)2 at p_R = 1623 psia, in MMscf/D. Two of the
+    # table's seven rows, those specs/features/022-gas-rate-inflow.md quotes; the book is not in hand for the others.
+    src = 'Golan and Whitson (1991), Well performance, Example 2.4, Table E2.4'
+    medicine_lodge = Forchheimer(a=0.1095, b=3.58e-9)
+    for p, printed in ((14.7, '15.8'), (1550.0, '1.99')):
+        out.append(
+            Example(
+                'INF-10',
+                f'{src}, p_wf = {p:g} psia',
+                'q_g (MMscf/D)',
+                printed,
+                lambda p=p: num(medicine_lodge.gas_mass_flow_rate(p, 1623.0)) / 1e6,
+                lambda p=p: rust('gas_rate', p, 1623.0, inflow=medicine_lodge) / 1e6,
+            )
+        )
+    # Economides, Hill and Ehlig-Economides (1994), Example 4-7: a = 1.5e4 psi2/(Mscf/d) and b = 68.5 psi2/(Mscf/d)2
+    # at p^2 = 2.13e7 psi2, an AOF printed as 460 Mscf/d, two significant figures: 0.46 MMscf/d
+    src = 'Economides et al. (1994), Petroleum production systems, Example 4-7'
+    example_4_7 = Forchheimer(a=1.5e4, b=68.5)
+    p_bar = math.sqrt(2.13e7)
+    out.append(
+        Example(
+            'INF-10',
+            f'{src}, the AOF',
+            'AOF (MMscf/d)',
+            '0.46',
+            lambda: num(example_4_7.gas_mass_flow_rate(14.7, p_bar)) / 1e3,
+            lambda: rust('gas_rate', 14.7, p_bar, inflow=example_4_7) / 1e3,
+        )
+    )
+    return out
+
+
+EXAMPLES = black_oil_examples() + gas_examples() + slip_examples() + other_examples() + gas_inflow_examples()
 
 # Values the examples print that their own equations do not give at their own inputs, by hand: not checked
 EXAMPLE_ERRORS = {

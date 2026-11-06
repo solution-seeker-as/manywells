@@ -79,6 +79,9 @@ Parameters and quantities of `develop`'s options, in addition (the dataclass fie
 | $\varepsilon$, Re | `roughness`, `Re` | m, – | pipe wall roughness and Reynolds number |
 | $w_\text{res}$ | `w_res` | kg/s | liquid mass rate from the reservoir (the inflow model's) |
 | $w_{g,\text{res}}$, $w_d$ | `w_g_res` | kg/s | reservoir gas rate, gas dissolved in the oil |
+| $a$, $b$ | `a`, `b` | bar² s/kg, bar² s²/kg² | Forchheimer's Darcy and non-Darcy coefficients of the gas inflow, $a > 0$, $b \ge 0$ (INF-10) |
+| $\Delta$ | – | bar² | $p_r^2 - p_0^2$, the pressure-squared drawdown of the gas inflow (INF-10) |
+| CGR, WGR | – | Sm³/Sm³ | a gas well's condensate–gas and water–gas ratios at standard conditions, held by the fluid as `gor` $= 1/\text{CGR}$ and `wlr` $= \text{WGR}/(\text{WGR} + \text{CGR})$ (INF-11) |
 | $T_{lg}$ | `T_lg` | K | lift-gas temperature at injection; `None` means the ambient temperature at the injection point (THM-4, THM-9), which at the bottomhole is $T_r$ |
 | $z_\text{inj}$ | `injection_md` | m | measured depth of the lift gas's injection point from the surface, a field of `WellProperties`; `None` means the bottomhole (INF-9) |
 | $k$ | `injection_point` | – | the injection point: the grid point nearest $z_\text{inj}$, the deeper of two equally near; 0 at the bottomhole (INF-9) |

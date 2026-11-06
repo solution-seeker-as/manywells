@@ -291,6 +291,12 @@ impl Fluid {
         (self.f_g / (1.0 - self.f_g)) * w_res
     }
 
+    /// Liquid mass rate from the reservoir (kg/s) that comes with a reservoir gas rate w_g_res (kg/s): INF-4 read
+    /// backwards, for the gas inflow (Forchheimer). Needs gas, f_g > 0
+    pub fn reservoir_liquid_rate(&self, w_g_res: f64) -> f64 {  // spec: INF-11
+        ((1.0 - self.f_g) / self.f_g) * w_g_res
+    }
+
     /// Gas and liquid mass rates (kg/s) at a point at pressure p (bar) and temperature t (K), for a reservoir liquid
     /// rate w_res and a lift gas rate w_lg (kg/s). Without mass transfer they are the same at every point; with black
     /// oil or a table, reservoir gas (not lift gas) dissolves into the oil up to its solution gas-oil ratio at (p, T).

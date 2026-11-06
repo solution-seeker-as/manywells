@@ -97,8 +97,8 @@ class DamagedProductivityIndex(ProductivityIndex):
 
     damage: float = 0.2  # Fraction of the inflow lost (-)
 
-    def liquid_mass_flow_rate(self, p, p_r):
-        return (1 - self.damage) * super().liquid_mass_flow_rate(p, p_r)
+    def liquid_mass_flow_rate(self, p, p_r, fluid=None):
+        return (1 - self.damage) * super().liquid_mass_flow_rate(p, p_r, fluid)
 
 
 wp_user = WellProperties(inflow=DamagedProductivityIndex(k_l=0.5, damage=0.2))

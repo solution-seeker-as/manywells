@@ -24,7 +24,7 @@ from manywells.choke import ChokeModel, BernoulliChokeModel
 from manywells.discretization import STATE, DIM_X, build_system
 from manywells.friction import MAX_RELATIVE_ROUGHNESS, FrictionModel, RoughnessFriction
 from manywells.geometry import WellGeometry
-from manywells.inflow import InflowModel, ProductivityIndex
+from manywells.inflow import Forchheimer, InflowModel, ProductivityIndex
 from manywells.pvt.fluid import FluidModel
 from manywells.slip import SlipModel
 from manywells.solution import Root, RootSet
@@ -114,6 +114,12 @@ class WellProperties:
                 f'the relative roughness {self.friction.roughness / D:.4g} (roughness '
                 f'{self.friction.roughness} m, D = {D} m) exceeds {MAX_RELATIVE_ROUGHNESS}, the upper end '
                 "of the friction correlations' range (specs/model/validity.md)"
+            )
+        # INF-11 gives the liquid from the gas in the fluid's ratios, which needs gas in the fluid
+        if isinstance(self.inflow, Forchheimer) and not self.fluid.f_g > 0:
+            raise ValueError(
+                f"Forchheimer's gas inflow needs a fluid with gas, f_g > 0 (gor = {self.fluid.gor}): it gives the "
+                'liquid from the gas rate (INF-11)'
             )
 
     @property

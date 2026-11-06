@@ -29,6 +29,7 @@ from manywells.configurations import v1_fluid
 from manywells.discretization import OperatingPoint, PointState, cell_rows, lift_gas_rate, lifts
 from manywells.friction import RoughnessFriction, chen_friction_factor, friction_factor, haaland_friction_factor
 from manywells.geometry import WellGeometry
+from manywells.inflow import Forchheimer
 from manywells.pvt import density_from_api, gas_density_from_sg, mixture_viscosity
 from manywells.pvt.black_oil import BlackOil, BlackOilPVT, live_oil_surface_tension, live_oil_viscosity
 from manywells.pvt.dead_oil import DeadOil, dead_oil_viscosity
@@ -140,6 +141,21 @@ def injection_well(k):
 def point_phase_rates(k, i, p, T, w_res, w_lg):
     wp = injection_well(int(k))
     return wp.fluid.phase_rates(p, T, w_res, lift_gas_rate(w_lg, lifts(wp)[int(i)]))
+
+
+# INF-10's coefficients (bar2 s/kg, bar2 s2/kg2) at about the 5th, 50th and 95th percentiles of the sampler draft's
+# gas and condensate wells (plans/evidence/gas_inflow_wells.py), with reservoir pressures (bar) at the same percentiles
+FORCHHEIMER_P5, FORCHHEIMER_P50, FORCHHEIMER_P95 = (90.0, 17.0, 60.0), (3500.0, 810.0, 270.0), (1.1e5, 3.2e4, 660.0)
+
+
+def gas_inflow(a, b, p, p_r):
+    return Forchheimer(a=a, b=b).gas_mass_flow_rate(p, p_r)
+
+
+def liquid_with_gas(gor, wlr, rho_o, rho_g, rho_w, w_g):
+    """INF-11 in a gas well's terms: the liquid with the gas of a black oil at the gas-oil ratio gor (1/CGR) and the
+    water-liquid ratio wlr (WGR / (WGR + CGR))."""
+    return FluidModel(pvt=BlackOil(rho_o=rho_o, rho_g=rho_g), rho_w=rho_w, gor=gor, wlr=wlr).reservoir_liquid_rate(w_g)
 
 
 # DISC-12's well: vertical, 1000 m on 10 cells of D = 0.1 m, the black oil of fluid() with DAK's gas law, develop's
@@ -327,6 +343,49 @@ TABLES = [
             (8.0, 8.0, 100.0, 340.0, 10.0, 3.0),
         ),
         point_phase_rates,
+    ),
+    # At p_r, a drawdown of 0.1 bar, a typical one and the AOF (1.01325 bar); the linear limit b = 0; the 5th and 95th
+    # percentiles; b w >> a; and above p_r, the odd extension
+    Table(
+        'inflow.md',
+        'INF-10',
+        ('a', 'b', 'p', 'p_r'),
+        ('w_g',),
+        (
+            (*FORCHHEIMER_P50[:2], 270.0, 270.0),
+            (*FORCHHEIMER_P50[:2], 269.9, 270.0),
+            (*FORCHHEIMER_P50[:2], 200.0, 270.0),
+            (*FORCHHEIMER_P50[:2], 1.01325, 270.0),
+            (FORCHHEIMER_P50[0], 0.0, 200.0, 270.0),
+            (*FORCHHEIMER_P5[:2], 30.0, 60.0),
+            (*FORCHHEIMER_P95[:2], 500.0, 660.0),
+            (FORCHHEIMER_P5[0], FORCHHEIMER_P95[1], 1.01325, 270.0),
+            (*FORCHHEIMER_P50[:2], 270.1, 270.0),
+            (*FORCHHEIMER_P50[:2], 300.0, 270.0),
+        ),
+        gas_inflow,
+    ),
+    Table(
+        'inflow.md',
+        'INF-11',
+        ('f_g', 'w_g'),
+        ('w_l',),
+        ((0.05, 3.8), (0.5, 3.8), (0.9, 3.8), (0.99, 30.0)),
+        lambda f_g, w_g: v1_fluid(rho_l=850.0, R_s=420.0, cp_g=2225.0, cp_l=2000.0, f_g=f_g).reservoir_liquid_rate(w_g),
+    ),
+    # A wet gas (CGR 50 and WGR 50 Sm3 per 1e6 Sm3), a condensate-like fluid with water, and a gas with little
+    # condensate and much water
+    Table(
+        'inflow.md',
+        'INF-11 (gas well)',
+        ('gor', 'wlr', 'rho_o', 'rho_g', 'rho_w', 'w_g'),
+        ('w_l',),
+        (
+            (20000.0, 0.5, 760.0, 0.75, 1025.0, 3.8),
+            (3000.0, 0.3, 780.0, 0.85, 1025.0, 3.8),
+            (100000.0, 0.9, 750.0, 0.7, 1025.0, 30.0),
+        ),
+        liquid_with_gas,
     ),
     # thermal.md
     Table(

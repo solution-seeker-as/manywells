@@ -41,6 +41,8 @@ impl WellSpec {
         if !(self.fluid.f_g > 0.0 && self.fluid.f_g < 1.0) {
             return Err("the gas mass fraction must be in (0, 1)".into());
         }
+        // Forchheimer's coefficients, as Forchheimer.__post_init__; the gas inflow's f_g > 0 is checked above (INF-11)
+        self.inflow.check()?;
         // SLIP-18: a negative scale would take C_0 below 1, and the void fraction's bracket on [0, 1] with it
         if !(self.slip.profile_scale.is_finite() && self.slip.profile_scale >= 0.0) {
             return Err(format!("the profile scale must be finite and non-negative, got {}", self.slip.profile_scale));
@@ -357,6 +359,44 @@ pub mod test_wells {
         (spec, op)
     }
 
+    /// Forchheimer's gas inflow with the gas rate of the well's own inflow at half the drawdown from p_r to p_s, and
+    /// half of its drop non-Darcy there: a = Δ_h / (2 w_h), b = Δ_h / (2 w_h²), as tests/backend_cases.py's overlay
+    /// `forchheimer` (022)
+    pub fn forchheimer_like(spec: &WellSpec, op: &OperatingPoint) -> Inflow {
+        let p_h = op.p_r - 0.5 * (op.p_r - op.p_s);
+        let w_h = spec.fluid.reservoir_gas_rate(spec.inflow.liquid_rate(p_h, op.p_r, &spec.fluid));
+        let delta = (op.p_r - p_h) * (op.p_r + p_h);
+        Inflow::Forchheimer { a: delta / (2.0 * w_h), b: delta / (2.0 * w_h * w_h) }
+    }
+
+    /// The well with Forchheimer's inflow fitted to its own (forchheimer_like), and then its fluid a gas well's: gas-oil
+    /// ratio 3000 Sm³/Sm³ and water-liquid ratio 0.3, so that the gas rate is the well's and the liquid the gas
+    /// well's, as tests/backend_cases.py's overlay `gas well` (022)
+    fn gas_well((mut spec, op): (WellSpec, OperatingPoint)) -> (WellSpec, OperatingPoint) {
+        spec.inflow = forchheimer_like(&spec, &op);
+        spec.fluid = Fluid::new(FluidInputs { gor: 3000.0, wlr: 0.3, ..spec.fluid.inputs.clone() });
+        (spec, op)
+    }
+
+    /// W2 in the v1.0.0 configuration but for Forchheimer's gas inflow, fitted to its productivity index (022)
+    pub fn w2_forchheimer(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        let (mut spec, op) = w2(n_cells);
+        spec.inflow = forchheimer_like(&spec, &op);
+        (spec, op)
+    }
+
+    /// W1 with develop's model, deviated, with the DAK gas law and Joule-Thomson cooling, as a gas well with
+    /// Forchheimer's inflow and its lift gas at the bottomhole (016, 022)
+    pub fn gas_well_joule_thomson(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        gas_well(w1_joule_thomson(n_cells))
+    }
+
+    /// W2 L-shaped with a real gas, the energy terms and Joule-Thomson cooling, as a gas well with Forchheimer's
+    /// inflow and 1.5 kg/s of lift gas at 290 K at a valve at three quarters of the depth (021, 022)
+    pub fn gas_well_valve(n_cells: usize) -> (WellSpec, OperatingPoint) {
+        gas_well(w2_valve(n_cells))
+    }
+
     /// Every test well
     pub fn all(n_cells: usize) -> Vec<(&'static str, WellSpec, OperatingPoint)> {
         let named = |name, (spec, op)| (name, spec, op);
@@ -371,7 +411,10 @@ pub mod test_wells {
              named("w2_table_one_temperature", w2_table_one_temperature(n_cells)),
              named("w1_profile_scale", w1_profile_scale(n_cells)), named("w2_profile_scale", w2_profile_scale(n_cells)),
              named("w1_valve", w1_valve(n_cells)), named("w1_hot_valve", w1_hot_valve(n_cells)),
-             named("w2_valve", w2_valve(n_cells)), named("w1_valve_no_mixing", w1_valve_no_mixing(n_cells))]
+             named("w2_valve", w2_valve(n_cells)), named("w1_valve_no_mixing", w1_valve_no_mixing(n_cells)),
+             named("w2_forchheimer", w2_forchheimer(n_cells)),
+             named("gas_well_joule_thomson", gas_well_joule_thomson(n_cells)),
+             named("gas_well_valve", gas_well_valve(n_cells))]
     }
 }
 
@@ -431,6 +474,16 @@ mod tests {
         }
         // A fixed friction factor, as in the v1.0.0 configuration, has no roughness
         assert!(WellSpec { friction: Friction::FixedFactor { f_d: 0.03 }, ..spec.clone() }.check().is_ok());
+    }
+
+    #[test]
+    fn a_gas_inflow_with_coefficients_out_of_range_is_refused() {
+        let (spec, _) = super::test_wells::w2_forchheimer(10);
+        assert!(spec.check().is_ok());
+        for (a, b) in [(0.0, 1.0), (1.0, -1.0), (f64::NAN, 1.0)] {
+            let bad = WellSpec { inflow: crate::inflow::Inflow::Forchheimer { a, b }, ..spec.clone() };
+            assert!(bad.check().unwrap_err().contains("Forchheimer"), "a = {a}, b = {b}");
+        }
     }
 
     #[test]

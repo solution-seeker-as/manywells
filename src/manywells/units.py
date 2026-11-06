@@ -64,6 +64,7 @@ CF_UP = 1e-7  # micropoise -> Pa s
 ################################################
 
 CF_DYNCM = 1e-3  # dyn/cm -> J/m2 (surface tension)
+CF_DAY = 86_400  # day -> s
 CF_KGM3_TO_GCC = 1e-3  # kg/m3 -> g/cm3
 
 
