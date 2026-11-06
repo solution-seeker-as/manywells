@@ -27,7 +27,9 @@ split into a table (specs/model/pvt/table.md). Nothing here is a real fluid. Thr
         interim black oil (Vazquez-Beggs at the drawn API, gas gravity and GOR).
 
 The separation is one stage at standard conditions (1.01325 bar, 288.15 K), as pvt_table_eos.py has it, so that a
-GOR axis recombines along one tie line (PVT-TAB-1). Where the stream is all vapour, the table keeps a liquid mass
+GOR axis recombines along one tie line (PVT-TAB-1). The drawn descriptors are the field's, as reported through the
+well's own separator and a stock tank: the single-stage targets of the match are shifted by each fluid's offsets
+between the two, in two passes, and the offsets are recorded (D-63, as Bjarne ruled at J2 on 2026-11-06). Where the stream is all vapour, the table keeps a liquid mass
 fraction DELTA of the liquid at the nearest saturation point, so that B_o > 0 (fluids-draft.md, The table).
 
 NeqSim needs Java. From the repository root, with the JVM sized to fit the memory cap:
@@ -283,6 +285,30 @@ class Flash:
         rho_g = P_REF * M_V * 1000 / (R_UNIVERSAL * T_REF)
         return dict(rho_o=rho_L, rho_g=rho_g, gor=(X / rho_g) / ((1 - X) / rho_L), y=y, x=x, M_o=M_L * 1000)
 
+    def field(self, z, p_sep, T_sep):
+        """The field's report of stream z (D-63, as ruled at J2): the well's separator at (p_sep, T_sep), then its
+        liquid to a stock tank at standard conditions. The stock-tank oil's API gravity, the separator gas's gravity
+        (the stock tank's where the separator has no gas), and the GOR of both gases per Sm3 of stock-tank oil."""
+        phases, _ = self.flash(z, p_sep, T_sep, properties=False)
+        if len(phases) == 2:
+            (X1, _, M_V1, _, _, _), (_, _, _, _, _, x1) = phases
+        elif phases[0][1] < 200.0:  # all vapour at the separator: no liquid to report
+            return None
+        else:
+            X1, M_V1, x1 = 0.0, math.nan, phases[0][5]
+        st, _ = self.flash(x1, P_SC, T_REF, properties=False)
+        if len(st) < 2:
+            if st[0][1] < 200.0:
+                return None
+            X2, M_V2, rho_L = 0.0, math.nan, st[0][1]
+        else:
+            (X2, _, M_V2, _, _, _), (_, rho_L, _, _, _, _) = st
+        gas = (X1 / (P_REF * M_V1 * 1000 / (R_UNIVERSAL * T_REF)) if X1 > 0 else 0.0) + (
+            (1 - X1) * X2 / (P_REF * M_V2 * 1000 / (R_UNIVERSAL * T_REF)) if X2 > 0 else 0.0
+        )
+        M_g = M_V1 if X1 > 0 else M_V2
+        return dict(api=api_of(rho_L), sg_gas=M_g * 1000 / M_AIR, gor=gas / ((1 - X1) * (1 - X2) / rho_L))
+
     def recombine(self, sep, gor):
         """The stream of the separator gas and stock-tank oil of sep at the GOR gor: per Sm3 of oil, rho_o/M_o kmol of
         oil and gor/V_M_SC kmol of gas."""
@@ -379,6 +405,41 @@ def synthetic(cls, rng, target, max_iter=8):
 
 
 RHO_AIR = P_REF * M_AIR / (R_UNIVERSAL * T_REF)
+
+
+def field_matched(w, passes=2):
+    """
+    D-63 as ruled at J2: the composition matched as single-stage descriptors at standard conditions (synthetic), then
+    flashed through the well's separator and stock tank (Flash.field), and the single-stage targets shifted by the
+    difference, so that the field-reported API, gas gravity and GOR are the drawn ones. Each pass redraws the same
+    composition from the well's seed. Returns synthetic's four values, with the offsets and the field's descriptors
+    in the record.
+    """
+    drawn = dict(api=w['api'], sg_gas=w['sg_gas'], R_si=w['R_si'])
+    target = dict(drawn)
+    for k in range(passes + 1):
+        fl, z, sep, rec = synthetic(w['fluid_class'], np.random.default_rng(w['composition_seed']), target)
+        f = fl.field(z, w['p_sep'], w['T_sep'])
+        if f is None:
+            rec |= dict(field=None, offsets=None, passes=k)
+            break
+        single = dict(api=api_of(sep['rho_o']), sg_gas=sep['rho_g'] / RHO_AIR, R_si=target['R_si'])
+        offsets = dict(
+            api=f['api'] - single['api'], sg_gas=f['sg_gas'] - single['sg_gas'], gor=f['gor'] / single['R_si']
+        )
+        rec |= dict(field=f, offsets=offsets, single_stage=single, passes=k)
+        if k == passes:
+            break
+        target = dict(
+            api=drawn['api'] - offsets['api'],
+            sg_gas=drawn['sg_gas'] - offsets['sg_gas'],
+            R_si=drawn['R_si'] / offsets['gor'],
+        )
+    rec['field_error'] = None if rec['field'] is None else dict(
+        api=rec['field']['api'] - drawn['api'], sg_gas=rec['field']['sg_gas'] - drawn['sg_gas'],
+        gor=rec['field']['gor'] / drawn['R_si'] - 1,
+    )  # fmt: skip
+    return fl, z, sep, rec
 
 
 def saturated_at(fl, sep, gor, T, p_i):
@@ -482,11 +543,11 @@ def make(picked, outdir):
     summary = []
     for w in picked:
         t0 = time.time()
-        rng = np.random.default_rng(w['composition_seed'])
-        fl, z, sep, rec = synthetic(w['fluid_class'], rng, w)
+        fl, z, sep, rec = field_matched(w)
         t_match = time.time() - t0
         sat_r = fl.saturation(z, w['T_r'], 1.3 * w['p_i'])
-        gor, moved, rule = w['R_si'], None, 'matched'
+        gor = rec['single_stage']['R_si'] if rec.get('single_stage') else w['R_si']
+        moved, rule = None, 'matched'
         if sat_r and sat_r['p'] > w['p_i']:  # above its saturation pressure at p_i: saturated at discovery
             g = saturated_at(fl, sep, gor, w['T_r'], w['p_i'])
             if g is not None:
