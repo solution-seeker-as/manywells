@@ -20,14 +20,17 @@ GOR from the material balance (D-19, solution_gas_drive.py), the permeability by
 from Joshi's on a growing drainage length times Dikken's friction efficiency (D-21, drain_friction.py), the subsea
 flowline-and-riser loss (D-15), the bean (D-27), the injection pressure by well type (D-29) and the lift-gas capacity
 (D-31); this script at commit 8e6c175 gives R6's draws. Every draw comes from numpy's default_rng, seeded by (seed,
-well, 'v2', block) through manywells.sampling.wells.rng_for, one generator per block of the draft.
+well, 'v2', block) through manywells.sampling.wells.rng_for, one generator per block of the draft. Since D2's ruling (2026-11-06) a
+gas well's non-Darcy coefficient is D-62's estimate from Economides et al.'s Eq. 4-34 and its permeability the well
+type's law times GAS_K_FACTOR; NONDARCY = 'r3' restores R3's draw (D-23) for comparison (gas_rates_d62.py).
 
 From the repository root:
 
     (ulimit -v 3000000; OMP_NUM_THREADS=1 timeout 600 .venv/bin/python plans/evidence/sampler_draft_draws.py 2000)
 
-    --seed N     the dataset seed (default 2026)
-    --csv OUT    write one row per well
+    --seed N           the dataset seed (default 2026)
+    --csv OUT          write one row per well
+    --nondarcy r3|d62  the non-Darcy coefficient's draw (default NONDARCY)
 """
 
 import argparse
@@ -97,6 +100,13 @@ PERM = {  # mD: median, log-sd and bounds by well type, D-20 as revised by D-100
     'subsea': (60, 1.2, 0.5, 3000),
     'onshore': (3, 1.5, 0.05, 1000),
 }
+NONDARCY = 'd62'  # the gas wells' non-Darcy coefficient: 'd62', D-62's Eq. 4-34 as ruled (D2); 'r3', D-23's LogU
+GAS_K_FACTOR = 1 / 14  # the gas classes' permeability: the well type's law (PERM) times this, bounds included, D2
+D_R3 = (2e-4, 2e-3)  # d/Mscf, D-23
+PERF_SHARE = (0.3, 1.0)  # the perforated share of the net pay, h_perf / h, D-62
+D_ERROR = 0.7  # log-sd of Eq. 4-34's error factor, median 1 ("may be off by 100%", Guo et al. 2008), D-62
+D_BOUNDS = (1e-5, 2e-3)  # d/Mscf: D-62's truncation, R3's range widened down to 1e-5
+R_W = 0.108  # m, the wellbore radius (8.5 in hole), sampling-draft.md, Productivity
 P_S_MAX = {'platform': 120.0, 'subsea': 250.0, 'onshore': 120.0}  # bar, the nominal downstream pressure's cap, D-15
 RISER = (0.03, 0.07)  # bar/m, a subsea well's flowline-and-riser loss per metre of water depth, D-15
 BEAN_MAX = 0.1016  # m, the fully open bean's largest diameter (4 in), D-27
@@ -277,6 +287,14 @@ def forchheimer(k_md, h, mu, Z, T, ln_term, s, D_dmscf):
     a_si = P_REF * T * mu * Z * (ln_term + s) / (math.pi * k_md * 9.869233e-16 * h * T_REF)  # Pa2 per Sm3/s
     b_si = a_si * D_dmscf * 86400 / 28.3168 / (ln_term + s)  # Pa2 per (Sm3/s)2
     return a_si / 1e10 / 86400, b_si / 1e10 / 86400**2
+
+
+def nondarcy_eq434(sg, k_md, h, mu, h_perf):
+    """Economides et al.'s estimate of the non-Darcy coefficient (1994, Eq. 4-34), D = 6e-5 gamma_g k^-0.1 h /
+    (mu_g r_w h_perf^2) in field units, d/Mscf: k in md, the net pay h and the perforated interval h_perf (m) and R_W
+    in ft, mu (Pa s) in cP."""
+    ft = 0.3048
+    return 6e-5 * sg * k_md**-0.1 * (h / ft) / (mu * 1e3 * (R_W / ft) * (h_perf / ft) ** 2)
 
 
 def gas_rate(a, b, dp2):
@@ -507,6 +525,8 @@ def draw_well(seed, k, stage_override=None, force_lift=False):
     # Inflow, before a drain's friction
     r = gen('inflow')
     k_med, k_s, k_lo, k_hi = PERM[wt]
+    if not oil:  # a gas well's effective permeability, carrying the operating limits the model lacks (D2, D-100)
+        k_med, k_lo, k_hi = (GAS_K_FACTOR * x for x in (k_med, k_lo, k_hi))
     perm = logu(r, k_lo, k_hi) if tail else tlognorm(r, k_med, k_s, k_lo, k_hi)
     h_net = logu(r, 3, 100) if tail else tlognorm(r, 15, 0.8, 3, 100)
     skin = r.uniform(-3, 15) if tail else tnorm(r, 2, 3, -3, 15)
@@ -536,7 +556,19 @@ def draw_well(seed, k, stage_override=None, force_lift=False):
     else:
         Z = bo.z_factor(p_r, T_r)
         mu_g = bo.gas_viscosity(p_r, T_r, bo.gas_density(p_r, T_r))
-        D_nd = logu(r, 2e-4, 2e-3)
+        D_nd = logu(r, *D_R3)  # D-23; drawn under either option, so that the inflow block's draws stay as they were
+        D_434 = nondarcy_eq434(sg, perm, h_net, mu_g, h_net)  # Eq. 4-34 perforated over the net pay, for the record
+        if NONDARCY == 'd62':
+            # D-62 as ruled: Eq. 4-34 at a perforated share, times a log-normal error factor, truncated; core and tail
+            # alike, from their own generator so that no other draw moves. mu_g is a's, so b = a D / (ln + s) holds
+            # no viscosity, as the inertial term should not. A drain scales b_V as any other (D-21, on_geometry)
+            r_nd = gen('nondarcy')
+            f_perf = r_nd.uniform(*PERF_SHARE)
+            D_nd = tlognorm(r_nd, nondarcy_eq434(sg, perm, h_net, mu_g, f_perf * h_net), D_ERROR, *D_BOUNDS)
+            w['perf_share'] = f_perf
+        elif NONDARCY != 'r3':
+            raise ValueError(f'NONDARCY must be r3 or d62, got {NONDARCY!r}')
+        w['D_eq434'] = D_434
         a_v, b_v = forchheimer(perm, h_net, mu_g, Z, T_r, ln_re - 0.75, skin, D_nd)  # the vertical well's
         a, b = on_geometry(a_v, b_v)
 
@@ -558,9 +590,10 @@ def draw_well(seed, k, stage_override=None, force_lift=False):
     v_e = 1.22 * c_e / math.sqrt(mass / vol)
     sizes = TUBING_ID if not oil else TUBING_ID[:-1]
     fits = [D for D in sizes if q_d * vol / 86400 / (math.pi * D * D / 4) <= v_e]
+    u_up = r.random()  # drawn for every well, so that the flag moves no later draw
     if fits:
         i = sizes.index(fits[0])
-        if r.random() < (0.5 if tail else 0.3) and i + 1 < len(sizes):
+        if u_up < (0.5 if tail else 0.3) and i + 1 < len(sizes):
             i += 1
         D = sizes[i]
     else:
@@ -656,8 +689,17 @@ def draw_well(seed, k, stage_override=None, force_lift=False):
         md_inj = float(np.interp(H, tvd_st, md_st))
         T_a = T_s + (T_r - T_s) * H / L
         phi = r.uniform(0, 0.3)
-        glr = logu(r, 30, 1000)  # D-31, the core and the tail
-        w_lg_max = min(max(rho_g * glr * q_l_now / 86400, W_LG_MAX[0]), W_LG_MAX[1])
+        # D-31 as ruled: GLR_cap log-uniform over the part of 30 to 1000 Sm3/Sm3 whose capacity lies within W_LG_MAX
+        # (truncated, not clipped); a well too weak for the floor even at 1000 takes the floor. Core and tail alike
+        kq = rho_g * q_l_now / 86400  # kg/s per unit of GLR
+        lo, hi, u_glr = max(30.0, W_LG_MAX[0] / kq), min(1000.0, W_LG_MAX[1] / kq), r.random()
+        if lo <= hi:
+            glr = lo * (hi / lo) ** u_glr
+            w_lg_max = kq * glr
+        else:
+            w_lg_max = W_LG_MAX[0] if 1000.0 * kq < W_LG_MAX[0] else W_LG_MAX[1]
+            glr = w_lg_max / kq
+            flags.append('lift_capacity_at_bound')
         w.update(z_inj=H, md_inj=md_inj, z_inj_frac=H / L, p_inj=p_inj, dp_valve=dp_v, T_lg=T_a - phi * (T_a - T_s))
         w.update(packer_offset=dz_pk, phi_lg=phi)
         w.update(T_lg_below_ambient=phi * (T_a - T_s), glr_cap=glr, w_lg_max=w_lg_max)
@@ -921,11 +963,14 @@ def report(df):
 
 
 def main():
+    global NONDARCY
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('n', type=int)
     ap.add_argument('--seed', type=int, default=2026)
     ap.add_argument('--csv')
+    ap.add_argument('--nondarcy', choices=('r3', 'd62'), default=NONDARCY)
     args = ap.parse_args()
+    NONDARCY = args.nondarcy
     rows = []
     for k in range(args.n):
         w, stations = draw_well(args.seed, k)

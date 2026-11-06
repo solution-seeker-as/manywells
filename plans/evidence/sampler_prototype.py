@@ -57,6 +57,7 @@ from sampler_draft_samples import (
     P_LIFT_OFF,
     P_OPEN,
     P_OPEN_SET,
+    LIFT_FLOOR,
     P_SMALL,
     REDRAW_SMALL,
     REDRAW_STEP,
@@ -69,6 +70,7 @@ from sampler_draft_samples import (
     logu,
     producing_gor,
     reflect,
+    sol2_well_at,
     separator_pressure,
 )
 
@@ -359,10 +361,13 @@ def well_fixed(w):
 
 def sol2_well(seed, k) -> dict:
     t_start = time.perf_counter()
-    w, stations = draw_well(seed, k)
-    lifted = w['lift'] == 'gas_lift'
+    # The well's life at one date in its drawn stage, as nsol-2 has it (Bjarne, 2026-11-06, 'one life for both')
+    nw = NsolWell(seed, k)
+    w, _, t = sol2_well_at(seed, k, nw.lf)
+    st, lifted, stations, builder = nw.state(t), nw.lift_on(t), nw.stations, nw.builder
+    w.update(k_l=st['k_l'], w_l_max=st['w_l_max'], lift='gas_lift' if lifted else 'natural')
+    w.update({key: nw.design[key] if lifted else math.nan for key in LIFT_KEYS})
     w_max = w['w_lg_max'] if lifted else 0.0
-    builder = Builder(w, stations, design=w if lifted else None)
     fixed = well_fixed(w)
     log, info = [], dict(draw_index=k, outcome=None, best_rate=math.nan, best_rate_w_lg=math.nan)
     nominal = dict(fixed, p_r=w['p_r'], gor=w['R_go'], wlr=w['wlr'], wgr=w.get('wgr', math.nan), p_s_nom=w['p_s'])
@@ -374,12 +379,10 @@ def sol2_well(seed, k) -> dict:
     floor = FLOOR[w['well_type']]
     br = best_rate(builder, nominal, lifted, w_max, floor, log, dict(draw_index=k, kind='best_rate', slot=-1))
     if not lifted and w['fluid_type'] in OILS and br['status'] in ('no_operating_point', 'below_floor'):
-        # D-101: an oil well that cannot flow naturally at its best rate gets R3's lift design, as an operator would
-        # lift it (nsol-2's rule 2 of D-49); the lift block's draws are the well's own (force_lift)
-        w, _ = draw_well(seed, k, force_lift=True)
-        w['lift_reason'] = 'no_natural_flow'
+        # D-101: an oil well that cannot flow naturally at its best rate gets its life's lift design, as an operator
+        # would lift it (nsol-2's rule 2 of D-49)
+        w.update({key: nw.design[key] for key in LIFT_KEYS}, lift='gas_lift', lift_reason='no_natural_flow')
         lifted, w_max = True, w['w_lg_max']
-        builder.design = w
         base = dict(draw_index=k, kind='best_rate_lifted', slot=-1)
         br = best_rate(builder, nominal, lifted, w_max, floor, log, base)
     info.update(best_rate=br['best'], best_rate_w_lg=br['best_w_lg'], best_rate_outcomes=br['outcomes'])
@@ -485,7 +488,7 @@ class NsolWell:
         for t, kind, test in slots:
             lift_on = self.lift_on(t)
             if lift_on and w_sp is None:
-                w_sp = w_0 * w_max
+                w_sp = (LIFT_FLOOR + (1 - LIFT_FLOOR) * w_0) * w_max
             if kind == 'operating' and t > 0:
                 for which in ('u', 'w'):
                     change, small, step, redraw_open, redraw = (
@@ -503,9 +506,9 @@ class NsolWell:
                         else:
                             u_sp = 1.0 if redraw_open < P_OPEN_SET else U_MIN + (1 - U_MIN) * redraw
                     elif small < P_SMALL:
-                        w_sp = reflect(w_sp + step * w_max, 0.0, w_max)
+                        w_sp = reflect(w_sp + step * w_max, LIFT_FLOOR * w_max, w_max)
                     else:
-                        w_sp = 0.0 if redraw_open < P_LIFT_OFF else w_max * redraw
+                        w_sp = 0.0 if redraw_open < P_LIFT_OFF else w_max * (LIFT_FLOOR + (1 - LIFT_FLOOR) * redraw)
             u, w_lg, sweep_kind, m_test = u_sp, (w_sp if lift_on else 0.0), None, None
             if kind == 'test':
                 m, i = test
@@ -541,9 +544,9 @@ def nsol2_redraw(r, planned, lift_on, w_max, p_s_nom, dp_fl):
     w_lg = planned['w_lg']
     if lift_on:
         if small_w < REDRAW_SMALL:
-            w_lg = reflect(planned['w_lg'] + step_w * w_max, 0.0, w_max)
+            w_lg = reflect(planned['w_lg'] + step_w * w_max, LIFT_FLOOR * w_max, w_max)
         else:
-            w_lg = 0.0 if off_w < P_LIFT_OFF else w_max * new_w
+            w_lg = 0.0 if off_w < P_LIFT_OFF else w_max * (LIFT_FLOOR + (1 - LIFT_FLOOR) * new_w)
     return u, w_lg, separator_pressure(r, p_s_nom, dp_fl)
 
 
@@ -843,6 +846,7 @@ def well_columns(w, info, kind, stations, nsol=None, theta_grid=math.nan) -> dic
     if kind == 'sol':
         row.update(
             life_stage=stage,
+            life_date=g('date'),
             life_state=life_state,
             lift='gas_lift' if lifted else 'natural',
             lift_reason=w.get('lift_reason', 'needs_lift' if w['needs_lift'] else 'drawn') if lifted else None,

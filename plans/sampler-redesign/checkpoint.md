@@ -261,6 +261,8 @@ Per well, the share of gas wells above 270,000 Sm³/d at their median runs from 
 
 **Deferred:** Bjarne, 2026-11-06: wait for feature 022 (R9), then decide D2 on gas rates measured with the real inflow.
 
+**Ruling:** Bjarne, 2026-11-06, with feature 022's inflow measured on the rework's draws (`gas_rates_d62.py`; D-62): D-62's non-Darcy coefficient, and the gas classes' permeability the well type's law times 1/14, bounds included; no redraw above the erosional capacity, which flags 3.4% of the core gas wells at these laws.
+
 #### D3 · The economic floor and its margin (D-34, D-50)
 
 **Question.** Drop a well whose best rate is below half its floor (0.8 Sm³/d of oil equivalent onshore and on platforms, 4 Sm³/d subsea)?

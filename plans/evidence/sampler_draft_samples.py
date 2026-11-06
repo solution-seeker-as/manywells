@@ -48,10 +48,13 @@ WLR_MAX = 0.98  # Hasan et al.'s largest water cut, R3
 # --- nsol-2 ---------------------------------------------------------------------------------------------------------
 T_LIFE = (3.0, 30.0)  # years, log-uniform, D-41 as ruled: lives may be shorter than 8 years
 Q_END = (0.03, 0.3)  # the decline's rate at the end of the life over the plateau's, log-uniform, D-41 as ruled
+END_P_MIN = 0.15  # p_r/p_i of an exhausted reservoir under depletion: the coverage tail's floor (R3), D-41
+END_WGR = 1000.0  # Sm3 per 1e6 Sm3: a gas well's water at the end of a life with pressure support, the tail's top, D-41
 N_OP, N_TESTS, N_SWEEP = 160, 8, 5  # operating samples, test periods, samples per test: 160 + 8 x 5 = 200, D-48
 P_OPEN_SET = 0.05  # Share of choke set points at fully open, D-47
 P_CHANGE = (0.5, 0.95)  # Per-operating-sample probability of a set-point change, log-uniform per well, D-47 as ruled
 P_SMALL, STEP = 0.9, 0.1  # A change is a small step of at most +-0.1 with probability 0.9, else a redraw, D-47
+LIFT_FLOOR = 0.1  # A lifted well's lift-gas set point stays at or above this share of its capacity unless shut in
 REDRAW_SMALL, REDRAW_STEP = 0.6, 0.2  # A redrawn slot's change of the controls, R4's set-point change as D-83 has it
 
 
@@ -168,7 +171,16 @@ class Life:
             self.r0, self.water0 = r0_core, ((0.0 if dry < 0.5 else wlr0_core) if self.oil else wgr0_core)
         else:
             self.r0, self.water0 = w0['r_p'], w0[key]
+        # The end: a core well's life runs towards its reservoir exhausted, at the sampler's existing bounds, and
+        # stops where the well stops paying, at the economic floor (D-50, D-84; Bjarne, 2026-11-06, D-41): under
+        # depletion the pressure from END_P_MIN to the bottom of R3's late range, under pressure support the water
+        # at its cap; the rest as the late draw
+        u_end = r.random()
         self.r1, self.water1 = min(self.wL['r_p'], self.r0), self.wL[key]
+        if not w0['tail'] and w0['drive'] == 'depletion':
+            self.r1 = min(END_P_MIN + ((0.3 if self.oil else 0.2) - END_P_MIN) * u_end, self.r0)
+        elif not w0['tail']:
+            self.water1 = WLR_MAX if self.oil else END_WGR
         self.N_T = cumulative(self.T, self.t_pl, self.D, self.b)
         self.bo = black_oil(w0)
         if self.gas_depletion and self.r1 < self.r0:  # p as a function of F, p/Z linear in F (Ahmed 2006, Eq. 13-8)
@@ -264,6 +276,46 @@ class Life:
         return 'initial' if t < 1.0 else ('late' if t >= 0.5 * self.T else 'mid_life')
 
 
+# --- sol-2's well: its life at one date (Bjarne, 2026-11-06, 'one life for both') -----------------------------------
+LIFT_FIELDS = ('z_inj', 'md_inj', 'z_inj_frac', 'p_inj', 'dp_valve', 'T_lg', 'packer_offset', 'phi_lg')
+LIFT_FIELDS += ('T_lg_below_ambient', 'glr_cap', 'w_lg_max')
+STAGE_DATES = {'initial': (0.0, 1.0), 'mid_life': (1.0, 0.5), 'late': (0.5, 1.0)}  # years, or shares of T_life
+
+
+def sol2_date(seed, k, life):
+    """The date (years) of a sol-2 well in its life: uniform within its drawn stage, the first year, the rest of the
+    first half of the life span, or its second half, as Life.stage labels the dates. A tail well's state is its tail
+    draw, which its life reaches at its end (D-42)."""
+    stage = draw_well(seed, k)[0]['stage']
+    u = rng_for(seed, k, 'v2', 'date').random()
+    if life.w0['tail']:
+        return stage, life.T
+    a, b = STAGE_DATES[stage]
+    lo, hi = (a, b * life.T) if stage == 'mid_life' else ((a * life.T, b * life.T) if stage == 'late' else (a, b))
+    return stage, lo + (hi - lo) * u
+
+
+def sol2_well_at(seed, k, life=None):
+    """A sol-2 well: the well's initial draw with its state at its date from its life, so that sol-2 and nsol-2 share
+    one model of a well's life (Bjarne, 2026-11-06). Returns the well, its life and the date."""
+    life = life or Life(seed, k)
+    stage, t = sol2_date(seed, k, life)
+    w0, s = life.w0, life.state(t)
+    w = dict(w0, stage=stage, date=t, p_r=s['p_r'], r_p=s['p_r'] / w0['p_i'], R_go=s['R_go'], p_s=life.p_s_nom(t))
+    w.update(r_s=life.r_s(t), h=life.h(t), roughness=life.roughness(t), below_hydrostatic=s['p_r'] < w0['p_h'])
+    if life.oil:
+        w['wlr'] = min(WLR_MAX, s['water'])
+    else:
+        w.update(wgr=s['water'], ogr=1e6 / s['R_go'], wlr=s['water'] / (s['water'] + 1e6 / s['R_go']))
+    if w0['fluid_class'] not in ('wet_gas', 'dry_gas'):
+        w['saturation'] = 'undersaturated' if s['p_r'] > w0['p_sat'] else 'saturated'
+    lifted = life.lift_start is not None and t >= life.lift_start
+    w['lift'] = 'gas_lift' if lifted else 'natural'
+    for key in LIFT_FIELDS:
+        w[key] = life.lift_w[key] if lifted else math.nan
+    return w, life, t
+
+
 def reflect(x, lo, hi):
     if x > hi:
         x = 2 * hi - x
@@ -291,7 +343,7 @@ def nsol2_samples(seed, life):
     for t, kind, test in slots:
         lift_on = life.lift_start is not None and t >= life.lift_start
         if lift_on and w_sp is None:
-            w_sp = w_0 * w_max  # a newly installed lift starts with gas on
+            w_sp = (LIFT_FLOOR + (1 - LIFT_FLOOR) * w_0) * w_max  # a newly installed lift starts with gas on
         if kind == 'operating' and t > 0:
             for which in ('u', 'w'):
                 # Every draw is made whatever its branch, so that a rule's change moves no other draw
@@ -311,9 +363,9 @@ def nsol2_samples(seed, life):
                     else:
                         u_sp = 1.0 if redraw_open < P_OPEN_SET else U_MIN + (1 - U_MIN) * redraw
                 elif small < P_SMALL:
-                    w_sp = reflect(w_sp + step * w_max, 0.0, w_max)
+                    w_sp = reflect(w_sp + step * w_max, LIFT_FLOOR * w_max, w_max)
                 else:
-                    w_sp = 0.0 if redraw_open < P_LIFT_OFF else w_max * redraw
+                    w_sp = 0.0 if redraw_open < P_LIFT_OFF else w_max * (LIFT_FLOOR + (1 - LIFT_FLOOR) * redraw)
         u, w_lg, sweep_kind = u_sp, (w_sp if lift_on else 0.0), None
         if kind == 'test':
             m, i = test
@@ -479,13 +531,14 @@ def main():
     ap.add_argument('--seed', type=int, default=2026)
     ap.add_argument('--show', type=int, default=4)
     args = ap.parse_args()
-    wells = [draw_well(args.seed, k)[0] for k in range(args.n)]
+    at = [sol2_well_at(args.seed, k) for k in range(args.n)]
+    wells = [w for w, _, _ in at]
     s = pd.DataFrame([sol2_sample(args.seed, w, j) for w in wells for j in range(N_SAMPLES)])
     wells = pd.DataFrame(wells)
     report_sol2(wells, s)
     lives, rows, changes, p_cs = [], [], [], []
     for k in range(args.n):
-        lf = Life(args.seed, k)
+        lf = at[k][1]
         rs, c, p_c = nsol2_samples(args.seed, lf)
         lives.append(lf)
         rows += rs
