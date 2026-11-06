@@ -139,6 +139,16 @@ Scripts behind `../../specs/features/021-lift-gas-injection-depth.md`, run on 20
 | `injection_depth_wells.py scan OUT.csv` | The core's $R(p_0)$ on 4000 samples for each case that loses its operating point with the valve | In all five (case, valve) pairs $R$ stays positive: the model has no root |
 | `injection_depth_wells.py run 1000 OUT.csv --casadi-cases 0 --processes 1`, on the core with each adaptation of its temperature solve at the injection cell undone in turn | The adaptations' effect (principle 7) | The chord iteration's slope saves 2 to 3% of the chord fallbacks and no measurable time; the widened bracket changes nothing on these cases. About 4 minutes per variant |
 
+## Feature 022: the gas-rate inflow
+
+Scripts behind `../../specs/features/022-gas-rate-inflow.md`, run on 2026-11-06 on the branch `feature/022-gas-rate-inflow` (`develop` at `7ba717d` with the feature; Python 3.14, casadi 3.8.1), with 24 CPUs shared with other work. Every well is synthetic: the sampler redesign's draft draws (R3, as R6 revised them), whose scripts `sampler_draft_draws.py`, `sampler_draft_samples.py` and `sampler_prototype.py` are on the branch `sampler-redesign` (used as committed at `8e6c175`; `--draws` names their directory until that branch is merged). The draw-only measurements of the spec's design are `gas_inflow_shapes.py`, on that branch.
+
+| Script | What it shows | Result |
+|---|---|---|
+| `gas_inflow_wells.py 2000 --draws DIR --processes 10 --out OUT.parquet` | Acceptance 8: the 715 gas and condensate wells of the first 2000 draws, each at its first sol-2 sample, on both backends, with the interim productivity index and with Forchheimer's inflow from R3's $a$ and $b$: operating points, roots, choked, non-finite $R$, rates against the AOF and the erosional velocity, the backends against each other, and the time per case | Operating points: 672 of 715 on the core with either inflow, 658 and 659 on the CasADi backend; the two the core loses with Forchheimer have no root in the model. The gas rate falls to 0.76 of the index's at the median and stays below the AOF; choked 41.5% against 50.3%; non-finite $R$ 3.8% against 17.3%; two roots in a third of the cases with either. The CasADi search misses the operating point, a deep-drawdown stable root the core finds, in 16 and 14 cases. No change in cost. About 25 minutes on 10 processes |
+| `gas_inflow_wells.py --report OUT.parquet` | The report again, without solving | |
+| `scripts/verification/compare_backends.py OUT.json --per-configuration 20 --configurations "v1.0.0+forchheimer" "develop+forchheimer" "develop+gas well" --processes 12` | Acceptance 6: the backends on the new comparison groups | 60 of 60 cases pass Step 9's rule; one root missed by the core where the slip law has several void fractions. About 40 s |
+
 ## Validity ranges
 
 The measurements behind `../../specs/model/validity.md`, run on 2026-10-29 on `develop` at `8874b7f` (Python 3.14), on the Rust core with 8 processes. `validity_ranges.py run` solves wells of `develop`'s sampler (seed 2026) at their nominal operating point and two sampled ones, as `gor_cap_wells.py` does, and records each correlation's inputs at every grid point of each operating point; `summary` compares them with the published ranges in its `RANGES`.
