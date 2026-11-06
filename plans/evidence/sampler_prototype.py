@@ -58,9 +58,11 @@ from sampler_draft_samples import (
     P_OPEN,
     P_OPEN_SET,
     P_SMALL,
+    REDRAW_SMALL,
+    REDRAW_STEP,
+    STEP,
     PR_DRIFT,
     RATIO_DRIFT,
-    STEP,
     U_MIN,
     WLR_MAX,
     Life,
@@ -526,18 +528,19 @@ class NsolWell:
 
 
 def nsol2_redraw(r, planned, lift_on, w_max, p_s_nom, dp_fl):
-    """D-83: a redraw keeps the date and its state, and changes both controls by D-47's set-point change from the
-    planned value (the lift gas only where lift is installed), and the separator pressure as D-39. Every draw is made
-    whatever its branch."""
-    small_u, step_u, open_u, new_u = r.random(), r.uniform(-STEP, STEP), r.random(), r.random()
-    small_w, step_w, off_w, new_w = r.random(), r.uniform(-STEP, STEP), r.random(), r.random()
-    if small_u < P_SMALL:
+    """D-83: a redraw keeps the date and its state, and changes both controls from the planned value by R4's
+    set-point change (a step of at most 0.2 with probability 0.6, else a redraw; not D-47's smaller steps as ruled,
+    which leave a redraw too near a set point that does not flow), the lift gas only where lift is installed, and the
+    separator pressure as D-39. Every draw is made whatever its branch."""
+    small_u, step_u, open_u, new_u = r.random(), r.uniform(-REDRAW_STEP, REDRAW_STEP), r.random(), r.random()
+    small_w, step_w, off_w, new_w = r.random(), r.uniform(-REDRAW_STEP, REDRAW_STEP), r.random(), r.random()
+    if small_u < REDRAW_SMALL:
         u = reflect(planned['u'] + step_u, U_MIN, 1.0)
     else:
         u = 1.0 if open_u < P_OPEN_SET else U_MIN + (1 - U_MIN) * new_u
     w_lg = planned['w_lg']
     if lift_on:
-        if small_w < P_SMALL:
+        if small_w < REDRAW_SMALL:
             w_lg = reflect(planned['w_lg'] + step_w * w_max, 0.0, w_max)
         else:
             w_lg = 0.0 if off_w < P_LIFT_OFF else w_max * new_w

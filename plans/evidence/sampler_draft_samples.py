@@ -52,6 +52,7 @@ N_OP, N_TESTS, N_SWEEP = 160, 8, 5  # operating samples, test periods, samples p
 P_OPEN_SET = 0.05  # Share of choke set points at fully open, D-47
 P_CHANGE = (0.5, 0.95)  # Per-operating-sample probability of a set-point change, log-uniform per well, D-47 as ruled
 P_SMALL, STEP = 0.9, 0.1  # A change is a small step of at most +-0.1 with probability 0.9, else a redraw, D-47
+REDRAW_SMALL, REDRAW_STEP = 0.6, 0.2  # A redrawn slot's change of the controls, R4's set-point change as D-83 has it
 
 
 # --- Shared helpers -------------------------------------------------------------------------------------------------
