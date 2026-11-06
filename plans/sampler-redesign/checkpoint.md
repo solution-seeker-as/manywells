@@ -236,6 +236,8 @@ In each group the items that need judgement come first, then the entries that ca
 - **Shape.** Draw the permeability by well type, and set each type's median and spread on the rework's pilot against these rows, keeping the support wide (coverage first): subsea wells against the GoM's deep-water subsea wells and Brazil's pre-salt, platform wells against the GoM shelf, its deep-water platforms and Brazil's post-salt [own analysis of BOEM's OGOR-A production and ANP's production by well].
 - **Top end, by physics.** Redraw a well whose design rate exceeds the 7 in tubing's erosional capacity, as for gas (D2): 7,700 to 17,700 m³/d of wellhead mixture for $C$ of 100 to 150 (`erosional_capacity.py`), of the order of the best months on public record [own analysis of BOEM's OGOR-A production and ANP's production by well: well peak].
 
+**Ruling:** Bjarne, 2026-11-06: permeability by well type, set on the rework's pilot against the per-well rates; the erosional capacity as a check only, a redraw added only if the flagged share stays above a few percent (D-100). Keep the method simple.
+
 #### D2 · Gas wells' rates, and the non-Darcy coefficient (D-62, D-23, D-61)
 
 **Question.** The core gas and condensate wells make 0.14 / 0.90 / 3.1 million Sm³/d (P10 / P50 / P90), 83% above 270,000 Sm³/d, against the GoM gas wells' mean of 32,700 Sm³/d and 2.3% above 270,000 (R6, Realism; [WP §5]). D-62 would raise them further. What should set the gas wells' rates?
@@ -255,6 +257,8 @@ Per well, the share of gas wells above 270,000 Sm³/d at their median runs from 
 - **The cap, by physics.** D-25's own rule already finds the design rate above the largest tubing's erosional capacity in 6% of the draft's gas wells and 12% of its condensates (21% of its volatile oils, 7% of its black oils), and keeps them in the largest tubing (`sampler_draft_draws.py`). 9-5/8 in tubing carries 2.4 to 11 million Sm³/d at the erosional velocity, over wellhead pressures of 30 to 300 bar and $C$ of 100 to 150 (`erosional_capacity.py`). Redraw the permeability of a well above its capacity, in place of a cap at a record. The best months on public record and Norway's best field-year per well lie inside that capacity [own analysis of BOEM's OGOR-A production, ANP's production by well (well peak) and Sodir's FactPages (NCS gas fields)].
 - **Shape.** As for oil (D1), draw the gas classes' permeability by well type, and set the medians on the rework's pilot with feature 022 against these rows, keeping the support down to the weak wells near liquid loading.
 
+**Deferred:** Bjarne, 2026-11-06: wait for feature 022 (R9), then decide D2 on gas rates measured with the real inflow.
+
 #### D3 · The economic floor and its margin (D-34, D-50)
 
 **Question.** Drop a well whose best rate is below half its floor (0.8 Sm³/d of oil equivalent onshore and on platforms, 4 Sm³/d subsea)?
@@ -267,7 +271,9 @@ Per well, the share of gas wells above 270,000 Sm³/d at their median runs from 
 
 **Recommendation** (revised 2026-11-05, from the per-well data). Half the floor for platform and onshore wells, whose stopped wells' low final rates sit near it. Raise the subsea floor towards the stopped subsea wells' low final rates, a design value of about 20 Sm³/d of oil equivalent with half of it as the margin [own analysis of BOEM's OGOR-A production (GoM deep water subsea, final_oil_equivalent_rate) and ANP's production by well (offshore pre-salt)]. Wells also stop for water, sand or a failed completion, so a final rate is an upper bound on the economic floor; the low percentiles are the evidence used.
 
-**Bulk-approvable:**
+**Ruling:** Bjarne, 2026-11-06: half the floor for platform and onshore wells; the subsea floor raised to about 20 Sm³/d of oil equivalent, half of it the margin (D-34, D-50).
+
+**Bulk-approvable** (Bjarne, 2026-11-06: approved; D-21 ruled with B1):
 
 - D-21 · Drains' and slant wells' productivity factors. *Not bulk-approvable as drafted* (2026-11-06, `drain_friction.py`, B1). Drop the cap of 6: $J = J_\text{Joshi}\thinspace\eta$, with Joshi's index on a drainage area that grows with the drain and the friction efficiency $\eta$ of Dikken's model in closed form, the liner taken as the tubing, at the design rate. For gas drains, replace the placeholder factor of 1.5 to 4 on $kh$, which physics does not support, by the drain's Forchheimer coefficients: $a$ over Joshi's ratio, and $b$ scaled by $(I_\text{ani} h/L)^2$ plus the friction term. The slant factor stays a placeholder (Economides et al.'s §4-6 and §5-4, Section 6).
 - D-22 · Vogel where the saturation pressure is at least 0.8 of $p_r$ and the water cut below 0.6, else a productivity index.
@@ -295,7 +301,9 @@ Per well, the share of gas wells above 270,000 Sm³/d at their median runs from 
 
 **Recommendation** (revised 2026-11-06, from the well tests): $U(0.15, 0.6)$, which covers both the textbook beans and v1's range, with the bean capped at 4 in (101.6 mm), the largest choke tested in the GoM's groups [own analysis of BSEE's well tests: well, largest test choke]. Measure it in the rework after D1 and D2 have lowered the gas wells' rates and tubing, and check the beans in mm against these rows by setting and well kind. The rates' fix belongs to D1 and D2, not to the beans. The UK's per-well data show both behaviours of the rate against the opening [own analysis of NSTA's production by well].
 
-**Bulk-approvable:**
+**Ruling:** Bjarne, 2026-11-06: $U(0.15, 0.6)$ with the bean capped at 4 in (D-27).
+
+**Bulk-approvable** (Bjarne, 2026-11-06: approved):
 
 - D-25 · Tubing from the initial design rate and the erosional velocity. The draws find the design rate above the largest tubing's capacity in 7%, 21%, 12% and 6% of the black oils, volatile oils, condensates and gases, which keep the largest tubing; D1 and D2 propose to redraw them (2026-11-05, `erosional_capacity.py`).
 - D-26 · Roughness by life stage.
@@ -316,6 +324,8 @@ Per well, the share of gas wells above 270,000 Sm³/d at their median runs from 
 
 **Recommendation** (revised 2026-11-05, from the per-well data). Keep the static check: the GoM's oil wells show the same fall with GOR. The fall is milder there, so raise the drawn lift shares of the upper GOR quartiles until R6's ratio of the top quartile's lifted share to the bottom's matches the GoM's platform wells' [own analysis of BOEM's OGOR-A production: gas_lifted by producing GOR quartile]. Keep D-28's stage shares, which lie within the GoM's lifted shares by years on production for platform wells, and the gas classes' shares, which are near the GoM's. The GoM lifts few subsea wells, but that is one region's practice, and ANP's data carry no lift method, so keep the subsea wells' shares.
 
+**Ruling:** Bjarne, 2026-11-06: as drafted; keep it simple and do not lean on the GoM's data (D-28).
+
 #### F2 · A natural oil well that cannot flow is lifted (D-101), and the lift capacity's floor (D-31)
 
 **Question.** Accept D-101, and raise the capacity's lower bound from 0.02 kg/s?
@@ -329,6 +339,8 @@ Per well, the share of gas wells above 270,000 Sm³/d at their median runs from 
 **In real wells** (2026-11-06). Petrobras' 3W satellite oil wells, subsea and gas-lifted, inject far more lift gas than R6's lifted wells can: R6's subsea capacity at the median is about a tenth of 3W's median injection rate, and R6's cap of 2.0 kg/s lies below 3W's highest well medians [own analysis of Petrobras' 3W Dataset: lift_gas_rate; `draws_r6.csv`]. The floor of 0.1 kg/s lies below nearly all of 3W's lifted wells. 3W publishes no production rates, so its injected GLR is unknown.
 
 **Recommendation** (revised 2026-11-06): accept D-101 and raise the floor to 0.1 kg/s, measured in the rework. Raise the capacity's cap for subsea wells to about 3.5 kg/s, and check the lifted subsea wells' capacities against 3W's injection rates once D1 has raised the subsea wells' design rates, on which the capacity scales.
+
+**Ruling:** Bjarne, 2026-11-06, decided from data at his ask: D-101 approved; the lift-gas capacity from 0.1 to 3.5 kg/s for every well type, with the injected GLR at capacity widened to 30 to 1000 Sm³/Sm³ times the design liquid rate (D-31).
 
 **Bulk-approvable:**
 

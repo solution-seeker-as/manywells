@@ -220,7 +220,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** design liquid rates of 33 / 451 / 6411 Sm³/d (P10 / P50 / P90) for oils: wide, and high for a population counted by wells next to the Gulf's 2024 brackets (52% of oil wells at or below 16 Sm³/d o.e.), but solved rates are lower; R6 checks (D-24).
 - **Needs sign-off:** yes (sampling).
 - **Used by:** Productivity; Inflow; Tubing; Gas lift: capacity.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint D1): as drafted, with D-100's permeability by well type.
 
 ### D-21 · Horizontal drains and slant: the productivity's factor
 
@@ -240,7 +240,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** Vogel holds for solution-gas drive below the bubble point and not where water flows too (`validity.md`, note 10); 64% of core oils get it.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** Inflow; Mapping.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, groups D and E's bulk lists): approved.
 
 ### D-23 · Gas and condensate wells: Forchheimer's parameters, and the interim inflow
 
@@ -250,7 +250,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** AOF 0.12 / 1.5 / 8.1 million Sm³/d (P5 / P50 / P95); 11% of gas wells' design rates exceed the largest tubing's erosional rate, as "a strong gas well will never produce to capacity" (Golan and Whitson 1991, Preface). The interim makes the gas rate linear in drawdown.
 - **Needs sign-off:** yes (sampling; the feature spec is R5's and needs approval before implementation, and widening `v2.0.0`'s check needs Bjarne's ruling).
 - **Used by:** Productivity; Inflow; Mapping; R5; R6's interim prototype.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, groups D and E's bulk lists): approved.
 
 ### D-24 · The rate target is a check, not a draw
 
@@ -260,7 +260,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** the brackets are annual averages over calendar days of a mature shelf, so they sit low for a global offshore population.
 - **Needs sign-off:** yes (sampling; the check's tolerance is R6's).
 - **Used by:** Checks; R6.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, groups D and E's bulk lists): approved.
 
 ### D-25 · Tubing from the design rate
 
@@ -270,7 +270,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** no public distribution of tubing sizes is in hand. Late-life wells keep their initial tubing, which is how they load up.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** Tubing; Choke; Heat transfer; Gas lift: capacity.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, groups D and E's bulk lists): approved.
 
 ### D-26 · Roughness by life stage
 
@@ -280,7 +280,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** the examples in hand give 30 and 46 µm; Farshad and Rieke (2006) are not in hand.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** Roughness.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, groups D and E's bulk lists): approved.
 
 ### D-27 · The choke: Simpson only, sized to the tubing
 
@@ -290,7 +290,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** no public data on bean sizes or profiles over wells; the draw contains v1's range.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** Choke; R4's choke draw.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint E1): $\beta \sim U(0.15, 0.6)$ of the tubing's diameter, with the fully open bean capped at 4 in (101.6 mm), the largest choke tested in the GoM's groups [own analysis of BSEE's well tests]; checked in mm against the tests after D1 and D2.
 
 ### D-28 · Who gets gas lift
 
@@ -300,7 +300,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** core oils 32% lifted, 58% late in life; gas lift is the main lift offshore, but no count of lifted wells is in hand.
 - **Needs sign-off:** yes (sampling; Bjarne's goal 5).
 - **Used by:** Gas lift; R4's lift-gas draw.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint F1): as drafted: the static-column check and the stage shares, with no tuning of the shares by GOR quartile to the GoM's. Keep it simple and do not lean on one region.
 
 ### D-29 · The injection depth
 
@@ -330,7 +330,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** the examples in hand inject 27 to 77 Sm³/Sm³, and up to 184,000 Sm³/d per well (von Flatern 2015); total GLRs of 430 to 800 Sm³/Sm³ in small tubing are optima. The draws give 0.02 / 0.38 / 2.0 kg/s.
 - **Needs sign-off:** yes (sampling; Bjarne's goal 5).
 - **Used by:** Gas lift: capacity; R4's lift-gas draw.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint F2), decided from data at his ask: the capacity's floor raised to 0.1 kg/s and its cap to 3.5 kg/s for every well type (lifted wells' injection reaches past 2.0 kg/s on platforms as well as subsea; 3W's subsea wells reach about 3.4 kg/s [own analysis of Petrobras' 3W Dataset]), and the injected GLR at capacity widened to 30 to 1000 Sm³/Sm³ times the design liquid rate, since lifted wells' capacities spread wider than 50 to 400.
 
 ### D-32 · The heat-transfer coefficient
 
@@ -340,7 +340,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** 3.2 / 6.3 / 11.9 W/(m² K), inside the 3 to 25 implied by Hasan and Kabir's examples; v1's range overstates heat loss for wells older than a month.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** Heat-transfer coefficient.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, groups D and E's bulk lists): approved.
 
 ### D-33 · Heat capacities from correlations
 
@@ -350,7 +350,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** $c_{pg}$ of 2513 to 3178 J/(kg K) against today's 2225; the gas's scaling is an assumption until a correlation for natural gases is in hand.
 - **Needs sign-off:** yes (sampling; a Goals' fluid constant).
 - **Used by:** Heat capacities.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, groups D and E's bulk lists): approved.
 
 ### D-34 · The economic floor
 
@@ -360,7 +360,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** stripper limits of 10 bbl/d and 60 Mcf/d (EIA 2025, p. 10); offshore structures' revenue thresholds (Kaiser 2011, abstract only). Before any solve 2.0% of the drawn wells lie below half the floor.
 - **Needs sign-off:** yes: the margin is Bjarne's (the Goals), and the filter is part of the dataset design (R7).
 - **Used by:** The economic floor; R4; R7.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint D3): the floor as drafted for platform and onshore wells; the subsea floor raised to about 20 Sm³/d of oil equivalent, from the final rates of stopped subsea wells [own analysis of BOEM's OGOR-A production and ANP's production by well].
 
 ### D-35 · Truncations at the model's and the data's limits
 
@@ -522,7 +522,7 @@ Entries D-37 to D-56 are R4's (2026-10-30), for the sample part of `sampling-dra
 - **Realism:** the floor's sources are R3's [WP §11]. Before any solve 2.0% of R3's wells have a design rate below half the floor; the solved share, and the lives the floor cuts, are R6's.
 - **Needs sign-off:** yes (the margin is Bjarne's, and the filter is part of the dataset design, R7).
 - **Used by:** Producibility filter; The end of a life; D-49; D-55.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint D3): a well whose best rate is below half its floor is dropped, with D-34's raised subsea floor.
 
 ### D-51 · SMP-28's three filters are dropped, and §1.11 lapses
 
@@ -869,7 +869,7 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Realism:** the rate is set by the productivity index (Spearman 0.84 between a core offshore oil well's median-sample rate and its $J$) and by the tubing sized for it (0.82). Reservoir permeabilities have medians of 10 to 570 mD by porosity (Ehrenberg and Nadeau 2005, Table 1), so 15 mD lies at the low end of the reservoirs: it stands for a well's effective permeability, which also carries what the model lacks, such as the oil's relative permeability below the bubble point and with water, a partial completion, and operating limits that hold a well below its potential. EIA's brackets are calendar-day averages of a mature shelf, and an offshore Norwegian well makes at least 10,000 bbl/d (Golan and Whitson 1991, Preface), so the median is not matched to the Gulf's: the target is the share above 1018 Sm³/d. Measured after the change (R6's `sol-2` pilot, seed 2026): 22.7% of the core offshore oil wells above 1018 Sm³/d and 11.6% above 2035 Sm³/d, a median of 197 and a mean of 822 Sm³/d; gas and condensate wells 0.9 million Sm³/d at the median (1.8 before); 5.5% of the core wells dropped as not producible (3.7% before). The share above 1018 Sm³/d is still four times EIA's: how close to come is Bjarne's call (`r6-measurements.md`, For Bjarne's ruling).
 - **Needs sign-off:** yes (sampling; it revises D-20 against D-24's check).
 - **Used by:** `sampling-draft.md`, Productivity; `sampler_draft_draws.py` (`PERM`); every rate in `r6-measurements.md`.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint D1): the permeability drawn by well type, each type's median and spread set on the rework's pilot against the per-well rates, keeping the support wide. The tubing's erosional capacity stays a check: D-25's test flags a well whose design rate exceeds the largest tubing's capacity, the rework's pilot measures the flagged share, and a redraw is added only if it stays above a few percent. Keep the method simple.
 
 ### D-101 · `sol-2`: an oil well that cannot flow at its best rate is lifted, not dropped
 
@@ -879,7 +879,7 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Realism:** an operator lifts an oil well that stops flowing rather than abandon it (Golan and Whitson 1991, Example 4.11; gas lift is the main lift offshore, [WP §9]), and `nsol-2` already does so by D-49's rule 2 (D-84). The static check compares $p_r$ with a no-slip column at mean conditions and leaves out friction and slip. In the draft's pilot it left 9 of 380 core wells natural (2.4%) that then failed the best rate: 7 oil wells with no operating point at a fully open choke (subsea wells in mid-life at $p_s$ of 37 to 72 bar, and late wells at water cuts of 0.74 to 0.94) and 2 below half the floor. In R6's pilot the rule lifted 22 wells (14 core), of which 8 were kept (6 core); 13 fail with lift too, 12 of them with a lift capacity of 0.02 to 0.04 kg/s, at or near D-31's lower bound, because it scales with a small design rate.
 - **Needs sign-off:** yes (sampling). It makes the lift label of these wells depend on a solve, against R3's rule that no label does (Labels); the label's own value marks them.
 - **Used by:** `sampling-draft.md`, Gas lift: assignment, Producibility filter; `sampler_prototype.py` (`sol2_well`).
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint F2): approved: a natural oil well that cannot flow is lifted, as operators do.
 
 ### D-102 · A scan with non-finite points and no root has no operating point
 
