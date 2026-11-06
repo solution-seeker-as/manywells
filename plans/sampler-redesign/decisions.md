@@ -140,7 +140,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** 20.4% above 0.6 psi/ft, near the Gulf's share by wells; gradients by class within 0.008 bar/m of BOEM's medians [own analysis of BOEM's sands atlas]. The lithostatic gradient has no source in hand.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** Initial reservoir pressure; Bjarne's goal 3.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, groups B and C's bulk lists): approved.
 
 ### D-13 · The geothermal gradient
 
@@ -150,7 +150,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** medians by class within 6 K of BOEM's [own analysis of BOEM's sands atlas]; 17.1% above 395 K (12.9% of large-field reservoirs). The North Sea's gradients are uncorrected logging values, which run low.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** Geothermal gradient and reservoir temperature.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, groups B and C's bulk lists): approved.
 
 ### D-14 · Surface temperature by well type
 
@@ -160,7 +160,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** the profile meets the four seabed values of [WP §2] within about 2 K; deep-water platforms' risers get too warm an ambient under THM-4's linear profile.
 - **Needs sign-off:** yes (sampling; a Goals' new draw).
 - **Used by:** Surface temperature; the gradient's bounds; the lift-gas temperature.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, groups B and C's bulk lists): approved.
 
 ### D-15 · Separator conditions and the nominal downstream pressure
 
@@ -170,7 +170,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** first stages at 41 to 83 bar (Guo et al. 2007), lower stages at 20 and 2 bar (weak). The separator's correction raises Vazquez–Beggs's $R_{so}$ by about 30% at 40 bar against standard conditions, so it shifts the black oils' GORs.
 - **Needs sign-off:** yes (sampling; separator conditions are a Goals' fluid constant).
 - **Used by:** Separator conditions; Saturation pressure and the initial GOR; Tubing; Gas lift; Bjarne's goal 2.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group C's bulk list): approved with the revision for subsea wells: a larger flowline-and-riser loss and a higher truncation of $p_{s,\text{nom}}$ than 120 bar, set on the rework's pilot against 3W's subsea tree pressures.
 
 ### D-16 · Oil and gas gravities by class
 
@@ -200,7 +200,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** 46.7% of core wells lie below hydrostatic and 30.1% by more than 10%; late depletion wells reach the Gulf's abandonment $p/Z$ range [own analysis of BOEM's sands atlas]; late wells with support have a median water cut of 0.77, near the Norwegian oil fields' at 10 to 20 years [own analysis of Sodir's FactMaps]. No public count of wells by stage is in hand.
 - **Needs sign-off:** yes (sampling; it meets Bjarne's goal 1 and the Goals' life stage).
 - **Used by:** Drive and life stage; Reservoir state; Separator; Roughness; Heat transfer; R4's drift and `nsol-2` trends.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint C1): stage shares 0.25 / 0.40 / 0.35 and the state tables, with the water cut's upper tail thickened towards 0.98 and the initial stage's depletion range widened to $U(0.85, 1.0)$.
 
 ### D-19 · Producing GOR below the saturation pressure
 
@@ -210,7 +210,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** Golan and Whitson's (1991) Example 4.11 rose to 8.3 times its initial GOR at 0.58 of initial pressure, then fell; Norwegian condensate fields' producing GOR late in life is in [own analysis of Sodir's FactMaps]. One example only.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** Reservoir state; R4's `nsol-2` GOR trend.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint C1): the producing GOR below the saturation pressure from the material balance of solution-gas drive (Muskat; Craft and Hawkins 1991, Ch. 9) on the well's own black oil, with Fig. 9.16's $k_g/k_o$ in the core and the book's range of curves in the tail, chosen by the per-well GOR data; $R_{si}$ wherever $p_r \ge p_\text{sat}$; no cap (`solution_gas_drive.py`). Replaces the linear factor of 2 to 15.
 
 ### D-20 · Productivity from permeability, pay, viscosity and skin
 
@@ -230,7 +230,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** the draws give $J_H/J_V$ of 1.8 / 3.9 / 6.0, against 2 to 5 for a 610 m drain in Economides et al.'s Fig. 2-10. The gas factor and the slant factor are placeholders.
 - **Needs sign-off:** yes (sampling; it is how the inflow stands for the drain under Bjarne's ruling).
 - **Used by:** Productivity; Inflow.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint B1 and group D): the physical form, kept simple: a drain's PI is Joshi's on a drainage length that grows with the drain, times the friction efficiency of Dikken's model in closed form, $\eta = (1 + \Pi/1.5)^{-1/3}$, with the liner taken as the tubing and no cap; a gas drain's Forchheimer coefficients scaled by the same physics (`drain_friction.py`). Drains $U(300, 2500)$ m (D-104). The slant factor stays a placeholder.
 
 ### D-22 · Oil wells' inflow: Vogel or a productivity index
 
@@ -370,7 +370,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** the 950 bar bound cuts into the central 90% of the pressure draw in 6.8% of wells, the temperature bound in 13.2%; HPHT wells beyond exist but are rare; heavy oils (few of the Gulf's lie below 22 °API [own analysis of BOEM's sands atlas]) need a table.
 - **Needs sign-off:** yes (sampling; `validity.md`'s ranges are signed off, and these bounds choose where the sampler stops).
 - **Used by:** Initial reservoir pressure; Geothermal gradient; Geometry; Oil and gas at standard conditions.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group C's bulk list): approved, the measured depth kept at 9342 m, the edge of Hasan et al.'s data, after 9000 m was considered.
 
 ### D-36 · Volatile oils and condensates as tables; wet gases as black oil; the interim mapping
 
@@ -462,7 +462,7 @@ Entries D-37 to D-56 are R4's (2026-10-30), for the sample part of `sampling-dra
 - **Realism:** the GOR rises below the bubble point (McCain 1990, pp. 151, 153). R3's form reaches at most 6.6 times $R_{si}$ where the example reached 8.3. Draws: core oils' $R_{go}/R_{si}$ medians 1.01, 1.40 and 1.54 over the life, P95 5.6 at the end.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** `nsol-2`, Gas–oil ratio.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (with checkpoint C1): the GOR along the life is D-19's material-balance factor at $p_r(t)/p_\text{sat}$; no late fall, which the physics puts below every core state.
 
 ### D-45 · `nsol-2`'s well properties that age, and the fixed inflow model
 
@@ -592,7 +592,7 @@ Entries D-37 to D-56 are R4's (2026-10-30), for the sample part of `sampling-dra
 - **Realism:** S wells are about half as common as J wells among the Gulf of Mexico's producing boreholes, and about as common in Dutch offshore platform gas wells [own analysis of BOEM's directional surveys and NLOG's deviation surveys]; a third of the deviated class sits between.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** Geometry.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, groups B and C's bulk lists): approved.
 
 Entries of R5, merged from its own file on 2026-11-02. The drafts they belong to are `specs/features/022-gas-rate-inflow.md` (the gas-rate inflow), `fluids-draft.md` (the table fluids) and `spec-changes.md` (the edits to decided specs). *Evidence* is `plans/evidence/gas_inflow_shapes.py` on R3's 703 gas and condensate wells of 2000 (seed 2026), and `plans/evidence/table_fluids.py`, a proof on four of R3's wells and one published fluid; neither solves a well. Every entry needs sign-off: a feature spec is approved before its implementation, and the rest sets part of the new `specs/sampling.md` or changes a decided spec.
 
@@ -900,3 +900,13 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Needs sign-off:** yes (the Goals leave the share to the research; D-6).
 - **Used by:** `sampling-draft.md`, Coverage tail; `sampler_draft_draws.py` (`TAIL_SHARE`).
 - **Ruling:** Bjarne, 2026-11-06 (checkpoint A2): approved: 0.20 of the drawn wells are tail wells, with independent flat draws, and tail wells may take lift and geometry regardless of stage and type.
+
+### D-104 · The wells' shapes from the pooled surveys, uniform over their ranges
+
+- **Step:** the checkpoint (R8), 2026-11-06. Revises the shapes' parameters of `sampling-draft.md`, Geometry, within the classes of D-9; with D-21.
+- **Choice made:** each shape parameter uniform between the pooled 5th and 95th percentiles of the regions in hand: the kickoff below the mudline $U(0.05, 0.75)$ of the TVD below it (a fix: the draft drew it from $0.1L$ with the riser in $L$, so a deep-water platform well could start its build inside the riser); the build rate $U(0.3, 3.6)$ °/30 m; the S wells' drop $U(0.2, 2.2)$ °/30 m and bottom inclination $U(0°, 35°)$; the drains' tangent before landing $U(10°, 65°)$, landing build $U(1.5, 7)$ °/30 m and length $U(300, 2500)$ m; the high-angle tangent wells holding $U(60°, 75°)$ to the bottom, as extended-reach wells do. The deviated class's hold angle stays as drafted. The drains' productivity is D-21's physical form.
+- **Alternatives:** log-normal or Beta draws through the pooled percentiles (typical shapes weighted as the regions in hand); R3's ranges with only the kickoff fix and longer drains.
+- **Realism:** the GoM's and the Netherlands' station surveys [own analysis of BOEM's directional surveys and NLOG's deviation surveys], the UK's equivalent kickoffs and tangents from top- and bottom-hole positions [own analysis of NSTA's wellbore layer], and Norway's MD/TVD [own analysis of Sodir's FactMaps] agree on gentler builds and shallower kickoffs than R3's ranges; the UK and Norway add extended-reach wells whose MD/TVD passes the draft's highly deviated class. A private comparison with field well paths informed the decision.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `sampling-draft.md`, Geometry; R10's `specs/sampling.md`.
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint B1): uniform over the pooled ranges, as above. Keep it simple.

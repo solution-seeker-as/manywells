@@ -182,7 +182,9 @@ In each group the items that need judgement come first, then the entries that ca
 
 **Recommendation** (revised 2026-11-06): adopt the surveys' distributions, truncated to the classes' ranges, and recheck MD within 9342 m and the share of redrawn fits. Draw the kickoff below the mudline, let the high-angle tangent start near 10°, and draw drains $U(300, 2500)$ m, with D-21 revised as in group D. The drainage geometry of long drains (Joshi's area growing with the drain, against a fixed spacing between drains, which raises the upper tail) remains a choice; the first is Joshi's and the recommendation.
 
-**Bulk-approvable:**
+**Ruling:** Bjarne, 2026-11-06: use physics where possible, but keep it simple, and base the shapes on all the surveys in hand, not the GoM's and the Netherlands' alone. Each shape parameter is uniform over its pooled range (D-104): the kickoff below the mudline $U(0.05, 0.75)$ of TVD, the build $U(0.3, 3.6)$ °/30 m, the S wells' drop $U(0.2, 2.2)$ °/30 m and bottom $U(0°, 35°)$, the drains' tangent $U(10°, 65°)$, landing $U(1.5, 7)$ °/30 m and length $U(300, 2500)$ m, and high-angle tangent wells holding $U(60°, 75°)$ to the bottom; D-21 in its simple physical form.
+
+**Bulk-approvable** (Bjarne, 2026-11-06: approved):
 
 - D-57 · S-shaped wells as a third of the deviated class.
 
@@ -204,7 +206,9 @@ In each group the items that need judgement come first, then the entries that ca
 - **GOR** (D-19, D-44; revised 2026-11-06: physics and data decide). The material balance of solution-gas drive (`solution_gas_drive.py`: Muskat's method, Craft and Hawkins 1991, Ch. 9, Eqs. 9.33 to 9.35, checked on the book's Example 9.1 and Ch. 10 history match) on the model's own black oil gives the GOR's shape: it dips to the dissolved gas just below the saturation pressure until the gas can flow, then rises steeply and would fall only below about 0.15 to 0.25 of $p_\text{sat}$, where no core state lies. The draft's linear rise from $p_\text{sat}$ is not that shape. The one free input is the rock's $k_g/k_o$, which moves the rise about fivefold across the book's laboratory curves. The data choose it: with the book's least mobile gas (Fig. 9.16), the late-stage wells' GOR over its initial value has a median of 1 and an upper tail within the span of the real wells' GOR over their first year at 10 to 30 years on production, while the book's more mobile curves put the 90th and 95th percentiles above every region's [own analysis of BOEM's OGOR-A production, ANP's production by well and NSTA's production by well: gor_over_first_year]. The draft has a median too high and a tail too thin. Recommendation: the factor from the material balance per well at $p_r/p_\text{sat}$, with Fig. 9.16's $k_g/k_o$ in the core and the book's range of curves in the tail; $R_{si}$ wherever $p_r \ge p_\text{sat}$, so pressure support needs no rule of its own; no cap, since the curve bounds itself.
 - **Gas depletion.** The UK gas wells' bottomhole and wellhead pressures in their last year lie within R6's ranges [own analysis of NSTA's production by well: well, last year], so the public data ask for no deeper gas depletion.
 
-**Bulk-approvable:**
+**Ruling:** Bjarne, 2026-11-06: stage shares 0.25 / 0.40 / 0.35, with every evidence-based change above: the water cut's tail towards 0.98, the initial depletion range $U(0.85, 1.0)$, and the GOR from the material balance with Fig. 9.16's $k_g/k_o$ in the core and the book's range in the tail (D-18, D-19, D-44).
+
+**Bulk-approvable** (Bjarne, 2026-11-06: approved, D-15 with its subsea revision, D-35 with its MD bound kept at 9342 m):
 
 - D-12 · Overpressure rising with depth; 4% initially underpressured. Norwegian drill-stem tests' bottomhole pressures have an upper tail close to the draws' (2026-11-05) [own analysis of Sodir's FactPages: NCS drill-stem tests, bottomhole_pressure_gradient].
 - D-13 · The geothermal gradient, one log-normal falling with water depth. Norwegian drill-stem tests put the shelf's median gradient near the draws' upper percentile, as its logging temperatures did (2026-11-05) [own analysis of Sodir's FactPages: NCS drill-stem tests, geothermal_gradient].
