@@ -12,7 +12,7 @@ The hydrocarbon PVT of a fluid from a table (feature 018, `specs/features/018-pv
 | solution gas–oil ratio, formation volume factor | $p$ (bar), $T$ (K) | $R_{so}$ (Sm³/Sm³), $B_o$ (–) | yes |
 | gas law, gas density | $p$ (bar), $T$ (K), $\rho_g$ (kg/m³) | row (bar), $\rho_g$ (kg/m³) | yes |
 | oil and gas viscosity, surface tension | $p$ (bar), $T$ (K), $\rho_g$ (kg/m³) | $\mu_o$, $\mu_g$ (Pa s), $\sigma_{go}$ (J/m²) | yes |
-| the table from a flash's phase split | the separation, and $X$, $\rho_L$, $\rho_V$ at the nodes | the table | no |
+| the table from a flash's phase split | the separation, $X$, $\rho_L$, $\rho_V$ at the nodes, and the trace $\delta$ | the table | no |
 | the table at the fluid's GOR | the tables at several GORs, $R_{go}$ | the table | no |
 
 In code, `PVTTable` (`pvt/table.py`) is a `PVTModel` whose `gas_law` is `'table'`; `PVTTableSet` holds the tables of one stream at several GORs. In the Rust core, the fluid's `Pvt::Table` (`rust/src/pvt/fluid.rs`, `table.rs`) holds the table at the fluid's GOR, which `solvers/rust.py` passes it; the core never sees a GOR axis. `PVTTable.read_csv` reads either from a file, and `write_csv` writes one: `# key: value` lines (`rho_o` and `rho_g`, and the free-text `name`, `source`, `separation` and `gor`), then the columns `[gor,] p, T, R_so, B_o, Z[, mu_o, mu_g, sigma]`, one row per node, in Sm³/Sm³, bar, K and SI units.
@@ -23,8 +23,8 @@ In code, `PVTTable` (`pvt/table.py`) is a `PVTModel` whose `gas_law` is `'table'
 
 A grid $p_1 < \dots < p_m$ (bar, $m \ge 2$) and $T_1 < \dots < T_n$ (K, $n \ge 1$), every node $(p_j, T_k)$ present, with $R_{so}$ (Sm³/Sm³), $B_o$ (–) and $Z$ (–) at each, and optionally $\mu_o$, $\mu_g$ (Pa s) and $\sigma_{go}$ (J/m²); and the densities at standard conditions $\rho_o$ and $\rho_{g,\text{sc}}$ (kg/m³) that they refer to.
 
-- **Meaning, by the role in the balances.** Per Sm³ of stock-tank oil, the oil at $(p, T)$ carries the mass $\rho_o + R_{so}\rho_{g,\text{sc}}$ in the volume $B_o$ (PVT-OIL-9), and the free gas has the density $c_\text{bar}\thinspace p/(Z R_s T)$ with $R_s = p_\text{ref}/(\rho_{g,\text{sc}}T_\text{ref})$ (PVT-GAS-2, PVT-GAS-6). A table made from a flash may therefore have $R_{so} < 0$ and $B_o < 1$ where the free gas carries components that are oil at standard conditions (PVT-TAB-6). Above the fluid's bubble point $R_{so}$ is the table's GOR, and $Z$ is that of the gas that would appear first, so that the column is continuous.
-- **Checks**, raising `ValueError` when the table is built: finite values; strictly increasing grids; $B_o > 0$, $Z > 0$, and $\mu_o, \mu_g, \sigma_{go} > 0$ where given; $R_{so}$ nondecreasing in $p$ at every $T$, to rounding (a fall of at most $10^{-12}\max(1, \lvert R_{so}\rvert)$, which PVT-TAB-7's arithmetic can make where $R_{so}$ is flat); and $R_{so} \ge 0$ unless the table has $\mu_o$ and $\sigma_{go}$, because the live-oil corrections PVT-OIL-11 and PVT-OIL-12 are undefined below $R_{so} = -17.8$ Sm³/Sm³ and untested below 0.
+- **Meaning, by the role in the balances.** Per Sm³ of stock-tank oil, the oil at $(p, T)$ carries the mass $\rho_o + R_{so}\rho_{g,\text{sc}}$ in the volume $B_o$ (PVT-OIL-9), and the free gas has the density $c_\text{bar}\thinspace p/(Z R_s T)$ with $R_s = p_\text{ref}/(\rho_{g,\text{sc}}T_\text{ref})$ (PVT-GAS-2, PVT-GAS-6). A table made from a flash may therefore have $R_{so} < 0$ and $B_o < 1$ where the free gas carries components that are oil at standard conditions (PVT-TAB-6). Above the fluid's bubble point $R_{so}$ is the table's GOR, and $Z$ is that of the gas that would appear first, so that the column is continuous. Above a dew point the stream is all vapour; a table from a flash keeps a trace of liquid there (PVT-TAB-6), so that $B_o > 0$.
+- **Checks**, raising `ValueError` when the table is built: finite values; strictly increasing grids; $B_o > 0$, $Z > 0$, and $\mu_o, \mu_g, \sigma_{go} > 0$ where given; and $R_{so} \ge 0$ unless the table has $\mu_o$ and $\sigma_{go}$, because the live-oil corrections PVT-OIL-11 and PVT-OIL-12 are undefined below $R_{so} = -17.8$ Sm³/Sm³ and untested below 0; the oil phase's mass per Sm³ of stock-tank oil positive, $\rho_o + R_{so}\rho_{g,\text{sc}} > 0$, at every node; and the free gas's density, $p/Z$, strictly increasing in $p$ at every $T$. $R_{so}$ may fall as the pressure rises: below a gas condensate's dew point, liquid condenses as the pressure falls (retrograde condensation), so the oil phase holds more of the stream at the lower pressure.
 - **GOR axis** (optional). Tables of one stream at GORs $R_1 < \dots < R_l$, each with a grid of its own, all with the same $\rho_o$ and $\rho_{g,\text{sc}}$: the stream recombined from the same separator gas and oil, so that every GOR is on the same tie line at standard conditions.
 
 ### PVT-TAB-2 · Interpolation
@@ -63,7 +63,7 @@ Python only; no row uses it. Given the stream's separation (stock-tank oil densi
 
 $$R_{so} = R_{go} - \frac{X m}{\rho_{g,\text{sc}}}, \qquad B_o = \frac{(1 - X) m}{\rho_L}, \qquad Z = \frac{c_\text{bar}\thinspace p}{\rho_V R_s T}.$$
 
-At the GOR $R_{go}$, PVT-TAB-3 and PVT-TAB-4 then give the flash's phase mass rates and phase densities exactly at the nodes: without water or lift gas, PVT-OIL-13 gives $w_g/(w_g + w_l) = (R_{go} - R_{so})\rho_{g,\text{sc}}/m = X$. Where the stream is all liquid, the caller gives $\rho_V$ of the gas that would appear first (PVT-TAB-1).
+At the GOR $R_{go}$, PVT-TAB-3 and PVT-TAB-4 then give the flash's phase mass rates and phase densities exactly at the nodes: without water or lift gas, PVT-OIL-13 gives $w_g/(w_g + w_l) = (R_{go} - R_{so})\rho_{g,\text{sc}}/m = X$. Where the stream is all liquid, the caller gives $\rho_V$ of the gas that would appear first (PVT-TAB-1). Where the flash's liquid mass fraction $1 - X$ is below $\delta$, all vapour above a dew point or below a lower one, $X$ is set to $1 - \delta$, and the caller gives $\rho_L$ of the liquid at the nearest saturation point of the same temperature; `from_phase_split` takes $\delta$, $10^{-4}$ by default. The table then carries a liquid of mass $\delta$ times the stream's where the stream has none, which PVT-OIL-13 keeps as liquid: at $10^{-4}$, less than a water–gas ratio of 2 Sm³ per 10⁶ Sm³ carries.
 
 ### PVT-TAB-7 · The table at the fluid's GOR
 
@@ -176,10 +176,10 @@ Generated by `specs/tools/make_develop_vectors.py` from develop (casadi 3.8.1): 
 
 | ID | Paper | v1.0.0 code | Checked by |
 |---|---|---|---|
-| PVT-TAB-1 | — | — | property: tests/test_pvt_table.py (each check raises, and the CSV round trip) |
+| PVT-TAB-1 | — | — | property: tests/test_pvt_table.py (each check raises, a retrograde table builds, and the CSV round trip) |
 | PVT-TAB-2 | — | — | vectors; property: tests/test_pvt_table.py (exact at the nodes, the formula between them, clamped outside, one temperature) |
 | PVT-TAB-3 | — | — | vectors; property: tests/test_pvt_table.py (mass conservation of the phase rates) |
 | PVT-TAB-4 | — | — | vectors; property: tests/test_pvt_table.py (the row is zero at the density) |
 | PVT-TAB-5 | — | — | vectors; property: tests/test_pvt_table.py (the correlations where columns are missing) |
-| PVT-TAB-6 | — | — | property: tests/test_pvt_table.py (a phase split from the black oil gives back its columns) |
+| PVT-TAB-6 | — | — | property: tests/test_pvt_table.py (a phase split from the black oil gives back its columns, and the vapour nodes keep a trace of liquid) |
 | PVT-TAB-7 | — | — | property: tests/test_pvt_table.py (exact at the axis's GORs, linear between, refused outside) |

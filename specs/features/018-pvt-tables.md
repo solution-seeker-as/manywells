@@ -18,7 +18,7 @@ Each decision as recommended; the sections below give the reasons and the measur
 
 Three details of phase B, each as recommended (Bjarne, 2026-10-28):
 
-10. **$R_{so}$ nondecreasing in $p$, to rounding.** PVT-TAB-1's check accepts a fall of at most $10^{-12}\max(1, \lvert R_{so}\rvert)$. PVT-TAB-7's arithmetic makes falls of about $10^{-14}$ where $R_{so}$ is flat above a bubble point, as a user's own tool may. Rejected: an exact check, with `at_gor` forcing its result monotone by a running maximum.
+10. **$R_{so}$ nondecreasing in $p$, to rounding.** PVT-TAB-1's check accepts a fall of at most $10^{-12}\max(1, \lvert R_{so}\rvert)$. PVT-TAB-7's arithmetic makes falls of about $10^{-14}$ where $R_{so}$ is flat above a bubble point, as a user's own tool may. Rejected: an exact check, with `at_gor` forcing its result monotone by a running maximum. Lapsed on 2026-11-06: Bjarne's ruling on the sampler redesign's decision D-64 (its checkpoint item K1) drops the check on the order of $R_{so}$, so that a gas condensate's table builds, and adds two checks that hold for every fluid (`specs/model/pvt/table.md`, PVT-TAB-1).
 11. **A column only one of two neighbouring GOR tables has is dropped** from the table between them (PVT-TAB-7), and the correlations stand in for it (PVT-TAB-5). Rejected: refusing an axis whose tables differ in their columns.
 12. **`plans/evidence/pvt_table_eos.py` stays where it is**, with the measurements of the same fluid. It needs NeqSim and Java; `AGENTS.md`'s table of reference data points to it. `specs/tools/make_pvt_tables.py` writes the two tables ManyWells makes itself. Rejected: splitting the table writing into `specs/tools/`.
 
