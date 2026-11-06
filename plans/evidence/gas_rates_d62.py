@@ -45,9 +45,8 @@ above 270,000 Sm3/d (EIA 2025, Table B32, as [WP §5] quotes them). Per-well med
 in this script: they are kept outside the repo [own analysis of BOEM's OGOR-A production, ANP's production by well
 and NSTA's production by well], and no value computed from real-well data is in this script or its output.
 
-The draft's scripts live on the branch sampler-redesign and feature 022 on feature/022-gas-rate-inflow until they are
-merged: run this script with a .venv that has Forchheimer, and name the directory of the draft's scripts with
---draws (by default this script's; a copy keeps a run apart from edits made while it runs). From the repository root,
+Feature 022 is on develop since 2026-11-06 (#38). --draws names the directory of the draft's scripts (by default
+this script's; a copy keeps a run apart from edits made while it runs). From the repository root,
 with the sandbox off (the pool needs Unix sockets), each process capped:
 
     (ulimit -v 3000000; OMP_NUM_THREADS=1 timeout 7200 .venv/bin/python plans/evidence/gas_rates_d62.py 700 \\

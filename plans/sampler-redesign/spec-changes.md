@@ -4,6 +4,8 @@
 
 Each section gives the spec file, the passage as it stands, the proposed text, and why.
 
+*Applied (2026-11-06): feature 022's sections (`specs/model/inflow.md`, `solution.md`, `README.md`, `nomenclature.md`, the 022 parts of `validity.md`, `specs/architecture.md` and `specs/features/README.md`) went into `develop` with the feature (#38), and the `specs/model/pvt/table.md` section with K1's option A′ (#39); the specs as merged are the record. The sections for `specs/goals.md` and `specs/constitution.md` are still proposals, for R10.*
+
 ## `specs/goals.md`
 
 ### Compatibility → Datasets (R7)

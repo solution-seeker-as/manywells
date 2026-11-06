@@ -24,6 +24,15 @@
 - **The checkpoint's evidence from per-well data and physics** (2026-11-05, at Bjarne's ask: "let data and physics decide"): BOEM's production by completion and ANP's and NSTA's production by well, summarised by setting, years on production and stage of life [own analysis of BOEM's OGOR-A production, ANP's production by well and NSTA's production by well], and the tubing's erosional capacity (`plans/evidence/erosional_capacity.py`), revise C1, D1, D2, D3, E1, F1 and D-41; the checkpoint's Section 6 now sorts the resources by who can get them.
 - **The checkpoint's evidence from open data** (2026-11-06, at Bjarne's go-ahead): BSEE's well tests (choke sizes, tubing and casing pressures), Petrobras' 3W (40 subsea satellite wells' operation: pressures, lift gas, choke histories) and NOAA's ocean atlas (seabed temperatures at wells) [own analysis of BSEE's well tests, Petrobras' 3W Dataset and NOAA's World Ocean Atlas 2023]; they revise E1, F2, D-14, D-15, D-29, D-37 and D-47; USGS's produced-water database, which Bjarne downloaded the same day [own analysis of USGS's produced-water database], revises D-11. The analyses are kept outside the repo (the maintainer's decision, 2026-11-06).
 - **Bjarne's rulings on the checkpoint** (2026-11-06), after physics from four books he obtained (Craft and Hawkins's material balance, Joshi's and Brekke and Lien's drains, Elsharkawy's dew points) settled C1, D-21, B1, D-65 and J2: every card and bulk list is ruled and section 4 is signed off in substance, except D2 and D-62, which wait for feature 022. Notable rulings: 0.10 onshore inside the datasets (A1); the wells' shapes uniform over the ranges pooled from all the surveys, drains to 2500 m with friction in place of the cap of 6 (B1, D-104, D-21); the GOR from the material balance (C1); permeability by well type with the erosional capacity as a check (D1); the lift-gas capacity 0.1 to 3.5 kg/s for every well type (F2); the logs in a companion file (I1); condensate tables by option A′ (K1). The rework and R9 can start.
+- **The rework and R9, 2026-11-06.**
+  - The rework implements the rulings in the draft's scripts and `sampling-draft.md`. Its pilots led to further rulings the same day:
+    - one life for both datasets, a `sol-2` well being its `nsol-2` life at one date, with lives running to an exhausted reservoir and stopping at the economic floor (D-105);
+    - D2 settled with D-62's non-Darcy coefficient and the gas wells' permeability at 1/14 of the oil wells' (D-62);
+    - the lift-gas capacity truncated, not clipped (D-31);
+    - a floor on the lift-gas set point (D-47);
+    - R4's control change kept for redraws (D-83).
+  - Feature 022 (#38) and K1's retrograde tables (#39) are merged into `develop`, and J2's per-fluid offsets are in `table_fluids.py`.
+  - Left for R9: the generator's Forchheimer inflow fitted as D-61 says, the per-well NeqSim tables, and the rerun of the pilots with them.
 
 This plan replaces v1's sampling procedure for the v2 datasets (`specs/goals.md`, limitation 5: unrealistic sampled wells). It ends with:
 
