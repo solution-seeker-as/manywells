@@ -88,8 +88,10 @@ table = PVTTable(p=p, T=T, R_so=R_so, B_o=B_o, Z=Z, rho_o=866.4, rho_g=1.0354, g
 ```
 
 The table is checked when it is built: every value finite, increasing grids, and positive `B_o`, `Z`, viscosities
-and surface tension. `R_so` must not fall as the pressure rises, apart from rounding. It may be below 0 only if the
-table has its own `mu_o` and `sigma`, because the live-oil correlations take `R_so` ≥ 0.
+and surface tension; the oil phase's mass, `rho_o + R_so * rho_g`, positive at every node; and the gas density,
+`p / Z`, rising with the pressure at every temperature. `R_so` may fall as the pressure rises, as a gas condensate's
+does below its dew point. It may be below 0 only if the table has its own `mu_o` and `sigma`, because the live-oil
+correlations take `R_so` ≥ 0.
 
 ## A table from an equation of state
 
@@ -110,7 +112,10 @@ At each node it takes three values from the flash:
 - `rho_V`, the vapour's density, in kg/m³.
 
 Where the stream is all liquid, `X` is 0, and `rho_V` is the density of the gas that would appear first: the
-incipient phase at the bubble point, or a stability analysis's trial phase.
+incipient phase at the bubble point, or a stability analysis's trial phase. Where it is all vapour, above a dew point,
+`X` is 1, and `rho_L` is the density of the liquid at the nearest saturation point of the same temperature. The table
+keeps a trace of liquid there, a mass fraction `delta` of the stream (10⁻⁴ by default, an argument of
+`from_phase_split`), so that `B_o` is positive.
 
 The table then reproduces the flash's phase mass rates and densities at the nodes, at the stream's GOR (PVT-TAB-6).
 At low pressure and high temperature its `R_so` can be negative and its `B_o` below 1, where the free gas carries

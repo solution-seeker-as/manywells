@@ -108,11 +108,14 @@ class PVTTable(PVTModel):
                 raise ValueError(f'{name} must be finite at every node')
             if name != 'R_so' and not np.all(a > 0):
                 raise ValueError(f'{name} must be positive at every node')
+        # R_so may fall as the pressure rises: a gas condensate's below its dew point (retrograde condensation)
         R_so = np.array(self.R_so)
-        if np.any(np.diff(R_so, axis=0) < -1e-12 * np.maximum(1.0, np.abs(R_so[1:]))):  # To rounding, as at_gor's
-            raise ValueError('R_so must not fall as the pressure rises, at any temperature')
         if np.any(R_so < 0) and not (self.mu_o is not None and self.sigma is not None):
             raise ValueError('R_so below 0 needs the columns mu_o and sigma: the live-oil correlations take R_so >= 0')
+        if not np.all(self.rho_o + R_so * self.rho_g > 0):
+            raise ValueError("the oil phase's mass per Sm3 of stock-tank oil, rho_o + R_so rho_g, must be positive")
+        if not np.all(np.diff(p[:, None] / np.array(self.Z), axis=0) > 0):
+            raise ValueError("the free gas's density, p/Z, must rise strictly with the pressure at every temperature")
         if self.gor is not None and not (math.isfinite(self.gor) and self.gor >= 0):
             raise ValueError(f'gor must be None, or non-negative and finite, got {self.gor}')
 
@@ -197,23 +200,29 @@ class PVTTable(PVTModel):
 
     @classmethod
     def from_phase_split(
-        cls, p, T, X, rho_L, rho_V, rho_o, rho_g, gor, mu_o=None, mu_g=None, sigma=None, **text
+        cls, p, T, X, rho_L, rho_V, rho_o, rho_g, gor, mu_o=None, mu_g=None, sigma=None, delta=1e-4, **text
     ) -> 'PVTTable':  # spec: PVT-TAB-6
         """
         The table that reproduces a flash's phase split at the stream's GOR: at each node, the vapour mass fraction X
         of the hydrocarbon stream, and the liquid's and the vapour's densities, rho_L and rho_V (kg/m3), each of shape
         (len(p), len(T)). Where the stream is all liquid, X = 0, and rho_V is the density of the gas that would appear
-        first. The stream's separation gives rho_o, rho_g and gor.
+        first. Where the liquid's mass fraction 1 - X is below delta, as where the stream is all vapour, X is set to
+        1 - delta, so that B_o > 0, and rho_L is the density of the liquid at the nearest saturation point of the same
+        temperature. The stream's separation gives rho_o, rho_g and gor.
 
         :param p: Pressures (bar)
         :param T: Temperatures (K)
         :param rho_o: The separated stream's stock-tank oil density (kg/m3)
         :param rho_g: Its gas density at standard conditions (kg/m3)
         :param gor: Its gas-oil ratio (Sm3/Sm3)
+        :param delta: The trace of liquid, a mass fraction of the stream, kept where the flash has less, in [0, 1)
         :param text: name, source, separation
         """
+        if not 0 <= delta < 1:
+            raise ValueError(f'delta must be in [0, 1), got {delta}')
         p, T = np.asarray(p, dtype=float), np.asarray(T, dtype=float)
         X, rho_L, rho_V = (np.asarray(a, dtype=float).reshape(len(p), len(T)) for a in (X, rho_L, rho_V))
+        X = np.minimum(X, 1 - delta)  # A trace of liquid where the stream is all vapour
         m = rho_o + gor * rho_g  # The stream's mass per Sm3 of stock-tank oil
         R_s = R_UNIVERSAL / (M_AIR * sg_from_gas_density(rho_g))  # As PVTModel.R_s (PVT-GAS-6)
         return cls(

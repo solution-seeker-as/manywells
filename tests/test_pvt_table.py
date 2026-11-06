@@ -96,6 +96,25 @@ def node(kw, column, value, j=1, k=1):
     return {**kw, column: a}
 
 
+def condensate(gor=2000.0, delta=None):
+    """
+    A made-up gas condensate's table from a flash (PVT-TAB-6). Below its dew point p_d(T), 240 bar at 330 K and 220
+    bar at 370 K, the liquid's mass fraction falls linearly from 0.3 at 0 bar to 0 at p_d, so that R_so falls as the
+    pressure rises (retrograde condensation); above p_d the stream is all vapour, and rho_L is the liquid's at p_d, the
+    nearest saturation point. Returns the table and the flash: X, rho_L and the all-vapour nodes.
+    """
+    p, T = (1.0, 50.0, 100.0, 150.0, 200.0, 250.0, 300.0), (330.0, 370.0)
+    P, TT = np.meshgrid(p, T, indexing='ij')
+    p_d = 240.0 - 0.5 * (TT - 330.0)
+    X = 1 - 0.3 * np.maximum(1 - P / p_d, 0.0)
+    rho_L = 600.0 + 0.3 * np.minimum(P, p_d)
+    rho_V = 0.75 * P * (1 + P / 1000.0) * 350.0 / TT
+    columns = dict(mu_o=np.full(P.shape, 3e-4), mu_g=np.full(P.shape, 2e-5), sigma=np.full(P.shape, 5e-3))
+    trace = {} if delta is None else dict(delta=delta)
+    table = PVTTable.from_phase_split(p, T, X, rho_L, rho_V, rho_o=780.0, rho_g=0.9, gor=gor, **columns, **trace)
+    return table, dict(X=X, rho_L=rho_L, vapour=P >= p_d)
+
+
 # ---------------------------------------------------------------------------
 # PVT-TAB-1: the checks
 # ---------------------------------------------------------------------------
@@ -125,7 +144,6 @@ class TestChecks:
             pytest.param(lambda kw: node(kw, 'B_o', 0.0), id='B_o not positive'),
             pytest.param(lambda kw: node(kw, 'Z', -0.1), id='Z not positive'),
             pytest.param(lambda kw: node(kw, 'mu_g', 0.0), id='mu_g not positive'),
-            pytest.param(lambda kw: node(kw, 'R_so', 1000.0), id='R_so falls as p rises'),
             pytest.param(lambda kw: {**node(kw, 'R_so', -1.0, j=0), 'mu_o': None}, id='R_so below 0 without mu_o'),
             pytest.param(lambda kw: {**node(kw, 'R_so', -1.0, j=0), 'sigma': None}, id='R_so below 0 without sigma'),
             pytest.param(lambda kw: {**kw, 'Z': np.ones((4, 2))}, id='a column of the wrong shape'),
@@ -137,6 +155,32 @@ class TestChecks:
     def test_each_check_raises(self, change):
         with pytest.raises(ValueError):
             PVTTable(**change(table_kwargs()))
+
+    @pytest.mark.parametrize(
+        'change, match',
+        [
+            pytest.param(lambda kw: node(kw, 'R_so', -1000.0, j=0), "oil phase's mass", id='oil mass not positive'),
+            pytest.param(lambda kw: node(kw, 'Z', 0.3), 'p/Z', id='p/Z falls as p rises'),
+            pytest.param(lambda kw: node(kw, 'Z', np.array(kw['Z'])[2, 1] / 2), 'p/Z', id='p/Z flat'),
+        ],
+    )
+    def test_the_checks_that_hold_for_every_fluid(self, change, match):
+        """The oil phase's mass is positive, and the free gas's density p/Z rises strictly with the pressure."""
+        with pytest.raises(ValueError, match=match):
+            PVTTable(**change(table_kwargs()))
+
+    def test_a_retrograde_table_builds(self):
+        """
+        A gas condensate below its dew point: liquid condenses as the pressure falls, so R_so falls as the pressure
+        rises. FluidModel builds on it, and on a GOR axis of two such tables.
+        """
+        t, _ = condensate()
+        falls = np.diff(np.array(t.R_so), axis=0)
+        assert np.all(falls <= 0) and np.any(falls < 0)
+        FluidModel(pvt=t, gor=t.gor)
+        axis = PVTTableSet(tables=(t, condensate(gor=2500.0)[0]))
+        FluidModel(pvt=axis, gor=2250.0)
+        assert np.any(np.diff(np.array(axis.at_gor(2250.0).R_so), axis=0) < 0)
 
     def test_R_so_below_0_with_the_oil_viscosity_and_the_surface_tension(self):
         """A flash's table (PVT-TAB-6): R_so < 0 is accepted where the table carries what the correlations cannot."""
@@ -431,6 +475,41 @@ class TestFromPhaseSplit:
                 assert w_g / (w_g + w_l) == pytest.approx(want['X'][j, k], abs=1e-6)
                 assert num(fl.gas_density(p, T)) == pytest.approx(want['rho_V'][j, k], rel=1e-13)
 
+    @pytest.mark.parametrize('delta', [None, 1e-3])
+    def test_the_vapour_nodes_keep_a_trace_of_liquid(self, delta):
+        """Where the stream is all vapour, X = 1 - delta (1e-4 by default), so that B_o > 0; elsewhere the flash's X."""
+        t, flash = condensate(delta=delta)
+        d, m, vapour = 1e-4 if delta is None else delta, t.rho_o + t.gor * t.rho_g, flash['vapour']
+        assert vapour.any() and not vapour.all()
+        X = np.where(vapour, 1 - d, flash['X'])
+        np.testing.assert_allclose(np.array(t.R_so), t.gor - X * m / t.rho_g, rtol=1e-13)
+        B_o = np.array(t.B_o)
+        np.testing.assert_allclose(B_o[vapour], d * m / flash['rho_L'][vapour], rtol=1e-9)
+        np.testing.assert_allclose(B_o[~vapour], (1 - X[~vapour]) * m / flash['rho_L'][~vapour], rtol=1e-13)
+
+    def test_without_the_trace_an_all_vapour_node_is_refused(self):
+        with pytest.raises(ValueError, match='B_o must be positive'):
+            condensate(delta=0.0)
+
+    @pytest.mark.parametrize('delta', [-1e-4, 1.0, np.nan])
+    def test_a_trace_outside_0_to_1_is_refused(self, delta):
+        with pytest.raises(ValueError, match='delta'):
+            condensate(delta=delta)
+
+    def test_a_condensates_phase_rates_and_liquid_density_are_the_flashs(self):
+        """
+        Without water, PVT-OIL-13 gives back the flash's X, with the trace where the stream is all vapour, and
+        PVT-MIX-6 its liquid density, which there is the liquid's at the dew point.
+        """
+        t, flash = condensate()
+        fl = FluidModel(pvt=t, gor=t.gor)
+        X = np.where(flash['vapour'], 1 - 1e-4, flash['X'])
+        for j, p in enumerate(t.p):
+            for k, T in enumerate(t.T):
+                w_g, w_l = (num(v) for v in fl.phase_rates(p, T, 10.0, 0.0))
+                assert w_g / (w_g + w_l) == pytest.approx(X[j, k], abs=1e-9)
+                assert num(fl.liquid_density(p, T)) == pytest.approx(flash['rho_L'][j, k], rel=1e-9)
+
 
 # ---------------------------------------------------------------------------
 # PVT-TAB-7: a GOR axis
@@ -509,6 +588,7 @@ class TestSimulator:
             pytest.param(lambda: small(), id='small'),
             pytest.param(lambda: small(T=(350.0,), optional=False), id='one T'),
             pytest.param(lambda: TestGorAxis.AXIS, id='a GOR axis between its GORs'),
+            pytest.param(lambda: condensate()[0], id='a retrograde condensate'),
         ],
     )
     def test_the_core_reads_the_table_as_casadi_does(self, pvt):
