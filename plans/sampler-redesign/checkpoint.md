@@ -86,6 +86,25 @@ In each group the items that need judgement come first, then the entries that ca
 
 **Coverage first, shape second** (Bjarne, 2026-11-05; the plan's Goals). First, the draws cover almost all real wells and hold no unrealistic ones; second, they weigh typical wells more than rare ones. Every sample of real wells in hand, the Gulf of Mexico's statistics included, represents some fields and areas only, so its range is a lower bound on the support and its shape weak evidence of what is typical. D1, D2 and E1 were revised on 2026-11-05 to follow this.
 
+**What the evidence settles, and what is left to choose** (2026-11-06, at Bjarne's ask to let physics and data decide as much as possible). A card's recommendation rests on data, physics or the project's rules where this table says so; approve it unless the evidence looks wrong to you. The last column holds what no evidence can settle.
+
+| Card | Settled by | Left to choose |
+|---|---|---|
+| A1, A2 | – | Ruled 2026-11-06 |
+| B1 | The surveys' distributions; the physics of long drains (`drain_friction.py`); the kickoff below the mudline (a fix) | The drainage geometry of long drains (Joshi's growing area is the recommendation) |
+| C1 | Water by age (per-well data); the GOR's rise (material balance, its $k_g/k_o$ chosen by the per-well data); the initial depletion range (`nsol-2`'s first year) | The stage shares 0.25 / 0.40 / 0.35: no public count of wells by stage |
+| D1, D2 | Rates by well type (per-well data); the cap at the tubing's erosional capacity (physics); D-62's non-Darcy coefficient (Economides et al.'s Eq. 4-34) | The medians are set on the rework's pilot against the data |
+| D3 | The stopped wells' final rates (per-well data) | – |
+| E1 | The tested choke sizes and the 4 in cap (BSEE's well tests) | The lower end of $\beta$ at 0.15, for coverage of the textbook beans |
+| F1, F2 | Lift by GOR quartile (BOEM); the lift-gas rates (3W); D-101 as operators do | – |
+| G1, H3, H4 | Re-measure on the rework's pilot, or log to the backlog | Agree to defer |
+| H1 | The constitution's principle 7 (no measured gain, so drop) | – |
+| H2, K1 | Engineering choices with precedent (`sources-condensate-tables.md` for K1) | Approve or pick another option |
+| I1, I2 | – | What the datasets carry, and the re-solve tolerance (a tolerance needs sign-off) |
+| J2 | Each fluid's offsets by its own separator flash (physics) | – |
+| Bulk lists | Each entry's evidence; D-11, D-14, D-15, D-29, D-37, D-41, D-43, D-44, D-47, D-65 revised by data or physics since 2026-11-05 | D-15, D-21, D-29, D-41, D-47 are not bulk-approvable as drafted: approve their revisions |
+| Section 4 | – | Every spec change needs sign-off |
+
 ### A. Population and fluids
 
 #### A1 · The onshore share (D-5)
@@ -100,6 +119,8 @@ In each group the items that need judgement come first, then the entries that ca
 
 **Recommendation:** 0.10.
 
+**Ruling:** Bjarne, 2026-11-06: 0.10 onshore, inside `sol-2` and `nsol-2` and labelled by `well_type`. Separate onshore datasets were considered and not chosen: ManyWells models natural flow and gas lift only, while most onshore wells are rod-pumped or on ESPs; no onshore yardstick is in hand; and they would change the Goals and add cost. Users split by the label (D-5).
+
 #### A2 · The coverage tail: its share and form (D-6, D-103)
 
 **Question.** Draw 20% tail wells so that about 15% of the kept wells are tail? And may tail wells take lift and geometry regardless of stage and type, as drafted?
@@ -112,7 +133,9 @@ In each group the items that need judgement come first, then the entries that ca
 
 **Recommendation:** 0.20 drawn, independent draws; a dropped well costs one to three solves and is logged. Tail wells may take lift and geometry regardless of stage and type.
 
-**Bulk-approvable:**
+**Ruling:** Bjarne, 2026-11-06: 0.20 drawn, independent draws; tail wells may take lift and geometry regardless of stage and type (D-6, D-103).
+
+**Bulk-approvable** (Bjarne, 2026-11-06: approved, D-11 with its two changes; D-16 ruled separately: independent draws, black oils' gas heavier):
 
 - D-1 · Wells as the unit of weighting.
 - D-2 · Nadeau et al. (2023) by reservoir counts, as checks.
@@ -143,12 +166,21 @@ In each group the items that need judgement come first, then the entries that ca
 | S wells' drop rate | $U(1, 2.5)$ °/30 m | slower at the median [own analysis of BOEM's directional surveys] |
 | S wells' bottom inclination | $U(0°, 10°)$ | near vertical at the median, with a tail to steeper bottoms [own analysis of BOEM's directional surveys] |
 | Drains' landing build | $U(2, 4)$ °/30 m | steeper at the median [own analysis of BOEM's directional surveys] |
+| Kickoff of a platform well (a fix) | $K$ from $0.1L$ with $L = z + d_w$, so in deep water the build can start inside the riser | every surveyed well kicks off below the mudline; draw $K$ as a fraction of $z$ and add $d_w$ |
+| High-angle tangent $\theta_h$ | $U(35°, 65°)$ | the GoM's drains hold lower tangents at their lower quartile, then land late [own analysis of BOEM's directional surveys]: let $\theta_h$ start near 10° |
+| Drain length (D-21) | $U(300, 1000)$ m | a fifth or more of the Dutch drains and a few percent of the GoM's are longer than 1 km [own analysis of NLOG's deviation surveys and BOEM's directional surveys]; physics (below) lets drains to about 2500 m add productivity |
 
 - **Physically:** gentler main builds and slower drops, so longer curved sections; S wells cross the reservoir less vertical.
 - **Model and ML tasks:** small changes to MD/TVD and to each cell's inclination, which the slip's inclination terms see; little effect on rates.
 - **In real wells:** the GoM's and the Netherlands' surveyed producing boreholes [own analysis of BOEM's directional surveys and NLOG's deviation surveys]. Norway's production wellbores, which have no published surveys, have grown longer and more deviated since the 1970s: the platform wellbores' median MD/TVD rises decade by decade, and the subsea wellbores' upper tail most of all [own analysis of Sodir's FactPages: NCS platform and subsea production wellbores by completion era].
 
-**Recommendation:** adopt the surveys' distributions, truncated to the classes' ranges, and recheck MD within 9342 m and the share of redrawn fits.
+**Physics of long drains** (2026-11-06, `drain_friction.py`, from Joshi 1991, Ch. 3 and Ch. 10, and Brekke and Lien 1994). Dikken's coupled model, Joshi's index along the drain with the liner's turbulent friction, checked against Joshi's Table 3-2 and Example 10-5 and against Brekke and Lien's Troll drain:
+
+- Joshi's own geometry ends the gain once a drain reaches about 1.6 times the drainage radius; with the drainage area growing with the drain, a median well's $J_H/J_V$ is about 4.5 at 500 m, 7 at 1 km and 10 from 2 km.
+- Friction takes little below 100 mD (median loss 1%, 90% of the drawn drains), but above about 250 mD it stops the gain at 450 to 1200 m; in gas drains it takes more than 10% in most of them.
+- So the cap of 6 is not physics: it binds on about a third of the draft's drains already, and on half or more of drains to 2500 m. Friction, not a cap, is the limit, and a closed form, $\eta = (1 + \Pi/1.5)^{-1/3}$ with $\Pi$ the friction-to-drawdown number of Dikken's model, gives it within 2% of the march.
+
+**Recommendation** (revised 2026-11-06): adopt the surveys' distributions, truncated to the classes' ranges, and recheck MD within 9342 m and the share of redrawn fits. Draw the kickoff below the mudline, let the high-angle tangent start near 10°, and draw drains $U(300, 2500)$ m, with D-21 revised as in group D. The drainage geometry of long drains (Joshi's area growing with the drain, against a fixed spacing between drains, which raises the upper tail) remains a choice; the first is Joshi's and the recommendation.
 
 **Bulk-approvable:**
 
@@ -169,7 +201,7 @@ In each group the items that need judgement come first, then the entries that ca
 **Recommendation** (revised 2026-11-05, from the per-well data). Accept the shares and the water tables, and widen the initial range under depletion.
 
 - **Water.** The draft's water cut by years on production (D-43) lies inside the span of the regions' per-well medians, which runs from the GoM shelf, wetter at every age, to Brazil's pre-salt and the GoM's subsea wells, far drier [own analysis of BOEM's OGOR-A production and ANP's production by well: water_cut by years on production]. Real wells reach the cap of 0.98 late in life, so thicken the upper tail towards it.
-- **GOR** (D-19, D-44). The median real well keeps about its first year's GOR for decades, in the GoM, Brazil and the UK alike, and only an upper tail rises several-fold [own analysis of BOEM's OGOR-A production, ANP's production by well and NSTA's production by well: gor_over_first_year]; `nsol-2`'s draws raise the median to 1.40 and 1.54 times $R_{si}$ over the life (D-44). Tie the rise to depletion below the saturation pressure, so that a supported well's GOR stays near $R_{si}$; let a material balance of solution-gas drive set the factors by physics (Section 6); and check the median and the tail against these rows in the rework.
+- **GOR** (D-19, D-44; revised 2026-11-06: physics and data decide). The material balance of solution-gas drive (`solution_gas_drive.py`: Muskat's method, Craft and Hawkins 1991, Ch. 9, Eqs. 9.33 to 9.35, checked on the book's Example 9.1 and Ch. 10 history match) on the model's own black oil gives the GOR's shape: it dips to the dissolved gas just below the saturation pressure until the gas can flow, then rises steeply and would fall only below about 0.15 to 0.25 of $p_\text{sat}$, where no core state lies. The draft's linear rise from $p_\text{sat}$ is not that shape. The one free input is the rock's $k_g/k_o$, which moves the rise about fivefold across the book's laboratory curves. The data choose it: with the book's least mobile gas (Fig. 9.16), the late-stage wells' GOR over its initial value has a median of 1 and an upper tail within the span of the real wells' GOR over their first year at 10 to 30 years on production, while the book's more mobile curves put the 90th and 95th percentiles above every region's [own analysis of BOEM's OGOR-A production, ANP's production by well and NSTA's production by well: gor_over_first_year]. The draft has a median too high and a tail too thin. Recommendation: the factor from the material balance per well at $p_r/p_\text{sat}$, with Fig. 9.16's $k_g/k_o$ in the core and the book's range of curves in the tail; $R_{si}$ wherever $p_r \ge p_\text{sat}$, so pressure support needs no rule of its own; no cap, since the curve bounds itself.
 - **Gas depletion.** The UK gas wells' bottomhole and wellhead pressures in their last year lie within R6's ranges [own analysis of NSTA's production by well: well, last year], so the public data ask for no deeper gas depletion.
 
 **Bulk-approvable:**
@@ -233,7 +265,7 @@ Per well, the share of gas wells above 270,000 Sm³/d at their median runs from 
 
 **Bulk-approvable:**
 
-- D-21 · Drains' and slant wells' productivity factors (the slant factor and the gas-drain factor are placeholders until Economides et al.'s §4-6 and §5-4 are read; Section 6).
+- D-21 · Drains' and slant wells' productivity factors. *Not bulk-approvable as drafted* (2026-11-06, `drain_friction.py`, B1). Drop the cap of 6: $J = J_\text{Joshi}\thinspace\eta$, with Joshi's index on a drainage area that grows with the drain and the friction efficiency $\eta$ of Dikken's model in closed form, the liner taken as the tubing, at the design rate. For gas drains, replace the placeholder factor of 1.5 to 4 on $kh$, which physics does not support, by the drain's Forchheimer coefficients: $a$ over Joshi's ratio, and $b$ scaled by $(I_\text{ani} h/L)^2$ plus the friction term. The slant factor stays a placeholder (Economides et al.'s §4-6 and §5-4, Section 6).
 - D-22 · Vogel where the saturation pressure is at least 0.8 of $p_r$ and the water cut below 0.6, else a productivity index.
 - D-23 · Forchheimer's parameters for gas wells (its $D$ and mapping are revised by D-61 and D-62).
 - D-24 · The rate target is a check, not a draw.
@@ -322,7 +354,7 @@ Per well, the share of gas wells above 270,000 Sm³/d at their median runs from 
 - D-41 · `nsol-2`'s life span and the depletion clock. *Not bulk-approvable as drafted* (2026-11-05): real wells reach their best year within the first few years at the median, and in the last fifth of a stopped well's life its rate is a small fraction of its first year's in the GoM, Brazil and the UK, far below `nsol-2`'s 0.35 (R6); oil wells' Kaplan–Meier lives centre near the draft's median, with a lower tail well below its 8 years [own analysis of BOEM's OGOR-A production, ANP's production by well and NSTA's production by well: rate_over_first_year by fifth of the life, producing_life]. The data argue for a steeper decline (a larger $D$, or lives that run to the floor), set on the rework's pilot against these rows.
 - D-42 · `nsol-2`'s reservoir pressure.
 - D-43 · `nsol-2`'s water: a jump at breakthrough, then the semilog WOR. Over every field-year since 1971, Norwegian oil fields' median water cut lies below the draws' at every age, most in the first ten years (fields, not wells; 2026-11-05) [own analysis of Sodir's FactPages: NCS oil fields by years on production]. Per well, the medians by years on production in the GoM, Brazil and the UK bracket the draws' [own analysis of BOEM's OGOR-A production, ANP's production by well and NSTA's production by well: water_cut by years on production].
-- D-44 · `nsol-2`'s GOR, without the late fall. Per well, the median real GOR stays near its first year's (C1) [own analysis of BOEM's OGOR-A production, ANP's production by well and NSTA's production by well: gor_over_first_year].
+- D-44 · `nsol-2`'s GOR, without the late fall. Per well, the median real GOR stays near its first year's (C1) [own analysis of BOEM's OGOR-A production, ANP's production by well and NSTA's production by well: gor_over_first_year]. Revised with C1 (2026-11-06): the material balance's factor at $p_r(t)/p_\text{sat}$; leaving out the late fall agrees with the physics, which puts it below every core state.
 - D-45 · Well properties that age; the inflow model fixed.
 - D-46 · The separator's two step-downs.
 - D-47 · Piecewise-constant set points. *Not bulk-approvable as drafted* (2026-11-06). In 3W's normal operation, the typical well's production choke is moved by a few points every day or so [own analysis of Petrobras' 3W Dataset: production_choke_changes_per_day]. D-47 changes it about once in 11 months, so between two of `nsol-2`'s samples a real well's set point has almost always moved. Change the choke's set point at most samples, mostly by small steps, keeping the occasional redraw, and set the rates on the rework's pilot. The 3W windows are hours to weeks around events, so they show how often operators adjust, not how far a set point travels over a life.
@@ -438,12 +470,12 @@ Publishing is not asked here: Bjarne publishes the datasets himself, after valid
 | **Shift the targets by the examples' offsets** | Table fluids match field-reported values | Consistent with the black oils | Offsets from three examples only |
 | Match on two stages at the well's separator | Field-reported exactly | Breaks the single tie line that PVT-TAB-1's GOR axis needs | – |
 
-**Recommendation:** shift the targets by the examples' offsets, and record the offsets with the fluid.
+**Recommendation** (revised 2026-11-06: physics decides). Compute each fluid's own offsets, not the three examples': in R9, flash the matched composition through the well's own separator (its stages at $p_\text{sep}$ and $T_\text{sep}$, then stock tank) and through one stage at standard conditions, and shift the targets by the difference (one or two passes, since the offsets depend on the composition), so that the table fluid's field-reported GOR, API and gas gravity are the drawn ones. The single tie line that PVT-TAB-1's GOR axis needs is kept, since the matching stays single-stage; only the targets move. Record the offsets with the fluid.
 
 **Bulk-approvable:**
 
 - D-61 · Forchheimer's coefficients fitted to the pseudo-pressure at the wellstream's gravity.
-- D-65 · The table's saturation pressure replaces R3's; a fluid is saturated at discovery where it must be.
+- D-65 · The table's saturation pressure replaces R3's; a fluid is saturated at discovery where it must be. Published evidence supports using the untuned flash's dew point (2026-11-06): over 340 gas condensates, Peng–Robinson without tuning predicts the dew point with an average absolute deviation of 8.6% to 9.3% and a bias of −1% to +3%, by the plus fraction's characterization, against measurement errors of 5% to 10% in the data themselves (Elsharkawy 2002, Table 3 and §8.1). R5's one check, 8% below the measured dew point, lies within that spread, and the table and its saturation pressure come from the same flash, so the fluid stays consistent. The paper's samples span measured dew points of 108 to 816 bar at 4 to 171 °C (Table 1). R3's interim draw, $p_\text{sat} = p_i(1 - x)$, gives R6's condensates 76 to 780 bar at P5 to P95, its low end below any measured sample, a further reason to let the flash set the dew point from the composition.
 - D-66 · Six published example fluids, a fifth of the table wells.
 - D-67 · One table set per well, on its own grid and GOR axis.
 - D-68 · NeqSim as a build-time tool of the generator, outside ManyWells' dependencies.
@@ -534,11 +566,10 @@ From `spec-changes.md`. **Every row needs Bjarne's sign-off** (`AGENTS.md`, Need
 
 ### Only Bjarne can get
 
+*Revised 2026-11-06:* three of the four requests arrived and are used (No longer needed, below). The one left is optional: D1's top end already has the tubing's erosional capacity.
+
 | Reference | Settles | How | Assumed without it |
 |---|---|---|---|
-| Joshi (1991), *Horizontal well technology*; Dikken (1990), "Pressure drop in horizontal wells and its effect on production performance", *JPT* | D-21: the cap of 6 on $J_H/J_V$, and drains longer than 1000 m (B1) | Physics: friction along the wellbore, not a chosen cap, limits what a long drain adds | Joshi's equation as Economides et al. (1994) give it, capped at 6 |
-| Dake (1978), *Fundamentals of reservoir engineering*, or Craft and Hawkins, *Applied petroleum reservoir engineering* (2nd ed., revised by Terry, 1991) | C1, D-19, D-44: the GOR's rise below the saturation pressure | Physics: the Muskat or Tarner material balance of solution-gas drive on the model's own black oil, checked on the book's worked example, then against the per-well GOR rows | Factors of 2 to 15 around one example (Golan and Whitson 1991, Example 4.11) |
-| Nemeth and Kennedy (1967), *SPE Journal*; Elsharkawy (2002), *Fluid Phase Equilibria* | J2, D-65: condensate compositions and dew points | Data: measured dew points to check the untuned flash | Six examples; one measured dew point, 8% below the flash |
 | ANP's production by well from 2024 (its query tool, behind a captcha): two or three recent months of the offshore file | D1's top end | Data: whether the newest pre-salt wells pass the best months of 2005 to 2023 | ANP to 2023 [own analysis of ANP's production by well: well peak] |
 
 ### In hand, for the agents to read
@@ -551,6 +582,9 @@ From `spec-changes.md`. **Every row needs Bjarne's sign-off** (`AGENTS.md`, Need
 | Reference | Was for | Now |
 |---|---|---|
 | Per-well production offshore outside the GoM; ANP's production by well; BOEM's production by completion; Sodir's bulk tables | D1, D2, D-4, D-16, D-41, D-43 | Fetched and summarised [own analysis of ANP's production by well, NSTA's production by well, BOEM's OGOR-A production and Sodir's FactPages] |
+| Joshi (1991), *Horizontal well technology*; Brekke and Lien (1994), *JPT*, in place of Dikken (1990) | D-21, B1 | Obtained on 2026-11-06; Dikken's coupled model as Joshi gives it (Ch. 10) sets the drains' productivity by physics (`drain_friction.py`, B1, D-21) |
+| Craft and Hawkins (1991), *Applied petroleum reservoir engineering* | C1, D-19, D-44 | Obtained on 2026-11-06; Muskat's material balance sets the GOR's rise by physics, and the per-well data choose its $k_g/k_o$ (`solution_gas_drive.py`, C1) |
+| Elsharkawy (2002), *Fluid Phase Equilibria*; Nemeth and Kennedy (1967) not needed | J2, D-65 | Obtained on 2026-11-06; the untuned equation of state's dew-point errors over 340 condensates (Table 3) support D-65; J2's offsets are computed per fluid (J2) |
 | Petrobras 3W 2.0.0 | D-15, D-29, D-31, D-37, D-47, F2 | Fetched and summarised on 2026-11-06 [own analysis of Petrobras' 3W Dataset]; it has no production rates, so D-48's test schedule and the injected GLR stay without data |
 | Choke vendors' catalogues; BSEE's scanned well potential test reports; choke-correlation papers | E1 (D-27) | BSEE's tabulated well tests, 1975 to 2026, give the tested choke sizes [own analysis of BSEE's well tests] |
 | NOAA, World Ocean Atlas 2023 | D-14 | Fetched and summarised on 2026-11-06 [own analysis of NOAA's World Ocean Atlas 2023] |
@@ -589,12 +623,12 @@ From `spec-changes.md`. **Every row needs Bjarne's sign-off** (`AGENTS.md`, Need
 - **Small pilots.** 400 and 100 wells; the drop targets were judged on one to three wells per class.
 - **Regional samples.** Every sample of real wells in hand covers some fields and areas only, the Gulf of Mexico above all; Brazil and the UK add per-well data since 2026-11-05, and Norway its production by field; since 2026-11-06 the GoM adds its well tests, Petrobras 40 subsea satellite wells' operation, and the US its produced waters; other regions, such as West Africa, are missing. The support's ends rest on few sources.
 - **Two solver findings** are unexplained (H4).
-- **Placeholder factors** for slant wells and gas drains (D-21) affect the highly deviated class, a quarter of the wells.
+- **Placeholder factor** for slant wells (D-21) affects the highly deviated class, a quarter of the wells; the drains' and gas drains' productivity now follow physics (B1, D-21).
 - **The cost of table fluids.** Making them is scaled from R5's proof on four fluids, and solving them is not measured; R6's projection leaves both out (Section 8).
 
 ## 8. After the checkpoint
 
-Rulings that reverse an entry send its work back through R2 to R7, and a smaller checkpoint covers only what changed. The likely rework from the recommendations above: the beans and their cap at 4 in (E1); the permeability by well type against the per-well rates, with a redraw above the tubing's erosional capacity (D1, D2); the subsea floor (D3); the lift shares of the upper GOR quartiles (F1), the capacity's floor and its subsea cap (F2), and the injection pressure by well type (D-29); the subsea flowline loss and its truncation (D-15); the choke's set points changed at most samples (D-47); the salinity's median and floor (D-11); the GOR tied to depletion and the water cut's upper tail (C1); a steeper decline in `nsol-2` (D-41); the shapes' parameters (B1) and the stage range (C1), measured on a rerun of R6's pilots against the per-well statistics.
+Rulings that reverse an entry send its work back through R2 to R7, and a smaller checkpoint covers only what changed. The likely rework from the recommendations above: the beans and their cap at 4 in (E1); the permeability by well type against the per-well rates, with a redraw above the tubing's erosional capacity (D1, D2); the subsea floor (D3); the lift shares of the upper GOR quartiles (F1), the capacity's floor and its subsea cap (F2), and the injection pressure by well type (D-29); the subsea flowline loss and its truncation (D-15); the choke's set points changed at most samples (D-47); the salinity's median and floor (D-11); the GOR's rise from the material balance (C1, D-19, D-44); the drains to 2500 m with friction in place of the cap of 6, the kickoff below the mudline and the lower high-angle tangent (B1, D-21); the GOR tied to depletion and the water cut's upper tail (C1); a steeper decline in `nsol-2` (D-41); the shapes' parameters (B1) and the stage range (C1), measured on a rerun of R6's pilots against the per-well statistics.
 
 | Step | Work | Cost |
 |---|---|---|
@@ -623,7 +657,7 @@ Rulings that reverse an entry send its work back through R2 to R7, and a smaller
   - `sources-reservoir-fluids.md`, `sources-wells-production.md`, `sources-geometry.md`: the public sources;
   - `sources-condensate-tables.md`: how other tools represent condensates (K).
 - `specs/features/022-gas-rate-inflow.md`: the feature spec.
-- `plans/evidence/`, each with its row in the README there: `erosional_capacity.py` and `pilot_by_well_type.py` (the evidence of 2026-11-05 for D1, D2 and F1), `condensate_rv_form.py` (the condensate research), `sampler_draft_draws.py` and `sampler_draft_samples.py` (the draws, without solving), `sampler_prototype.py` and `sampler_prototype_report.py` (the prototype and its measurements), `gas_inflow_shapes.py` (feature 022's measurements), `table_fluids.py` and `pvt_table_eos.py` (the table fluids), `validity_ranges.py`.
+- `plans/evidence/`, each with its row in the README there: `erosional_capacity.py` and `pilot_by_well_type.py` (the evidence of 2026-11-05 for D1, D2 and F1), `solution_gas_drive.py` and `drain_friction.py` (the physics of 2026-11-06 for C1, B1 and D-21), `stratified_flow_limit.py` (D-10), `condensate_rv_form.py` (the condensate research), `sampler_draft_draws.py` and `sampler_draft_samples.py` (the draws, without solving), `sampler_prototype.py` and `sampler_prototype_report.py` (the prototype and its measurements), `gas_inflow_shapes.py` (feature 022's measurements), `table_fluids.py` and `pvt_table_eos.py` (the table fluids), `validity_ranges.py`.
 
 **The figures** (R6, Figures; kept outside the repo with the pilots' tables in the datasets' schema, and shown on the report page):
 

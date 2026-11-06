@@ -30,7 +30,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** the Goals count wells. Sidetracks count as wellbores on the Norwegian shelf, which slightly over-weights oil.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** every share and marginal of `sampling-draft.md`.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group A's bulk list): approved.
 
 ### D-2 · Nadeau et al. (2023) by reservoir counts
 
@@ -40,7 +40,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** the draws put 17.1% of wells above 395 K and 20.4% above 0.6 psi/ft, against 12.9% of reservoirs above 122 °C and 16.2% above SG 1.3.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** Initial reservoir pressure, Geothermal gradient (as checks).
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group A's bulk list): approved.
 
 ### D-3 · Fluid classes by McCain (1990)
 
@@ -50,7 +50,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** under McCain's limits volatile oils are few of the Gulf's wells [own analysis of BOEM's sands atlas]; the black oil (PVT-OIL-4) carries McCain's black oils within Beggs and Robinson's $R_{so}$ range.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** Fluid class, Saturation pressure and the initial GOR, Mapping.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group A's bulk list): approved.
 
 ### D-4 · The fluid mix and the gas subtypes
 
@@ -60,7 +60,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** the shares by wells of the Gulf, its deep water and the Norwegian shelf are in [own analysis of BOEM's sands atlas] and [own analysis of Sodir's FactMaps]. The floor over-weights volatile oils several times over, which the Goals chose for coverage.
 - **Needs sign-off:** yes (sampling; the Goals set the floor).
 - **Used by:** Fluid class, and every class-dependent draw.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group A's bulk list): approved.
 
 ### D-5 · The well-type mix
 
@@ -70,7 +70,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** deep water in the Gulf is 84% dry tree (Liu, Wang and Kaiser 2014); a large minority of Norwegian wellbores are subsea [own analysis of Sodir's FactMaps]; the onshore share is a design choice of the Goals' offshore weighting, not a statistic.
 - **Needs sign-off:** yes (sampling). Bjarne may want to see the onshore share before the checkpoint.
 - **Used by:** Well type, and the water depth, surface temperature, separator, permeability, lift and economic floor.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint A1): platform 0.55, subsea 0.35, onshore 0.10, within `sol-2` and `nsol-2`, labelled by `well_type`. Separate onshore datasets were considered and not chosen: ManyWells models natural flow and gas lift only, most onshore wells are rod-pumped or on ESPs, no onshore yardstick is in hand, and they would change the Goals and add cost.
 
 ### D-6 · The coverage tail
 
@@ -80,7 +80,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** tail wells are less likely, not implausible: none of the 2000 drawn wells breaks a bound. The tail lifts half its oil wells regardless of stage, which is less realistic than the core.
 - **Needs sign-off:** yes (the Goals leave the share to the research).
 - **Used by:** every draw's tail form; Where realism and coverage conflict; R6's coverage measurements.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint A2): as revised by D-103.
 
 ### D-7 · The order of the draws and seeding by block
 
@@ -90,7 +90,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** not applicable; it makes draws reproducible and local.
 - **Needs sign-off:** yes (sampling, SMP-31's scheme extended).
 - **Used by:** the whole draft; the sanity script.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group A's bulk list): approved.
 
 ### D-8 · Depth by fluid class, and water depth by well type
 
@@ -100,7 +100,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** dry gas lies shallowest and condensates deepest in the Gulf; deep water is deeper and oilier. The draws give 1530 / 2768 / 4831 m and reproduce BOEM's temperatures and gradients by class within 10 K and 0.008 bar/m [own analysis of BOEM's sands atlas].
 - **Needs sign-off:** yes (sampling).
 - **Used by:** Depth below the mudline; Water depth and the well's length; everything below them.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group A's bulk list): approved.
 
 ### D-9 · Geometry families and the heel approach; shares pending
 
@@ -130,7 +130,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** no public distribution of offshore salinities is in hand; the median gives 0.104 bar/m, close to the Gulf's normal gradient [own analysis of BOEM's sands atlas].
 - **Needs sign-off:** yes (sampling; it makes the water density a draw, one of the Goals' fluid constants).
 - **Used by:** Formation water; Initial reservoir pressure; Heat capacities.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group A's bulk list): approved with the two changes the produced-water statistics support: the salinity's median lowered to about 60,000 ppm and its floor to about 0.2%, the cap kept at 25% (near halite's saturation).
 
 ### D-12 · Overpressure with depth, and initial underpressure
 
@@ -180,7 +180,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** the Gulf's oils' API and gas gravities are in [own analysis of BOEM's sands atlas]; Valkó and McCain's separator gases average 0.838. API and $R_{si}$ correlate at 0.31 in the draws, through Vazquez–Beggs, against the Gulf's correlation in the same section.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** Oil and gas at standard conditions; everything that uses the fluid.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group A): independent draws, with black oils' gas gravity $N_{[0.58, 0.95]}(0.70, 0.07)$, heavier as Norwegian drill-stem tests show [own analysis of Sodir's FactPages]. The tests' rank correlation of API and gas gravity in oils is physical (lighter oils carry more intermediates into the separator gas) but changes the black oils' $R_{si}$ little, so it is not drawn.
 
 ### D-17 · Undersaturation and the initial GOR from the model's own correlation
 
@@ -190,7 +190,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** $R_{si}$ 71 / 168 / 356 Sm³/Sm³ and $p_i - p_b$ 0 / 26 / 209 bar, against the Gulf's [own analysis of BOEM's sands atlas]; rank correlations within 0.12 of the Gulf's but for $R_{si}$–$T_r$ (0.32 in the draws, stronger in the Gulf). The well's bubble point is the model's.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** Saturation pressure and the initial GOR; Reservoir state; Inflow.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group A's bulk list): approved.
 
 ### D-18 · Drive, life stage and the reservoir's state
 
@@ -380,7 +380,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** the Goals put volatile oils and condensates in tables from a flash; in the interim their bubble and dew points are Vazquez–Beggs's, not the drawn ones.
 - **Needs sign-off:** yes (sampling; R5's tables and their cost are for the checkpoint).
 - **Used by:** Fluid class; Saturation pressure; Mapping; R5; R6.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group A's bulk list): approved.
 
 Entries D-37 to D-56 are R4's (2026-10-30), for the sample part of `sampling-draft.md` (The samples within a well). Their *draws* are those of `plans/evidence/sampler_draft_samples.py` (1000 wells, seed 2026), which draws without solving. Like R3's, every entry needs sign-off, because each sets part of the new `specs/sampling.md`; an entry that also bears on the dataset design (R7), a tolerance or solver machinery says so.
 
@@ -899,4 +899,4 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Realism:** the tail's flat draws are independent, so a tail well can draw $p_r$ at 0.15 $p_i$ and $p_s$ near 120 bar: 5 of the 25 dropped tail wells had $p_r \le p_s$ at their nominal state, and most of the rest had too little drawdown to flow. The tail is a coverage device, not a population, and its wells are labelled. In R6's pilots the tail is 19.3% of the drawn `sol-2` wells (87 of 450) and 14.5% of the accepted, and 19% of the accepted `nsol-2` wells.
 - **Needs sign-off:** yes (the Goals leave the share to the research; D-6).
 - **Used by:** `sampling-draft.md`, Coverage tail; `sampler_draft_draws.py` (`TAIL_SHARE`).
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint A2): approved: 0.20 of the drawn wells are tail wells, with independent flat draws, and tail wells may take lift and geometry regardless of stage and type.
