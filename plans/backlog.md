@@ -52,6 +52,12 @@ set does not show this: both backends pass it at 100%.
     60 comparison wells (`v1.0.0+valve at 50%` #17, #22, #27), each a root of
     every CasADi row; two have several void fractions under the fitted
     classifier. With `develop`'s model it missed none of 210.
+  - The sampler redesign's R6 pilots (2026-11-02): the CasADi search misses a
+    stable root in 4 of 200 compared `sol-2` samples, highly deviated wet-gas
+    wells at PBH of 14 to 41 bar, where the core finds it
+    (`plans/sampler-redesign/r6-measurements.md`, Backends). Logged at
+    Bjarne's ruling of 2026-11-06 (checkpoint H4); the generation does not use
+    CasADi's search once the retry is dropped (H1).
 - **Roots only the CasADi search finds.** Where the slip law has several void
   fractions, the core misses roots on other branches (`develop#17`, 015 Finding
   2). With the profile scale at $\kappa_0 \le 0.5$ (020), it misses a second
@@ -100,6 +106,17 @@ Done when a synthetic round trip passes in both backends. A well solved with a
 choke and a reservoir inflow, then solved again with `FixedFlowRate` at the
 solved liquid rate and the wellhead pressure fixed at the solved $p_N$, gives the
 same solution to the solver's tolerance.
+
+
+### 2.17 An unstable root and no stable one in a sampled well
+
+**[after the plan]** *From the sampler redesign's R6, 2026-11-02; logged at Bjarne's ruling of
+2026-11-06 (`plans/sampler-redesign/checkpoint.md`, H4).* In the draft's `nsol-2` run, well 62 (a
+late tail black oil) has root sets with an unstable root and no stable one at 15 dates, on both
+backends, with rejected sign changes in 64 scans. A continuous $R(p_0)$ cannot do that
+(`plans/sampler-redesign/decisions.md`, D-53), so a root is missed or $R$ is discontinuous. 1 of 100
+`nsol-2` wells. The sampler redesign looks at it in R9, next to feature 022's measurements of $R(p_0)$
+in gas wells, since R11 counts an unstable-only root set as a solver failure.
 
 ## 4. Performance and architecture
 

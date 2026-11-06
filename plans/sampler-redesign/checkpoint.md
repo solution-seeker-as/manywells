@@ -86,6 +86,8 @@ In each group the items that need judgement come first, then the entries that ca
 
 **Coverage first, shape second** (Bjarne, 2026-11-05; the plan's Goals). First, the draws cover almost all real wells and hold no unrealistic ones; second, they weigh typical wells more than rare ones. Every sample of real wells in hand, the Gulf of Mexico's statistics included, represents some fields and areas only, so its range is a lower bound on the support and its shape weak evidence of what is typical. D1, D2 and E1 were revised on 2026-11-05 to follow this.
 
+**Ruled on 2026-11-06:** every card and bulk list, and section 4 in substance, except D2 and its D-62, which wait for feature 022 (R9). Each ruling is under its card and in its decision entry; the rework they ask for is in section 8.
+
 **What the evidence settles, and what is left to choose** (2026-11-06, at Bjarne's ask to let physics and data decide as much as possible). A card's recommendation rests on data, physics or the project's rules where this table says so; approve it unless the evidence looks wrong to you. The last column holds what no evidence can settle.
 
 | Card | Settled by | Left to choose |
@@ -342,7 +344,7 @@ Per well, the share of gas wells above 270,000 Sm³/d at their median runs from 
 
 **Ruling:** Bjarne, 2026-11-06, decided from data at his ask: D-101 approved; the lift-gas capacity from 0.1 to 3.5 kg/s for every well type, with the injected GLR at capacity widened to 30 to 1000 Sm³/Sm³ times the design liquid rate (D-31).
 
-**Bulk-approvable:**
+**Bulk-approvable** (Bjarne, 2026-11-06: approved; D-29 by well type, D-38 with the lift gas off in 20% of the slots):
 
 - D-29 · The injection depth at the pressure-balance point. *Not bulk-approvable as drafted* (2026-11-06). The draft draws every lifted well's surface injection pressure from onshore practice, $U(48, 76)$ bar. The GoM's gas-lifted wells' casing pressures reach that range's top and a little beyond [own analysis of BSEE's well tests: gas-lifted tests, casing_or_line_pressure]. 3W's subsea satellite wells take their lift gas at more than twice the range's top, both topside and in the annulus at the tree [own analysis of Petrobras' 3W Dataset: gas_lift_choke_downstream_pressure, annulus_pressure]. Draw the injection pressure by well type, in design values: platform and onshore wells about $U(48, 85)$ bar, subsea wells about $U(130, 210)$ bar at the tree. Set them on the rework's pilot, since the pressure-balance point, and so the injection depth, moves with them.
 - D-30 · The lift gas's temperature, up to 30% towards $T_s$.
@@ -362,7 +364,9 @@ Per well, the share of gas wells above 270,000 Sm³/d at their median runs from 
 
 **Recommendation:** accept; re-measure after D2 and E1, and add a draw only if churn stays this thin.
 
-**Bulk-approvable:**
+**Ruling:** Bjarne, 2026-11-06: accepted; churn re-measured after D2 and E1.
+
+**Bulk-approvable** (Bjarne, 2026-11-06: approved; D-41 and D-47 ruled with their revisions, D-44 with C1):
 
 - D-37 · `sol-2`'s choke: 5% fully open, else uniform from 0.05. In 3W's normal operation, few wells ever open their production choke fully, and those that do stay there; the pooled time fully open lies above 5% and the typical well's below it (2026-11-06) [own analysis of Petrobras' 3W Dataset: share_of_time_production_choke_fully_open]. The UK's gas wells spend a share of their days fully open [own analysis of NSTA's production by well: share_of_days_fully_open]. A modest mass at fully open stands.
 - D-39 · The separator pressure per sample, ±10%.
@@ -389,6 +393,8 @@ Per well, the share of gas wells above 270,000 Sm³/d at their median runs from 
 
 **Recommendation:** drop it (constitution, principle 7: no measured gain). D-56's starts then serve only comparison runs; R11 keeps D-92's CasADi re-solve of 100 rows.
 
+**Ruling:** Bjarne, 2026-11-06: dropped (D-54, D-82).
+
 #### H2 · What counts as no operating point (D-102, D-53)
 
 **Question.** Count a scan with no root and no rejected sign change as no operating point, whatever its non-finite scan points?
@@ -398,6 +404,8 @@ Per well, the share of gas wells above 270,000 Sm³/d at their median runs from 
 - **Under D-53 as drafted:** 4 tail wells were dropped at the solver-failure limit, 3 for such attempts only.
 
 **Recommendation:** accept D-102.
+
+**Ruling:** Bjarne, 2026-11-06: D-102 accepted.
 
 #### H3 · The drop targets and the redraw limits (D-81, D-82, D-83)
 
@@ -411,6 +419,8 @@ Per well, the share of gas wells above 270,000 Sm³/d at their median runs from 
 
 **Recommendation:** keep the targets and limits, and judge them on R11's pilot: 1 to 3 wells per class is too few to tell 1.4% from 1%. F2's capacity floor may remove some of these drops.
 
+**Ruling:** Bjarne, 2026-11-06: kept, judged on R11's pilot (D-81, D-82, D-83).
+
 #### H4 · Two solver findings
 
 **Question.** Investigate before R11, or log to the backlog?
@@ -420,7 +430,9 @@ Per well, the share of gas wells above 270,000 Sm³/d at their median runs from 
 
 **Recommendation:** log both to the backlog, and look at well 62 in R9 next to feature 022's measurements of $R(p_0)$ in gas wells, since R11 counts an unstable-only root set as a solver failure.
 
-**Bulk-approvable:**
+**Ruling:** Bjarne, 2026-11-06: logged to the backlog; well 62 looked at in R9 with feature 022.
+
+**Bulk-approvable** (Bjarne, 2026-11-06: approved):
 
 - D-51 · SMP-28's three filters dropped; backlog §1.11 lapses.
 - D-55 · Wells whose best-rate solve fails are dropped and counted.
@@ -442,6 +454,8 @@ Publishing is not asked here: Bjarne publishes the datasets himself, after valid
 
 **Recommendation:** include both; they are synthetic and hold nothing confidential.
 
+**Ruling:** Bjarne, 2026-11-06: the logs go in a separate companion file next to each dataset, not in it (D-85).
+
 #### I2 · The re-solve tolerance (D-92)
 
 **Question.** A re-solved row gives identical features on the generator's platform and code version, and elsewhere agrees within the verifier's `tol_x` applied to the features: pressures within $10^{-4}\thinspace(p_r - p_s)$, temperatures within $10^{-4}\thinspace(T_r - T_s)$, mass rates within $10^{-4}$ of WTOT. Accept? The alternative stores each operating point's full state, about 11 GB per dataset.
@@ -450,7 +464,9 @@ Publishing is not asked here: Bjarne publishes the datasets himself, after valid
 
 **Recommendation:** accept.
 
-**Bulk-approvable:**
+**Ruling:** Bjarne, 2026-11-06: accepted (D-92).
+
+**Bulk-approvable** (Bjarne, 2026-11-06: approved):
 
 - D-86 · Parquet, one file per table; where the files are published is Bjarne's choice when he publishes them.
 - D-87 · Four tables and two logs, each input in one place (with the edit to `specs/goals.md`, Section 4).
@@ -488,7 +504,9 @@ Publishing is not asked here: Bjarne publishes the datasets himself, after valid
 
 **Recommendation** (revised 2026-11-06: physics decides). Compute each fluid's own offsets, not the three examples': in R9, flash the matched composition through the well's own separator (its stages at $p_\text{sep}$ and $T_\text{sep}$, then stock tank) and through one stage at standard conditions, and shift the targets by the difference (one or two passes, since the offsets depend on the composition), so that the table fluid's field-reported GOR, API and gas gravity are the drawn ones. The single tie line that PVT-TAB-1's GOR axis needs is kept, since the matching stays single-stage; only the targets move. Record the offsets with the fluid.
 
-**Bulk-approvable:**
+**Ruling:** Bjarne, 2026-11-06: per-fluid offsets by each fluid's own separator flash, in R9 (D-63).
+
+**Bulk-approvable** (Bjarne, 2026-11-06: approved):
 
 - D-61 · Forchheimer's coefficients fitted to the pseudo-pressure at the wellstream's gravity.
 - D-65 · The table's saturation pressure replaces R3's; a fluid is saturated at discovery where it must be. Published evidence supports using the untuned flash's dew point (2026-11-06): over 340 gas condensates, Peng–Robinson without tuning predicts the dew point with an average absolute deviation of 8.6% to 9.3% and a bias of −1% to +3%, by the plus fraction's characterization, against measurement errors of 5% to 10% in the data themselves (Elsharkawy 2002, Table 3 and §8.1). R5's one check, 8% below the measured dew point, lies within that spread, and the table and its saturation pressure come from the same flash, so the fluid stays consistent. The paper's samples span measured dew points of 108 to 816 bar at 4 to 171 °C (Table 1). R3's interim draw, $p_\text{sat} = p_i(1 - x)$, gives R6's condensates 76 to 780 bar at P5 to P95, its low end below any measured sample, a further reason to let the flash set the dew point from the composition.
@@ -540,26 +558,28 @@ PIPESIM, Prosper and LedaFlow publish too little to say.
 
 **Recommendation:** A′, implemented in R9. The proposed text is in `spec-changes.md` (`specs/model/pvt/table.md`).
 
+**Ruling:** Bjarne, 2026-11-06: A′, implemented in R9 (D-64).
+
 ## 4. Proposed changes to decided specs
 
-From `spec-changes.md`. **Every row needs Bjarne's sign-off** (`AGENTS.md`, Needs Bjarne's sign-off); none is made until he signs it off.
+From `spec-changes.md`. **Every row needs Bjarne's sign-off** (`AGENTS.md`, Needs Bjarne's sign-off). *Signed off in substance by Bjarne on 2026-11-06; each edit's final text is reviewed in the PR that makes it (R9, R10).*
 
 | Spec file | What the change says | From | Sign-off |
 |---|---|---|---|
 | `specs/features/022-gas-rate-inflow.md` | Approve the feature spec; approval comes before its implementation (R9) | D-60 (J1) | approved 2026-11-05 |
-| `specs/goals.md`, Compatibility → Datasets | Each sample is an operating point; a draw without one is redrawn and logged; two main tables, plus the surveys, the PVT tables and the two logs | D-52 (ruled), D-85, D-87 | needed |
-| `specs/goals.md`, Direction for v2 → v2.0's model | Names Forchheimer's law (022); volatile oils and condensates as tables from a flash, wet and dry gas as black oil; every cell at most 75°, drains modelled from the heel | D-9, D-10, D-36, D-60 | needed |
-| `specs/goals.md`, header and Decided elsewhere | Adds the ruling of 2026-11-02; points the columns, filters and redraws to `docs/datasets.md` and `specs/sampling.md` once written | D-52 | needed |
-| `specs/constitution.md`, Dataset reproducibility | A row and the rows it references (surveys, PVT tables) carry the inputs to re-solve it | D-87, D-92 | needed |
-| `specs/model/validity.md` | Status line; decision 5 closed (no horizontal cell, at most 75°, drains to the heel); the inclination row's rule; rows for INF-10 and INF-11; notes 9 and 10 updated; a new note 12 on the $p^2$ form's error; items 1 and 3 of Where the sampler leaves the ranges | D-9, D-10, D-22, D-57, D-60, D-61 | needed |
-| `specs/model/inflow.md` | INF-10 and INF-11; `liquid_mass_flow_rate(p_0, p_r, fluid=None)`; the options row; safeguards (odd extension above $p_r$, refusals); sources, vectors, coverage | D-60 | needed |
-| `specs/model/solution.md` | SOL-2 lists INF-10 among the inflows that need $p_0 < p_r$ | D-60 | needed |
-| `specs/model/README.md` | The Inflow row; independent checks for INF-10 and INF-11; a fifth well in `vectors/v2_rows.json`, a change to `v2.0.0`'s row vectors | D-60 | needed |
-| `specs/model/nomenclature.md` | $a$, $b$, $\Delta$; a gas well's CGR and WGR held as `gor` and `wlr` | D-60 | needed |
-| `specs/model/pvt/table.md` | PVT-TAB-1 drops the check that $R_{so}$ does not fall with pressure, and adds two: the oil phase's mass positive, and $p/Z$ strictly increasing in $p$; PVT-TAB-6 keeps a liquid trace $\delta$ where the stream is all vapour; feature 018's ruling 10 lapses | D-64 (K1) | needed |
-| `specs/architecture.md` | The `InflowModel` row with the fluid argument; the discretization's call; the Rust core's refusal of a gas-rate inflow without gas; the feature map | D-60 | needed |
-| `specs/features/README.md` | A row for 022 once approved | D-60 | needed |
-| Not drafted yet (R10, R11) | The v2 version of `specs/sampling.md` with SMP IDs; the v2 schema in `docs/datasets.md` | all entries | needed |
+| `specs/goals.md`, Compatibility → Datasets | Each sample is an operating point; a draw without one is redrawn and logged; two main tables, plus the surveys and the PVT tables, with the two logs in a companion file next to each dataset (I1, 2026-11-06) | D-52 (ruled), D-85 (ruled), D-87 | approved in substance 2026-11-06 |
+| `specs/goals.md`, Direction for v2 → v2.0's model | Names Forchheimer's law (022); volatile oils and condensates as tables from a flash, wet and dry gas as black oil; every cell at most 75°, drains modelled from the heel | D-9, D-10, D-36, D-60 | approved in substance 2026-11-06 |
+| `specs/goals.md`, header and Decided elsewhere | Adds the ruling of 2026-11-02; points the columns, filters and redraws to `docs/datasets.md` and `specs/sampling.md` once written | D-52 | approved in substance 2026-11-06 |
+| `specs/constitution.md`, Dataset reproducibility | A row and the rows it references (surveys, PVT tables) carry the inputs to re-solve it | D-87, D-92 | approved in substance 2026-11-06 |
+| `specs/model/validity.md` | Status line; decision 5 closed (no horizontal cell, at most 75°, drains to the heel); the inclination row's rule; rows for INF-10 and INF-11; notes 9 and 10 updated; a new note 12 on the $p^2$ form's error; items 1 and 3 of Where the sampler leaves the ranges | D-9, D-10, D-22, D-57, D-60, D-61 | approved in substance 2026-11-06 |
+| `specs/model/inflow.md` | INF-10 and INF-11; `liquid_mass_flow_rate(p_0, p_r, fluid=None)`; the options row; safeguards (odd extension above $p_r$, refusals); sources, vectors, coverage | D-60 | approved in substance 2026-11-06 |
+| `specs/model/solution.md` | SOL-2 lists INF-10 among the inflows that need $p_0 < p_r$ | D-60 | approved in substance 2026-11-06 |
+| `specs/model/README.md` | The Inflow row; independent checks for INF-10 and INF-11; a fifth well in `vectors/v2_rows.json`, a change to `v2.0.0`'s row vectors | D-60 | approved in substance 2026-11-06 |
+| `specs/model/nomenclature.md` | $a$, $b$, $\Delta$; a gas well's CGR and WGR held as `gor` and `wlr` | D-60 | approved in substance 2026-11-06 |
+| `specs/model/pvt/table.md` | PVT-TAB-1 drops the check that $R_{so}$ does not fall with pressure, and adds two: the oil phase's mass positive, and $p/Z$ strictly increasing in $p$; PVT-TAB-6 keeps a liquid trace $\delta$ where the stream is all vapour; feature 018's ruling 10 lapses | D-64 (K1) | approved in substance 2026-11-06 (K1) |
+| `specs/architecture.md` | The `InflowModel` row with the fluid argument; the discretization's call; the Rust core's refusal of a gas-rate inflow without gas; the feature map | D-60 | approved in substance 2026-11-06 |
+| `specs/features/README.md` | A row for 022 once approved | D-60 | approved in substance 2026-11-06 |
+| Not drafted yet (R10, R11) | The v2 version of `specs/sampling.md` with SMP IDs; the v2 schema in `docs/datasets.md` | all entries | approved in substance 2026-11-06 |
 
 ## 5. Feature 022 in brief
 

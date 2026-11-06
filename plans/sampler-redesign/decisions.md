@@ -310,7 +310,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** $H/L$ of 0.33 / 0.65 / 0.97; the injection pressures are an onshore textbook range, and offshore systems may run higher (no source in hand).
 - **Needs sign-off:** yes (sampling; the Goals' new draw, feature 021).
 - **Used by:** Gas lift: injection depth; Mapping.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group F): the valve at the pressure-balance point, with the injection pressure by well type: platform and onshore wells $U(48, 85)$ bar at the surface, subsea wells $U(130, 210)$ bar at the tree [own analysis of BSEE's well tests and Petrobras' 3W Dataset].
 
 ### D-30 · The lift gas's temperature
 
@@ -320,7 +320,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** the annulus gas exchanges heat with the formation on its way down (Hasan and Kabir 2018, §12.2.2), but no numbers are in hand; the 30% is an own choice.
 - **Needs sign-off:** yes (sampling; a Goals' new draw).
 - **Used by:** Gas lift: lift-gas temperature; Mapping.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group F's bulk list): approved.
 
 ### D-31 · The lift-gas capacity
 
@@ -392,7 +392,7 @@ Entries D-37 to D-56 are R4's (2026-10-30), for the sample part of `sampling-dra
 - **Realism:** no public distribution of choke openings in operation [WP §8]. Chokes limit rates for regulations, surface equipment, sand and coning (Guo et al. 2007, §5.1, p. 5/60), so operating wells are mostly choked back and late ones often fully open. The draws give 5.0% at fully open and 5.1% below 0.1; v1's draws failed mostly at small openings (L6).
 - **Needs sign-off:** yes (sampling; Bjarne's goal 4).
 - **Used by:** `sol-2`, Choke position; D-47's set points; `sampler_draft_samples.py`.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group G's bulk list): approved.
 
 ### D-38 · `sol-2`'s lift-gas rate: uniform to the capacity, off in 10% of the slots
 
@@ -402,7 +402,7 @@ Entries D-37 to D-56 are R4's (2026-10-30), for the sample part of `sampling-dra
 - **Realism:** von Flatern (2015, Fig. 1) optimises seven wells between 0.5 and 6.5 MMscf/d; beyond a limiting GLR more gas raises the gradient (Golan and Whitson 1991, p. 538); below a minimum rate lifted wells head (Asheim 1988, p. 1452). The share of time with lift gas off has no public source. Draws: 10.0% of lifted wells' slots without lift gas; a well that needs lift has no operating point there.
 - **Needs sign-off:** yes (sampling; Bjarne's goal 5).
 - **Used by:** `sol-2`, Lift-gas rate; D-47; D-50's best rate.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group F's bulk list): approved with the lift gas off in 20% of a lifted well's slots, not 10%.
 
 ### D-39 · The separator pressure per sample: ±10% around the nominal
 
@@ -412,7 +412,7 @@ Entries D-37 to D-56 are R4's (2026-10-30), for the sample part of `sampling-dra
 - **Realism:** no public spread of separator or manifold pressures [WP §7]; v1 used ±10% (SMP-20). In sonic flow the downstream pressure does not reach the well (Guo et al. 2007, §5.2, p. 5/60). Draws: 16.6% of `sol-2` slots below 10 bar.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** `sol-2`, Separator pressure; `nsol-2`, Separator over the life.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group G's bulk list): approved.
 
 ### D-40 · `sol-2`'s drift, with the GOR tied to the drifted pressure
 
@@ -422,7 +422,7 @@ Entries D-37 to D-56 are R4's (2026-10-30), for the sample part of `sampling-dra
 - **Realism:** the sizes are the Goals'. Below the bubble point the GOR rises as the pressure falls (McCain 1990, pp. 151, 153), which the tie keeps. Draws: saturated oils' GOR within 0.92 to 1.09 of nominal (P5 to P95), against 0.95 to 1.06 for all wells; 1.11% of the slots have $p_r \le p_s$ and no operating point.
 - **Needs sign-off:** yes (sampling; the Goals set the sizes).
 - **Used by:** `sol-2`, Drift of the reservoir; `nsol-2`, Drift between dates.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group G's bulk list): approved.
 
 ### D-41 · `nsol-2`'s life: the span, the clock and the start
 
@@ -432,7 +432,7 @@ Entries D-37 to D-56 are R4's (2026-10-30), for the sample part of `sampling-dra
 - **Realism:** Arps's forms (Ahmed 2006, Eqs. 16-1 to 16-4) with $b$ of 0 to 0.5, 0.3 for solution-gas and 0.5 for water drive (Golan and Whitson 1991, p. 385); offshore field declines of 7 to 23% a year (Miller et al. 2009) [RF §11]; Norwegian shut-down fields' producing lives [own analysis of Sodir's FactMaps], a sample cut short by the fields still producing. Draws: $T_\text{life}$ 8.6 / 15.6 / 27.9 years.
 - **Needs sign-off:** yes (sampling; the Goals' "a well's 200 samples span its life").
 - **Used by:** `nsol-2`, The well and its states; Life span and the depletion clock; every trend.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group G): a steeper decline, so that the last fifth of a life falls to about a tenth of the first year's rate, set on the rework's pilot against the per-well rows [own analysis of BOEM's OGOR-A production, ANP's production by well and NSTA's production by well: rate_over_first_year, producing_life]; lives may be shorter than 8 years.
 
 ### D-42 · `nsol-2`'s reservoir pressure
 
@@ -442,7 +442,7 @@ Entries D-37 to D-56 are R4's (2026-10-30), for the sample part of `sampling-dra
 - **Realism:** the gas material balance is a straight line of $p/z$ against cumulative production (Ahmed 2006, Eq. 13-8, p. 861). Golan and Whitson's (1991) Example 4.11 is fitted within 0.008 $p_i$ at $\gamma$ = 1.40; a straight line misses it by up to 0.055 $p_i$. One example only. Draws: core oils' $p_r/p_i$ medians 0.985, 0.84 and 0.81 at the start, the middle and the end of the life; gases 0.98, 0.59 and 0.45.
 - **Needs sign-off:** yes (sampling; Bjarne's goal 1 in `nsol-2`).
 - **Used by:** `nsol-2`, Reservoir pressure; the GOR (D-44); the inflow (D-45); the lift's static check (D-49).
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group G's bulk list): approved.
 
 ### D-43 · `nsol-2`'s water: a jump at breakthrough, then the semilog WOR
 
@@ -452,7 +452,7 @@ Entries D-37 to D-56 are R4's (2026-10-30), for the sample part of `sampling-dra
 - **Realism:** the fractional flow is S-shaped in the water saturation (Ahmed 2006, Eq. 14-22, Fig. 14-12) and the ratio of relative permeabilities a straight line on semilog paper (Eq. 5-28), so the logit of the water cut is linear in the saturation; the water cut "increases suddenly" at breakthrough (p. 970). Under pressure support the draws give 0.19 / 0.55 / 0.68 / 0.78 at 0–5 / 5–10 / 10–20 / 20–30 years on production, against Norwegian oil fields' medians (fields) [RF §9; own analysis of Sodir's FactMaps]; by stage, 0.32 in mid-life and 0.68 late against R3's 0.36 and 0.77.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** `nsol-2`, Water; the lift's static check (D-49).
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group G's bulk list): approved.
 
 ### D-44 · `nsol-2`'s GOR: R3's formula along the pressure, without the late fall
 
@@ -472,7 +472,7 @@ Entries D-37 to D-56 are R4's (2026-10-30), for the sample part of `sampling-dra
 - **Realism:** $h$ falls with production time (Hasan and Kabir 2012, Eq. 2), roughness grows with corrosion and scale [WP §6, §10]. Draws: $h$ medians 8.0, 6.2 and 6.0 W/(m² K) at the start, the middle and the end.
 - **Needs sign-off:** yes (sampling; the per-sample $h$ and $\varepsilon$ are new columns for R7).
 - **Used by:** `nsol-2`, Well properties that age; R5 (a composite inflow).
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group G's bulk list): approved.
 
 ### D-46 · `nsol-2`'s separator: two step-downs
 
@@ -482,7 +482,7 @@ Entries D-37 to D-56 are R4's (2026-10-30), for the sample part of `sampling-dra
 - **Realism:** Oseberg B moved to a second stage at 20 bar after 18 years and Njord lowered its stage pressures in tail production (trade press, weak) [WP §7]. Draws: the end's nominal pressure 0.15 / 0.46 / 0.81 of the start's; 17.4% of `nsol-2` slots below 10 bar.
 - **Needs sign-off:** yes (sampling; Bjarne's goal 2 in `nsol-2`).
 - **Used by:** `nsol-2`, Separator over the life.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group G's bulk list): approved.
 
 ### D-47 · `nsol-2`'s control set points
 
@@ -492,7 +492,7 @@ Entries D-37 to D-56 are R4's (2026-10-30), for the sample part of `sampling-dra
 - **Realism:** no public record of how often or how far operators move chokes and lift-gas rates [WP §8, §9]; Petrobras' 3W data may hold such histories (Resource list (R4 additions)). Draws: 17 choke changes per well (7 to 39), one about every 11 months at the median; 2.2% of the operating samples at fully open; 3.8% of the samples with lift on at zero lift gas.
 - **Needs sign-off:** yes (sampling; the Goals' "mixed history").
 - **Used by:** `nsol-2`, Control history.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group G): the choke's set point changes at most samples, mostly by small steps, with occasional redraws, set on the rework's pilot; operators move chokes far more often than once in 11 months [own analysis of Petrobras' 3W Dataset].
 
 ### D-48 · `nsol-2`'s test periods
 
@@ -502,7 +502,7 @@ Entries D-37 to D-56 are R4's (2026-10-30), for the sample part of `sampling-dra
 - **Realism:** multi-rate tests and lift performance curves are practice (Golan and Whitson 1991, §5.3), but no public schedule was found; 8 tests in 8 to 30 years is one every one to four years. Draws: 20.0% of the slots in tests; with them, 5.2% of `nsol-2` slots fully open, near `sol-2`'s 5.0%.
 - **Needs sign-off:** yes (sampling; the Goals' "regular test periods").
 - **Used by:** `nsol-2`, Test periods; The samples and the four tasks.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group G's bulk list): approved.
 
 ### D-49 · Gas lift that starts mid-life
 
@@ -512,7 +512,7 @@ Entries D-37 to D-56 are R4's (2026-10-30), for the sample part of `sampling-dra
 - **Realism:** natural flow ends after 1.7 years and gas lift follows in Golan and Whitson's (1991) Example 4.11; platforms run on gas lift at 80% water cut (Goh et al. 2007) [WP §9]. Draws (without the life scan): 12.6% of the wells lifted from the start, 29.0% later, at 0.20 / 0.48 / 0.85 of the life.
 - **Needs sign-off:** yes (sampling; Bjarne's goal 5; rule 2 depends on a solve, so the lift label of an `nsol-2` well does too, unlike R3's labels).
 - **Used by:** `nsol-2`, Gas lift that starts mid-life; The end of a life.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group F's bulk list): approved.
 
 ### D-50 · The producibility filter, the best rate and the end of a life
 
@@ -532,7 +532,7 @@ Entries D-37 to D-56 are R4's (2026-10-30), for the sample part of `sampling-dra
 - **Realism:** sonic flow at the choke is common and wanted, since it "stabilizes well production rate and separation operation conditions" (Guo et al. 2007, §5.2, p. 5/60); dropping wells choked in most samples removes high-pressure wells and wells at low separator pressures (goals 2 and 3). The drawn choke positions have a standard deviation of about 0.29 per well, against the old threshold of 0.055.
 - **Needs sign-off:** yes (the filters are part of the dataset design, R7; §1.11 was left to this redesign by Bjarne, 2026-10-29).
 - **Used by:** SMP-28's filters; What R6 must measure (the QTOT and choked shares as checks).
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group H's bulk list): approved.
 
 ### D-52 · Fixed sample slots; outcomes recorded, nothing redrawn
 
@@ -552,7 +552,7 @@ Entries D-37 to D-56 are R4's (2026-10-30), for the sample part of `sampling-dra
 - **Realism:** along SOL-3's curve $R(p_0)$ is positive at a low $p_0$, so a continuous $R$ has at least as many stable roots as unstable ones; a set of unstable roots alone has missed one. The Rust core misses roots on some void-fraction branches with the fitted classifier only, which `v2.0.0` leaves out (`specs/model/solution.md`).
 - **Needs sign-off:** yes (sampling; it decides what the data call physical).
 - **Used by:** No operating point or solver failure; D-54; D-55; the generation log.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint H2): as revised by D-102.
 
 ### D-54 · A second backend for solver failures
 
@@ -562,7 +562,7 @@ Entries D-37 to D-56 are R4's (2026-10-30), for the sample part of `sampling-dra
 - **Realism:** not a question of realism: the retry changes no input, so it cannot bias the drawn distributions; it shrinks the share of failures. Its gain is unknown until R6 counts the slots it recovers.
 - **Needs sign-off:** yes (a fallback of the generator: its measured gain is needed, constitution principle 7).
 - **Used by:** A second backend for solver failures; D-55; R6.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint H1): the CasADi retry of the Rust core's solver failures is dropped (the constitution's principle 7: no measured gain); R11 keeps D-92's CasADi re-solve of 100 rows.
 
 ### D-55 · Wells whose best-rate solve fails
 
@@ -572,7 +572,7 @@ Entries D-37 to D-56 are R4's (2026-10-30), for the sample part of `sampling-dra
 - **Realism:** the share is R6's to measure; dropping wells for solver failures favours wells that are easy to solve, which is why the share is bounded and reported by class.
 - **Needs sign-off:** yes (sampling; the 0.5% is a tolerance).
 - **Used by:** Wells whose best-rate solve fails; the generation log.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group H's bulk list): approved.
 
 ### D-56 · The starts
 
@@ -582,7 +582,7 @@ Entries D-37 to D-56 are R4's (2026-10-30), for the sample part of `sampling-dra
 - **Realism:** not a question of realism. A start can only add roots, and changes the operating point only in SOL-6's case of several stable roots, which the log flags.
 - **Needs sign-off:** yes (sampling; part of the generation rules).
 - **Used by:** Starts; D-54.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group H's bulk list): approved.
 
 ### D-57 · S-shaped wells as a third of the deviated class
 
@@ -617,7 +617,7 @@ Entries of R5, merged from its own file on 2026-11-02. The drafts they belong to
 - **Realism:** the fit is within 2% of the reference at the median and 6% at the 5th and 95th percentiles from 20% drawdown to the AOF. The wellstream factor $c$ is 1.01 / 1.05 / 1.14 for R3's condensates and at most 1.01 for wet and dry gas. `nsol-2` refits as $p_r$ falls, as R4 already recomputes $a$ and $b$ (D-45).
 - **Needs sign-off:** yes (sampling).
 - **Used by:** `sampling-draft.md`, Productivity; `specs/features/022-gas-rate-inflow.md`, Units; R6.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group J's bulk list): approved.
 
 ### D-62 · The non-Darcy coefficient from permeability, pay and the completion
 
@@ -637,7 +637,7 @@ Entries of R5, merged from its own file on 2026-11-02. The drafts they belong to
 - **Realism:** the proof matches within 0.01 °API and 0.0003 in 3 iterations for all four wells; the heptanes-plus contents (15.1 and 17.9 mol% for volatile oils, 1.4 and 6.0 for condensates) lie within McCain's limits for their classes. The single-stage basis makes a fluid matched to a field-reported API about 3 to 6 °API lighter in field terms; no statistic of single-stage descriptors is in hand.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** `fluids-draft.md`, The composition; R6.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint J2): per-fluid offsets: in R9 each matched composition is flashed through the well's own separator and through one stage at standard conditions, and the matching targets are shifted by the difference (one or two passes), so that the fluid's field-reported GOR, API and gas gravity are the drawn ones; the single tie line is kept and the offsets are recorded with the fluid.
 
 ### D-64 · Condensates in tables: a trace of liquid where the stream is all vapour, and $R_{so}$ allowed to fall with pressure
 
@@ -651,7 +651,7 @@ Entries of R5, merged from its own file on 2026-11-02. The drafts they belong to
 - **Research** (Bjarne asked, 2026-11-02, how other simulators do it; `sources-condensate-tables.md`): no tool checks the order of a net transfer such as $R_{so}$; OLGA's table generators fill an absent phase from the nearest node, as the trace does; the modified black oil's $R_v$ maps onto ManyWells' columns at one GOR, not back, and is not monotone itself. It recommends this choice plus two checks that hold for every fluid: $\rho_o + R_{so}\rho_{g,\text{sc}} > 0$, and $p/Z$ strictly increasing in $p$ (option A′).
 - **Needs sign-off:** yes, at the checkpoint (`checkpoint.md`, K1): it changes `specs/model/pvt/table.md` (PVT-TAB-1 and PVT-TAB-6), a decided spec.
 - **Used by:** `fluids-draft.md`, The table; `spec-changes.md`; feature 022's `develop+gas well+pvt table` comparison; R6.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint K1): option A′, implemented in R9: a liquid trace of $10^{-4}$ where the flash has none, no order check on $R_{so}$, and two new checks (the oil phase's mass positive, $p/Z$ rising with $p$); the text proposed for `specs/model/pvt/table.md` in `spec-changes.md`.
 
 ### D-65 · The table's saturation pressure replaces R3's, and a fluid is saturated at discovery where it must be
 
@@ -661,7 +661,7 @@ Entries of R5, merged from its own file on 2026-11-02. The drafts they belong to
 - **Realism:** the proof's saturation pressures against R3's: 386 against 513, 359 against 339, 255 against 250 and 289 against 351 bar. Two of four fluids would have been above their saturation pressure at $p_i$: one moved to 0.73 of its GOR, one took the equilibrium vapour at 1.73 times its GOR and 3 °API lighter. R3 draws 30% to 40% of these classes saturated at discovery; the share the rule adds is R6's to measure.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** `fluids-draft.md`, The saturation pressure; `sampling-draft.md`, Saturation pressure and Reservoir state; R6.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group J's bulk list): approved.
 
 ### D-66 · Six published example fluids, a fifth of the table wells, recombined to the drawn GOR
 
@@ -671,7 +671,7 @@ Entries of R5, merged from its own file on 2026-11-02. The drafts they belong to
 - **Realism:** about 500 of a dataset's 2500 table wells, each example used by about 80; their stock-tank oil and gas keep their published composition. The one example with a measured dew point at a stated temperature, Pedersen et al.'s Table 3.8, has 356 bar in the flash against 388 measured.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** `fluids-draft.md`, Published example fluids; R7 (`fluid_source`, the `pvt` rows' source).
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group J's bulk list): approved.
 
 ### D-67 · One table set per well, on its own grid and GOR axis
 
@@ -681,7 +681,7 @@ Entries of R5, merged from its own file on 2026-11-02. The drafts they belong to
 - **Realism:** the proof's tables take 0.5 to 4.6 s per GOR for 370 to 1116 nodes; a `sol-2` well with 3 GORs 2 to 17 s, an `nsol-2` well with up to 11 GORs 6 to 55 s; about 0.6 GB per process. A dataset's 2500 table wells take at most about 3 hours on 12 processes, and up to 0.75 GB of CSV for `sol-2` before compression.
 - **Needs sign-off:** yes (sampling; the size bears on R7's schema).
 - **Used by:** `fluids-draft.md`, The table and One table per well; `datasets-draft.md`'s `pvt` table (R7).
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group J's bulk list): approved.
 
 ### D-68 · NeqSim as a build-time tool of the generator, outside ManyWells' dependencies
 
@@ -691,7 +691,7 @@ Entries of R5, merged from its own file on 2026-11-02. The drafts they belong to
 - **Realism:** NeqSim needs a JVM; under a memory cap of 8 GB its heap must be capped (`-Xmx2g`), or it fails to start threads. The non-goal (no equation of state in ManyWells) holds: the flash runs before the model, as feature 018 decided.
 - **Needs sign-off:** yes (the generation's environment, R7 and R10).
 - **Used by:** `fluids-draft.md`; R6, R10 and R11.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group J's bulk list): approved.
 
 ### D-69 · R6's gas wells before the feature: the interim index on the core, a prototype subclass on CasADi
 
@@ -701,7 +701,7 @@ Entries of R5, merged from its own file on 2026-11-02. The drafts they belong to
 - **Realism:** the plan allows a prototype where the model allows it (Step R5); a user's subclass runs on the CasADi backend (architecture, decision 1).
 - **Needs sign-off:** no beyond the plan; listed so that Bjarne sees what R6's gas-well numbers rest on.
 - **Used by:** R6.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group J's bulk list): approved.
 
 Entries of R7, merged from its own file on 2026-11-02. Entries D-80 to D-85 apply Bjarne's ruling on D-52 (2026-11-02: "200 samples per well" means 200 operating points; a failed draw is redrawn until the well has 200, and every redraw is logged with its inputs and its reason) to R4's generation rules in `sampling-draft.md` (The samples within a well). Entries D-86 to D-94 are the dataset design in `datasets-draft.md`. No solve was run: the shares that decide these entries are R6's to measure, and each entry says which. Every entry needs sign-off, because each sets part of the new `specs/sampling.md` or the dataset schema (`AGENTS.md`, Needs Bjarne's sign-off).
 
@@ -713,7 +713,7 @@ Entries of R7, merged from its own file on 2026-11-02. Entries D-80 to D-85 appl
 - **Realism:** not a question of realism. The redraw distribution is the slot's own, so the samples are the drawn distribution conditioned on an operating point, and the run is deterministic, independent of the order of the wells and the number of processes (SMP-31). The passes make each pass a batch for the batch API (D-93).
 - **Needs sign-off:** yes (sampling; the generation rules).
 - **Used by:** `sampling-draft.md`, Conventions of the samples, Slots and outcomes, How the rules meet acceptance criterion 4; `datasets-draft.md`, `samples.attempt`, The generation.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group H's bulk list): approved.
 
 ### D-81 · The redraw limits, and what happens to a well that reaches one
 
@@ -723,7 +723,7 @@ Entries of R7, merged from its own file on 2026-11-02. Entries D-80 to D-85 appl
 - **Realism:** at a per-attempt failure share $p$ a well needs about $200\thinspace p/(1 - p)$ redraws: 11 at $p$ = 5%, 50 at 20%, 200 at 50%, 400 at 67%. R4's draws give 1.1% of `sol-2` first attempts at $p_r \le p_s$, and 10% lift-off attempts in lifted wells, which a well that needs lift cannot flow at; v1 failed in 3.5% of its draws (L6). Weak wells that pass the producibility filter but flow only near fully open are the wells the limit drops; their share is R6's. With $p \le 2/3$ the chance that a `sol-2` slot needs more than 50 attempts is below $10^{-8}$, so in `sol-2` the per-slot limit only guards against a slot that cannot flow at all; in `nsol-2` it defines a dead date (D-83).
 - **Needs sign-off:** yes (the limits and the 1% target are tolerances; dropping wells shapes the wells' distributions, criterion 4).
 - **Used by:** `sampling-draft.md`, Slots and outcomes, How the rules meet acceptance criterion 4, What R6 must measure; `datasets-draft.md`, `drawn_wells.outcome`, Cost.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint H3): the targets and limits kept, judged on R11's pilot.
 
 ### D-82 · Both outcomes are redrawn; a solver failure after the CasADi retry
 
@@ -733,7 +733,7 @@ Entries of R7, merged from its own file on 2026-11-02. Entries D-80 to D-85 appl
 - **Realism:** a `no_operating_point` redraw conditions the data on the physics: the samples are where the well flows. A `solver_failure` redraw conditions them on the solver, which criterion 4 rules out; the retry shrinks that share, and the target of D-52's draft, below 0.5% of the attempts and of the wells in every class, bounds the rest. The share is R6's.
 - **Needs sign-off:** yes (sampling; the retry is solver machinery whose gain R6 measures, constitution principle 7; the 0.5% target is a tolerance).
 - **Used by:** `sampling-draft.md`, Slots and outcomes, A second backend for solver failures, How the rules meet acceptance criterion 4; `datasets-draft.md`, `redraws.outcome`.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoints H1 and H3): solver failures redrawn and logged without the CasADi retry; the targets kept and judged on R11's pilot.
 
 ### D-83 · `nsol-2`'s redraws: the date kept, the controls changed for one slot; a failed date drops the well
 
@@ -743,7 +743,7 @@ Entries of R7, merged from its own file on 2026-11-02. Entries D-80 to D-85 appl
 - **Realism:** an operator whose well stops at a set point changes the set point; a one-slot change from the planned value is the nearest open-loop analogue. With D-84 every date lies between scan points where the best rate passes, so failed dates should be rare; R6 measures their share, and above 0.5% of the `nsol-2` wells a finer life scan is the fix.
 - **Needs sign-off:** yes (sampling; the Goals' open loop and "a well's 200 samples span its life").
 - **Used by:** `sampling-draft.md`, Redraws in `nsol-2`, Test periods, How the rules meet acceptance criterion 4; `datasets-draft.md`, `samples.attempt`, `drawn_wells.outcome`.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint H3): the targets and limits kept, judged on R11's pilot.
 
 ### D-84 · `nsol-2`'s life ends at the last scan point that passes, and lift starts before natural flow fails
 
@@ -753,7 +753,7 @@ Entries of R7, merged from its own file on 2026-11-02. Entries D-80 to D-85 appl
 - **Realism:** the life ends up to 5% of $T_\text{life}$ earlier, and lift starts up to 5% earlier, than R4 drafted: within the resolution of the scan, and on the side of the floor's margin. The share of lives cut and of `short_life` wells is R6's.
 - **Needs sign-off:** yes (sampling; the producibility filter's use over the life, D-50).
 - **Used by:** `sampling-draft.md`, The end of a life, Gas lift that starts mid-life, Producibility filter, Redraws in `nsol-2`.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group H's bulk list): approved.
 
 ### D-85 · The redraw log and the well log, published with each dataset
 
@@ -763,7 +763,7 @@ Entries of R7, merged from its own file on 2026-11-02. Entries D-80 to D-85 appl
 - **Realism:** the logs let a user measure the bias the redraws cause (criterion 4), and the `no_operating_point` attempts mark where each well cannot flow, which surrogate models and production optimisation can use. They are synthetic and hold nothing confidential.
 - **Needs sign-off:** yes (part of the dataset schema; whether to publish the logs is Bjarne's).
 - **Used by:** `sampling-draft.md`, Slots and outcomes, The generation log; `datasets-draft.md`, `redraws`, `drawn_wells`.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint I1): the logs (`redraws`, `drawn_wells`) are published as a separate companion file next to each dataset, not in it.
 
 ### D-86 · The datasets on Hugging Face: the same repository, new configs, parquet
 
@@ -773,7 +773,7 @@ Entries of R7, merged from its own file on 2026-11-02. Entries D-80 to D-85 appl
 - **Realism:** not a question of realism. Parquet with configs is what the Hugging Face loader and viewer read directly, and `load_dataset(…, name='manywells-sol-2')` gives the samples as `name='manywells-sol-1'` gives v1's.
 - **Needs sign-off:** yes (publishing is release work; the repository is Bjarne's choice).
 - **Used by:** `datasets-draft.md`, The datasets.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group I's bulk list): approved.
 
 ### D-87 · Four tables and two logs, each input in one place
 
@@ -783,7 +783,7 @@ Entries of R7, merged from its own file on 2026-11-02. Entries D-80 to D-85 appl
 - **Realism:** not a question of realism. A survey has 2 to about 150 stations and many wells may share a table (R5), so neither fits a row. The design needs `specs/goals.md`'s "two tables" to name the others (`spec-changes.md`).
 - **Needs sign-off:** yes (the dataset schema; the edit to `specs/goals.md`).
 - **Used by:** `datasets-draft.md`, The datasets, The schema; `spec-changes.md`.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group I's bulk list): approved, with the two logs in a companion file next to each dataset (I1).
 
 ### D-88 · Column names and types
 
@@ -793,7 +793,7 @@ Entries of R7, merged from its own file on 2026-11-02. Entries D-80 to D-85 appl
 - **Realism:** not a question of realism.
 - **Needs sign-off:** yes (the dataset schema).
 - **Used by:** `datasets-draft.md`, The schema, What changes against v1.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group I's bulk list): approved.
 
 ### D-89 · Labels as strings with fixed codes
 
@@ -803,7 +803,7 @@ Entries of R7, merged from its own file on 2026-11-02. Entries D-80 to D-85 appl
 - **Realism:** not a question of realism.
 - **Needs sign-off:** yes (the dataset schema).
 - **Used by:** `datasets-draft.md`, Labels and codes.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group I's bulk list): approved.
 
 ### D-90 · A train–test split by well, 80/20, stratified
 
@@ -813,7 +813,7 @@ Entries of R7, merged from its own file on 2026-11-02. Entries D-80 to D-85 appl
 - **Realism:** not a question of realism. A split by row would put a well's samples in both parts and measure interpolation within wells.
 - **Needs sign-off:** yes (the dataset design).
 - **Used by:** `datasets-draft.md`, The split and the documentation; `wells.split`.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group I's bulk list): approved.
 
 ### D-91 · Seeds, IDs and the draw index
 
@@ -823,7 +823,7 @@ Entries of R7, merged from its own file on 2026-11-02. Entries D-80 to D-85 appl
 - **Realism:** not a question of realism.
 - **Needs sign-off:** yes (the dataset design).
 - **Used by:** `datasets-draft.md`, The generation, `wells`.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group I's bulk list): approved.
 
 ### D-92 · The re-solve check and its tolerance
 
@@ -833,7 +833,7 @@ Entries of R7, merged from its own file on 2026-11-02. Entries D-80 to D-85 appl
 - **Realism:** not a question of realism. The Rust core is deterministic, and float64 round-trips through parquet; `tol_x` is about 0.01 bar and 0.01 K (`specs/verification.md`, Tolerances).
 - **Needs sign-off:** yes (a tolerance; the constitution's Dataset reproducibility).
 - **Used by:** `datasets-draft.md`, Re-solving a sample, Checks at generation.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint I2): accepted: identical features on the generator's platform and code version, elsewhere within the verifier's `tol_x` applied to the features.
 
 ### D-93 · The generator: the process pool, resumable chunks and a clean commit
 
@@ -843,7 +843,7 @@ Entries of R7, merged from its own file on 2026-11-02. Entries D-80 to D-85 appl
 - **Realism:** not a question of realism. At 0.15 s per solve each dataset takes about 85 to 120 CPU hours, 8 to 10 hours on 12 processes (`datasets-draft.md`, Cost); R6 measures the mean solve time, the time outside the core and the pool's speed-up.
 - **Needs sign-off:** yes (new generator machinery; the batch API is solver machinery under principle 7).
 - **Used by:** `datasets-draft.md`, The generation.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group H's bulk list): approved.
 
 ### D-94 · A datasheet for each dataset, in the repo and on the card
 
@@ -853,7 +853,7 @@ Entries of R7, merged from its own file on 2026-11-02. Entries D-80 to D-85 appl
 - **Realism:** not a question of realism.
 - **Needs sign-off:** yes (release documentation).
 - **Used by:** `datasets-draft.md`, The split and the documentation.
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group I's bulk list): approved.
 
 Entries of R6, merged from its own file on 2026-11-02. Each entry changes the draft where the prototype's measurements showed it failing a goal or an acceptance criterion (`r6-measurements.md`). The numbers are the prototype's (`plans/evidence/sampler_prototype.py` and `sampler_prototype_report.py`), in the interim mapping: volatile oils and gas condensates as the black oil, and gas and condensate wells on a productivity index (`sampling-draft.md`, Mapping). Every entry needs sign-off, because each sets part of the new `specs/sampling.md` (`AGENTS.md`, Needs Bjarne's sign-off).
 
@@ -889,7 +889,7 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Realism:** the core leaves out scan points where a march leaves the range of the closures, near $p_s$ through choked cells or where Joule–Thomson cooling leaves a cell's energy row without a root (`rust/src/shoot.rs`), and refines the edges of the finite region. Such points are routine: 13.9% and 14.2% of the operating points' searches in the draft's `sol-2` and `nsol-2` pilots had them. The draft's pilots had 211 attempts with non-finite points, no root and no rejected sign change (144 in `sol-2`, 67 in `nsol-2`). The CasADi retry ran on 72 of them (the others belonged to wells already at a limit): it found no root in 70 and recovered 2, both in `nsol-2`. So the change counts about 3% of these attempts as no operating point where a root exists, against 97% that D-53 counts as solver failures where none does. Under D-53, 4 tail wells of the `sol-2` pilot were dropped at the solver-failure limit (D-81), 3 of them for such attempts only, and every such attempt counted against the solver, which misstates criterion 4's split. In R6's pilots the solver failures left in the accepted `sol-2` wells fell from 8 to 0, and the retries from 52 to 11.
 - **Needs sign-off:** yes (sampling; it decides what the data call physical).
 - **Used by:** `sampling-draft.md`, No operating point or solver failure, A second backend for solver failures; `sampler_prototype.py` (`solve`).
-- **Ruling:**
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint H2): approved.
 
 ### D-103 · The coverage tail's drawn share raised to 0.20
 
