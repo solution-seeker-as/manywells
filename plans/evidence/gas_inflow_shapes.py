@@ -59,9 +59,10 @@ P2_LIMIT = 2000 * 0.0689476  # bar: 2000 psia, below which mu Z is about constan
 
 
 def pseudo_pressure(bo, p_r, T_r, n=400):
-    """m(p) = 2 int_1^p p/(mu Z) dp on a grid from 1 bar to p_r (bar2/(Pa s)), and mu Z at p_r (Pa s)."""
+    """m(p) = 2 int_1^p p/(mu Z) dp on a grid from 1 bar to p_r (bar2/(Pa s)), and mu Z at p_r (Pa s). bo is any PVT
+    model with a gas: a black oil, or a PVTTable (its gas and Z, PVT-TAB-4 and PVT-TAB-5)."""
     p = np.linspace(1.0, p_r, n)
-    muz = np.array([bo.gas_viscosity(x, T_r, bo.gas_density(x, T_r)) * bo.z_factor(x, T_r) for x in p])
+    muz = np.array([float(bo.gas_viscosity(x, T_r, bo.gas_density(x, T_r)) * bo.z_factor(x, T_r)) for x in p])
     f = 2 * p / muz
     m = np.concatenate([[0.0], np.cumsum(0.5 * (f[1:] + f[:-1]) * np.diff(p))])
     return p, m, muz[-1]
@@ -69,6 +70,19 @@ def pseudo_pressure(bo, p_r, T_r, n=400):
 
 def vogel(r):
     return 1 - 0.2 * r - 0.8 * r**2
+
+
+def p2_fit(q_of, p_r, nonnegative=False):
+    """a and b of p_r^2 - p_wf^2 = a q + b q^2 fitted by least squares of (p_r^2 - p_wf^2)/q against q to the rates
+    q_of(p_wf) at p_wf/p_r in R_POINTS and at the AOF: p2_ls below, and the sampler's fit (D-61). nonnegative keeps
+    b >= 0, as INF-10 needs: where the free fit's slope is negative, the least squares with b = 0, a the mean of
+    (p_r^2 - p_wf^2)/q."""
+    dp2 = np.array([p_r**2 - (f * p_r) ** 2 for f in R_POINTS] + [p_r**2 - P_ATM**2])
+    q = np.array([q_of(p_r * f) for f in R_POINTS] + [q_of(P_ATM)])
+    b, a = np.polyfit(q, dp2 / q, 1)
+    if nonnegative and b < 0:
+        return float(np.mean(dp2 / q)), 0.0
+    return float(a), float(b)
 
 
 def curves(w):
@@ -88,9 +102,7 @@ def curves(w):
     n_bp, ln_c = np.polyfit(np.log(dp2_t), np.log(q_t), 1)
     b_t, a_t = np.polyfit(q_t, dp2_t / q_t, 1)  # the four-point test's straight line: intercept a, slope b
     b_t = max(b_t, 1e-300)  # gas_rate divides by b
-    dp2_all = np.array([p_r**2 - (f * p_r) ** 2 for f in R_POINTS] + [p_r**2 - P_ATM**2])
-    q_all = np.array([q_pseudo(p_r * f) for f in R_POINTS] + [q_pseudo(P_ATM)])
-    b_ls, a_ls = np.polyfit(q_all, dp2_all / q_all, 1)
+    a_ls, b_ls = p2_fit(q_pseudo, p_r)
     b_ls = max(b_ls, 1e-300)
     mu_cp = 1000 * bo.gas_viscosity(p_r, T_r, bo.gas_density(p_r, T_r))
     h_ft = w['h_net'] * w['f_geo'] / 0.3048

@@ -308,12 +308,16 @@ def cp_methane(p, T):
 
 
 # --- The draws -------------------------------------------------------------------------------------------------------
-def draw_well(seed, k, stage_override=None, force_lift=False):
+def draw_well(seed, k, stage_override=None, force_lift=False, fluid=None):
     """One well of the draft, as a dict of its draws, labels and derived quantities, and its survey stations.
     stage_override sets the life stage after it is drawn, so that every generator draws the same numbers: the same
     well at another stage of its life, as R4's nsol-2 evolution uses it (sampler_draft_samples.py). force_lift gives
     the well its lift design even where the assignment leaves it natural (an nsol-2 well whose lift starts by D-49's
-    rules 1 or 2); it changes no other draw."""
+    rules 1 or 2); it changes no other draw. fluid is a volatile oil's or condensate's built table
+    (table_fluids.py; fluids-draft.md): its p_sat at T_r and initial GOR R_i, and its rho_o and rho_g (the model's,
+    single-stage, D-63), and where the fluid is not matched to the drawn API and gas gravity (a published example,
+    an equilibrium phase), its api and sg_gas. They replace the fluid block's after its draws (D-65), so that no draw
+    moves and every later block follows the table."""
     w = {'well': k}
     flags = []
 
@@ -471,6 +475,11 @@ def draw_well(seed, k, stage_override=None, force_lift=False):
         R_i = 1e6 / (logu(r, 2.8, 112) if tail else tlognorm(r, 30, 1.2, 2.8, 112))
     else:
         R_i = 1e6 / logu(r, 0.5, 2.8)
+    if fluid is not None:  # a built table's saturation pressure, initial GOR and densities (D-63, D-65, D-66)
+        sat_p, R_i = fluid['p_sat'], fluid['R_i']
+        api, sg = fluid.get('api', api), fluid.get('sg_gas', sg)
+        rho_o, rho_g = fluid['rho_o'], fluid['rho_g']
+        bo = BlackOil(rho_o=rho_o, rho_g=rho_g, gas_law='dak', p_sep=p_sep, T_sep=T_sep)
     w.update(api=api, sg_gas=sg, rho_o=rho_o, rho_g=rho_g, R_i=R_i, p_sat=sat_p)
 
     # Life stage: the reservoir's state now
@@ -640,7 +649,7 @@ def draw_well(seed, k, stage_override=None, force_lift=False):
         k_l = q_l_ref * rho_lsc / 86400 / (delta_d * p_r)  # interim productivity index (Mapping)
         w.update(a_gas=a, b_gas=b, a_ratio=a / a_v, b_ratio=b / b_v, D_nondarcy=D_nd, AOF=aof, q_g_ref=q_g_ref)
         w.update(f_geo=f_geo, k_l=k_l)
-        w.update(inflow='gas_rate', q_l_ref=q_l_ref, wgr=wgr)
+        w.update(inflow='forchheimer', q_l_ref=q_l_ref, wgr=wgr)  # feature 022's label (D-60); R3's 'gas_rate'
 
     # Choke
     r = gen('choke')
