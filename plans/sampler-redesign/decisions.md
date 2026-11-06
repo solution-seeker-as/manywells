@@ -921,3 +921,13 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Needs sign-off:** yes (sampling).
 - **Used by:** `sampling-draft.md`, Reservoir state at the life stage and `nsol-2`: a well's life; `sampler_draft_samples.py` (`sol2_well_at`, `Life`); `sampler_prototype.py` (`sol2_well`).
 - **Ruling:** Bjarne, 2026-11-06: "One life for both", after asking for a simple and reasonable method and that `nsol-2`'s and `sol-2`'s late stages be the same.
+
+### D-106 · A table's pressure nodes where p/Z falls are dropped as flash artefacts
+
+- **Step:** R9, 2026-11-06. Amends D-67's table build.
+- **Choice made:** after a table is flashed (`table_fluids.py`, `rising_pz_nodes`), the pressures at which p/Z does not rise strictly at some temperature, the nodes outside the longest subsequence along which it rises (of the longest, the one ending highest, so that a spike goes), are dropped at every temperature of that GOR's table, so that the grid stays rectangular; a table that would lose more than 5% of its pressures fails, and its well is `table_failed`. The manifest records the dropped pressures.
+- **Alternatives:** drop the wells whose tables fail PVT-TAB-1 (`table_failed`), which in R9's check run took 12 of 86 table sets, 6 of 16 in `nsol-2` and 5 of its 9 condensates, all in hot reservoirs, and so biases the table classes; relax PVT-TAB-1's p/Z check, which K1 added to catch such errors; a better flash (NeqSim's settings changed nothing: the artefact is deterministic).
+- **Realism:** near a hot fluid's near-critical bubble point NeqSim's TP flash splits the stream into two near-identical liquids, or misses the split at a single node (R9's check run). The dropped nodes are 1 to 2 of 75 to 119 pressures in the affected tables; the bilinear interpolation bridges them.
+- **Needs sign-off:** yes (the table build behind the datasets; new data-side machinery).
+- **Used by:** `table_fluids.py` (`build_tables`, `rising_pz_nodes`, `MAX_DROPPED`); R9's pilots.
+- **Ruling:**

@@ -98,6 +98,7 @@ P_SC = P_REF / CF_BAR
 M_AIR = 28.97
 V_M_SC = R_UNIVERSAL * T_REF / P_REF  # m3/kmol of an ideal gas at standard conditions
 DELTA = 1e-4  # liquid mass fraction kept where the stream is all vapour
+MAX_DROPPED = 0.05  # the largest share of a table's pressures that rising_pz_nodes may drop; beyond it the table fails
 P_EXAMPLE = 0.2  # a table well's probability of a published example fluid of its class, D-66
 GOR_STEP = 1.25  # the largest ratio of neighbouring GORs on a table set's axis, D-67
 
@@ -727,17 +728,47 @@ def build_fluid(w):
     )  # fmt: skip
 
 
+def rising_pz_nodes(df):
+    """The pressures to drop from one table so that p/Z rises strictly with p at every temperature (PVT-TAB-1): at
+    each temperature the nodes outside the longest subsequence along which p/Z rises, dropped at every temperature so
+    that the grid stays rectangular. They are flash artefacts: near a hot fluid's near-critical bubble point NeqSim's
+    TP flash can split the stream into two near-identical liquids, or miss the split at a single node (R9's check
+    run). Needs Bjarne's sign-off."""
+    drop = set()
+    for _, g in df.sort_values('p').groupby('T'):
+        pz = (g.p / g.Z).to_numpy()
+        n = len(pz)
+        best, prev = [1] * n, [-1] * n
+        for i in range(n):
+            for j in range(i):
+                if pz[j] < pz[i] and best[j] + 1 > best[i]:
+                    best[i], prev[i] = best[j] + 1, j
+        i, keep = n - 1 - int(np.argmax(best[::-1])), set()  # of the longest, the one that ends highest: a spike goes
+        while i >= 0:
+            keep.add(i)
+            i = prev[i]
+        drop |= {float(p) for i, p in enumerate(g.p) if i not in keep}
+    return sorted(drop)
+
+
 def build_tables(w, fluid, axis, path):
     """The well's table set at the GORs of its axis, each on the well's own grid with its saturation pressures as
     nodes (tabulate, PVT-TAB-6), written as one CSV with a gor column (PVTTableSet's format). Returns the nodes."""
     fl = Flash(fluid['stream']['fractions'])
     sep = fluid['stream']['sep']
     T_axis = np.array(w['T_axis'], dtype=float)
-    frames = []
+    frames, dropped = [], {}
     for g in axis['gors']:
         df, _ = tabulate(fl, fl.recombine(sep, g), (sep['rho_o'], sep['rho_g'], g), T_axis, w['p_top'])
+        bad = rising_pz_nodes(df)
+        if len(bad) > MAX_DROPPED * df.p.nunique():
+            raise ValueError(f'p/Z falls at {len(bad)} of {df.p.nunique()} pressures at GOR {g:.6g}')
+        if bad:
+            dropped[f'{g:.6g}'] = bad
+            df = df[~df.p.isin(bad)]
         frames.append(df.assign(gor=g))
     df = pd.concat(frames, ignore_index=True)
+    w['_dropped'] = dropped
     src = fluid['source'] if fluid['source'] != 'synthetic' else f'synthetic, draw index {w["well"]}'
     header = [
         '# ManyWells PVT table (specs/model/pvt/table.md)',
@@ -783,6 +814,7 @@ def build_task(task):
         try:
             nodes = build_tables(w, fluid, axis, outdir / f'k{k:06d}.csv')
             man |= dict(csv=f'k{k:06d}.csv', gors=axis['gors'], nodes=nodes, n_T=len(w['T_axis']), p_top=w['p_top'])
+            man['dropped_pressures'] = w.pop('_dropped', {})
         except Exception:  # noqa: BLE001
             man |= dict(status='failed', step='tables', error=traceback.format_exc()[-1500:])
     man['seconds'] = fluid['seconds'] | dict(tables=time.time() - t0)
