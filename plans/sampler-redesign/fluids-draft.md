@@ -154,6 +154,7 @@ These are scaled from the proof's four fluids, not measured on a dataset. Neithe
   - the solved wells with the tables against the interim black oil, on both backends, and the share of `off_table` roots;
   - whether the Rust core's march and temperature solve hold with $R_{so}$ falling in $p$ (its assumption tests on a test well with a condensate table);
   - the cost and size per dataset, for R7.
+- **Found by R9's check run** (2026-11-06; `plans/evidence/README.md`, R9's integration): PVT-TAB-1 refuses 12 of the 86 table sets built (6 of 70 for `sol-2`'s draws 0 to 199, 6 of 16 for `nsol-2`'s draws 0 to 59; 8 condensates and 4 volatile oils, mostly hot reservoirs), each for $p/Z$ falling at 1 to 7 pairs of neighbouring nodes. At those nodes NeqSim's TP flash, with or without its check for more phases, splits the stream into two near-identical liquids just below a near-critical bubble point, or misses the split at one pressure; the flash is deterministic, so a rerun gives the same. The wells are `table_failed` and replaced. Dropping the pressure nodes outside the longest run of rising $p/Z$ at each temperature, 1 or 2 of 75 to 119 per affected table, would let all twelve pass; that repair is not ruled, so it is not in the build.
 - **For R2's second pass:** a public set of condensate and volatile-oil compositions with their measured saturation pressures, for a check of the flash beyond one example (Nemeth and Kennedy 1967 and Elsharkawy 2002, on R2's resource list); Pedersen et al.'s Tables 1.6 and 3.15 transcribed.
 
 ## References
