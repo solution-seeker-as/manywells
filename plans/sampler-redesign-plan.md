@@ -32,7 +32,8 @@
     - a floor on the lift-gas set point (D-47);
     - R4's control change kept for redraws (D-83).
   - Feature 022 (#38) and K1's retrograde tables (#39) are merged into `develop`, and J2's per-fluid offsets are in `table_fluids.py`.
-  - Left for R9: the generator's Forchheimer inflow fitted as D-61 says, the per-well NeqSim tables, and the rerun of the pilots with them.
+  - R9's integration: the generator's Forchheimer inflow fitted as D-61 says, the per-well NeqSim tables with D-106's repair of their $p/Z$ (needs sign-off), and the rerun of the pilots with them (`r9-measurements.md`). Outcomes, decline and stages hold; the condensates' gas rates fall by a quarter. The cost rises by 70% (`sol-2`) and 110% (`nsol-2`), mostly from a few volatile oils whose temperature solve fails with Joule–Thomson cooling on their tables: a Rust core finding, open.
+  - Next: the smaller checkpoint (D-105, D-106, R9's choices and the open findings), then R10.
 
 This plan replaces v1's sampling procedure for the v2 datasets (`specs/goals.md`, limitation 5: unrealistic sampled wells). It ends with:
 

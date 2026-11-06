@@ -1097,7 +1097,11 @@ def assemble(kind, out, seed, n_wells):
         n_cells=N_CELLS,
         backend='rust',
         retry_backend=None,
-        interim_mapping='volatile oils and condensates as BlackOil',
+        interim_mapping=(
+            'none: volatile oils and condensates on their tables'
+            if (drawn.pvt_model == 'table').any()
+            else 'volatile oils and condensates as BlackOil'
+        ),
         gas_inflow='Forchheimer, fitted to the pseudo-pressure (D-61)',
         limits=dict(slot=SLOT_LIMIT, redraws=REDRAW_LIMIT, solver_failures=SOLVER_FAILURE_LIMIT),
         producibility=dict(floor=FLOOR, margin=FLOOR_MARGIN, lift_fractions=BEST_RATE_LIFT, scan_points=N_SCAN),
