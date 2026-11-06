@@ -9,9 +9,11 @@ Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 The prototype of the sampler redesign (Step R6 of plans/sampler-redesign-plan.md). It draws wells and their samples
 by the draft procedure (plans/sampler-redesign/sampling-draft.md: R3's well draws from sampler_draft_draws.py, R4's
 sample draws from sampler_draft_samples.py), maps each well to v2.0.0 and checks it, solves every attempt with the
-Rust core, retries the core's solver failures with the CasADi backend (D-54), applies the producibility filter, the
-nsol-2 life scan and the redraw rules with their limits (D-50, D-53 to D-56, D-80 to D-84), and writes the tables of
-plans/sampler-redesign/datasets-draft.md as parquet, with the run's own log of every attempt (attempts.parquet).
+Rust core, applies the producibility filter, the nsol-2 life scan and the redraw rules with their limits (D-50, D-53,
+D-55, D-56, D-80 to D-84, D-101, D-102), and writes the tables of plans/sampler-redesign/datasets-draft.md as parquet,
+with the run's own log of every attempt (attempts.parquet). Since the checkpoint's rulings of 2026-11-06 the draws are
+the rework's, and the core's solver failures are redrawn without a CasADi retry (H1: D-54 dropped); R6's revisions
+('draft' and 'r6', with the retry) are this script at commit 8e6c175.
 
 Interim mapping (sampling-draft.md, Mapping): volatile oils and gas condensates are built as the black oil with their
 API gravity, gas gravity, separator and GOR, and gas and condensate wells flow in on a productivity index whose k_l
@@ -29,7 +31,6 @@ The measurements are sampler_prototype_report.py's (plans/sampler-redesign/r6-me
     run sol|nsol N OUT   draw wells k = 0, 1, 2, ... until N are accepted; one task per well; a well's raw result is
                          kept in OUT/raw/, so that a stopped run resumes; then the tables are assembled in OUT
     --wells K0 K1        solve only the draw indices K0 to K1 - 1 (a speed and memory check), without assembling
-    --revision draft|r6  the draft as R3, R4 and R7 left it, or with R6's changes D-100 to D-103 (the default)
 """
 
 import argparse
@@ -46,7 +47,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-import sampler_draft_draws
 from sampler_draft_draws import OILS, draw_well, forchheimer, gas_rate, j_radial
 from sampler_draft_samples import (
     N_OP,
@@ -87,7 +87,8 @@ pa.set_io_thread_count(2)
 
 N_CELLS = 100
 DAY = 86400.0
-FLOOR = {'platform': 1.6, 'onshore': 1.6, 'subsea': 8.0}  # Sm3/d of oil equivalent, D-34
+FLOOR = {'platform': 1.6, 'onshore': 1.6, 'subsea': 20.0}  # Sm3/d of oil equivalent, D-34 as ruled
+REVISION = 'rework'  # the checkpoint's rulings of 2026-11-06; R6's revisions are this script at commit 8e6c175
 FLOOR_MARGIN = 0.5  # A well is dropped below half its floor, D-34
 WLR_NOT_PRODUCED = 0.98  # An oil well above this water cut is not produced, D-50
 BEST_RATE_LIFT = (0.0, 0.5, 1.0)  # Lift-gas rates of the best rate, fractions of w_lg_max, D-50
@@ -95,23 +96,6 @@ N_SCAN = 21  # Points of the nsol-2 life scan, every 5% of T_life, D-50
 SLOT_LIMIT, REDRAW_LIMIT, SOLVER_FAILURE_LIMIT = 50, 400, 10  # D-81
 WELL_TIME_LIMIT = 3600.0  # s: a guard of the prototype against a run-away well, not a rule of the draft
 TUBING_NAMES = {0.0620: '2-7/8', 0.0760: '3-1/2', 0.1005: '4-1/2', 0.1243: '5-1/2', 0.1571: '7', 0.2205: '9-5/8'}
-# The draft as R3, R4 and R7 left it ('draft'), and with R6's changes (decisions.md): D-100's permeability and
-# D-103's tail share in sampler_draft_draws, D-101's lift for oil wells that cannot flow naturally, and D-102's
-# classification of a scan with non-finite points and no root as no operating point
-REVISIONS = {
-    'draft': dict(TAIL_SHARE=0.15, PERM={'offshore': (50, 0.5, 3000), 'onshore': (10, 0.05, 1000)}, r6=False),
-    'r6': dict(TAIL_SHARE=0.20, PERM={'offshore': (15, 0.5, 3000), 'onshore': (3, 0.05, 1000)}, r6=True),
-}
-R6_RULES = True  # D-101 and D-102; set by set_revision
-
-
-def set_revision(name):
-    global R6_RULES
-    rev = REVISIONS[name]
-    sampler_draft_draws.TAIL_SHARE, sampler_draft_draws.PERM = rev['TAIL_SHARE'], rev['PERM']
-    R6_RULES = rev['r6']
-
-
 FEATURES = (
     'PBH PWH TBH TWH WGAS WLIQ WOIL WWAT WTOT QGL QGAS QLIQ QOIL QWAT QTOT FGAS FOIL FWAT CHOKED FRBH FRWH'.split()
 )
@@ -249,7 +233,7 @@ def solve(wp, bc, backend='rust', x_guess=None) -> dict:
             out.update(outcome='solver_failure', reason='invalid_row')
     elif not rs.roots:
         # D-53 counts a scan with non-finite points as incomplete; D-102 only one with a rejected sign change
-        partial = out['rejected'] > 0 if R6_RULES else (out['non_finite'] > 0 or out['rejected'] > 0)
+        partial = out['rejected'] > 0  # D-102
         incomplete = backend == 'rust' and partial
         out.update(outcome='solver_failure' if incomplete else 'no_operating_point')
         out['reason'] = 'incomplete_scan' if incomplete else 'no_root'
@@ -259,27 +243,10 @@ def solve(wp, bc, backend='rust', x_guess=None) -> dict:
     return out
 
 
-class Starts:
-    """The operating points found so far in a well, for the CasADi retry's extra start (D-56)."""
-
-    def __init__(self):
-        self.items = []
-
-    def add(self, coords, label, root):
-        self.items.append((np.asarray(coords, dtype=float), label, root))
-
-    def nearest(self, coords):
-        if not self.items:
-            return None, None
-        c = np.asarray(coords, dtype=float)
-        i = min(range(len(self.items)), key=lambda i: (float(np.linalg.norm(self.items[i][0] - c)), i))
-        return self.items[i][2], self.items[i][1]
-
-
 def attempt(builder, inp) -> dict:
     """An attempt's Rust solve: the log record, with the operating point's root under '_root' (not logged)."""
     t0 = time.perf_counter()
-    rec = dict(inp, retried=False, start=None, t_casadi=0.0, casadi_outcome=None, casadi_reason=None)
+    rec = dict(inp, retried=False, start=None, t_casadi=0.0, casadi_outcome=None, casadi_reason=None)  # no retry, H1
     try:
         wp, bc = builder.case(inp)
     except ValueError as e:  # an input the model refuses: a solver failure of the generator, logged
@@ -299,49 +266,19 @@ def attempt(builder, inp) -> dict:
     return rec
 
 
-def retry(builder, rec, starts, coords):
-    """D-54 and D-82: a Rust solver failure solved again by the CasADi backend, with the same inputs and the nearest
-    operating point of the well as an extra start (D-56). The record becomes 'recovered' if it finds the operating
-    point, and stays a solver failure otherwise."""
-    inp = {k: rec[k] for k in INPUT_KEYS if k in rec}
-    x0, label = starts.nearest(coords)
-    t0 = time.perf_counter()
-    try:
-        wp, bc = builder.case(inp)
-        res = solve(wp, bc, backend='casadi', x_guess=x0)
-    except ValueError as e:
-        res = dict(outcome='solver_failure', reason='exception', error=str(e)[:300], root=None, row=None)
-    rec.update(retried=True, start=label, t_casadi=time.perf_counter() - t0)
-    rec.update(casadi_outcome=res['outcome'], casadi_reason=res['reason'])
-    rec['t_total'] += rec['t_casadi']
-    if res['outcome'] == 'operating_point':
-        rec.update(res['row'])
-        rec.update(outcome='recovered', q_oe=oil_equivalent(res['row']), _root=res['root'])
-        rec.update(n_roots=res['n_roots'], n_stable=res['n_stable'], several_stable=res['several_stable'])
-    return rec
-
-
-INPUT_KEYS = ('u', 'w_lg', 'p_s', 'p_r', 'gor', 'wlr', 'lift_on', 'h', 'roughness', 'k_l', 'w_l_max')
-
-
 def has_op(rec) -> bool:
     return rec['outcome'] in ('operating_point', 'recovered')
 
 
-def best_rate(builder, state, lifted, w_lg_max, floor, starts, log, base) -> dict:
+def best_rate(builder, state, lifted, w_lg_max, floor, log, base) -> dict:
     """D-50: the most oil equivalent at a fully open choke, the state's p_r, GOR, water and p_s,nom, over the lift-gas
     rates BEST_RATE_LIFT of w_lg_max for a lifted well. The status is 'pass', 'below_floor', 'water_cut',
     'no_operating_point' or 'solver_failure' (no operating point found, and a solver failure among the solves)."""
     recs = []
     for i, f in enumerate(BEST_RATE_LIFT if lifted else (0.0,)):
         inp = dict(state, u=1.0, w_lg=f * w_lg_max if lifted else 0.0, lift_on=lifted, p_s=state['p_s_nom'])
-        coords = (base['t'],) if 't' in base else (1.0, f, 1.0)
         rec = attempt(builder, inp)
-        if rec['outcome'] == 'solver_failure':
-            retry(builder, rec, starts, coords)
         rec.update(base, attempt=i, lift_fraction=f)
-        if has_op(rec):
-            starts.add(coords, f'{base["kind"]}:{f}', rec['_root'])
         recs.append(rec)
         log.append(rec)
     ops = [r for r in recs if has_op(r)]
@@ -359,14 +296,13 @@ def best_rate(builder, state, lifted, w_lg_max, floor, starts, log, base) -> dic
     return out
 
 
-def solve_slots(k, draw, coords_of, builder, starts, log, t_start, slot_limit_outcome='slot_limit'):
-    """D-80 to D-82: pass a solves attempt a of every slot still without an operating point, the Rust solves first and
-    then the CasADi retries of the pass's solver failures in the order of j. draw(j, a) gives an attempt's inputs.
-    Returns the accepted record of each slot and the well's outcome."""
+def solve_slots(k, draw, builder, log, t_start, slot_limit_outcome='slot_limit'):
+    """D-80 to D-82: pass a solves attempt a of every slot still without an operating point with the Rust core, and
+    counts its solver failures, without the CasADi retry (H1, D-54). draw(j, a) gives an attempt's inputs. Returns
+    the accepted record of each slot and the well's outcome."""
     accepted, open_ = {}, list(range(N_SAMPLES))
     n_redraws = n_failures = 0
     for a in range(SLOT_LIMIT):
-        pending = []
         for j in open_:
             if a > 0:
                 if n_redraws >= REDRAW_LIMIT:
@@ -378,15 +314,7 @@ def solve_slots(k, draw, coords_of, builder, starts, log, t_start, slot_limit_ou
             log.append(rec)
             if has_op(rec):
                 accepted[j] = rec
-                starts.add(coords_of(j, inp), f'slot:{j}', rec['_root'])
             elif rec['outcome'] == 'solver_failure':
-                pending.append((j, inp, rec))
-        for j, inp, rec in pending:  # The retries of the pass, in the order of j (D-56)
-            retry(builder, rec, starts, coords_of(j, inp))
-            if has_op(rec):
-                accepted[j] = rec
-                starts.add(coords_of(j, inp), f'slot:{j}', rec['_root'])
-            else:
                 n_failures += 1
                 if n_failures > SOLVER_FAILURE_LIMIT:
                     return accepted, 'solver_failure_limit'
@@ -441,10 +369,9 @@ def sol2_well(seed, k) -> dict:
     except ValueError as e:
         info.update(outcome='invalid_input', error=str(e)[:300])
         return dict(well=w, stations=stations, info=info, log=log, seconds=time.perf_counter() - t_start)
-    starts = Starts()
     floor = FLOOR[w['well_type']]
-    br = best_rate(builder, nominal, lifted, w_max, floor, starts, log, dict(draw_index=k, kind='best_rate', slot=-1))
-    if R6_RULES and not lifted and w['fluid_type'] in OILS and br['status'] in ('no_operating_point', 'below_floor'):
+    br = best_rate(builder, nominal, lifted, w_max, floor, log, dict(draw_index=k, kind='best_rate', slot=-1))
+    if not lifted and w['fluid_type'] in OILS and br['status'] in ('no_operating_point', 'below_floor'):
         # D-101: an oil well that cannot flow naturally at its best rate gets R3's lift design, as an operator would
         # lift it (nsol-2's rule 2 of D-49); the lift block's draws are the well's own (force_lift)
         w, _ = draw_well(seed, k, force_lift=True)
@@ -452,7 +379,7 @@ def sol2_well(seed, k) -> dict:
         lifted, w_max = True, w['w_lg_max']
         builder.design = w
         base = dict(draw_index=k, kind='best_rate_lifted', slot=-1)
-        br = best_rate(builder, nominal, lifted, w_max, floor, starts, log, base)
+        br = best_rate(builder, nominal, lifted, w_max, floor, log, base)
     info.update(best_rate=br['best'], best_rate_w_lg=br['best_w_lg'], best_rate_outcomes=br['outcomes'])
     if br['status'] != 'pass':
         info['outcome'] = 'best_rate_solver_failure' if br['status'] == 'solver_failure' else 'not_producible'
@@ -463,10 +390,7 @@ def sol2_well(seed, k) -> dict:
         r = rng_for(seed, k, j, 'v2', 'sample') if a == 0 else rng_for(seed, k, j, a, 'v2', 'redraw')
         return dict(fixed, lift_on=lifted, **sol2_inputs(r, w))
 
-    def coords_of(j, inp):
-        return (inp['u'], inp['w_lg'] / w_max if lifted else 0.0, inp['p_s'] / w['p_s'])
-
-    accepted, outcome = solve_slots(k, draw, coords_of, builder, starts, log, t_start)
+    accepted, outcome = solve_slots(k, draw, builder, log, t_start)
     info['outcome'] = outcome
     return dict(well=w, stations=stations, info=info, log=log, seconds=time.perf_counter() - t_start)
 
@@ -486,7 +410,8 @@ def inflow_at(w0, pvt, p_r, R_go, wlr, wgr):
         return dict(k_l=k_l, w_l_max=math.nan)
     Z = pvt.z_factor(p_r, T_r)
     mu_g = pvt.gas_viscosity(p_r, T_r, pvt.gas_density(p_r, T_r))
-    a, b = forchheimer(w0['perm'], w0['h_net'] * w0['f_geo'], mu_g, Z, T_r, ln_term, skin, w0['D_nondarcy'])
+    a, b = forchheimer(w0['perm'], w0['h_net'], mu_g, Z, T_r, ln_term, skin, w0['D_nondarcy'])
+    a, b = a * w0['a_ratio'], b * w0['b_ratio']  # the geometry's factors at the drawn state (D-21)
     d = w0['delta_d']
     q_l = gas_rate(a, b, p_r**2 - ((1 - d) * p_r) ** 2) * (1e6 / R_go + wgr) / 1e6
     return dict(k_l=float(q_l * rho_lsc / DAY / (d * p_r)), w_l_max=math.nan)
@@ -633,12 +558,11 @@ def nsol2_well(seed, k) -> dict:
         info.update(outcome='invalid_input', error=str(e)[:300])
         out['seconds'] = time.perf_counter() - t_start
         return out
-    starts = Starts()
     w_max = nw.design['w_lg_max'] if nw.design is not None else 0.0
 
     def scan_point(i, t):
         base = dict(draw_index=k, kind='scan', slot=-1 - i, t=t)
-        return best_rate(builder, nw.state(t), nw.lift_on(t), w_max, floor, starts, log, base)
+        return best_rate(builder, nw.state(t), nw.lift_on(t), w_max, floor, log, base)
 
     # The life scan (D-50, D-84): T_end is the last passing point before the first that fails
     T = lf.T
@@ -691,10 +615,7 @@ def nsol2_well(seed, k) -> dict:
             st, u=u, w_lg=w_lg if lift_on else 0.0, p_s=p_s, lift_on=lift_on, test=sl['test'], sweep=sl['sweep']
         )
 
-    def coords_of(j, inp):
-        return (inp['t'],)
-
-    accepted, outcome = solve_slots(k, draw, coords_of, builder, starts, log, t_start, 'dead_date')
+    accepted, outcome = solve_slots(k, draw, builder, log, t_start, 'dead_date')
     info['outcome'] = outcome
     out['seconds'] = time.perf_counter() - t_start
     return out
@@ -731,8 +652,7 @@ LIFT_KEYS = ('md_inj', 'z_inj', 'T_lg', 'w_lg_max', 'glr_cap', 'p_inj', 'dp_valv
 
 # --- The pool --------------------------------------------------------------------------------------------------------------
 def run_task(task):
-    kind, seed, k, raw, revision = task
-    set_revision(revision)
+    kind, seed, k, raw = task
     path = Path(raw) / f'{k:06d}.pkl'
     if path.exists():
         with open(path, 'rb') as f:
@@ -754,7 +674,7 @@ def run_task(task):
     return k, res['info']['outcome'], res['seconds']
 
 
-def run(kind, n_wells, out, seed, processes, wells=None, revision='r6'):
+def run(kind, n_wells, out, seed, processes, wells=None):
     out = Path(out)
     raw = out / 'raw'
     raw.mkdir(parents=True, exist_ok=True)
@@ -764,7 +684,7 @@ def run(kind, n_wells, out, seed, processes, wells=None, revision='r6'):
     with ctx.Pool(processes) as pool:
         if wells is not None:
             ks = range(*wells)
-            for k, outcome, sec in pool.imap_unordered(run_task, [(kind, seed, k, str(raw), revision) for k in ks]):
+            for k, outcome, sec in pool.imap_unordered(run_task, [(kind, seed, k, str(raw)) for k in ks]):
                 done[k] = outcome
                 print(f'well {k}: {outcome} in {sec:.1f} s', flush=True)
         else:
@@ -776,9 +696,7 @@ def run(kind, n_wells, out, seed, processes, wells=None, revision='r6'):
                 need = n_wells - len(accepted)
                 batch = range(nxt, nxt + max(processes, int(math.ceil(need * 1.15))))
                 nxt = batch[-1] + 1
-                for k, outcome, sec in pool.imap_unordered(
-                    run_task, [(kind, seed, k, str(raw), revision) for k in batch]
-                ):
+                for k, outcome, sec in pool.imap_unordered(run_task, [(kind, seed, k, str(raw)) for k in batch]):
                     done[k] = outcome
                     n_acc = sum(o == 'accepted' for o in done.values())
                     print(f'well {k}: {outcome} in {sec:.1f} s; {n_acc} accepted of {len(done)}', flush=True)
@@ -790,7 +708,7 @@ def run(kind, n_wells, out, seed, processes, wells=None, revision='r6'):
         wall_seconds=wall,
         n_wells=n_wells,
         wells=wells,
-        revision=revision,
+        revision=REVISION,
         python=sys.version,
         platform=platform.platform(),
     )
@@ -798,7 +716,7 @@ def run(kind, n_wells, out, seed, processes, wells=None, revision='r6'):
         json.dump(meta, f, indent=1)
     print(f'{len(done)} wells in {wall:.0f} s on {processes} processes')
     if wells is None:
-        assemble(kind, out, seed, n_wells, revision)
+        assemble(kind, out, seed, n_wells)
 
 
 # --- The tables (datasets-draft.md) ---------------------------------------------------------------------------------------
@@ -869,7 +787,7 @@ def well_columns(w, info, kind, stations, nsol=None, theta_grid=math.nan) -> dic
         p_sat=w['p_sat'] if w['p_sat'] is not None else math.nan,
         R_si=w['R_i'],
         pvt_table_id=None,
-        k_g=g('k_g') if oil else math.nan,
+        kgko_weight=g('w_kgko') if oil else math.nan,
         gor_factor_cond=g('c_k') if w['fluid_class'] == 'gas_condensate' else math.nan,
         permeability=w['perm'],
         net_pay=w['h_net'],
@@ -945,7 +863,7 @@ def well_columns(w, info, kind, stations, nsol=None, theta_grid=math.nan) -> dic
     return row
 
 
-def assemble(kind, out, seed, n_wells, revision='r6'):
+def assemble(kind, out, seed, n_wells):
     """The tables of datasets-draft.md from the raw results: the first n_wells accepted wells by draw index."""
     out = Path(out)
     res = {}
@@ -1034,12 +952,12 @@ def assemble(kind, out, seed, n_wells, revision='r6'):
     pd.DataFrame(columns=pvt_cols).to_parquet(out / 'pvt.parquet', index=False)  # empty: the interim mapping
     meta = dict(
         dataset=f'manywells-{kind}-2 (R6 prototype)',
-        revision=revision,
+        revision=REVISION,
         seed=seed,
         configuration=V2,
         n_cells=N_CELLS,
         backend='rust',
-        retry_backend='casadi',
+        retry_backend=None,
         interim_mapping='volatile oils and condensates as BlackOil; gas and condensate wells on a ProductivityIndex',
         limits=dict(slot=SLOT_LIMIT, redraws=REDRAW_LIMIT, solver_failures=SOLVER_FAILURE_LIMIT),
         producibility=dict(floor=FLOOR, margin=FLOOR_MARGIN, lift_fractions=BEST_RATE_LIFT, scan_points=N_SCAN),
@@ -1075,18 +993,16 @@ def main():
     r.add_argument('--seed', type=int, default=2026)
     r.add_argument('--processes', type=int, default=12)
     r.add_argument('--wells', type=int, nargs=2)
-    r.add_argument('--revision', choices=tuple(REVISIONS), default='r6')
     a = sub.add_parser('assemble')
     a.add_argument('kind', choices=('sol', 'nsol'))
     a.add_argument('n', type=int)
     a.add_argument('out')
     a.add_argument('--seed', type=int, default=2026)
-    a.add_argument('--revision', choices=tuple(REVISIONS), default='r6')
     args = ap.parse_args()
     if args.cmd == 'run':
-        run(args.kind, args.n, args.out, args.seed, args.processes, args.wells, args.revision)
+        run(args.kind, args.n, args.out, args.seed, args.processes, args.wells)
     else:
-        assemble(args.kind, args.out, args.seed, args.n, args.revision)
+        assemble(args.kind, args.out, args.seed, args.n)
 
 
 if __name__ == '__main__':

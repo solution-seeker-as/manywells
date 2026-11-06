@@ -30,7 +30,7 @@ import math
 
 import numpy as np
 import pandas as pd
-from sampler_draft_draws import OILS, STD_GRAVITY, draw_well, logu, stream
+from sampler_draft_draws import OILS, P_S_MAX, STD_GRAVITY, draw_well, gor_factor, logu, stream
 
 from manywells.pvt.black_oil import BlackOil
 from manywells.sampling.wells import rng_for
@@ -39,25 +39,27 @@ from manywells.sampling.wells import rng_for
 N_SAMPLES = 200
 U_MIN = 0.05  # Smallest choke position, as SMP-18
 P_OPEN = 0.05  # Share of sol-2 samples at a fully open choke, D-37
-P_LIFT_OFF = 0.10  # Share of a lifted well's samples without lift gas, D-38
+P_LIFT_OFF = 0.20  # Share of a lifted well's samples without lift gas, D-38 as ruled
 PS_JITTER = 0.10  # Separator pressure within +-10% of nominal, D-39
 P_S_MIN = 1.5  # bar, R3's floor on the downstream pressure
 PR_DRIFT, RATIO_DRIFT = 0.02, 0.05  # The Goals' +-2% and +-5%, D-40
 WLR_MAX = 0.98  # Hasan et al.'s largest water cut, R3
 
 # --- nsol-2 ---------------------------------------------------------------------------------------------------------
-T_LIFE = (8.0, 30.0)  # years, log-uniform, D-41
+T_LIFE = (3.0, 30.0)  # years, log-uniform, D-41 as ruled: lives may be shorter than 8 years
+Q_END = (0.03, 0.3)  # the decline's rate at the end of the life over the plateau's, log-uniform, D-41 as ruled
 N_OP, N_TESTS, N_SWEEP = 160, 8, 5  # operating samples, test periods, samples per test: 160 + 8 x 5 = 200, D-48
 P_OPEN_SET = 0.05  # Share of choke set points at fully open, D-47
-P_CHANGE = (0.05, 0.25)  # Per-operating-sample probability of a set-point change, log-uniform per well, D-47
-P_SMALL, STEP = 0.6, 0.2  # A change is a small step of at most +-0.2 with probability 0.6, else a redraw, D-47
+P_CHANGE = (0.5, 0.95)  # Per-operating-sample probability of a set-point change, log-uniform per well, D-47 as ruled
+P_SMALL, STEP = 0.9, 0.1  # A change is a small step of at most +-0.1 with probability 0.9, else a redraw, D-47
 
 
 # --- Shared helpers -------------------------------------------------------------------------------------------------
 def producing_gor(w, p_r):
-    """R3's producing GOR at reservoir pressure p_r (sampling-draft.md, Reservoir state at the life stage)."""
+    """The producing GOR at reservoir pressure p_r: the oils' from the material balance (D-19, D-44), the
+    condensates' from R3's factor (sampling-draft.md, Reservoir state at the life stage)."""
     if w['fluid_type'] in OILS:
-        return w['R_i'] * min(10.0, 1 + w['k_g'] * max(0.0, 1 - p_r / w['p_sat']))
+        return w['R_i'] * gor_factor(w, p_r)
     if w['fluid_class'] == 'gas_condensate':
         return w['R_i'] * (1 + w['c_k'] * max(0.0, 1 - p_r / w['p_sat']))
     return w['R_i']
@@ -142,8 +144,10 @@ class Life:
         r = rng_for(seed, k, 'v2', 'evolution')
         self.T = logu(r, *T_LIFE)
         self.t_pl = r.uniform(0.0, 0.25) * self.T
-        self.D = logu(r, 0.07, 0.30)
+        self.q_end = logu(r, *Q_END)
         self.b = r.uniform(0.3, 0.5) if w0['drive'] == 'pressure_support' else r.uniform(0.0, 0.4)
+        tau = self.T - self.t_pl  # Arps's D from the rate at the end of the life: q / q_pl = (1 + b D tau)^(-1/b)
+        self.D = (self.q_end**-self.b - 1) / (self.b * tau) if self.b > 1e-6 else -math.log(self.q_end) / tau
         self.gamma = r.uniform(1.0, 2.0)
         support = w0['drive'] == 'pressure_support'
         F_bt, wlr_bt = (
@@ -156,7 +160,8 @@ class Life:
         # The start and end states: R3's initial and late states of the same well. A tail well's stage draws are
         # its tail draws, the same at every stage, so it starts from the core's initial state and ends at its tail
         # state (D-42). The start draws are made for every well.
-        r0_core, dry, wlr0_core, wgr0_core = r.uniform(0.97, 1.0), r.random(), r.uniform(0.0, 0.1), logu(r, 2, 20)
+        r0_lo = 0.85 if w0['drive'] == 'depletion' else 0.97  # R3's initial state, D-18
+        r0_core, dry, wlr0_core, wgr0_core = r.uniform(r0_lo, 1.0), r.random(), r.uniform(0.0, 0.1), logu(r, 2, 20)
         key = 'wlr' if self.oil else 'wgr'
         if w0['tail']:
             self.r0, self.water0 = r0_core, ((0.0 if dry < 0.5 else wlr0_core) if self.oil else wgr0_core)
@@ -219,7 +224,7 @@ class Life:
         w0 = self.w0
         if w0['tail']:
             return max((w0['p_s'] - w0['dp_fl']) * self.r_s(t) + w0['dp_fl'], P_S_MIN)
-        return min(max(self.r_s(t) * w0['p_sep'] + w0['dp_fl'], P_S_MIN), 120.0)
+        return min(max(self.r_s(t) * w0['p_sep'] + w0['dp_fl'], P_S_MIN), P_S_MAX[w0['well_type']])
 
     def roughness(self, t):
         e0, e1 = self.w0['roughness'], self.wL['roughness']

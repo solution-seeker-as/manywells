@@ -13,10 +13,14 @@ draft's interim mapping (the black oil for every fluid class, a productivity ind
 Mapping) and checked with configurations.differences, without building its system. R6 extends it to solve the wells.
 
 The geometry is Bjarne's ruling of 2026-11-02 (D-9, D-57): an even mix of four classes, each drawn by one of R3's
-families (R6 brought the script in line with it; the other blocks' draws did not change). R6 also revised the
-permeability's median (D-100) and the tail's share (D-103), decisions.md; sampler_prototype.py --revision draft
-restores the values before them. Every draw comes from numpy's default_rng, seeded by (seed, well, 'v2', block) through
-manywells.sampling.wells.rng_for, one generator per block of the draft.
+families. R6 revised the permeability's median (D-100) and the tail's share (D-103). The rework implements the
+checkpoint's rulings of 2026-11-06 (decisions.md): the shapes uniform over the pooled surveys' ranges (D-104), the
+brine (D-11), the black oils' gas gravity (D-16), the initial depletion and the late water cut (D-18), the producing
+GOR from the material balance (D-19, solution_gas_drive.py), the permeability by well type (D-100), a drain's index
+from Joshi's on a growing drainage length times Dikken's friction efficiency (D-21, drain_friction.py), the subsea
+flowline-and-riser loss (D-15), the bean (D-27), the injection pressure by well type (D-29) and the lift-gas capacity
+(D-31); this script at commit 8e6c175 gives R6's draws. Every draw comes from numpy's default_rng, seeded by (seed,
+well, 'v2', block) through manywells.sampling.wells.rng_for, one generator per block of the draft.
 
 From the repository root:
 
@@ -27,11 +31,14 @@ From the repository root:
 """
 
 import argparse
+import functools
 import math
 
 import numpy as np
 import pandas as pd
+from drain_friction import closed_form, gas_grad, liquid_grad, ratio
 from scipy.special import ndtr, ndtri
+from solution_gas_drive import X_GRID, black_oil_props, kgko_blend, muskat
 
 from manywells.choke import CHOKE_PROFILES, SimpsonChokeModel
 from manywells.configurations import V2, V2_SLIP, differences
@@ -62,6 +69,11 @@ P_GEOMETRY = (0.25, 0.25, 0.25, 0.25)  # Bjarne, 2026-11-02 (D-9): an even mix, 
 THETA_CLASS = {'slightly_deviated': (5.0, 20.0), 'deviated': (20.0, 60.0), 'highly_deviated': (60.0, 75.0)}
 P_S_SHAPED = 1 / 3  # Share of the deviated class drawn as S-shaped wells, D-57
 P_DRAIN = 0.5  # Share of the highly deviated class drawn as drains to the heel (high_angle), D-9
+KICKOFF = (0.05, 0.75)  # Kickoff's share of the TVD below the mudline, D-104
+BUILD = (0.3, 3.6)  # Build rate (degrees per 30 m), D-104
+DROP, S_BOTTOM = (0.2, 2.2), (0.0, 35.0)  # S wells' drop rate (degrees per 30 m) and bottom inclination, D-104
+DRAIN_TANGENT, LANDING = (10.0, 65.0), (1.5, 7.0)  # Drains' tangent before landing (deg) and landing build, D-104
+DRAIN_LENGTH = (300.0, 2500.0)  # m, D-104
 THETA_MAX = 75.0  # Inclination limit (degrees from vertical), D-30
 MD_MAX = 9342.0  # Hasan et al.'s largest measured depth (m), D-33
 P_MAX, T_MAX = 950.0, 450.0  # bar, K, D-33
@@ -80,7 +92,16 @@ DEPTH = {  # median (m below the mudline) and log-sd, fitted to BOEM's P5/P50/P9
 TUBING_ID = (0.0620, 0.0760, 0.1005, 0.1243, 0.1571, 0.2205)  # m: 2-7/8, 3-1/2, 4-1/2, 5-1/2, 7 and 9-5/8 in
 P_LIFT_OIL = {'offshore': (0.20, 0.45, 0.70), 'onshore': (0.15, 0.25, 0.35)}  # by stage, D-23
 P_LIFT_GAS = (0.0, 0.05, 0.15)
-PERM = {'offshore': (15, 0.5, 3000), 'onshore': (3, 0.05, 1000)}  # mD: median and bounds, D-20 as revised by D-100
+PERM = {  # mD: median, log-sd and bounds by well type, D-20 as revised by D-100 (by type, set on the rework's pilot)
+    'platform': (15, 1.2, 0.5, 3000),
+    'subsea': (60, 1.2, 0.5, 3000),
+    'onshore': (3, 1.5, 0.05, 1000),
+}
+P_S_MAX = {'platform': 120.0, 'subsea': 250.0, 'onshore': 120.0}  # bar, the nominal downstream pressure's cap, D-15
+RISER = (0.03, 0.07)  # bar/m, a subsea well's flowline-and-riser loss per metre of water depth, D-15
+BEAN_MAX = 0.1016  # m, the fully open bean's largest diameter (4 in), D-27
+P_INJ = {'platform': (48.0, 85.0), 'subsea': (130.0, 210.0), 'onshore': (48.0, 85.0)}  # bar, at the top, D-29
+W_LG_MAX = (0.1, 3.5)  # kg/s, the lift-gas capacity's bounds, D-31
 CH4_CP_P, CH4_CP_T = (1.0, 101.0, 201.0, 401.0), (300.0, 380.0)  # NIST methane (sources-reservoir-fluids, §10)
 CH4_CP = ((2236.0, 3011.0, 3549.0, 3336.0), (2466.0, 2801.0, 3079.0, 3234.0))  # J/(kg K), [T][p]
 
@@ -132,37 +153,51 @@ def arc_tvd(th0, th1, rate):
     return abs(math.sin(math.radians(th1)) - math.sin(math.radians(th0))) * 30.0 / math.radians(rate)
 
 
-def trajectory(rng, kind, L, theta):
+def raise_rate(rate, top, need, room):
+    """Raise a build or drop rate by steps of 20%, to at most top, until the TVD need(rate) fits in room."""
+    while need(rate) > room and rate < top:
+        rate = min(top, 1.2 * rate)
+    return rate
+
+
+def trajectory(rng, kind, L, theta, z0=0.0):
     """(md, tvd) stations from the surface to the bottom of the modelled well at TVD L, and the family's parameters.
-    theta is the class's range of the hold inclination (build_and_hold) or of the heel's (high_angle), D-9."""
+    theta is the class's range of the hold inclination (build_and_hold) or of the heel's (high_angle), D-9. z0 is the
+    mudline's TVD in the modelled well (a platform well's water depth, else 0). Each shape parameter is uniform over
+    the pooled regions' range, the kickoff 0.05 to 0.75 of the depth below the mudline (D-104). A build or drop too
+    gentle for the well's depth is raised towards its range's top; a shape that still does not fit returns None, and
+    the caller redraws it."""
     prm = {}
     if kind == 'vertical':
         return [0.0, L], [0.0, L], prm
+    z = L - z0
+    room = L - z0 - KICKOFF[0] * z  # the TVD below the shallowest kickoff
+
+    def kickoff(below):
+        """Uniform over the part of the kickoff's range that leaves the TVD below for the rest of the shape."""
+        f_max = min(KICKOFF[1], (L - below - z0) / z)
+        return None if f_max < KICKOFF[0] else z0 + z * rng.uniform(KICKOFF[0], f_max)
+
     st = [(0.0, 0.0, 0.0)]
     if kind == 'build_and_hold':
-        th = rng.uniform(*theta)
-        b = rng.uniform(1.5, 3.0)
-        while 0.9 * L - 50 < arc_tvd(0, th, b):  # raise the build rate, then lower the inclination, until it fits
-            if b < 5.0:
-                b = min(5.0, b * 1.2)
-            else:
-                th *= 0.9
-        k_max = min(0.7 * L, L - 50 - arc_tvd(0, th, b))
-        K = rng.uniform(0.1 * L, max(0.1 * L, k_max))
+        th, b = rng.uniform(*theta), rng.uniform(*BUILD)
+        b = raise_rate(b, BUILD[1], lambda x: arc_tvd(0, th, x), room - 50)
+        K = kickoff(50 + arc_tvd(0, th, b))
+        if K is None:
+            return None
         st.append((K, K, 0.0))
         arc(st, th, b)
         hold_to(st, L)
         prm.update(kickoff=K, theta_hold=th, build_rate=b)
     elif kind == 's_shaped':
-        th, b, d = rng.uniform(15, 45), rng.uniform(1.5, 3.0), rng.uniform(1.0, 2.5)
-        th_e, tail_tvd = rng.uniform(0, 10), min(rng.uniform(100, 400), 0.25 * L)
-        while 0.9 * L - 150 - tail_tvd < arc_tvd(0, th, b) + arc_tvd(th, min(th_e, th), d) and th > 5:
-            th *= 0.9
-        th_e = min(th_e, th)
-        if 0.9 * L - 100 - tail_tvd < arc_tvd(0, th, b) + arc_tvd(th, th_e, d):
-            return None  # the shape does not fit the well's depth
-        k_max = min(0.6 * L, L - 100 - tail_tvd - arc_tvd(0, th, b) - arc_tvd(th, th_e, d))
-        K = rng.uniform(0.1 * L, max(0.1 * L, k_max))
+        th, b, d = rng.uniform(15, 45), rng.uniform(*BUILD), rng.uniform(*DROP)
+        th_e, tail_tvd = min(rng.uniform(*S_BOTTOM), th), min(rng.uniform(100, 400), 0.25 * L)
+        left = room - 100 - tail_tvd
+        b = raise_rate(b, BUILD[1], lambda x: arc_tvd(0, th, x) + arc_tvd(th, th_e, d), left)
+        d = raise_rate(d, DROP[1], lambda x: arc_tvd(0, th, b) + arc_tvd(th, th_e, x), left)
+        K = kickoff(100 + tail_tvd + arc_tvd(0, th, b) + arc_tvd(th, th_e, d))
+        if K is None:
+            return None
         st.append((K, K, 0.0))
         arc(st, th, b)
         hold_to(st, L - tail_tvd - arc_tvd(th, th_e, d))
@@ -170,18 +205,18 @@ def trajectory(rng, kind, L, theta):
         hold_to(st, L)
         prm.update(kickoff=K, theta_hold=th, theta_end=th_e, build_rate=b, drop_rate=d, end_section_tvd=tail_tvd)
     elif kind == 'high_angle':
-        th = rng.uniform(35, 65)
-        th_heel = rng.uniform(*theta)
-        th = min(th, th_heel)  # the hold is never steeper than the heel
-        b1, b2 = rng.uniform(1.5, 3.0), rng.uniform(2.0, 4.0)
-        tan_md = rng.uniform(50, 300)
-        need = arc_tvd(0, th, b1) + arc_tvd(th, th_heel, b2) + tan_md * math.cos(math.radians(th_heel))
-        while 0.9 * L - 100 < need and th > 20:
-            th *= 0.9
-            need = arc_tvd(0, th, b1) + arc_tvd(th, th_heel, b2) + tan_md * math.cos(math.radians(th_heel))
-        if 0.95 * L - 100 < need:
+        th, th_heel = rng.uniform(*DRAIN_TANGENT), rng.uniform(*theta)
+        th = min(th, th_heel)  # the tangent is never steeper than the heel
+        b1, b2, tan_md = rng.uniform(*BUILD), rng.uniform(*LANDING), rng.uniform(50, 300)
+
+        def below(x1, x2):
+            return arc_tvd(0, th, x1) + arc_tvd(th, th_heel, x2) + tan_md * math.cos(math.radians(th_heel))
+
+        b1 = raise_rate(b1, BUILD[1], lambda x: below(x, b2), room - 100)
+        b2 = raise_rate(b2, LANDING[1], lambda x: below(b1, x), room - 100)
+        K = kickoff(100 + below(b1, b2))
+        if K is None:
             return None
-        K = rng.uniform(0.05 * L, max(0.05 * L, min(0.4 * L, L - 100 - need)))
         st.append((K, K, 0.0))
         arc(st, th, b1)
         hold_to(st, L - arc_tvd(th, th_heel, b2) - tan_md * math.cos(math.radians(th_heel)))
@@ -204,6 +239,25 @@ def rs_inverse(bo, rs_target, T, p_hi):
     return 0.5 * (lo + hi)
 
 
+@functools.lru_cache(maxsize=4096)
+def gor_curve(rho_o, rho_g, p_sep, T_sep, T_r, p_sat, w_kgko):
+    """R/R_si against p_r/p_sat, both ascending, under solution-gas drive: Muskat's material balance on the well's
+    black oil with the book's k_g/k_o blended at w_kgko, Fig. 9.16 at 0 (D-19; solution_gas_drive.py)."""
+    well = pd.DataFrame([dict(rho_o=rho_o, rho_g=rho_g, p_sep=p_sep, T_sep=T_sep, T_r=T_r, p_sat=p_sat)])
+    a = black_oil_props(well)
+    _, R, _ = muskat(a['p'], a['Rs'], a['Bo'], a['Bg'], a['mu_r'], a['dRs'], a['dBo'], a['dBg'], kgko_blend(w_kgko))
+    return X_GRID[::2][::-1], R[0][::-1] / a['Rs'][0, 0]
+
+
+def gor_factor(w, p_r):
+    """The producing GOR over R_si at reservoir pressure p_r for an oil well w: 1 at or above p_sat, else D-19's."""
+    if p_r >= w['p_sat']:
+        return 1.0
+    keys = ('rho_o', 'rho_g', 'p_sep', 'T_sep', 'T_r', 'p_sat', 'w_kgko')
+    x, F = gor_curve(*(float(w[k]) for k in keys))
+    return float(np.interp(p_r / w['p_sat'], x, F))
+
+
 def stream(bo, gor, wlr, rho_w, p, T):
     """In-situ volume (m3) and mass (kg) of the stream per Sm3 of stock-tank liquid at (p, T), without slip."""
     b = bo.at_gor(gor)
@@ -215,14 +269,6 @@ def stream(bo, gor, wlr, rho_w, p, T):
 def j_radial(k_md, h, mu, B, ln_term, s):
     """Pseudo-steady radial productivity index, Sm3/(d bar) of stock-tank liquid."""
     return 2 * math.pi * k_md * 9.869233e-16 * h / (mu * B * (ln_term + s)) * 86400 * 1e5
-
-
-def j_joshi(k_md, h, mu, B, L_d, I_ani, r_e, r_w, s):
-    """Joshi's horizontal-well productivity index (Economides et al. 1994, Eqs. 2-46 to 2-48), Sm3/(d bar)."""
-    a = L_d / 2 * math.sqrt(0.5 + math.sqrt(0.25 + (2 * r_e / L_d) ** 4))
-    t1 = math.log((a + math.sqrt(a * a - (L_d / 2) ** 2)) / (L_d / 2))
-    t2 = I_ani * h / L_d * (math.log(I_ani * h / (r_w * (I_ani + 1))) + s)
-    return 2 * math.pi * k_md * 9.869233e-16 * h / (mu * B * (t1 + t2)) * 86400 * 1e5
 
 
 def forchheimer(k_md, h, mu, Z, T, ln_term, s, D_dmscf):
@@ -296,7 +342,7 @@ def draw_well(seed, k, stage_override=None, force_lift=False):
         'highly_deviated': 'high_angle' if sub < P_DRAIN else 'build_and_hold',
     }[gcl]
     for attempt in range(20):
-        res = trajectory(r, gc, L, THETA_CLASS.get(gcl))
+        res = trajectory(r, gc, L, THETA_CLASS.get(gcl), d_w if wt == 'platform' else 0.0)
         if res is not None and res[0][-1] <= MD_MAX:
             md_st, tvd_st, gprm = res
             break
@@ -314,7 +360,7 @@ def draw_well(seed, k, stage_override=None, force_lift=False):
 
     # Formation water
     r = gen('water')
-    sal = logu(r, 0.005, 0.25) if tail else tlognorm(r, 0.08, 0.6, 0.01, 0.25)  # mass fraction of solids
+    sal = logu(r, 0.002, 0.25) if tail else tlognorm(r, 0.06, 0.6, 0.002, 0.25)  # mass fraction of solids, D-11
     rho_w = 999.1 + 692.0 * sal + 311.0 * sal**2
     w.update(salinity=sal, rho_w=rho_w)
 
@@ -365,8 +411,9 @@ def draw_well(seed, k, stage_override=None, force_lift=False):
     else:
         p_sep, T_sep = tlognorm(r, 35, 0.45, 5, 85), r.uniform(300, 340) if wt == 'platform' else r.uniform(290, 320)
     r_s = {'initial': 1.0, 'mid_life': r.uniform(0.5, 1.0), 'late': r.uniform(0.1, 0.6)}[stage]
-    dp_fl = r.uniform(5, 30) + 0.02 * d_w if wt == 'subsea' else 0.0
-    p_s = min(logu(r, 1.5, 120) + dp_fl, 120) if tail else min(max(r_s * p_sep + dp_fl, 1.5), 120)
+    dp_fl = r.uniform(5, 30) + r.uniform(*RISER) * d_w if wt == 'subsea' else 0.0  # flowline and riser, D-15
+    p_cap = P_S_MAX[wt]
+    p_s = min(logu(r, 1.5, 120) + dp_fl, p_cap) if tail else min(max(r_s * p_sep + dp_fl, 1.5), p_cap)
     w.update(p_sep=p_sep, T_sep=T_sep, p_s=p_s, r_s=r_s, dp_fl=dp_fl)
 
     # Fluid
@@ -374,7 +421,7 @@ def draw_well(seed, k, stage_override=None, force_lift=False):
     sat_p = None
     if fc == 'black_oil':
         api = rng_uniform_or(r, tail, 16, 45, lambda: tnorm(r, 33, 4.5, 16, 45))
-        sg = rng_uniform_or(r, tail, 0.58, 0.95, lambda: tnorm(r, 0.66, 0.06, 0.58, 0.95))
+        sg = rng_uniform_or(r, tail, 0.58, 0.95, lambda: tnorm(r, 0.70, 0.07, 0.58, 0.95))  # D-16
     elif fc == 'volatile_oil':
         api = r.uniform(40, 50)
         sg = rng_uniform_or(r, tail, 0.62, 1.0, lambda: tnorm(r, 0.75, 0.06, 0.62, 1.0))
@@ -411,7 +458,7 @@ def draw_well(seed, k, stage_override=None, force_lift=False):
     # Life stage: the reservoir's state now
     r = gen('stage')
     if stage == 'initial':
-        r_p = r.uniform(0.97, 1.0)
+        r_p = r.uniform(0.85, 1.0) if drive == 'depletion' else r.uniform(0.97, 1.0)  # D-18
     elif stage == 'mid_life':
         r_p = r.uniform(0.85, 1.0) if drive == 'pressure_support' else r.uniform(0.55, 0.92)
     elif drive == 'pressure_support':
@@ -427,13 +474,14 @@ def draw_well(seed, k, stage_override=None, force_lift=False):
             ('initial', 'depletion'): 0.0 if r.random() < 0.5 else r.uniform(0, 0.1),
             ('mid_life', 'pressure_support'): r.uniform(0.1, 0.6),
             ('mid_life', 'depletion'): r.uniform(0.0, 0.3),
-            ('late', 'pressure_support'): r.uniform(0.6, 0.95),
+            ('late', 'pressure_support'): r.uniform(0.6, 0.98),  # D-18: the tail towards 0.98
             ('late', 'depletion'): r.uniform(0.05, 0.4),
         }[(stage, drive)]
         if tail:
             wlr = r.uniform(0, 0.98)
-        k_g = logu(r, 2, 15)
-        R_go = R_i * min(10.0, 1 + k_g * max(0.0, 1 - p_r / sat_p))
+        u_kgko = r.random()
+        w['w_kgko'] = u_kgko if tail else 0.0  # k_g/k_o: Fig. 9.16 in the core, the book's range in the tail, D-19
+        R_go = R_i * gor_factor(w, p_r)
         ogr, c_k = None, None
     else:
         wgr = {
@@ -445,69 +493,57 @@ def draw_well(seed, k, stage_override=None, force_lift=False):
             ('late', 'depletion'): (5, 80),
         }[(stage, drive)]
         wgr = logu(r, 1, 1000) if tail else logu(r, *wgr)  # Sm3 water per 1e6 Sm3 gas
-        R_go, k_g, c_k = R_i, None, None
+        R_go, c_k = R_i, None
         if fc == 'gas_condensate':
             c_k = r.uniform(0.5, 3.0)
             R_go = R_i * (1 + c_k * max(0.0, 1 - p_r / sat_p))
         ogr = 1e6 / R_go
         wlr = wgr / (wgr + ogr)
-    w.update(r_p=r_p, p_r=p_r, wlr=wlr, R_go=R_go, ogr=ogr, below_hydrostatic=p_r < p_h, k_g=k_g, c_k=c_k)
+    w.update(r_p=r_p, p_r=p_r, wlr=wlr, R_go=R_go, ogr=ogr, below_hydrostatic=p_r < p_h, c_k=c_k)
     w['saturation'] = (
         'single_phase_gas' if fc in ('wet_gas', 'dry_gas') else ('undersaturated' if p_r > sat_p else 'saturated')
     )
 
-    # Inflow
+    # Inflow, before a drain's friction
     r = gen('inflow')
-    k_med, k_lo, k_hi = PERM['offshore' if offshore else 'onshore']
-    perm = logu(r, k_lo, k_hi) if tail else tlognorm(r, k_med, 1.5, k_lo, k_hi)
+    k_med, k_s, k_lo, k_hi = PERM[wt]
+    perm = logu(r, k_lo, k_hi) if tail else tlognorm(r, k_med, k_s, k_lo, k_hi)
     h_net = logu(r, 3, 100) if tail else tlognorm(r, 15, 0.8, 3, 100)
     skin = r.uniform(-3, 15) if tail else tnorm(r, 2, 3, -3, 15)
     ln_re = r.uniform(8.5, 9.5) if gc == 'high_angle' else r.uniform(7, 9)
-    r_w = 0.108
     delta_d = r.uniform(0.1, 0.4)  # design drawdown, a fraction of p_r
+    L_d, I_ani = r.uniform(*DRAIN_LENGTH), logu(r, 1, 3)  # a drain's length and anisotropy, drawn for every well
+    drain = gc == 'high_angle'
+    if drain:  # Joshi's index on a drainage length that grows with the drain, r_eH = max(r_e, L / 1.6), D-21
+        f_geo = float(ratio(L_d, h_net, I_ani, skin, ln_re, 'B'))
+        w.update(drain_length=L_d, I_ani=I_ani, J_H_over_J_V=f_geo)
+    elif gc in ('build_and_hold', 's_shaped'):
+        f_geo = math.cos(math.radians(incl[-1])) ** -0.5  # the slant's placeholder, D-21
+    else:
+        f_geo = 1.0
     w.update(perm=perm, h_net=h_net, skin=skin, delta_d=delta_d, ln_re_rw=ln_re)
-    rho_lsc = (1 - wlr) * rho_o + wlr * rho_w
+
+    def on_geometry(a, b):
+        """A vertical well's Forchheimer coefficients for the geometry: a over J_H/J_V, and for a drain b scaled by
+        (I_ani h / L)^2, the non-Darcy loss of the rate per completed length (D-21); the slant's factor on k h."""
+        return a / f_geo, (b * (I_ani * h_net / L_d) ** 2 if drain else b / f_geo)
+
     if oil:
         b_now = bo.at_gor(R_go)
         mu, B = b_now.oil_viscosity(p_r, T_r), b_now.bo(p_r, T_r)
-        J = j_radial(perm, h_net, mu, B, ln_re - 0.75, skin)
-        f_geo = 1.0
-        if gc == 'high_angle':
-            L_d, I_ani = r.uniform(300, min(1000, 1.6 * r_w * math.exp(ln_re))), logu(r, 1, 3)
-            f_geo = j_joshi(perm, h_net, mu, B, L_d, I_ani, r_w * math.exp(ln_re), r_w, skin) / J
-            if f_geo > 6.0:
-                f_geo = 6.0
-                flags.append('J_H_over_J_V_capped_at_6')
-            w.update(drain_length=L_d, I_ani=I_ani)
-        elif gc in ('build_and_hold', 's_shaped'):
-            f_geo = math.cos(math.radians(incl[-1])) ** -0.5
-        J *= f_geo
-        k_l = J * rho_lsc / 86400
-        vogel = sat_p >= 0.8 * p_r and wlr < 0.6
-        inflow = 'vogel' if vogel else 'productivity_index'
-        q_l_ref = J * delta_d * p_r
-        w.update(mu_o=mu, B_o=B, J=J, f_geo=f_geo, k_l=k_l, w_l_max=k_l * p_r / 1.8, inflow=inflow, q_l_ref=q_l_ref)
+        J_V = j_radial(perm, h_net, mu, B, ln_re - 0.75, skin)
+        J = J_V * f_geo
     else:
         Z = bo.z_factor(p_r, T_r)
         mu_g = bo.gas_viscosity(p_r, T_r, bo.gas_density(p_r, T_r))
         D_nd = logu(r, 2e-4, 2e-3)
-        f_geo = 1.0
-        if gc == 'high_angle':
-            f_geo = r.uniform(1.5, 4.0)
-        elif gc in ('build_and_hold', 's_shaped'):
-            f_geo = math.cos(math.radians(incl[-1])) ** -0.5
-        a, b = forchheimer(perm, h_net * f_geo, mu_g, Z, T_r, ln_re - 0.75, skin, D_nd)
-        aof = gas_rate(a, b, p_r**2 - P_ATM**2)
-        q_g_ref = gas_rate(a, b, p_r**2 - ((1 - delta_d) * p_r) ** 2)
-        q_l_ref = q_g_ref * (ogr + wgr) / 1e6
-        k_l = q_l_ref * rho_lsc / 86400 / (delta_d * p_r)  # interim productivity index (Mapping)
-        w.update(a_gas=a, b_gas=b, D_nondarcy=D_nd, AOF=aof, q_g_ref=q_g_ref, f_geo=f_geo, k_l=k_l)
-        w.update(inflow='gas_rate', q_l_ref=q_l_ref, wgr=wgr)
+        a_v, b_v = forchheimer(perm, h_net, mu_g, Z, T_r, ln_re - 0.75, skin, D_nd)  # the vertical well's
+        a, b = on_geometry(a_v, b_v)
 
     # Completion: tubing from the design rate at completion (the initial state), and roughness
     r = gen('completion')
     c_e = r.uniform(100, 150)
-    p_wh = 1.5 * p_sep + 5 + (0.02 * d_w if wt == 'subsea' else 0.0)
+    p_wh = 1.5 * p_sep + 5 + dp_fl
     T_wh = T_s + 0.6 * (T_r - T_s)
     if oil:
         wlr_d, gor_d = 0.0, R_i
@@ -516,7 +552,7 @@ def draw_well(seed, k, stage_override=None, force_lift=False):
         q_d = J_i * delta_d * p_i
     else:
         wlr_d, gor_d = 10 / (10 + 1e6 / R_i), R_i
-        a_i, b_i_ = forchheimer(perm, h_net * f_geo, mu_g, bo.z_factor(p_i, T_r), T_r, ln_re - 0.75, skin, D_nd)
+        a_i, b_i_ = on_geometry(*forchheimer(perm, h_net, mu_g, bo.z_factor(p_i, T_r), T_r, ln_re - 0.75, skin, D_nd))
         q_d = gas_rate(a_i, b_i_, p_i**2 - ((1 - delta_d) * p_i) ** 2) * (1e6 / R_i + 10) / 1e6
     vol, mass = stream(bo, gor_d, wlr_d, rho_w, p_wh, T_wh)
     v_e = 1.22 * c_e / math.sqrt(mass / vol)
@@ -529,7 +565,7 @@ def draw_well(seed, k, stage_override=None, force_lift=False):
         D = sizes[i]
     else:
         D = sizes[-1]
-        flags.append('design_rate_above_tubing_capacity')
+        flags.append('design_rate_above_tubing_capacity')  # a check, D-100
     q_cap = v_e * math.pi * D * D / 4 * 86400 / vol  # Sm3/d of liquid at the erosional velocity
     eps = {
         'initial': (1.5e-6, 3e-5),
@@ -539,12 +575,53 @@ def draw_well(seed, k, stage_override=None, force_lift=False):
     eps = logu(r, 1.5e-6, 1.5e-4) if tail else logu(r, *eps)
     w.update(c_e=c_e, q_design=q_d, D=D, q_cap=q_cap, roughness=eps)
 
+    # A drain's friction along its liner, taken as the tubing: Dikken's model in closed form (D-21, drain_friction.py)
+    rho_lsc = (1 - wlr) * rho_o + wlr * rho_w
+    if oil:
+        if drain:
+            B_l = (1 - wlr) * B + wlr
+            rho_l = min(max(((1 - wlr) * (rho_o + R_go * rho_g) + wlr * rho_w) / B_l, 400.0), 1100.0)
+            _, c_heel = liquid_grad(D, rho_l, (1 - wlr) * mu + wlr * 0.5e-3, B_l, eps=eps)
+            J_eff = float(closed_form(J, L_d, c_heel, delta_d * p_r, q_cap))
+            w['eta_drain'] = J_eff / J
+            J = J_eff
+        k_l = J * rho_lsc / 86400
+        vogel = sat_p >= 0.8 * p_r and wlr < 0.6
+        inflow = 'vogel' if vogel else 'productivity_index'
+        q_l_ref = J * delta_d * p_r
+        w.update(mu_o=mu, B_o=B, J=J, f_geo=J / J_V, k_l=k_l, w_l_max=k_l * p_r / 1.8, inflow=inflow, q_l_ref=q_l_ref)
+    else:
+        u_d = p_r**2 - ((1 - delta_d) * p_r) ** 2
+        if drain:  # the friction's first-order term c L / 4 in b, c at the heel's rate (drain_friction.py)
+            _, c_heel = gas_grad(min(D, 0.1571), sg, Z, T_r, mu_g, eps=eps)
+            q_cap_g = q_cap * 1e6 / (1e6 / R_i + 10)
+            b_f = 0.0
+            for _ in range(4):
+                q = min(gas_rate(a, b + b_f, u_d), q_cap_g)
+                b_f = float(c_heel(q)) * L_d / 4
+            w['b_friction_share'] = b_f / (b + b_f)
+            b += b_f
+        aof = gas_rate(a, b, p_r**2 - P_ATM**2)
+        q_g_ref = gas_rate(a, b, u_d)
+        q_l_ref = q_g_ref * (ogr + wgr) / 1e6
+        k_l = q_l_ref * rho_lsc / 86400 / (delta_d * p_r)  # interim productivity index (Mapping)
+        w.update(a_gas=a, b_gas=b, a_ratio=a / a_v, b_ratio=b / b_v, D_nondarcy=D_nd, AOF=aof, q_g_ref=q_g_ref)
+        w.update(f_geo=f_geo, k_l=k_l)
+        w.update(inflow='gas_rate', q_l_ref=q_l_ref, wgr=wgr)
+
     # Choke
     r = gen('choke')
-    beta = r.uniform(0.2, 0.75) if tail else r.uniform(0.25, 0.6)
+    beta = r.uniform(0.15, 0.75) if tail else r.uniform(0.15, 0.6)  # D-27
+    d_bean = min(beta * D, BEAN_MAX)
+    if d_bean < beta * D:
+        flags.append('bean_capped_at_4_in')
     c_d = r.uniform(0.75, 0.9)
     w.update(
-        beta=beta, c_d=c_d, K_c=c_d * beta**2 * math.pi * D * D / 4, choke_profile=pick(r, CHOKE_PROFILES, (1,) * 4)
+        beta=d_bean / D,
+        d_bean=d_bean,
+        c_d=c_d,
+        K_c=c_d * math.pi * d_bean**2 / 4,
+        choke_profile=pick(r, CHOKE_PROFILES, (1,) * 4),
     )
 
     # Gas lift
@@ -562,7 +639,7 @@ def draw_well(seed, k, stage_override=None, force_lift=False):
     q_l_now = min(q_l_ref, q_cap)
     if lift:
         dz_pk = r.uniform(30, 150)
-        p_inj, dp_v = r.uniform(48, 76), r.uniform(3.4, 13.8)
+        p_inj, dp_v = r.uniform(*P_INJ[wt]), r.uniform(3.4, 13.8)  # at the top: the surface or the tree, D-29
         p_wf_d = (1 - r.uniform(0.3, 0.7)) * p_r  # a lifted well's design drawdown
         vol_b, mass_b = stream(bo, R_go, wlr, rho_w, p_wf_d, T_r)  # the flowing column below the valve, no slip
         G_l = mass_b / vol_b * STD_GRAVITY / 1e5
@@ -579,8 +656,8 @@ def draw_well(seed, k, stage_override=None, force_lift=False):
         md_inj = float(np.interp(H, tvd_st, md_st))
         T_a = T_s + (T_r - T_s) * H / L
         phi = r.uniform(0, 0.3)
-        glr = logu(r, 25, 1000) if tail else logu(r, 50, 400)
-        w_lg_max = min(max(rho_g * glr * q_l_now / 86400, 0.02), 2.0)
+        glr = logu(r, 30, 1000)  # D-31, the core and the tail
+        w_lg_max = min(max(rho_g * glr * q_l_now / 86400, W_LG_MAX[0]), W_LG_MAX[1])
         w.update(z_inj=H, md_inj=md_inj, z_inj_frac=H / L, p_inj=p_inj, dp_valve=dp_v, T_lg=T_a - phi * (T_a - T_s))
         w.update(packer_offset=dz_pk, phi_lg=phi)
         w.update(T_lg_below_ambient=phi * (T_a - T_s), glr_cap=glr, w_lg_max=w_lg_max)
@@ -679,6 +756,11 @@ def report(df):
         ('L (m)', core['L']),
         ('MD (m)', core['md']),
         ('MD/TVD, deviated families', core.loc[core.geometry_class != 'vertical', 'md_tvd']),
+        (
+            'kickoff below the mudline / depth below it',
+            (core['geo_kickoff'] - core['d_w'].where(core.well_type == 'platform', 0)) / core['z'],
+        ),
+        ('build rate (deg/30 m)', core['geo_build_rate']),
         ('max inclination, deviated (deg)', core.loc[core.geometry_class != 'vertical', 'theta_max']),
         ('salinity (mass fraction)', core['salinity']),
         ('rho_w (kg/m3)', core['rho_w']),
@@ -691,6 +773,12 @@ def report(df):
         ('T_r (K)', core['T_r']),
         ('p_sep (bar)', core['p_sep']),
         ('p_s nominal (bar)', core['p_s']),
+        ('p_s nominal, subsea (bar)', core.loc[core.well_type == 'subsea', 'p_s']),
+        (
+            'p_s nominal, subsea in water over 1000 m (bar)',
+            core.loc[(core.well_type == 'subsea') & (core.d_w > 1000), 'p_s'],
+        ),
+        ('flowline and riser loss, subsea (bar)', core.loc[core.well_type == 'subsea', 'dp_fl']),
         ('API, black oil', core.loc[core.fluid_class == 'black_oil', 'api']),
         ('gas gravity, black oil', core.loc[core.fluid_class == 'black_oil', 'sg_gas']),
         ('R_si, black oil (Sm3/Sm3)', core.loc[core.fluid_class == 'black_oil', 'R_i']),
@@ -700,15 +788,34 @@ def report(df):
         ('p_r/p_i', core['r_p']),
         ('water cut, oils', core.loc[core.fluid_type.isin(OILS), 'wlr']),
         ('WGR, gas classes (Sm3/1e6 Sm3)', core['wgr']),
-        ('permeability (mD)', core['perm']),
+        ('permeability, platform (mD)', core.loc[core.well_type == 'platform', 'perm']),
+        ('permeability, subsea (mD)', core.loc[core.well_type == 'subsea', 'perm']),
+        ('permeability, onshore (mD)', core.loc[core.well_type == 'onshore', 'perm']),
         ('J, oils (Sm3/(d bar))', core['J']),
-        ('J_H/J_V, high-angle oils', core.loc[core.geometry_family == 'high_angle', 'f_geo']),
+        ('J_eff/J_V, drains (oils)', core.loc[core.geometry_family == 'high_angle', 'f_geo']),
+        ('friction efficiency J_eff/J_H, drains (oils)', core['eta_drain'] if 'eta_drain' in core else []),
+        ("friction's share of b, drains (gas)", core['b_friction_share'] if 'b_friction_share' in core else []),
+        ('drain length (m)', core['drain_length']),
         ('q_l_ref, oils (Sm3/d)', core.loc[core.fluid_type.isin(OILS), 'q_l_ref']),
+        (
+            'q_l_ref, platform oils (Sm3/d)',
+            core.loc[core.fluid_type.isin(OILS) & (core.well_type == 'platform'), 'q_l_ref'],
+        ),
+        (
+            'q_l_ref, subsea oils (Sm3/d)',
+            core.loc[core.fluid_type.isin(OILS) & (core.well_type == 'subsea'), 'q_l_ref'],
+        ),
+        (
+            'R_go/R_si, saturated core black oils',
+            (core['R_go'] / core['R_i'])[(core.fluid_class == 'black_oil') & (core.saturation == 'saturated')],
+        ),
         ('AOF, gas classes (Sm3/d)', core['AOF']),
         ('q_g_ref, gas classes (Sm3/d)', core['q_g_ref']),
         ('D (mm)', core['D'] * 1000),
         ('roughness (um)', core['roughness'] * 1e6),
         ('K_c/A', core['K_c'] / (math.pi * core['D'] ** 2 / 4)),
+        ('bean diameter (mm)', core['d_bean'] * 1000),
+        ('injection pressure, subsea (bar)', core.loc[core.well_type == 'subsea', 'p_inj']),
         ('injection TVD / L', core['z_inj_frac']),
         ('T_lg below the ambient at the valve (K)', core['T_lg_below_ambient']),
         ('w_lg capacity (kg/s)', core['w_lg_max']),
@@ -769,7 +876,7 @@ def report(df):
         + ', '.join(f'{k} {lift[oils_all][rq == k].mean():.0%}' for k in ['Q1', 'Q2', 'Q3', 'Q4'])
     )
     oe = np.where(df.fluid_type.isin(OILS), df.q_l_ref * (1 - df.wlr), df.q_g_ref / 1000)
-    floor = np.where(df.well_type == 'subsea', 8.0, 1.6)
+    floor = np.where(df.well_type == 'subsea', 20.0, 1.6)
     print(
         f'  design rate below the economic floor (oil equivalent, before any solve): {(oe < floor).mean():.1%}; '
         f'below half of it: {(oe < 0.5 * floor).mean():.1%}'
