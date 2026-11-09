@@ -106,6 +106,8 @@ Under A, half the supported gas wells' samples have a WGR above 1000 (P90 7800),
 
 **Ruling:** pending. Bjarne was away on 2026-11-09 and asked not to be stopped, so the rerun takes A as a working assumption (D-107).
 
+**The rerun with A** (`r9-measurements.md`, The rerun after the second checkpoint): with the tables, the supported gas wells' last fifth is 0.25 (R9: 0.76), the core gas wells' median-sample P50 128,000 Sm³/d (R9: 154,000), and `nsol-2`'s outcomes unchanged; `sol-2`'s tail keeps 66% of its drawn wells against R9's 70%, as its gas wells now reach a WGR of 10,000.
+
 ### L5 · The platform oil wells' upper tail
 
 **Question.** The rework's first run found the platform oil wells' upper tail of median-sample rates above every region's [own analysis of BSEE's well tests, ANP's production by well and NSTA's production by well]. R9's core offshore oil wells (platform and subsea together) make 6 / 91 / 1985 Sm³/d of oil equivalent (P10 / P50 / P90), 19% of them above 1018 Sm³/d. Narrow the tail?
@@ -154,6 +156,8 @@ Tests: `cargo test` (58), the full suite (not slow 1198, slow 177), and the Rust
 
 **Ruling:** pending. The rerun uses the branch's core as a working assumption; the branch is neither pushed nor opened as a PR before the ruling.
 
+**The rerun with the guard** (`r9-measurements.md`): `sol-2`'s CPU per accepted well 53.6 s (R9: 70.1; the rework 41.3), the pool's efficiency back to 0.94 from 0.46, the volatile oils' mean solve 0.22 s (R9: 0.81). What remains above the rework's cost lies outside the core, in building each attempt's table (`PVTTableSet.at_gor`), for R10.
+
 ### Noted, no ruling needed
 
 - **H3's targets**, ruled on 2026-11-06 to be judged on R11's pilot: in R9, redraw-limit drops are 2.1% of the core's drawn `sol-2` wells (target 1% per class), dead dates 2 of 115 `nsol-2` wells (target 0.5%), and best-rate solver failures 2 of 487 `sol-2` wells (target 0.5%). R9 neither adds to them nor removes them. D-83 names the fix for dead dates, a finer life scan, which R10 implements.
@@ -161,9 +165,18 @@ Tests: `cargo test` (58), the full suite (not slow 1198, slow 177), and the Rust
 - **D-105's two datasets by stage**: $p_r/p_i$ and the oils' water cut of `sol-2`'s wells and `nsol-2`'s samples agree by stage and drive to 0.01, as in the rework.
 - **Building an attempt**: `PVTTableSet.at_gor` interpolates a table at each attempt's GOR in Python, about 30 to 40 ms per attempt, 11% (`sol-2`) and 20% (`nsol-2`) of the CPU. R10 moves the sampler into `manywells.sampling` and makes this cheap.
 
-## 3. After the checkpoint
+## 3. R10's spec draft: points for Bjarne
 
-1. The rulings in the draft's scripts and `sampling-draft.md`, and L6's fix in its own branch.
-2. A rerun of both pilots with the tables, to measure the rulings and the cost.
+A first draft of the new `specs/sampling.md` is on the local branch `r10-sampling-spec` (`.worktrees/r10-sampler`, not pushed), for Bjarne's sign-off: v1's procedure unchanged, the v2 procedure as SMP-50 to SMP-117, D-107 marked pending. Drafting it found these:
+
+- **Needs a ruling:** one lift label for both datasets, `lift_start_rule` (`from_start`, `static_check`, `drawn_time`, `end_of_natural_flow`, `no_natural_flow`), since D-105 gives a `sol-2` well its life's lift; `datasets-draft.md`'s `lift_reason` predates D-105 (R11's schema).
+- **Filled from the prototype, to confirm:** a geometry redrawn at most 20 times, then vertical (no well reached it); the black oil at the table's stock-tank densities as the stand-in for the design steps of a table fluid (static check, tubing, lift design and capacity, the volatile oils' GOR balance, the condensates' $p/Z$ trend), the table only in the inflow; R3's $x$ still drawn for table fluids, as a record; the tail's depth and subsea water-depth ranges reaching past the core's bounds, as drafted; no tolerance on the field-reported API and gas gravity after J2's two passes (a lean condensate missed by 2.8 °API), only the single-stage match's; D-50's 21 scan points kept, the finer life scan named as D-83's fix; the depth and overpressure fits to BOEM's data as design values.
+- **Drafts behind the rulings** (the spec follows the rulings; the drafts are plans and stay as they are): the lift-gas capacity's point masses (D-31), the lift-off share 0.20 (D-38), the logs in a companion file (I1), no CasADi retry (H1), the outcome `table_failed` (L1), `saturation_kind` `none`, a `sol-2` well's lift and inflow rule from its life (D-105, D-45).
+- **Other specs to carry with R10:** `specs/goals.md` (the datasets' files with I1's companion, v2.0's model), `specs/constitution.md` (dataset reproducibility), `specs/model/validity.md` (decision 5, the inclination row, L3's limit, D-107's WGR if ruled, and the Sampler columns after R10's code), feature 022 (L3), and L6's spec text with its branch.
+
+## 4. After the checkpoint
+
+1. Done on 2026-11-09: the rulings in the draft's scripts and `sampling-draft.md`, L6's fix in its own branch, the rerun of both pilots with the tables, and R10's first spec draft.
+2. On Bjarne's rulings of L4 and L6: the PR of L6's branch to `develop`, and D-107 kept or replaced.
 3. R10: the new `specs/sampling.md` (for sign-off) and the sampler in `manywells.sampling`, with tests.
 4. R11: the pilot datasets for Bjarne's review, then the full generation.

@@ -36,7 +36,9 @@
 - **The second checkpoint, 2026-11-09** (`plans/sampler-redesign/checkpoint-2.md`): R9's choices and the open findings.
   - Ruled by Bjarne the same day: D-106's repair of the tables approved (L1); a table fluid's saturation pressure is its flash's, and R3's undersaturation draw applies to black oils only (L2); $b = 0$ in D-61's fit kept as a known limit of the $p^2$ form (L3); the platform oil wells' upper tail kept and measured by well type on R11's pilot (L5).
   - Pending, taken as working assumptions while Bjarne was away: a gas well with pressure support waters out at a WGR of 10,000 (L4, D-107); and the Rust core's guard against DAK's Joule–Thomson pole on tables (L6), on the branch `fix/table-jt-temperature-solve`, not pushed, which makes the volatile oils' solves five times cheaper with the same roots.
-  - Next: the rerun of both pilots with the tables, D-107 and the guard; then R10.
+  - The rerun of both pilots with the tables, D-107 and the guard (`r9-measurements.md`): the supported gas wells decline as the regions' do, and the cost falls back near the rework's apart from building each attempt's table.
+  - R10's spec: a first draft on the local branch `r10-sampling-spec`, with points for Bjarne in `checkpoint-2.md`, section 3.
+  - Next: Bjarne's rulings on L4, L6 and the spec draft's points; then R10's code.
 
 This plan replaces v1's sampling procedure for the v2 datasets (`specs/goals.md`, limitation 5: unrealistic sampled wells). It ends with:
 
