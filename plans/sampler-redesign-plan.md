@@ -1,8 +1,8 @@
 # Sampler redesign — plan
 
-*Draft 2026-10-30. Owner: Bjarne Grimstad. Status: R1 to R7 done on the branch; R8, the checkpoint, ready for Bjarne on 2026-11-02.*
+*Draft 2026-10-30. Owner: Bjarne Grimstad. Status: R1 to R8 done; the rework and R9's integration done; the second checkpoint mostly ruled on 2026-11-09.*
 
-## Where we are (2026-11-02)
+## Where we are (2026-11-09)
 
 - **Done before this plan:** the model-lock plan (`plans/model-lock-plan.md`). `v2.0.0` is named and pinned, the correlations' validity ranges are recorded, the correlations are checked against independent sources, and both backends pass the `v1.0.0` configuration's regression checks.
 - **R1 done:** the interview was held on 2026-10-30, and Bjarne confirmed the Goals below the same day, with the changes they make to `specs/goals.md` and `specs/constitution.md` (Where the goals change the specs).
@@ -33,7 +33,10 @@
     - R4's control change kept for redraws (D-83).
   - Feature 022 (#38) and K1's retrograde tables (#39) are merged into `develop`, and J2's per-fluid offsets are in `table_fluids.py`.
   - R9's integration: the generator's Forchheimer inflow fitted as D-61 says, the per-well NeqSim tables with D-106's repair of their $p/Z$ (needs sign-off), and the rerun of the pilots with them (`r9-measurements.md`). Outcomes, decline and stages hold; the condensates' gas rates fall by a quarter. The cost rises by 70% (`sol-2`) and 110% (`nsol-2`), mostly from a few volatile oils whose temperature solve fails with Joule–Thomson cooling on their tables: a Rust core finding, open.
-  - Next: the smaller checkpoint (D-105, D-106, R9's choices and the open findings), then R10.
+- **The second checkpoint, 2026-11-09** (`plans/sampler-redesign/checkpoint-2.md`): R9's choices and the open findings.
+  - Ruled by Bjarne the same day: D-106's repair of the tables approved (L1); a table fluid's saturation pressure is its flash's, and R3's undersaturation draw applies to black oils only (L2); $b = 0$ in D-61's fit kept as a known limit of the $p^2$ form (L3); the platform oil wells' upper tail kept and measured by well type on R11's pilot (L5).
+  - Pending, taken as working assumptions while Bjarne was away: a gas well with pressure support waters out at a WGR of 10,000 (L4, D-107); and the Rust core's guard against DAK's Joule–Thomson pole on tables (L6), on the branch `fix/table-jt-temperature-solve`, not pushed, which makes the volatile oils' solves five times cheaper with the same roots.
+  - Next: the rerun of both pilots with the tables, D-107 and the guard; then R10.
 
 This plan replaces v1's sampling procedure for the v2 datasets (`specs/goals.md`, limitation 5: unrealistic sampled wells). It ends with:
 

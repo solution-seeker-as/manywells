@@ -519,7 +519,7 @@ def draw_well(seed, k, stage_override=None, force_lift=False, fluid=None):
             ('late', 'pressure_support'): (50, 500),
             ('late', 'depletion'): (5, 80),
         }[(stage, drive)]
-        wgr = logu(r, 1, 1000) if tail else logu(r, *wgr)  # Sm3 water per 1e6 Sm3 gas
+        wgr = logu(r, 1, 10000) if tail else logu(r, *wgr)  # Sm3 water per 1e6 Sm3 gas; the tail's top is D-107's end
         R_go, c_k = R_i, None
         if fc == 'gas_condensate':
             c_k = r.uniform(0.5, 3.0)
