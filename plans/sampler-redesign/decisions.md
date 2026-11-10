@@ -941,3 +941,159 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Needs sign-off:** yes (sampling; the WGR bound and `validity.md`'s row).
 - **Used by:** `sampler_draft_samples.py` (`END_WGR`), `sampler_draft_draws.py` (the tail's WGR); `sampling-draft.md`, The reservoir state and `nsol-2`: a well's life.
 - **Ruling:** Bjarne, 2026-11-10 (second checkpoint, L4): approved as recommended. The rerun of 2026-11-09 took it as a working assumption (`r9-measurements.md`, The rerun after the second checkpoint).
+
+*Entries D-108 to D-121 are R10's (2026-11-10): working assumptions taken while the sampler was moved into the package, under Bjarne's rule of that day that an agent works until the step is finished and hands it over once, and that the design rests on data and physics. D-110 to D-120 replace guesses that the triage of `guesses.md` found data, a published source or physics for. Each is its own commit, so that a ruling can reverse it alone. Two of the triage's proposals are not taken and wait for Bjarne: a later water breakthrough with wet starts (G30), and a higher separator pressure for gas wells (G7).*
+
+### D-108 · Every number of a block is drawn, whatever the branch
+
+- **Step:** R10, 2026-11-10. Implements the checkpoint's note on D-7.
+- **Choice made:** where the prototype skipped a number that a well's branch did not use (six places in the well draws: the dry-gas number, the surface temperature's second number, the flowline's two numbers, the undersaturation, the stage block's second pressure number and initial water numbers, and the lift's Bernoulli), the block now draws it and leaves it unused, so that every block takes the same count of numbers in the same order for every well. The same holds for the samples' blocks. A core well does not draw a tail well's form of a number as well: the two forms take the same number.
+- **Alternatives:** leave the prototype's order, under which a change of one rule moves later draws of the same block; a fixed vector of uniforms per block with every draw an inverse transform, which is stricter and rewrites every draw.
+- **Basis:** a design choice for reproducibility (D-7): a change of one rule moves no other draw.
+- **Realism:** not applicable. The draws' values change against the prototype's for most wells, and their distributions do not; the port was proved bit for bit against the prototype before this change, and the pilots were rerun after it.
+- **Needs sign-off:** no; it carries out a ruled note.
+- **Used by:** `specs/sampling.md`, SMP-51; `sampling/v2/draws.py`, `life.py`, `samples.py`; a test that every block takes the same count of numbers for every well.
+- **Ruling:**
+
+### D-109 · The initial pressure stops at 950 bar where the hydrostatic pressure alone passes it
+
+- **Step:** R10, 2026-11-10. A finding of the port on D-12 and D-35.
+- **Choice made:** where $p_h > 950$ bar, $p_i = 950$ bar and `pressure_class` is `under`; otherwise as SMP-63.
+- **Alternatives:** leave $p_i$ up to about 1080 bar in such wells, outside the bound that D-35 ruled; redraw the depth or the water depth, which moves other draws; a lower cap on the depth in deep water.
+- **Basis:** physics for the bound, the largest bottomhole pressure of Hasan et al.'s data (D-35, `validity.md`); the cap's form is a design choice, the simplest that keeps the bound.
+- **Realism:** $p_h$ passes 950 bar only in the deepest wells in the deepest water: 38 of 300,000 draws of the prototype (seed 2026), 34 of them tail subsea wells, so one or two wells of a dataset. Such wells exist, at pressures above the model's range; a capped well is under its hydrostatic pressure by at most an eighth, inside the underpressured class's range of 0.8 to 1.0.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-63; `sampling/v2/draws.py`; the bound's test, no longer expected to fail.
+- **Ruling:**
+
+### D-110 · Water depths: subsea wells log-uniform, fewer deep-water dry trees, a lower shelf floor
+
+- **Step:** R10, 2026-11-10. Revises D-13 (`guesses.md`, G2).
+- **Choice made:** subsea $d_w \sim \text{LogU}(80, 3000)$ m in place of $\text{LogN}_ {[80, 3000]}(350, 0.8)$; deep-water dry trees 0.10 of platform wells in place of 0.15; the shelf platforms' floor 5 m in place of 15 m; the rest of SMP-58 as it is.
+- **Alternatives:** keep the log-normal, whose median is one region's; a fit to one region's subsea wells.
+- **Basis:** data. The subsea wells of three regions together span the whole range, one centred where the draft's median is and another mostly in deep water, where the draft put few wells; the shelf wells of one region stand in shallower water than the draft's floor; the deep-water share of platform wells lies between one region's present-day share and the others' none [own analysis of BOEM's directional surveys and borehole file, Sodir's FactMaps, NSTA's wellbore layer and NOAA's World Ocean Atlas 2023]. The log-uniform shape is a design choice, D-104's rule of a uniform draw over the pooled range.
+- **Realism:** subsea wells in 1000 m of water or more become three in ten of the subsea wells in place of a tenth. Deeper water gives a colder seabed, a larger flowline loss and a lower effective gradient, so the subsea wells' rates and kept share are measured again on the pilot.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-58; `sampling/v2/draws.py`.
+- **Ruling:**
+
+### D-111 · S wells hold at 20° to 60° and run on for longer; a drain's tangent may be absent
+
+- **Step:** R10, 2026-11-10. Revises D-104's shapes for the S family and the drains (`guesses.md`, G3).
+- **Choice made:** an S well's hold $\theta_h \sim U(20°, 60°)$ in place of $U(15°, 45°)$; its end section $\min(U(100, 1200)\ \text{m}, L/3)$ of TVD in place of $\min(U(100, 400)\ \text{m}, L/4)$; a drain's tangent before the heel $U(0, 300)$ m in place of $U(50, 300)$ m; the holds' least lengths as they are.
+- **Alternatives:** keep R3's values, set before the surveys were read; fitted shapes.
+- **Basis:** data, by D-104's rule of a uniform draw over the pooled range: the S wells of two regions hold up to well above the draft's 45°, and one region's run on below their drop for longer than the draft allowed; most of one region's drains land without a tangent [own analysis of BOEM's directional surveys and NLOG's deviation surveys]. The lower end of 20° is the deviated class's own (SMP-59).
+- **Realism:** S wells are a twelfth of the wells. The end section rests on one region.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-60; `sampling/v2/survey.py`.
+- **Ruling:**
+
+### D-112 · Subsea separator temperatures up to 340 K
+
+- **Step:** R10, 2026-11-10. Revises D-15's temperatures (`guesses.md`, G8).
+- **Choice made:** subsea $T_\text{sep} \sim U(290, 340)$ K in place of $U(290, 320)$ K.
+- **Alternatives:** keep 320 K.
+- **Basis:** data, thinly: subsea satellite wells of one operator arrive topside at temperatures whose median lies above the draft's top [own analysis of Petrobras' 3W Dataset]; a long tieback arrives colder, which the range's bottom keeps.
+- **Realism:** the temperature enters only the black oil's separator correction (PVT-OIL-5) and a table fluid's offsets, by a few per cent.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-66; `sampling/v2/draws.py`.
+- **Ruling:**
+
+### D-113 · A slanted well's productivity from Cinco-Ley's slant skin
+
+- **Step:** R10, 2026-11-10. Replaces D-21's placeholder factor (`guesses.md`, G14 and G15).
+- **Choice made:** for build-and-hold and S wells, the skin of a slanted well, $s_\theta = -(\theta'/41)^{2.06} - (\theta'/56)^{1.865}\log_{10}(h_D/100)$ with $\theta' = \arctan(\tan\theta_\text{end}/I_\text{ani})$ in degrees and $h_D = h_n I_\text{ani}/r_w$, is added to the skin in $J$ and in a gas well's $a$, in place of the factor $(\cos\theta_\text{end})^{-1/2}$; a gas well's non-Darcy coefficient takes the perforated length along the well, $h_\text{perf}/\cos\theta_\text{end}$, in Eq. 4-34. The gain $(A + s)/(A + s + s_\theta)$, with $A = \ln(r_e/r_w) - 0.75$, is capped where a stimulated well at a high angle would pass it. The drains' form (D-21) is untouched.
+- **Alternatives:** keep the placeholder, which is unbiased at the median but blind to the skin, on which the gain depends; Besson's form.
+- **Basis:** physics, a published correlation: Cinco-Ley, Ramey and Miller's (1975) slant skin, as tabulated by Economides, Hill and Ehlig-Economides (1994, Table 5-1, p. 91: −0.128, −0.517, −1.178, −2.149 and −3.577 at 15° to 75° for $h_D$ = 100), which the fit reproduces within 3%; valid to 75°, the sampler's limit. The cap is a design choice of the build.
+- **Realism:** for a well of skin 2 and $\ln(r_e/r_w)$ = 8 the table gives gains of 1.06, 1.15, 1.30 and 1.63 at 30°, 45°, 60° and 75°, where the placeholder gave 1.07, 1.19, 1.41 and 1.97. Over the draws the placeholder over the slant skin's gain is 0.85 / 1.01 / 1.11 (5th, 50th and 95th percentiles) from 20° to 60° and 0.58 / 1.09 / 1.36 from 60° to 75°.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-72, SMP-73; `sampling/v2/reservoir.py`, `draws.py`.
+- **Ruling:**
+
+### D-114 · The lift gas arrives at the valve between the ambient and the reservoir temperature
+
+- **Step:** R10, 2026-11-10. Revises D-30's temperature (`guesses.md`, G23).
+- **Choice made:** $T_{lg} = T_a(H) + \psi\thinspace(T_r - T_a(H))$ with $\psi \sim U(0, 0.75)$, in place of $T_a(H) - \phi\thinspace(T_a(H) - T_s)$ with $\phi \sim U(0, 0.3)$; one uniform draw, as before.
+- **Alternatives:** the draft's, which cools the gas below the ambient at the valve; THM-9's default, the ambient itself, with no draw.
+- **Basis:** physics, from published solutions: in Hasan and Kabir's (2018, §12.2.3, Figs. 12.16 to 12.22) examples the annulus gas warms within the first few hundred feet and then runs between the geotherm and the tubing's fluid, about two thirds to three quarters of the way from the formation's temperature to the reservoir's in a deep well at a high rate, and a little above the geotherm at a low rate; it is below the ambient only by a few kelvin, at a valve near the bottom. The uniform shape and the top of 0.75 are a guess read off three examples; a solution of the annulus' energy balance per well would replace them.
+- **Realism:** a few kelvin in a lifted well's stream above the valve. $T_{lg}$ stays at or below $T_r$, inside the solver's temperature bound.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-79; `sampling/v2/draws.py`.
+- **Ruling:**
+
+### D-115 · The pressure's exponent over a life: 0.7 to 1.5
+
+- **Step:** R10, 2026-11-10. Revises D-42 (`guesses.md`, G29).
+- **Choice made:** $\gamma \sim U(0.7, 1.5)$ for oils and wells with pressure support, in place of $U(1, 2)$.
+- **Alternatives:** keep the draft's, fitted to one textbook well; the material balance's own $p_r(F)$ with a term for the oil above the bubble point, which adds a compressibility to the draws and stays the named replacement.
+- **Basis:** physics, the model's own result: Muskat's material balance on the model's black oil, from the bubble point down, gives exponents from about 0.7 to 1 (`plans/evidence/solution_gas_drive.py`), and the oil above its bubble point raises the exponent of the whole path, as in Golan and Whitson's (1991) Example 4.11, fitted at 1.4. For wells with pressure support the form stays a guess; their pressure moves little.
+- **Realism:** depletion oils hold a higher pressure in mid-life than the draft's.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-85; `sampling/v2/life.py`; the evidence script's fit of the exponent.
+- **Ruling:**
+
+### D-116 · The separator's steps may come from a tenth of the life
+
+- **Step:** R10, 2026-11-10. Revises D-46 (`guesses.md`, G32).
+- **Choice made:** the two step dates $U(0.1, 0.9)\thinspace T_\text{life}$ in place of $U(0.25, 0.9)$: the range widened downwards only.
+- **Alternatives:** the triage's $U(0.1, 0.8)$, which also follows one region's medians; keep the draft's.
+- **Basis:** data, thinly and by a proxy: one region's gas wells, with the choke open, lose wellhead pressure earlier in their lives than the draft's first step in most wells [own analysis of NSTA's production by well]. The upper end is kept, since one region's shape is weak evidence (the Goals, coverage first).
+- **Realism:** the separator steps down earlier in some lives.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-89; `sampling/v2/life.py`.
+- **Ruling:**
+
+### D-117 · Lift's drawn start from a twentieth of the life
+
+- **Step:** R10, 2026-11-10. Revises D-49's drawn date (`guesses.md`, G33).
+- **Choice made:** $U(0.05, 0.9)\thinspace T_\text{life}$ in place of $U(0.2, 0.9)$.
+- **Alternatives:** keep the draft's.
+- **Basis:** data: of one region's oil wells that were ever on gas lift and not from their start, the first month on lift spans a range that starts well below the draft's 0.2 and ends near its 0.9, by two sources [own analysis of BOEM's OGOR-A production and BSEE's well tests]. The uniform shape is a design choice for simplicity.
+- **Realism:** the drawn date is one of three rules, and the earliest wins; some lifts start earlier.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-90; `sampling/v2/life.py`.
+- **Ruling:**
+
+### D-118 · Set points that change less often: the change probability from 0.2
+
+- **Step:** R10, 2026-11-10. Revises D-47's probability (`guesses.md`, G36).
+- **Choice made:** $p_c \sim \text{LogU}(0.2, 0.95)$ per well in place of $\text{LogU}(0.5, 0.95)$; the step of ±0.1 and the share 0.1 of new draws as they are.
+- **Alternatives:** keep the draft's, set by one operator's subsea wells.
+- **Basis:** data from two regions: sampled at `nsol-2`'s spacings, one region's gas wells change their choke opening in fewer intervals than the draft's lowest 0.5, and the other's wells move theirs about daily [own analysis of NSTA's production by well and Petrobras' 3W Dataset]. The step and the share stay guesses: the one history in hand over whole lives is of swing producers.
+- **Realism:** `nsol-2` gains wells whose set points move less often.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-98; `sampling/v2/samples.py`.
+- **Ruling:**
+
+### D-119 · The liner's water takes the model's viscosity
+
+- **Step:** R10, 2026-11-10 (`guesses.md`, N5).
+- **Choice made:** in a drain's friction, the water's viscosity is PVT-WAT-3's at $T_r$ in place of 0.5 mPa s.
+- **Alternatives:** keep the constant.
+- **Basis:** physics, the model's own correlation: 0.49 mPa s at 330 K and 0.15 at 450 K.
+- **Realism:** the viscosity enters Chen's friction factor weakly; a drain's friction changes slightly.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-72; `sampling/v2/reservoir.py`.
+- **Ruling:**
+
+### D-120 · Lighter heptanes-plus for condensates
+
+- **Step:** R10, 2026-11-10. Revises D-63's range (`guesses.md`, G37).
+- **Choice made:** a synthetic condensate's $M_{7+} \sim U(120, 200)$ g/mol in place of $U(140, 200)$, if the composition's match to the drawn API gravity holds on the build; otherwise the range stays and the build's result is recorded here.
+- **Alternatives:** keep the draft's, which starts at the published average and so leaves out the lighter half of the published condensates.
+- **Basis:** data, published: 340 gas condensates' heptanes-plus have molar masses of 106 to 253 g/mol with an average of 142 (Elsharkawy 2002, Table 1, p. 151).
+- **Realism:** lighter condensates, with lower dew points.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-113; `sampling/v2/table_build.py`.
+- **Ruling:**
+
+### D-121 · A gas drain's liner is at most 7 in
+
+- **Step:** R10, 2026-11-10. Records what the prototype did, where D-21 says "the liner taken as the tubing".
+- **Choice made:** a gas drain's liner is the tubing, at most 157.1 mm (7 in): a gas well on 9-5/8 in tubing has a 7 in liner.
+- **Alternatives:** the liner as the tubing in every case, a 9-5/8 in liner.
+- **Basis:** a design choice of the build: 7 in is the largest of the oil wells' tubing sizes (SMP-75). Nothing was found on liner sizes over wells; completion records would replace it.
+- **Realism:** 72 of 4000 drawn wells, gas drains on 9-5/8 in tubing.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-73; `sampling/v2/reservoir.py`.
+- **Ruling:**
