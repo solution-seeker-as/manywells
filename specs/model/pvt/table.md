@@ -84,7 +84,7 @@ a table whose GOR is $R_{go}$, exact at the axis's GORs. A column only one of th
 ## Safeguards
 
 - The checks of PVT-TAB-1.
-- The clamping of PVT-TAB-2 keeps every property finite and positive at trial states far outside the well's pressures and temperatures, where linear extrapolation could make $B_o$ or $Z$ negative.
+- The clamping of PVT-TAB-2 keeps every property finite and positive at trial states far outside the well's pressures and temperatures, where linear extrapolation could make $B_o$ or $Z$ negative. It also gives a state at any temperature far below the grid, where a black oil's DAK density, or the dead-oil viscosity correlation of a table without $\mu_o$ (PVT-TAB-5, undefined below 0 °F), has none; with every column, only the Joule–Thomson factor, DAK's (PVT-TAB-4), is undefined there, beyond its pole (PVT-GAS-10 and `gas.md`, Safeguards).
 - `SSDFSimulator.root_set` refuses boundary conditions whose $p_r$ or $T_r$ lies outside the grid (`ValueError`), and a `Root` records whether any of its points lies off the grid (`off_table`), with a warning on the `manywells` logger for an operating point that does (specs/features/018-pvt-tables.md, ruling 3).
 
 ## Sources
