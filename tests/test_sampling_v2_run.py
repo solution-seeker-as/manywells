@@ -24,12 +24,15 @@ import pytest
 from manywells.datasets.v2 import (
     CODES,
     FEATURES,
+    LOGS,
     REASONS,
+    TABLES,
     WEEKS_PER_YEAR,
     read_dataset,
     resolve_sample,
     sample_case,
     sample_rows,
+    write_tables,
 )
 from manywells.sampling.v2 import assemble as asm
 from manywells.sampling.v2 import generate
@@ -85,16 +88,20 @@ def stand_in_attempt(builder, inp) -> dict:
 @pytest.fixture(scope='module')
 def results() -> dict:
     """The results of draw indices 0 to N_TEST_WELLS - 1 of each dataset, generated with stand-in solves and
-    N_TEST_SLOTS slots, without tables, and a crash in each."""
+    N_TEST_SLOTS slots, without tables, and well CRASHED's generation crashed."""
     out = {}
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(generate, 'N_SLOTS', N_TEST_SLOTS)
         mp.setattr(generate, '_attempt', stand_in_attempt)
         for kind in ('sol', 'nsol'):
             out[kind] = [runner.run_well(kind, SEED, k) for k in range(N_TEST_WELLS)]
-            mp.setitem(runner.GENERATE, kind, crashing(lambda k: True)[0])
-            out[kind].append(runner.run_well(kind, SEED, N_TEST_WELLS))
+            with pytest.MonkeyPatch.context() as crash:
+                crash.setitem(runner.GENERATE, kind, crashing(lambda k: True)[0])
+                out[kind][CRASHED] = runner.run_well(kind, SEED, CRASHED)
     return out
+
+
+CRASHED = 8  # A table well of the tests' seed, before its last accepted well: the crash is in the logs
 
 
 def crashing(when):
@@ -224,7 +231,7 @@ def test_the_tables_range_limits_the_run(monkeypatch, tmp_path):
 
 # --- SMP-108, SMP-110: the assembly -----------------------------------------------------------------------------------
 @pytest.mark.parametrize('kind', ['sol', 'nsol'])
-def test_the_assembled_tables(results, kind):
+def test_the_assembled_tables(results, kind, tmp_path):
     """The tables and logs of the wells up to the n-th accepted: their columns and types, the IDs in draw order, every
     sample of an accepted well, and every slot's attempt of a drawn well in the samples or the redraw log."""
     res = results[kind]
@@ -234,6 +241,12 @@ def test_the_assembled_tables(results, kind):
     n = outcomes.count('accepted')
     attempts = []
     out = asm.assemble(res, kind, SEED, n, attempts=attempts.append)
+    meta = write_tables(tmp_path, {key: out[key] for key in TABLES + LOGS}, {})  # Every table writes as parquet
+    assert {name: f['rows'] for name, f in meta['files'].items()} == {
+        f'{k}.parquet': len(out[k]) for k in TABLES + LOGS
+    }
+    crash = out['drawn_wells'].loc[out['drawn_wells']['draw_index'] == CRASHED].iloc[0]
+    assert crash['outcome'] == 'crash' and crash['error'].startswith('Traceback') and crash['n_attempts'] == 0
     wells, samples, drawn, red = out['wells'], out['samples'], out['drawn_wells'], out['redraws']
     assert list(wells.columns) == asm.well_columns(kind) and list(drawn.columns) == asm.drawn_well_columns(kind)
     assert list(samples.columns) == asm.sample_columns(kind) and list(red.columns) == asm.redraw_columns(kind)
@@ -310,7 +323,7 @@ def test_a_wells_row(results, kind):
         assert row['lift'] == ('natural' if life['lift_start'] is None else 'gas_lift')
         design = life['design']
         assert same(row['injection_md'], design['injection_md'] if design is not None else math.nan)
-    crash = asm.well_row(results[kind][-1], kind)
+    crash = asm.well_row(results[kind][CRASHED], kind)
     assert (crash['outcome'], crash['n_attempts']) == ('crash', 0) and 'ValueError' in crash['error']
     with pytest.raises(ValueError, match='accepted wells'):
         asm.assemble(results[kind], kind, SEED, 100)

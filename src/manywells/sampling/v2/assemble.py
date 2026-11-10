@@ -151,7 +151,8 @@ def well_row(res: dict, kind: str) -> dict:  # spec: SMP-108, SMP-110
     times = dict(seconds=res['seconds'], cpu_seconds=res.get('cpu_seconds', math.nan))
     if w is None:
         row = dict(draw_index=info['draw_index'], configuration=V2, n_cells=N_CELLS, **_counts(res))
-        return row | dict(outcome=info['outcome'], error=info.get('error'), best_rate_outcomes=[], **times)
+        row.update(outcome=info['outcome'], error=info.get('error'), best_rate_outcomes=[], **times)
+        return row | (dict(scan_best_rate=[], scan_outcome=[]) if kind == 'nsol' else {})
 
     def g(key):
         v = w.get(key, math.nan)
