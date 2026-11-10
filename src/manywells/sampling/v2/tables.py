@@ -15,6 +15,8 @@ from pathlib import Path
 
 from manywells.pvt.table import PVTTable
 
+TABLE_CLASSES = ('volatile_oil', 'gas_condensate')  # The fluid classes that take a PVT table  # spec: SMP-112
+
 
 def read_table(tables_dir, k, kind, seed) -> dict:  # spec: SMP-116
     """
