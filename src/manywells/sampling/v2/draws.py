@@ -300,6 +300,8 @@ def _pressure(r, w, x):  # spec: SMP-63
             lam = logistic(tnorm(r, mu, 0.9, -12.0, math.log(lam_cap / (1 - lam_cap))))
         p_i = p_h + lam * (p_lith - p_h)
         pclass = 'over' if lam >= 0.25 else 'normal'
+    if p_h > _P_MAX:  # The hydrostatic pressure alone passes the cap: the reservoir is held at it, underpressured
+        p_i, lam, pclass = _P_MAX, 0.0, 'under'
     if lam_cap < logistic(mu + 1.645 * 0.9):
         x.flags.append('p_i_cap_binds')
     w.update(p_h=p_h, p_lith=p_lith, lam=lam, p_i=p_i, pressure_class=pclass, grad_i=(p_i - P_ATM) / (z + d_w))

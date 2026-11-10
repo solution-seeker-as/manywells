@@ -963,8 +963,9 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Alternatives:** leave $p_i$ up to about 1080 bar in such wells, outside the bound that D-35 ruled; redraw the depth or the water depth, which moves other draws; a lower cap on the depth in deep water.
 - **Basis:** physics for the bound, the largest bottomhole pressure of Hasan et al.'s data (D-35, `validity.md`); the cap's form is a design choice, the simplest that keeps the bound.
 - **Realism:** $p_h$ passes 950 bar only in the deepest wells in the deepest water: 38 of 300,000 draws of the prototype (seed 2026), 34 of them tail subsea wells, so one or two wells of a dataset. Such wells exist, at pressures above the model's range; a capped well is under its hydrostatic pressure by at most an eighth, inside the underpressured class's range of 0.8 to 1.0.
+- **Implemented** (R10, 2026-11-10): in the package after D-108, 5 of 100,000 wells (seed 2026) have $p_h > 950$ bar, 4 tail subsea and 1 tail platform well; 4 of them had $p_i$ above 950 bar, up to 974.5 bar, and one had been drawn underpressured at 903 bar, which the rule raises to 950 bar. No other draw moves.
 - **Needs sign-off:** yes (sampling).
-- **Used by:** `specs/sampling.md`, SMP-63; `sampling/v2/draws.py`; the bound's test, no longer expected to fail.
+- **Used by:** `specs/sampling.md`, SMP-63; `sampling/v2/draws.py` (`_pressure`); the bound's test, now a plain test.
 - **Ruling:**
 
 ### D-110 · Water depths: subsea wells log-uniform, fewer deep-water dry trees, a lower shelf floor

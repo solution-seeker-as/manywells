@@ -353,17 +353,15 @@ def test_truncations_of_pressure_and_temperature(part):
     assert onshore['T_s'] == (308 if part == 'tail' else 303) and onshore['G'] == pytest.approx(55)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason='SMP-63, an open finding of R10: where the hydrostatic pressure alone is above 950 bar, a deep reservoir '
-    'under deep water (about 1 draw in 10 000, most of them tail subsea wells), lambda_max is floored at 0.001 and '
-    'p_i exceeds the cap that the rule and v2: checks state',
-)
-def test_initial_pressure_cap_where_the_hydrostatic_pressure_exceeds_it():
-    w = dict(coverage_tail='tail', z=6900.0, d_w=2300.0, rho_w=1150.0)
-    draws._pressure(Extreme(True), w, SimpleNamespace(flags=[]))
-    assert w['p_h'] > 950
-    assert w['p_i'] <= 950
+@pytest.mark.parametrize('part', ['core', 'tail'])
+@pytest.mark.parametrize('top', [True, False])
+def test_initial_pressure_cap_where_the_hydrostatic_pressure_exceeds_it(part, top):
+    """SMP-63 (D-109): where the hydrostatic pressure alone is above 950 bar, a deep reservoir under deep water, p_i
+    is 950 bar and the reservoir underpressured, whatever its numbers."""
+    w = dict(coverage_tail=part, z=6400.0, d_w=2900.0, rho_w=1150.0)
+    draws._pressure(Extreme(top), w, SimpleNamespace(flags=[]))
+    assert w['p_h'] > 950 and w['p_i'] == 950 and w['pressure_class'] == 'under' and w['lam'] == 0
+    assert 0.8 * w['p_h'] <= w['p_i'] < w['p_h']
 
 
 # --- Shares and marginals --------------------------------------------------------------------------------------------
