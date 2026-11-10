@@ -154,7 +154,9 @@ def stream(bo, gor, wlr, rho_w, p, T) -> tuple:
     return x_o * b.bo(p, T) + wlr + x_o * free, x_o * (bo.rho_o + gor * bo.rho_g) + wlr * rho_w
 
 
-def draw_well(seed: int, k: int, stage: str | None = None, force_lift: bool = False, fluid: dict | None = None):
+def draw_well(
+    seed: int, k: int, stage: str | None = None, force_lift: bool = False, fluid: dict | None = None, start=None
+):
     """
     The draws of well k of a dataset with seed `seed`: a dict of its labels, draws and derived values, and its survey.
 
@@ -168,6 +170,10 @@ def draw_well(seed: int, k: int, stage: str | None = None, force_lift: bool = Fa
         (Sm3/Sm3) and stock-tank densities `rho_o` and `rho_g` (kg/m3), and `api` and `sg_gas` where the fluid is not
         matched to the drawn ones. They replace the fluid block's after its draws, so that no draw moves and every
         later block follows the table.
+    :param start: The state of the life's start (SMP-83), a dict of `p_r` (bar) and `wlr` (an oil's), at which the
+        inflow model is chosen (SMP-74) and the non-Darcy coefficient's gas viscosity taken (SMP-71), whatever the
+        stage; None for the draw's own state, which is the start of a core well's initial-stage draw. It changes no
+        draw of a number.
     :return: (w, (md, tvd)): the well's draws, and its survey stations from the wellhead (m)
 
     The keys of w, by block (a key in brackets is there only for the wells it applies to):
@@ -196,7 +202,7 @@ def draw_well(seed: int, k: int, stage: str | None = None, force_lift: bool = Fa
     if stage is not None and stage not in STAGES:
         raise ValueError(f'stage must be one of {STAGES} or None, got {stage!r}')
     w = {'well': k}
-    x = SimpleNamespace(flags=[])  # Working values that the well's draws do not record
+    x = SimpleNamespace(flags=[], start=start)  # Working values that the well's draws do not record
 
     def gen(block):  # spec: SMP-109
         return rng_for(seed, k, 'v2', block)
@@ -496,14 +502,17 @@ def _inflow(gen, w, x):
     else:
         x.Z = bo.z_factor(p_r, T_r)
         x.mu_g = bo.gas_viscosity(p_r, T_r, bo.gas_density(p_r, T_r))
-        # spec: SMP-71. Eq. 4-34 at a perforated share of the net pay, times a log-normal error factor, truncated
+        # spec: SMP-71. Eq. 4-34 at a perforated share of the net pay, times a log-normal error factor, truncated,
+        # with the gas viscosity at the life's start, so that every stage's draw has the well's one coefficient
+        p_0 = p_r if x.start is None else x.start['p_r']
+        mu_0 = x.mu_g if p_0 == p_r else bo.gas_viscosity(p_0, T_r, bo.gas_density(p_0, T_r))
         # A slanted or vertical well's perforated length along the well, theta_end being 0 in a vertical one
         r_nd = gen('nondarcy')
         f_perf = r_nd.uniform(*_PERF_SHARE)
         along = 1.0 if family == 'high_angle' else 1 / math.cos(math.radians(w['theta_end']))
-        estimate = nondarcy(w['sg_gas'], perm, h_net, x.mu_g, f_perf * h_net * along)
+        estimate = nondarcy(w['sg_gas'], perm, h_net, mu_0, f_perf * h_net * along)
         x.D_nd = tlognorm(r_nd, estimate, _D_ERROR, *_D_BOUNDS)
-        w.update(perf_share=f_perf, D_eq434=nondarcy(w['sg_gas'], perm, h_net, x.mu_g, h_net))
+        w.update(perf_share=f_perf, D_eq434=nondarcy(w['sg_gas'], perm, h_net, mu_0, h_net))
         x.a_v, x.b_v = forchheimer(perm, h_net, x.mu_g, x.Z, T_r, ln_re - 0.75, skin, x.D_nd)  # spec: SMP-73
         x.a, x.b = _on_geometry(w, x, x.a_v, x.b_v)
 
@@ -565,7 +574,8 @@ def _inflow_at_stage(w, x):
             J = J_eff
         rho_lsc = (1 - wlr) * w['rho_o'] + wlr * w['rho_w']
         k_l = J * rho_lsc / 86400  # spec: SMP-111
-        vogel = w['p_sat'] >= 0.8 * p_r and wlr < 0.6  # spec: SMP-74
+        p_0, wlr_0 = (p_r, wlr) if x.start is None else (x.start['p_r'], x.start['wlr'])
+        vogel = w['p_sat'] >= 0.8 * p_0 and wlr_0 < 0.6  # spec: SMP-74. At the life's start
         w.update(mu_o=x.mu_o, B_o=x.B_o, J=J, f_geo=J / x.J_V, k_l=k_l, w_l_max=k_l * p_r / 1.8)
         w.update(inflow='vogel' if vogel else 'productivity_index', q_l_ref=J * delta_d * p_r)
     else:

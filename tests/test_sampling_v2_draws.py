@@ -29,7 +29,7 @@ from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.water import water_viscosity
 from manywells.sampling.v2 import draws
 from manywells.sampling.v2.draws import P_S_MAX, STAGES, TUBING, black_oil, draw_well, stream
-from manywells.sampling.v2.reservoir import slant_skin
+from manywells.sampling.v2.reservoir import nondarcy, slant_skin
 from manywells.sampling.v2.survey import FAMILIES, survey
 from manywells.sampling.wells import rng_for, sample_well
 
@@ -684,6 +684,35 @@ def test_force_lift_gives_a_design_and_moves_no_other_draw(wells):
         assert w['lift'] == 'gas_lift' and 0.1 <= w['w_lg_max'] <= 3.5 and 0 < w['injection_md'] < w['md']
         check_well(w, *st)
         assert all(w[key] == w0[key] for key in w0 if key not in ('lift', 'flags'))
+
+
+def test_the_lifes_start_sets_the_inflow_model_and_the_non_darcy_coefficient(wells, monkeypatch):
+    """SMP-74, SMP-71 (D-128): with the life's start given, the inflow model is chosen at its state and the non-Darcy
+    coefficient takes its gas viscosity, whatever the stage; no other number is drawn, and nothing else changes."""
+    made = counting(monkeypatch, draws)
+    oil = next(w for w, _ in wells if w['fluid_class'] == 'black_oil' and w['p_sat'] < 0.75 * w['p_r'])
+    gas = next(w for w, _ in wells if w['fluid_class'] == 'wet_gas')
+    for w0, start in (
+        (oil, dict(p_r=oil['p_sat'] / 0.85, wlr=0.05)),  # Vogel's at the start: saturated enough
+        (gas, dict(p_r=0.5 * gas['p_r'], wlr=math.nan)),
+    ):
+        del made[:]
+        w, _ = draw_well(SEED, w0['well'], 'late', start=start)
+        numbers = list(made)
+        del made[:]
+        late, _ = draw_well(SEED, w0['well'], 'late')
+        assert numbers == made  # The same generators, and the same counts of their numbers
+        assert all(w.get(key) == late.get(key) for key in STAGE_FREE + ['p_r', 'R_go', 'wlr', 'roughness', 'h'])
+        if w0 is oil:
+            assert (w['inflow'], late['inflow']) == ('vogel', 'productivity_index')
+            assert draw_well(SEED, w0['well'], start=dict(start, wlr=0.7))[0]['inflow'] == 'productivity_index'
+        else:
+            bo = black_oil(w)
+            mu = bo.gas_viscosity(start['p_r'], w['T_r'], bo.gas_density(start['p_r'], w['T_r']))
+            assert w['D_eq434'] == nondarcy(w['sg_gas'], w['perm'], w['h_net'], mu, w['h_net'])
+            assert w['D_nondarcy'] > late['D_nondarcy']  # D goes as 1/mu_g, less at the lower pressure
+    own = dict(p_r=oil['p_r'], wlr=oil['wlr'])  # A core well's initial draw: its own state is the start
+    assert draw_well(SEED, oil['well'], start=own)[0] == oil
 
 
 def test_a_table_fluid_replaces_the_fluid_blocks_values(wells):

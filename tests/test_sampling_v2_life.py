@@ -24,7 +24,7 @@ from manywells.sampling.v2.draws import P_S_MAX, STAGES, black_oil, draw_well, s
 from manywells.sampling.v2.inflow import COEF_KEYS, inflow_at
 from manywells.sampling.v2.life import WLR_MAX, Life, _cumulative, lift_on, sol2_well
 from manywells.sampling.v2.mapping import WellBuilder
-from manywells.sampling.v2.reservoir import producing_gor
+from manywells.sampling.v2.reservoir import nondarcy, producing_gor
 from manywells.sampling.wells import rng_for
 
 from .sampling_v2_wells import N_MANY_LIVES, SEED, drawn_lives, drawn_sol2_wells, drawn_wells, is_oil
@@ -253,6 +253,33 @@ def check_sol2_well(lf, w, drawn_stage):
 
 
 # --- The life --------------------------------------------------------------------------------------------------------
+def test_the_inflow_model_the_non_darcy_coefficient_and_nsol2s_label_are_the_starts(lives, sol2_wells):
+    """SMP-74, SMP-71 and SMP-68 (D-128): the inflow model is chosen at the life's start and kept, the non-Darcy
+    coefficient takes the gas viscosity there, and nsol-2's saturation label is the start's. A tail well starts at a
+    core state drawn for it, not at its initial-stage draw's tail state; its sol-2 and nsol-2 wells share the life."""
+    tails = 0
+    for lf, w in zip(lives, sol2_wells):
+        w0, prm = lf.w0, lf.parameters()
+        p_0 = prm['r_p_start'] * w0['p_i']
+        draws_ = (w0, lf._wm, lf._wL) + ((lf.design,) if lf.design is not None else ())
+        assert {d['inflow'] for d in draws_} == {w['inflow']} == {w0['inflow']}
+        if lf.oil:
+            vogel = w0['p_sat'] >= 0.8 * p_0 and prm['water_start'] < 0.6
+            assert w0['inflow'] == ('vogel' if vogel else 'productivity_index')
+        else:
+            assert w0['inflow'] == 'forchheimer' and {d['D_nondarcy'] for d in draws_} == {w0['D_nondarcy']}
+            bo = black_oil(w0)
+            mu = bo.gas_viscosity(p_0, w0['T_r'], bo.gas_density(p_0, w0['T_r']))
+            assert w0['D_eq434'] == pytest.approx(nondarcy(w0['sg_gas'], w0['perm'], w0['h_net'], mu, w0['h_net']))
+        if w0['p_sat'] is not None:
+            assert w0['saturation'] == ('undersaturated' if p_0 > w0['p_sat'] else 'saturated')
+        if is_tail(lf):
+            tails += 1
+            alone = draw_well(SEED, lf.k, 'initial')[0]  # The initial-stage draw at its own, tail, state
+            assert alone['r_p'] == w0['r_p'] and p_0 != alone['p_r']
+    assert tails >= 10
+
+
 @pytest.mark.parametrize('part', ['core', 'tail'])
 def test_no_life_breaks_a_bound(lives, part):
     """SMP-83 to SMP-91, on core and tail wells apart."""
@@ -421,12 +448,12 @@ def test_lift_design_is_the_late_draws(lives):
     oil well natural; a gas well that the late draw leaves natural has none."""
     later = [lf for lf in lives if lf.w0['lift'] == 'natural'][:20]
     for lf in later:
-        late = draw_well(SEED, lf.k, 'late')[0]
+        late = draw_well(SEED, lf.k, 'late', start=lf._start)[0]  # With the start's inflow model and D (D-128)
         if late['lift'] == 'gas_lift':
             assert lf.design == late and lf.lift_start is not None
             assert lf.lift_start <= 0.9 * lf.T_life  # At the drawn date, or at the static check's failure before it
         elif lf.oil:
-            assert lf.design == draw_well(SEED, lf.k, 'late', force_lift=True)[0]
+            assert lf.design == draw_well(SEED, lf.k, 'late', force_lift=True, start=lf._start)[0]
             assert lf.lift_start_rule in ('static_check', None)
         else:
             assert lf.design is None and lf.lift_start is None
@@ -505,7 +532,8 @@ def test_a_rerun_gives_the_same_life(lives, sol2_wells):
 def test_the_lifes_generators(lives, sol2_wells, monkeypatch):
     """SMP-109: the life's parameters come from the well's `evolution` generator and a sol-2 well's date from its
     `date` generator, so that with the evolution drawn from another seed the well's draws and its date's number
-    stay."""
+    stay, but for what a tail well's start, drawn by the evolution, sets (D-128): here a wet gas's non-Darcy
+    coefficient."""
     k = 9
     asked = []
 
@@ -516,7 +544,10 @@ def test_the_lifes_generators(lives, sol2_wells, monkeypatch):
     monkeypatch.setattr(life_module, 'rng_for', other_evolution)
     lf = Life(SEED, k)
     assert asked == [(k, 'v2', 'evolution')]
-    assert lf.w0 == lives[k].w0 and lf.T_life != lives[k].T_life
+    assert is_tail(lf) and not lf.oil and lf.T_life != lives[k].T_life
+    drawn = 'perm h_net skin perf_share p_i T_r R_i r_p wgr roughness h c_e beta lift'.split()
+    assert all(lf.w0[key] == lives[k].w0[key] for key in drawn) and lf.stations == lives[k].stations
+    assert lf.w0['D_nondarcy'] != lives[k].w0['D_nondarcy']
     w = sol2_well(lf)
     assert asked[1:] == [(k, 'v2', 'labels'), (k, 'v2', 'date')]
     assert w['life_stage'] == sol2_wells[k]['life_stage']

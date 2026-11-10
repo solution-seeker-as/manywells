@@ -79,7 +79,9 @@ class Life:
 
     - `seed`, `k`; `w0`, the well's initial-stage draws (draws.draw_well), which hold everything that is fixed for
       the life (SMP-88), and `stations`, its survey (md, tvd); `oil`, whether the fluid is an oil; `pvt`, the PVT
-      model of the inflow's coefficients.
+      model of the inflow's coefficients. Every stage's draw takes the inflow model and the non-Darcy coefficient
+      at the life's start (SMP-74, SMP-71), and a tail well's `w0` its `saturation` label there (SMP-68): a core
+      well starts at its initial-stage draw's state, a tail well at a core state drawn for it (SMP-83).
     - `T_life`: the life span (years).
     - `design`: the draws that hold the lift design (draws.draw_well's lift keys): the initial-stage draw's of a
       well lifted from the start, else the late-stage draw's, made as if lifted where that draw leaves an oil well
@@ -93,11 +95,7 @@ class Life:
 
     def __init__(self, seed: int, k: int, fluid: dict | None = None, pvt=None):
         self.seed, self.k = seed, k
-        # spec: SMP-83. The same well at its three stages (SMP-51)
-        self.w0, self.stations = draw_well(seed, k, 'initial', fluid=fluid)
-        self._wm = draw_well(seed, k, 'mid_life', fluid=fluid)[0]
-        self._wL = draw_well(seed, k, 'late', fluid=fluid)[0]
-        w0, wL = self.w0, self._wL
+        w0, self.stations = draw_well(seed, k, 'initial', fluid=fluid)  # Its stage's state, a core well's start
         self.oil = w0['fluid_type'] in OILS
         self._tail = w0['coverage_tail'] == 'tail'
         self._bo = black_oil(w0)  # The black oil of the draws, a table fluid's too (v2: scope and conventions)
@@ -129,8 +127,19 @@ class Life:
         if self._tail:
             self._r0 = r0_core
             self._water0 = (0.0 if dry < 0.5 else wlr0_core) if self.oil else wgr0_core
+            start = dict(p_r=self._r0 * w0['p_i'], wlr=self._water0 if self.oil else math.nan)
         else:
             self._r0, self._water0 = w0['r_p'], w0[water]
+            start = dict(p_r=w0['p_r'], wlr=w0['wlr'])
+        # spec: SMP-83. The same well at its three stages (SMP-51), each with the inflow model and the non-Darcy
+        # coefficient of the life's start (SMP-74, SMP-71): a tail well's initial-stage draw is its tail state
+        if self._tail:
+            w0 = draw_well(seed, k, 'initial', fluid=fluid, start=start)[0]
+            if w0['fluid_class'] not in ('wet_gas', 'dry_gas'):  # spec: SMP-68. nsol-2's label, at the start
+                w0['saturation'] = 'undersaturated' if start['p_r'] > w0['p_sat'] else 'saturated'
+        self.w0, self._start = w0, start
+        self._wm = draw_well(seed, k, 'mid_life', fluid=fluid, start=start)[0]
+        self._wL = wL = draw_well(seed, k, 'late', fluid=fluid, start=start)[0]
         # spec: SMP-83. The end: a core well's reservoir exhausted, a tail well's tail state
         u_end = r.random()
         self._r1, self._water1 = min(wL['r_p'], self._r0), wL[water]
@@ -156,7 +165,7 @@ class Life:
             if late_lifted:
                 self.design = wL
             elif self.oil:
-                self.design = draw_well(seed, k, 'late', force_lift=True, fluid=fluid)[0]
+                self.design = draw_well(seed, k, 'late', force_lift=True, fluid=fluid, start=start)[0]
             else:
                 self.design = None
             starts = []
