@@ -643,8 +643,11 @@ def _lift(r, w, x, force_lift):
         p_wf_d = (1 - delta_lift) * p_r
         vol_b, mass_b = stream(bo, R_go, wlr, rho_w, p_wf_d, T_r)  # The flowing column below the valve, no slip
         G_l = mass_b / vol_b * STD_GRAVITY / 1e5
-        den = G_l - p_inj / _GILBERT_H
-        H_bal = (p_inj - dp_v - p_wf_d + G_l * L) / den if den > 0 else L
+        den = G_l - p_inj / _GILBERT_H  # The tubing's gradient less the casing's
+        # H_bal: where the casing less dp_v crosses the tubing; L where the casing's gradient is the larger, as where
+        # the casing lies above the tubing at every depth (the packer); 0 where the tubing lies above the casing at
+        # every depth and no gas can enter, so that the strong-well rule applies
+        H_bal = max((p_inj - dp_v - p_wf_d + G_l * L) / den, 0.0) if den > 0 else L
         if H_bal < 0.3 * L and not need and not tail and not force_lift:  # spec: SMP-78
             lift = False  # A strong well: the operator does not install gas lift yet
             x.flags.append('lift_not_installed_strong_well')

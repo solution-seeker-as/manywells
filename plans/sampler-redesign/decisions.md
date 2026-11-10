@@ -1210,3 +1210,15 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Needs sign-off:** yes (sampling).
 - **Used by:** `specs/sampling.md`, SMP-68, SMP-71, SMP-74 and SMP-83; `sampling/v2/draws.py` (`draw_well`, `_inflow`, `_inflow_at_stage`), `sampling/v2/life.py` (`Life`); `tests/test_sampling_v2_draws.py`, `tests/test_sampling_v2_life.py`.
 - **Ruling:**
+
+### D-129 · The pressure-balance point where the casing's gas and the tubing do not cross
+
+- **Step:** R10, 2026-11-10 (the review of R10). Corrects SMP-79's text to the code.
+- **Choice made:** SMP-79 states each case of the casing's line less the valve's drop against the tubing's, as the port's code takes them: where the tubing's pressure grows faster with depth, $H_\text{bal}$ is their crossing, and where the tubing lies above the casing's gas at every depth, no gas can enter, $H_\text{bal}$ is 0 and the strong-well rule (SMP-78) applies; where the casing's grows at least as fast, or the casing lies above the tubing at every depth, $H_\text{bal} = L$ and the valve is at the packer. The code clips its $H_\text{bal}$ at 0 to say so, which changes no draw (checked on every stage's draw and forced design of 1500 wells, 6000 draws, all equal), since a negative $H_\text{bal}$ was below $0.3\thinspace L$ for the strong-well rule and raised to it for the valve as 0 is.
+- **Alternatives:** the text's "$L$ where the two do not cross", which for a tubing above the casing at every depth would put the valve at the packer, where no gas enters, and lift a strong well that the rule leaves natural.
+- **Basis:** physics: lift gas enters the tubing only where the casing's pressure less the valve's drop exceeds the tubing's (Golan and Whitson 1991, §5.3).
+- **Realism:** of the 6000 stage draws and forced designs of `sol-2`'s draw indices 0 to 1499 at seed 2026, the tubing lies above the casing's gas at every depth in 334 oil and 826 gas draws, of which 24 and 42 are lifted and 25 are an oil's forced late design: those inject at $0.3\thinspace L$, the rest stay natural. One case remains where the code and the physics differ, left for a ruling because a fix moves draws: where the casing's gradient is the larger, the code takes $L$ even where the tubing lies above the casing at every depth (22 gas draws, 2 of them lifted, at the packer), and where the two cross with the casing below at the top (6 gas draws, 1 lifted) $L$ is right, the deepest point at which gas enters.
+- **Implemented** (R10, 2026-11-10): SMP-79's text; `draws._lift` clips $H_\text{bal}$ at 0, with a comment that names the cases.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-79; `sampling/v2/draws.py` (`_lift`).
+- **Ruling:**
