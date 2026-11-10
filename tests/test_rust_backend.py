@@ -405,3 +405,70 @@ def test_the_core_finds_the_operating_point_of_a_gas_well_with_joule_thomson_coo
 
     system = build_system(wp)
     assert system.energy_rows_rise(op.x, system.params(bc))  # SOL-9: the upper root where the row is U-shaped
+
+
+def _table_well_with_every_column():
+    """
+    A hot volatile-oil well whose PVT is a table with the viscosity and surface-tension columns, as tables from an
+    equation of state have them: a DAK black oil (draw 162 of the sampler redesign's sol pilot, rounded) tabulated on
+    1 to 400 bar and 260 to 450 K. Every property is clamped outside the grid (PVT-TAB-2), so a state exists at any
+    temperature, and only DAK's Joule-Thomson factor has a pole (specs/features/018-pvt-tables.md, Findings).
+    """
+    from manywells.friction import RoughnessFriction
+    from manywells.pvt.black_oil import BlackOil
+    from manywells.pvt.fluid import FluidModel
+    from manywells.pvt.table import PVTTable
+
+    bo = BlackOil(rho_o=792.0, rho_g=1.02, gas_law='dak')
+    fluid = FluidModel(pvt=bo, rho_w=1030.0, gor=466.0, wlr=0.3)
+    p, T = np.r_[1.0, np.arange(10.0, 410.0, 10.0)], np.arange(260.0, 460.0, 10.0)
+    P, TT = np.meshgrid(p, T, indexing='ij')
+    columns = {
+        'R_so': fluid.rs,
+        'B_o': fluid.bo,
+        'Z': fluid.z_factor,
+        'mu_o': bo.oil_viscosity,
+        'mu_g': lambda p, T: bo.gas_viscosity(p, T, fluid.gas_density(p, T)),
+        'sigma': bo.oil_surface_tension,
+    }
+    table = PVTTable(
+        p=p,
+        T=T,
+        rho_o=bo.rho_o,
+        rho_g=bo.rho_g,
+        gor=fluid.gor,
+        **{k: np.vectorize(lambda a, b, f=f: float(f(a, b)))(P, TT) for k, f in columns.items()},
+    )
+    wp = WellProperties(
+        geometry=WellGeometry.vertical(3000.0, 20, D=0.1571),
+        fluid=replace(fluid, pvt=table),
+        friction=RoughnessFriction(roughness=2.8e-5),
+        thermal=ThermalModel(h=23.0),
+        inflow=Vogel(w_l_max=1700.0),
+        choke=SimpsonChokeModel(K_c=1e-3),
+    )
+    return wp, BoundaryConditions(p_r=345.0, p_s=1.5, T_r=447.0, T_s=279.0, u=1.0)
+
+
+def test_the_temperature_solve_does_not_converge_onto_the_joule_thomson_factors_pole():
+    """
+    At large drawdowns the first cell chokes, and at its sonic pressure the Joule-Thomson cooling keeps the energy row
+    positive down to the pole of DAK's J, below the table's grid (PVT-GAS-10, Safeguards). The row changed sign
+    only across the pole, the temperature solve converged onto it, and the march went on there through every cell,
+    which made such wells 10 to 80 times slower. J is now NaN beyond the pole, so the state fails, as a black oil's
+    DAK density does there, and no march holds a point at the pole.
+    """
+    from manywells.solvers.rust import core_well, operating_point
+
+    wp, bc = _table_well_with_every_column()
+    assert wp.thermal.joule_thomson
+    core, op = core_well(wp), operating_point(wp, bc)
+    for p_0 in np.linspace(bc.p_s, bc.p_r, 41)[1:-1]:
+        x = np.asarray(core.march(op, p_0)[0]).reshape(-1, 7)
+        for s in x[np.isfinite(x[:, 0])]:
+            j = core._component('jt_factor', [s[6], s[4]])[0]
+            assert abs(j) < 1e3, f'p_0 = {p_0}: J = {j} at T = {s[6]}'
+    sim = SSDFSimulator(wp, backend='rust')
+    op_root = sim.simulate(bc)
+    assert op_root.label == 'stable' and op_root.p_0 == pytest.approx(339.105, abs=1e-3)
+    assert sim._roots.counts['edge_refinements'] <= 2
