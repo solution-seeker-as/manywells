@@ -436,12 +436,14 @@ def _field_matched(w, passes=2):  # spec: SMP-113
     descriptors at standard conditions (_synthetic), then flashed through the well's separator and stock tank
     (_Flash.field), and the single-stage targets shifted by the difference, in passes. Each pass draws the same
     composition from the well's composition_seed. Returns _synthetic's four values, with the offsets and the field's
-    descriptors in the record.
+    descriptors in the record, and `recombined_gor`, the GOR of the stream returned: its last pass's target, also
+    where that pass's field flash found no liquid.
     """
     drawn = dict(api=w['api'], sg_gas=w['sg_gas'], R_si=w['R_si'])
     target = dict(drawn)
     for k in range(passes + 1):
         fl, z, sep, rec = _synthetic(w['fluid_class'], np.random.default_rng(w['composition_seed']), target)
+        rec['recombined_gor'] = target['R_si']
         f = fl.field(z, w['p_sep'], w['T_sep'])
         if f is None:
             rec |= dict(field=None, offsets=None, passes=k)
@@ -474,7 +476,8 @@ def _example_matched(w, passes=2):  # spec: SMP-114
     The published example w['source'] recombined along its own single-stage tie line, its GOR matched to the drawn one
     in the field as _field_matched does a synthetic fluid's: the stream flashed through the well's separator and a
     stock tank, and the single-stage GOR shifted by the difference, in passes. Its stock-tank oil and separator gas
-    are the example's, so its API and gas gravity are its own. Returns _field_matched's four values.
+    are the example's, so its API and gas gravity are its own. Returns _field_matched's four values, `recombined_gor`
+    in the record too.
     """
     fr, z0 = _example_stream(w['source'])
     fl = _Flash(fr)
@@ -483,6 +486,7 @@ def _example_matched(w, passes=2):  # spec: SMP-114
     target = w['R_si']
     for k in range(passes + 1):
         z = fl.recombine(sep, target)
+        rec['recombined_gor'] = target
         f = fl.field(z, w['p_sep'], w['T_sep'])
         if f is None:
             rec |= dict(field=None, offsets=None, passes=k)
@@ -540,7 +544,7 @@ def build_fluid(w) -> dict:  # spec: SMP-115
     t0 = time.time()
     fl, z, sep, rec = _field_matched(w) if w['source'] == 'synthetic' else _example_matched(w)
     t_match = time.time() - t0
-    gor = rec['single_stage']['R_si'] if rec.get('single_stage') else w['R_si']
+    gor = rec['recombined_gor']  # The stream's own, also where a pass's field flash found no liquid
     sat = fl.saturation(z, w['T_r'], 1.3 * w['p_i'])
     moved, rule = None, 'matched'
     if sat and sat['p'] > w['p_i']:  # It could not be one phase at p_i: saturated at discovery

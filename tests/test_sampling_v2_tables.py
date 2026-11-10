@@ -354,6 +354,48 @@ def test_no_crossing_in_the_classs_direction_is_the_equilibrium_phase(cls):
     assert tb._GOR_FACTORS == dict(volatile_oil=(0.8, 0.6, 0.4, 0.25), gas_condensate=(1.25, 1.6, 2.5, 4.0))
 
 
+class PassFlash:
+    """In place of the NeqSim system for the matching's passes: the stream is its GOR, in each of its mole fractions,
+    and the field's flash finds liquid at the drawn GOR only, reporting 1.1 times it; the saturation pressure is
+    100 bar."""
+
+    DRAWN = 441.8863083575895
+
+    def __init__(self, fractions=()):
+        self.fractions = list(fractions)
+
+    def recombine(self, sep, gor):
+        return np.full(len(tb.LIGHT) + 5, float(gor))
+
+    def separation(self, z):
+        return dict(SEP, gor=float(z[0]))
+
+    def field(self, z, p_sep, T_sep):
+        return dict(api=45.0, sg_gas=0.7, gor=1.1 * z[0]) if z[0] == self.DRAWN else None
+
+    def saturation(self, z, T, p_hi):
+        return dict(p=100.0, kind='bubble', lo=None, p_flash=100.0)
+
+
+@pytest.mark.parametrize('source', ['synthetic', 'wb2000_volatile_oil'])
+def test_a_fluid_whose_field_flash_finds_no_liquid_keeps_its_streams_gor(monkeypatch, source):
+    """SMP-113, SMP-114: where the field's flash finds no liquid at a pass after the first, the fluid is the stream
+    recombined at that pass's target, and its initial GOR is that stream's, so that it and the saturation pressure
+    belong to one stream."""
+    monkeypatch.setattr(tb, '_Flash', PassFlash)
+    monkeypatch.setattr(tb, '_example_stream', lambda name: ([], np.zeros(len(tb.LIGHT) + 5)))
+
+    def synthetic(cls, rng, target):
+        return PassFlash(), PassFlash().recombine(SEP, target['R_si']), dict(SEP), dict(z7=0.1)
+
+    monkeypatch.setattr(tb, '_synthetic', synthetic)
+    fluid = tb.build_fluid(WELL | dict(source=source, R_si=PassFlash.DRAWN))
+    target = PassFlash.DRAWN / 1.1  # The second pass's, shifted by the first pass's offset
+    assert fluid['composition']['passes'] == 1 and fluid['composition']['field'] is None
+    assert fluid['R_i'] == fluid['hook']['R_i'] == fluid['composition']['recombined_gor'] == pytest.approx(target)
+    assert fluid['stream']['z'][0] == fluid['R_i'] and fluid['saturation_rule'] == 'matched'
+
+
 # ---------------------------------------------------------------------------
 # SMP-116: the files, with the flash replaced
 # ---------------------------------------------------------------------------
