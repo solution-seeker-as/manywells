@@ -12,6 +12,7 @@ Each entry records an open choice that an agent made in order to carry on, so th
 - **Step:** R<k>, <date>.
 - **Choice made:** the option taken, in one sentence.
 - **Alternatives:** each with its evidence.
+- **Basis** (entries from 2026-11-10): data, physics, a design choice or a guess (the plan's Goals, The yardstick). For a guess: what was looked for, and what would replace it.
 - **Realism:** whether the case occurs in realistic wells and in the draws, with numbers and sources.
 - **Needs sign-off:** yes or no, and why (`AGENTS.md`, Needs Bjarne's sign-off).
 - **Used by:** the sections of the drafts and the scripts that depend on it.

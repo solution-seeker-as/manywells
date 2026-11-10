@@ -72,6 +72,7 @@ Criteria 1 and 3 are the coverage of the support, and come first. Within it, the
 
 - **Population.** Realistic means global statistics weighted towards offshore production wells, on platforms and subsea, that flow naturally or on gas lift, counted by wells.
 - **Sources.** Published statistics first. Where they are thin, distributions are fitted to public per-well data (paper appendices, regulators' open databases) outside the repo, and only the fitted parameters, the method and the citation are committed.
+- **Data and physics decide** (Bjarne, 2026-11-05 and 2026-11-10). Every distribution, bound and rule of the procedure rests on data or on physics: published statistics, an analysis of open per-well data, a derivation, or the model's own result, such as the material balance or the erosional capacity. A qualified guess or a generic statement stands in only where both are missing. It is marked as a guess, with what was looked for and what would replace it. A choice made for a goal, such as the even mix of geometries for coverage, is marked as a design choice.
 - **Judging.** Bjarne judges realism at the checkpoint, from the report and the prototype's samples in the datasets' row format, on which he may run his private comparisons. There is no earlier hand-over.
 
 ### Bjarne's goals for the population
@@ -134,6 +135,8 @@ Drafted with these goals, for sign-off:
 
 Bjarne reviews the work at two gates: the interview at the start and the checkpoint before implementation. Between them the agents work on their own.
 
+**Sign-off comes after the work** (Bjarne, 2026-11-10). In every step, R9 to R11 and the rework included, an agent works until the step is finished and hands it over once. Bjarne then reads it, rules and suggests changes. Only very large work gets its sign-off first, so that a reversed choice does not waste it (Working assumptions).
+
 ```
 R1 interview ─▶ R2–R7 research, design, prototype ─▶ R8 checkpoint ─▶ R9–R10 features, sampler ─▶ R11 datasets
   (Bjarne)          (agents, on their own)              (Bjarne)            (agents)                  (pilot: Bjarne)
@@ -144,25 +147,27 @@ R1 interview ─▶ R2–R7 research, design, prototype ─▶ R8 checkpoint ─
 1. **Interview (R1).** Bjarne sets the goals before any research starts. An agent asks, Bjarne answers, and the agent writes the goals into this plan for Bjarne to confirm.
 2. **Autonomous work (R2 to R7).** Agents research public sources, design the procedure, draft the feature specs the design needs, and prototype and measure the sampler. They do not stop for decisions (Working assumptions).
 3. **Checkpoint (R8).** Bjarne reviews one package: the draft procedure, its evidence and measurements, every working assumption, and a list of the papers and books the agents could not reach. He rules, supplies resources and sends parts back. The reworked parts return to a smaller checkpoint, until he signs off.
-4. **Implementation and generation (R9 to R11)**, after the sign-off, through the usual loop (`AGENTS.md`). Bjarne reviews a pilot dataset before the full generation.
+4. **Implementation and generation (R9 to R11)**, after the sign-off, through the usual loop (`AGENTS.md`). Each step is handed over with its PR, and its open choices are working assumptions until then. The full generation is very large, so Bjarne reviews a pilot dataset before it.
 
 ### Working assumptions
 
-Between the interview and the checkpoint, an agent does not wait for a ruling. Where a choice is open, it:
+An agent does not wait for a ruling: not in the autonomous work, not in the rework, and not in the steps after the checkpoint. Where a choice is open, it:
 
 - takes the option it recommends;
-- records the choice in the decision log (`plans/sampler-redesign/decisions.md`). An entry gives the alternatives and the evidence for each. It says whether the case occurs in realistic wells and in the draws, with numbers, and whether the choice needs sign-off;
+- records the choice in the decision log (`plans/sampler-redesign/decisions.md`). An entry gives the alternatives and the evidence for each. It says what the choice rests on (data, physics, a design choice or a guess; Goals, The yardstick), whether the case occurs in realistic wells and in the draws, with numbers, and whether the choice needs sign-off;
 - carries on.
 
-Bjarne rules on the whole log at the checkpoint. A ruling that reverses an assumption sends back the work that depends on it.
+Questions that do not block the work wait for the hand-over too. Bjarne rules on the whole log at the checkpoint, and on a later step's entries when the step is handed over. A ruling that reverses an assumption sends back the work that depends on it.
 
-An agent stops and asks before:
+An agent stops and asks only before:
 
 - anything that would touch real-well data (Data and sources);
 - work towards a non-goal (`specs/goals.md`);
-- changing a decided spec, the verifier or reference data, as opposed to drafting a change;
-- implementing a model feature, whose spec Bjarne approves first;
-- a run that would load the machine for more than about an hour.
+- implementing a model feature, whose spec Bjarne approves first (`AGENTS.md`);
+- very large work that hangs on an open choice: as a guide, more than about a day of an agent's work. It asks about that choice alone, and carries on with the rest;
+- a run that would load the machine for more than about an hour, such as R11's full generation.
+
+A change to a decided spec, the verifier or reference data is drafted on the branch and handed over with its step. Nothing merges into `develop` before the sign-off (Goals, The process).
 
 ### Where the work lives
 
@@ -380,7 +385,7 @@ The rules are in `AGENTS.md` (Data and sources) and the constitution (Convention
 
 - **Goal.** The signed-off procedure in the spec and the code.
 - **Work.**
-  - A new version of `specs/sampling.md`: the v2 procedure with SMP IDs and a Coverage table, and v1's procedure kept for the `v1.0.0` configuration.
+  - A new version of `specs/sampling.md`: the v2 procedure with SMP IDs and a Coverage table, and v1's procedure kept for the `v1.0.0` configuration. Each rule's sources say what it rests on, and mark a guess or a design choice as one (Goals, The yardstick).
   - The code in `manywells.sampling`: v2's draws next to v1's, seeded as in SMP-31, with each sampled well checked against `v2.0.0`.
   - Tests of the draws' marginals, rank correlations and bounds, and that a rerun gives the same draws.
   - The batch API, if R7 calls for it.
