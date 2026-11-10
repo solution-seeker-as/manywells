@@ -44,11 +44,12 @@ from manywells.datasets.v2 import (
     code_record,
     lock_hash,
     platform_record,
+    sha256,
     typed,
     write_tables,
 )
 from manywells.geometry import WellGeometry
-from manywells.sampling.v2 import generate
+from manywells.sampling.v2 import generate, table_build
 from manywells.sampling.v2.life import WLR_MAX
 from manywells.sampling.v2.mapping import N_CELLS
 from manywells.sampling.v2.reservoir import OILS
@@ -359,9 +360,27 @@ def _frame(parts, columns) -> pd.DataFrame:
     return pd.concat(parts, ignore_index=True).reindex(columns=columns)
 
 
+def _table_build_record(tables) -> dict | None:  # spec: SMP-110, SMP-116
+    """The record of a run's folder of tables (table_wells.py): the SHA-256 of its wells.json and axes.json, the draw
+    indices and the table wells it covers, and the NeqSim version of the build; None for a run without tables."""
+    if tables is None:
+        return None
+    folder = Path(tables)
+    spec = json.loads((folder / 'wells.json').read_text())
+    axes = folder / 'axes.json'
+    return dict(
+        wells_sha256=sha256(folder / 'wells.json'),
+        axes_sha256=sha256(axes) if axes.exists() else None,
+        wells_range=spec['wells_range'],
+        table_wells=len(spec['wells']),
+        neqsim=table_build.NEQSIM_VERSION,
+    )
+
+
 def records(kind: str, seed: int, n_wells: int, settings: dict) -> dict:  # spec: SMP-110
     """The records of a dataset (SMP-110): its seed, the configuration, the grid, the backend, the limits and the
-    floor, the code that ran and assembled it, the lock file's hash and the platform."""
+    floor, the folder of tables and its build, the code that ran and assembled it, the lock file's hash and the
+    platform."""
     return dict(
         dataset=DATASETS[kind],
         kind=kind,
@@ -383,6 +402,7 @@ def records(kind: str, seed: int, n_wells: int, settings: dict) -> dict:  # spec
         split=dict(test_share=0.2, strata=['fluid_type', 'well_type', 'geometry_class', 'coverage_tail']),
         chunk_size=settings['chunk_size'],
         tables=settings['tables'],
+        table_build=_table_build_record(settings['tables']),
         code=settings['code'],
         assembled_by=code_record(),
         lock_sha256=lock_hash(),

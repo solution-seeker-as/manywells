@@ -51,6 +51,7 @@ An attempt's record is a flat dict of:
 - for an operating point, its FEATURES and `q_oe`, the oil equivalent (Sm3/d).
 """
 
+import json
 import math
 import time
 
@@ -58,13 +59,13 @@ import numpy as np
 
 from manywells.configurations import V2, check
 from manywells.datasets.v2 import FEATURES, sample_features  # noqa: F401 - FEATURES: the columns a record holds
-from manywells.sampling.v2.draws import draw_well
 from manywells.sampling.v2.inflow import COEF_KEYS
 from manywells.sampling.v2.life import _LIFT_KEYS, WLR_MAX, Life, lift_on, sol2_well
 from manywells.sampling.v2.mapping import WellBuilder
 from manywells.sampling.v2.reservoir import OILS
 from manywells.sampling.v2.samples import N_SLOTS, nsol2_attempt, nsol2_plan, sol2_attempt
-from manywells.sampling.v2.tables import TABLE_CLASSES, read_table
+from manywells.sampling.v2.table_wells import gor_axis, table_well
+from manywells.sampling.v2.tables import TableMismatch, read_table, wells_file
 from manywells.solvers.rust import RustRootFinder
 
 FLOOR = {'platform': 1.6, 'onshore': 1.6, 'subsea': 20.0}  # Sm3/d of oil equivalent, by well type  # spec: SMP-102
@@ -245,13 +246,37 @@ def _solve_slots(k, draw, builder, log, slot_limit_outcome) -> tuple:  # spec: S
 
 # --- A well ----------------------------------------------------------------------------------------------------------
 def _table(seed, k, kind, tables):  # spec: SMP-112, SMP-116
-    """A table well's manifest with its PVTTableSet (tables.read_table), or with the status `failed`; None for a well
-    of another fluid class. Without a folder of tables the well's table is missing."""
-    if draw_well(seed, k)[0]['fluid_class'] not in TABLE_CLASSES:
-        return None
+    """
+    A table well's manifest with its PVTTableSet (tables.read_table), or with the status `failed`; None for a well
+    of another fluid class. Without a folder of tables the well's table is missing, and so it is for a draw index
+    beyond the folder's.
+
+    :raises TableMismatch: where the folder covers the draw index and its record of the well (table_wells.table_well,
+        or none for a well of another class) or the well's GOR axis is not the one the run's draws give
+    """
+    own = table_well(seed, k)
     if tables is None:
-        return dict(status='failed', step='missing', error='no folder of tables was given')
-    return read_table(tables, k, kind, seed)
+        return None if own is None else dict(status='failed', step='missing', error='no folder of tables was given')
+    f_kind, f_seed, (k0, k1), records = wells_file(tables)
+    if (f_kind, f_seed) != (kind, seed) or not k0 <= k < k1:
+        return None if own is None else read_table(tables, k, kind, seed)  # Another's folder, or beyond its range
+    if json.loads(json.dumps(own)) != records.get(k):
+        raise TableMismatch(
+            f'the tables of {tables} were not built from the draws of draw index {k}: its record in wells.json is '
+            f'{records.get(k)}, and the draws give {own}. Build the tables again.'
+        )
+    if own is None:
+        return None
+    table = read_table(tables, k, kind, seed)
+    if table['status'] == 'ok':
+        axis = json.loads(json.dumps(gor_axis(kind, seed, k, table['hook'])))['gors']
+        if axis != table['gors']:
+            raise TableMismatch(
+                f"the table of draw index {k} in {tables} was built on another GOR axis than the well's life gives "
+                f'({len(table["gors"])} GORs from {table["gors"][0]:.6g}, against {len(axis)} from {axis[0]:.6g}). '
+                'Build the tables again.'
+            )
+    return table
 
 
 def _result(t_start, well, stations, table, info, log=(), accepted=None, nsol=None) -> dict:
@@ -327,10 +352,15 @@ def generate_sol2_well(seed: int, k: int, tables=None) -> dict:
         return _table_failed(t_start, seed, k, 'sol', table)
     hook, pvt = (table['hook'], table['pvt']) if table is not None else (None, None)
     life = Life(seed, k, fluid=hook, pvt=pvt)
-    w = sol2_well(life)
+    log, info = [], _info(k)
+    try:  # spec: SMP-106. The table refuses a GOR off its axis at the inflow's coefficients of the well's date
+        w = sol2_well(life)
+    except ValueError as e:
+        info.update(outcome='invalid_input', error=str(e)[:300])
+        w = sol2_well(Life(seed, k, fluid=hook)) | dict.fromkeys(COEF_KEYS, math.nan)  # The draws without the table
+        return _result(t_start, w, life.stations, table, info)
     builder = WellBuilder(life.w0, life.stations, design=life.design, pvt=pvt)
     lifted = w['lift'] == 'gas_lift'
-    log, info = [], _info(k)
     nominal = _sol2_nominal(w)
     try:  # spec: SMP-106
         check(builder.case(dict(nominal, u=1.0, w_lg=0.0, lift_on=lifted, p_s=w['p_s']))[0], V2)

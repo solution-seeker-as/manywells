@@ -43,6 +43,7 @@ from manywells.sampling.v2 import table_build
 from manywells.sampling.v2.assemble import write_dataset
 from manywells.sampling.v2.run import CHUNK, OutOfMemory, run
 from manywells.sampling.v2.table_wells import write_axes, write_table_wells
+from manywells.sampling.v2.tables import TableMismatch
 
 NEQSIM_CAP = 8_000_000_000  # bytes of address space per process of NeqSim's build
 JAVA_OPTIONS = '-Xmx1g -XX:+UseSerialGC -XX:ActiveProcessorCount=2 -XX:ReservedCodeCacheSize=128m'
@@ -135,7 +136,7 @@ def main():
         cap = int(args.memory_cap * 1e9)
         try:
             state = run(args.kind, args.n, out / 'run', args.seed, args.processes, tables, memory_cap=cap)
-        except OutOfMemory as e:
+        except (OutOfMemory, TableMismatch) as e:
             sys.exit(f'the run stopped: {e}')
         if state['complete']:
             break

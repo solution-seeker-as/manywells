@@ -24,6 +24,8 @@ import pytest
 from manywells.configurations import V2
 from manywells.datasets import schema
 from manywells.sampling.v2 import generate
+from manywells.sampling.v2 import run as runner
+from manywells.sampling.v2 import table_wells as tw
 from manywells.sampling.v2.generate import (
     FEATURES,
     FLOOR,
@@ -38,7 +40,7 @@ from manywells.sampling.v2.inflow import COEF_KEYS
 from manywells.sampling.v2.life import lift_on, sol2_well
 from manywells.sampling.v2.mapping import WellBuilder
 from manywells.sampling.v2.samples import N_SLOTS, nsol2_plan, sol2_attempt
-from manywells.sampling.v2.tables import TABLE_CLASSES
+from manywells.sampling.v2.tables import TABLE_CLASSES, TableMismatch
 from manywells.solution import Root, RootSet
 
 from .sampling_v2_wells import SEED, drawn_lives, drawn_sol2_wells
@@ -664,6 +666,7 @@ def test_a_table_well_without_a_usable_table(monkeypatch, tmp_path, kind):
     no_solve(monkeypatch)
     k = a_table_well()
     run = generate_sol2_well if kind == 'sol' else generate_nsol2_well
+    tw.write_table_wells(tmp_path, kind, SEED, k + 1)  # The build's first step, and no table yet
     for tables, step in ((None, 'missing'), (tmp_path, 'missing')):
         res = run(SEED, k, tables)
         assert (res['info']['outcome'], res['table']['status'], res['table']['step']) == (
@@ -687,6 +690,57 @@ def test_a_table_well_without_a_usable_table(monkeypatch, tmp_path, kind):
         assert set(res['well']) == set(drawn) and all(nan_or(res['well'][key], v) for key, v in drawn.items())
     else:
         assert math.isnan(res['info']['T_end']) and res['info']['scan'] == [] and res['nsol']['T_life'] > 0
+
+
+def own_hook(w) -> dict:
+    """A table fluid's values as the draws give them: the hook that changes nothing."""
+    return dict(p_sat=w['p_sat'], R_i=w['R_i'], rho_o=w['rho_o'], rho_g=w['rho_g'])
+
+
+@pytest.mark.parametrize('kind', ['sol', 'nsol'])
+def test_a_folder_of_tables_built_from_other_draws_stops_the_run(monkeypatch, tmp_path, kind):
+    """SMP-116: a folder whose record of a table well is not what the run's draws give, as after a rule changed
+    since the build, or that records a well of another class, stops the run (TableMismatch): it is no outcome of the
+    well. A draw index beyond the folder's range has no table."""
+    no_solve(monkeypatch)
+    k = a_table_well()
+    other = next(lf.k for lf in drawn_lives() if lf.k > k and lf.w0['fluid_class'] not in TABLE_CLASSES)
+    run = generate_sol2_well if kind == 'sol' else generate_nsol2_well
+    spec = tw.write_table_wells(tmp_path, kind, SEED, other + 1)
+    path = tmp_path / 'wells.json'
+    rec = next(w for w in spec['wells'] if w['well'] == k)
+    for key, value in (('p_i', rec['p_i'] + 1.0), ('T_axis', rec['T_axis'][:-1]), ('composition_seed', 7)):
+        tw.write_json(path, dict(spec, wells=[dict(w, **{key: value}) if w is rec else w for w in spec['wells']]))
+        with pytest.raises(TableMismatch, match=f'were not built from the draws of draw index {k}'):
+            run(SEED, k, tmp_path)
+        with pytest.raises(TableMismatch):
+            runner.run_well(kind, SEED, k, tmp_path)  # Not a crash
+    stray = dict(rec, well=other)  # A well that the draws give another class
+    tw.write_json(path, dict(spec, wells=spec['wells'] + [stray]))
+    with pytest.raises(TableMismatch, match=f'draw index {other}'):
+        run(SEED, other, tmp_path)
+    tw.write_json(path, dict(spec, wells_range=[0, k]))  # The folder covers draw indices below k only
+    assert run(SEED, k, tmp_path)['table']['step'] == 'missing'
+
+
+@pytest.mark.parametrize('kind', ['sol', 'nsol'])
+def test_a_gor_off_the_tables_axis_at_the_nominal_state_is_invalid_input(monkeypatch, kind):
+    """SMP-106: where the table refuses the GOR of the well's nominal state (nsol-2: its start), the well is
+    `invalid_input`, not a crash; its draws are made without the table's coefficients."""
+    no_solve(monkeypatch)
+    lf = next(lf for lf in drawn_lives() if lf.w0['fluid_class'] == 'volatile_oil')
+
+    def refuse(gor):
+        raise ValueError(f"gor {gor} is outside the PVT table's GOR axis, 1.0 to 2.0 Sm3/Sm3")
+
+    pvt = types.SimpleNamespace(rho_o=lf.w0['rho_o'], rho_g=lf.w0['rho_g'], at_gor=refuse)
+    table = dict(status='ok', hook=own_hook(lf.w0), pvt=pvt)
+    monkeypatch.setattr(generate, '_table', lambda seed, k, kind, tables: table)
+    res = (generate_sol2_well if kind == 'sol' else generate_nsol2_well)(SEED, lf.k)
+    assert res['info']['outcome'] == 'invalid_input' and "outside the PVT table's GOR axis" in res['info']['error']
+    assert res['log'] == [] and res['well']['well'] == lf.k
+    if kind == 'sol':
+        assert all(math.isnan(res['well'][key]) for key in COEF_KEYS) and 'date' in res['well']
 
 
 def test_a_well_of_another_class_takes_no_table(monkeypatch):

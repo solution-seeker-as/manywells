@@ -33,8 +33,11 @@ OutOfMemory, which names the well, and a rerun resumes from it.
 
 A table well takes its table from the folder that table_wells.py and table_build.py made for the dataset and seed;
 the run runs no chunk beyond the draw indices that the folder covers (its wells.json's `wells_range`), since a table
-well there would have no table, and returns incomplete, so that the tables are extended first. Without a folder of
-tables every table well is `table_failed`.
+well there would have no table, and returns incomplete, so that the tables are extended first. It starts only where
+the build is complete, every table well of wells.json with its manifest, and it stops with TableMismatch where the
+folder's record of a well or the well's GOR axis is not what the run's draws give (generate._table), as after a rule
+changed since the build: such a folder is built again, not used. Without a folder of tables every table well is
+`table_failed`.
 
 From the repository root, with the sandbox off (the pool needs Unix sockets), each process capped:
 
@@ -59,6 +62,7 @@ from manywells.configurations import V2
 from manywells.datasets.v2 import DATASETS, code_record
 from manywells.sampling.v2 import generate
 from manywells.sampling.v2.mapping import N_CELLS
+from manywells.sampling.v2.tables import TableMismatch
 
 CHUNK = 100  # Draw indices per chunk  # spec: SMP-110
 GENERATE = {'sol': generate.generate_sol2_well, 'nsol': generate.generate_nsol2_well}
@@ -91,8 +95,8 @@ def run_well(kind: str, seed: int, k: int, tables=None) -> dict:  # spec: SMP-11
     t0, cpu0 = time.perf_counter(), time.process_time()
     try:
         res = GENERATE[kind](seed, k, tables)
-    except MemoryError:
-        raise
+    except (MemoryError, TableMismatch):
+        raise  # The process's, or the folder of tables': not the well's
     except BaseException as e:  # noqa: BLE001 - a crash is logged as the well's outcome, and the run carries on
         if not (isinstance(e, Exception) or generate._is_panic(e)):
             raise  # An interrupt or an exit stops the run
@@ -241,13 +245,20 @@ def read_results(run_dir):
         c += 1
 
 
-def _tables_limit(tables, kind, seed):
-    """The draw indices that the folder of tables covers, 0 to the returned number; None without tables."""
+def _tables_limit(tables, kind, seed):  # spec: SMP-116
+    """The draw indices that the folder of tables covers, 0 to the returned number; None without tables. The folder
+    must be the dataset's and seed's, and its build complete: every table well of its wells.json with its manifest."""
     if tables is None:
         return None
     spec = json.loads((Path(tables) / 'wells.json').read_text())
     if (spec['kind'], spec['seed']) != (kind, seed):
         raise ValueError(f'{tables} holds the tables of {spec["kind"]}, seed {spec["seed"]}, not {kind}, seed {seed}')
+    missing = [w['well'] for w in spec['wells'] if not (Path(tables) / f'k{w["well"]:06d}.json').exists()]
+    if missing:
+        raise ValueError(
+            f'the build of {tables} is not complete: {len(missing)} table wells have no manifest (draw indices '
+            f'{", ".join(map(str, missing[:5]))}{", ..." if len(missing) > 5 else ""}); run table_build.py'
+        )
     return spec['wells_range'][1]
 
 
@@ -326,6 +337,8 @@ def run(
         tables cover, or None) and `seconds` (the call's wall time)
     :raises OutOfMemory: where a well runs out of memory in the pool and in each of its fresh processes, once the
         batch's other wells are kept
+    :raises TableMismatch: where the folder of tables was not built from the run's draws (generate._table)
+    :raises ValueError: where the folder of tables is another dataset's, or its build is not complete
     """
     run_dir = Path(out)
     (run_dir / 'wells').mkdir(parents=True, exist_ok=True)

@@ -32,6 +32,7 @@ from manywells.datasets.v2 import (
     resolve_sample,
     sample_case,
     sample_rows,
+    sha256,
     write_tables,
 )
 from manywells.sampling.v2 import assemble as asm
@@ -42,7 +43,7 @@ from manywells.sampling.v2 import table_wells as tw
 from manywells.sampling.v2.life import Life, sol2_well
 from manywells.sampling.v2.mapping import WellBuilder
 from manywells.sampling.v2.samples import nsol2_attempt, nsol2_plan, sol2_attempt
-from manywells.sampling.v2.tables import TABLE_CLASSES, read_table
+from manywells.sampling.v2.tables import TABLE_CLASSES, TableMismatch, read_table
 from manywells.sampling.wells import rng_for
 
 from .sampling_v2_wells import SEED, drawn_lives
@@ -464,6 +465,7 @@ def test_a_dataset_written_from_a_run(monkeypatch, tmp_path):
     assert meta['producibility']['floor'] == generate.FLOOR and meta['counts']['wells_accepted'] == 3
     assert meta['files']['samples.parquet']['rows'] == 3 * N_TEST_SLOTS == len(data['samples'])
     assert {'code', 'assembled_by', 'lock_sha256', 'python', 'platform', 'created'} <= set(meta)
+    assert meta['tables'] is None and meta['table_build'] is None
     assert len(logs['drawn_wells']) == meta['counts']['wells_drawn']
     parts = sorted((tmp_path / 'run' / 'attempts').glob('part-*.parquet'))
     assert sum(len(pd.read_parquet(p)) for p in parts) == sum(
@@ -473,6 +475,24 @@ def test_a_dataset_written_from_a_run(monkeypatch, tmp_path):
     monkeypatch.setattr(asm, 'code_record', lambda: dirty)
     with pytest.raises(ValueError, match='has changes'):
         asm.write_dataset(tmp_path / 'run', tmp_path / 'out2', 3)
+
+
+def test_the_table_builds_record(tmp_path):
+    """SMP-110, SMP-116: a dataset records its folder of tables' build: the files' SHA-256, the draw indices and the
+    table wells it covers, and NeqSim's version."""
+    spec = dict(kind='sol', seed=SEED, wells_range=[0, 300], wells=[dict(well=3), dict(well=8)])
+    tw.write_json(tmp_path / 'wells.json', spec)
+    record = asm._table_build_record(tmp_path)
+    assert record == dict(
+        wells_sha256=sha256(tmp_path / 'wells.json'),
+        axes_sha256=None,
+        wells_range=[0, 300],
+        table_wells=2,
+        neqsim='3.4.0',
+    )
+    tw.write_json(tmp_path / 'axes.json', {'3': dict(gors=[1.0, 1.2])})
+    assert asm._table_build_record(tmp_path)['axes_sha256'] == sha256(tmp_path / 'axes.json')
+    assert asm._table_build_record(None) is None
 
 
 # --- SMP-112, SMP-116: the table wells and their axes -----------------------------------------------------------------
@@ -602,6 +622,20 @@ def test_the_axes_file_and_the_builds_tables(monkeypatch, tmp_path):
     assert table['status'] == 'ok' and table['gors'] == axes[str(a.k)]['gors']
     assert table['pvt'].gors == tuple(float(f'{g:.10g}') for g in axes[str(a.k)]['gors'])
     assert read_table(tmp_path, b.k, 'sol', SEED)['step'] == 'fluid'
+
+    # The generation's checks of the folder against the run's draws (SMP-116): the record and the GOR axis
+    assert generate._table(SEED, a.k, 'sol', tmp_path)['status'] == 'ok'
+    manifest = tmp_path / f'k{a.k:06d}.json'
+    man = json.loads(manifest.read_text())
+    tw.write_json(manifest, dict(man, gors=man['gors'][:-1]))  # A table built on another axis
+    with pytest.raises(TableMismatch, match='another GOR axis'):
+        generate._table(SEED, a.k, 'sol', tmp_path)
+    tw.write_json(manifest, man)
+
+    # The run starts only where the build is complete (SMP-116), every table well with its manifest
+    (tmp_path / f'k{b.k:06d}.json').rename(tmp_path / 'aside.json')
+    with pytest.raises(ValueError, match=f'is not complete: 1 table wells have no manifest \\(draw indices {b.k}\\)'):
+        runner.run('sol', 1, tmp_path / 'run', SEED, processes=1, tables=tmp_path, log=lambda x: None)
 
 
 # --- SMP-110: re-solving a pilot ---------------------------------------------------------------------------------------
