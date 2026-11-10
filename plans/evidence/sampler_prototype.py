@@ -15,9 +15,11 @@ with the run's own log of every attempt (attempts.parquet). Since the checkpoint
 the rework's, and the core's solver failures are redrawn without a CasADi retry (H1: D-54 dropped); R6's revisions
 ('draft' and 'r6', with the retry) are this script at commit 8e6c175.
 
-Interim mapping (sampling-draft.md, Mapping): volatile oils and gas condensates are built as the black oil with their
-API gravity, gas gravity, separator and GOR, and gas and condensate wells flow in on a productivity index whose k_l
-gives the liquid the gas carries at the design drawdown. Every result on those classes depends on it.
+Since R9 (2026-11-06) gas and condensate wells flow in on feature 022's Forchheimer inflow, its a and b fitted to the
+pseudo-pressure as D-61 says at every reservoir state (inflow_at, gas_inflow), in place of R3's interim productivity
+index. Without --tables, volatile oils and gas condensates are still built as the black oil with their API gravity,
+gas gravity, separator and GOR (sampling-draft.md, Mapping: the interim mapping); the rework's runs, before R9, are
+this script at commit d6c0b7d.
 
 From the repository root, with the sandbox off (the pool needs Unix sockets), each process capped:
 
@@ -31,6 +33,11 @@ The measurements are sampler_prototype_report.py's (plans/sampler-redesign/r6-me
     run sol|nsol N OUT   draw wells k = 0, 1, 2, ... until N are accepted; one task per well; a well's raw result is
                          kept in OUT/raw/, so that a stopped run resumes; then the tables are assembled in OUT
     --wells K0 K1        solve only the draw indices K0 to K1 - 1 (a speed and memory check), without assembling
+    --tables DIR         the volatile oils' and condensates' table sets that table_fluids.py built for this dataset
+                         and seed (fluids-draft.md, How a table replaces the interim mapping): a table well takes its
+                         PVTTableSet, and the table's p_sat, initial GOR and densities replace the fluid block's
+                         (draw_well's fluid); a table well without a built table, or whose table fails PVT-TAB-1's
+                         checks, is logged as table_failed and not solved, so the next drawn well takes its place
 """
 
 import argparse
@@ -47,6 +54,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from gas_inflow_shapes import p2_fit, pseudo_pressure, wellstream_factor
 from sampler_draft_draws import OILS, draw_well, forchheimer, gas_rate, j_radial
 from sampler_draft_samples import (
     N_OP,
@@ -79,9 +87,10 @@ from manywells.configurations import V2, V2_SLIP, check
 from manywells.datasets.rows import root_features
 from manywells.friction import RoughnessFriction
 from manywells.geometry import WellGeometry
-from manywells.inflow import ProductivityIndex, Vogel
+from manywells.inflow import Forchheimer, ProductivityIndex, Vogel
 from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.fluid import FluidModel
+from manywells.pvt.table import PVTTable, PVTTableSet
 from manywells.sampling.wells import rng_for
 from manywells.simulator import BoundaryConditions, SSDFSimulator, WellProperties
 from manywells.thermal import ThermalModel
@@ -92,11 +101,14 @@ pa.set_io_thread_count(2)
 N_CELLS = 100
 DAY = 86400.0
 FLOOR = {'platform': 1.6, 'onshore': 1.6, 'subsea': 20.0}  # Sm3/d of oil equivalent, D-34 as ruled
-REVISION = 'rework'  # the checkpoint's rulings of 2026-11-06; R6's revisions are this script at commit 8e6c175
+REVISION = 'r9'  # R9's inflow and tables; the rework's runs are this script at d6c0b7d, R6's at 8e6c175
 FLOOR_MARGIN = 0.5  # A well is dropped below half its floor, D-34
 WLR_NOT_PRODUCED = 0.98  # An oil well above this water cut is not produced, D-50
 BEST_RATE_LIFT = (0.0, 0.5, 1.0)  # Lift-gas rates of the best rate, fractions of w_lg_max, D-50
 N_SCAN = 21  # Points of the nsol-2 life scan, every 5% of T_life, D-50
+TABLE_CLASSES = ('volatile_oil', 'gas_condensate')  # the fluid classes that take a table (D-36)
+COEF_KEYS = ('k_l', 'w_l_max', 'forchheimer_a', 'forchheimer_b')  # the inflow's coefficients, NaN where unused
+N_PSEUDO = 200  # Points of a gas well's pseudo-pressure from 1 bar to p_r (D-61; R5's 400 agree to 1e-4)
 SLOT_LIMIT, REDRAW_LIMIT, SOLVER_FAILURE_LIMIT = 50, 400, 10  # D-81
 WELL_TIME_LIMIT = 3600.0  # s: a guard of the prototype against a run-away well, not a rule of the draft
 TUBING_NAMES = {0.0620: '2-7/8', 0.0760: '3-1/2', 0.1005: '4-1/2', 0.1243: '5-1/2', 0.1571: '7', 0.2205: '9-5/8'}
@@ -124,13 +136,16 @@ class _TimedCore:
 
 
 class Builder:
-    """A drawn well's fixed parts (the survey's grid, the PVT model, the choke) and the WellProperties of an attempt,
-    in the interim mapping. design is the lift design (a well's draw dict with md_inj and T_lg) or None."""
+    """A drawn well's fixed parts (the survey's grid, the PVT model, the choke) and the WellProperties of an attempt.
+    design is the lift design (a well's draw dict with md_inj and T_lg) or None; pvt a table well's PVTTableSet, or
+    None for the black oil (and the interim mapping of a table well)."""
 
-    def __init__(self, w, stations, design=None):
+    def __init__(self, w, stations, design=None, pvt=None):
         self.w, self.design = w, design
         self.geometry = WellGeometry.from_survey(stations[0], stations[1], N_CELLS, D=w['D'])
-        self.pvt = BlackOil(rho_o=w['rho_o'], rho_g=w['rho_g'], gas_law='dak', p_sep=w['p_sep'], T_sep=w['T_sep'])
+        if pvt is None:
+            pvt = BlackOil(rho_o=w['rho_o'], rho_g=w['rho_g'], gas_law='dak', p_sep=w['p_sep'], T_sep=w['T_sep'])
+        self.pvt = pvt
         self.choke = SimpsonChokeModel(K_c=w['K_c'], chk_profile=w['choke_profile'])
 
     def fluid(self, gor, wlr):
@@ -142,7 +157,9 @@ class Builder:
     def case(self, inp):
         """The WellProperties and BoundaryConditions of an attempt's inputs."""
         w, lift = self.w, bool(inp['lift_on'])
-        if not math.isnan(inp.get('w_l_max', math.nan)):
+        if not math.isnan(inp.get('forchheimer_a', math.nan)):
+            inflow = Forchheimer(a=inp['forchheimer_a'], b=inp['forchheimer_b'])  # feature 022, fitted by D-61
+        elif not math.isnan(inp.get('w_l_max', math.nan)):
             inflow = Vogel(w_l_max=inp['w_l_max'])
         else:
             inflow = ProductivityIndex(k_l=inp['k_l'])
@@ -330,6 +347,38 @@ def solve_slots(k, draw, builder, log, t_start, slot_limit_outcome='slot_limit')
     return accepted, slot_limit_outcome
 
 
+# --- Table fluids (fluids-draft.md, How a table replaces the interim mapping) -------------------------------------------
+def table_for(seed, k, kind, tables):
+    """A table well's table from DIR (table_fluids.py's build for this dataset and seed): its manifest with the
+    PVTTableSet under 'pvt', read by PVTTable.read_csv and so checked by PVT-TAB-1 as develop has it; status 'failed'
+    with the error where the build failed, no table was built, or the checks refuse it. None for a well of another
+    class, or without --tables (the interim mapping)."""
+    if tables is None or draw_well(seed, k)[0]['fluid_class'] not in TABLE_CLASSES:
+        return None
+    path = Path(tables) / f'k{k:06d}.json'
+    if not path.exists():
+        return dict(status='failed', step='missing', error=f'no table built for draw index {k}')
+    man = json.loads(path.read_text()) | dict(tables_dir=str(tables))
+    if (man.get('kind'), man.get('seed')) != (kind, seed):
+        return dict(
+            man, status='failed', step='missing', error=f'the table is for {man.get("kind")}, {man.get("seed")}'
+        )
+    if man['status'] == 'ok':
+        try:
+            man['pvt'] = PVTTable.read_csv(Path(tables) / man['csv'])
+        except ValueError as e:
+            man.update(status='failed', step='check', error=f'PVT-TAB-1: {e}'[:500])
+    return man
+
+
+def table_failed(seed, k, kind, table, t_start) -> dict:
+    """A table well without a usable table: logged as table_failed, with the interim draws for its row, not solved."""
+    nw = NsolWell(seed, k)
+    w = sol2_well_at(seed, k, nw.lf)[0] if kind == 'sol' else nw.w0
+    info = dict(draw_index=k, outcome='table_failed', error=table.get('error'), table_step=table.get('step'))
+    return dict(well=w, stations=nw.stations, info=info, log=[], seconds=time.perf_counter() - t_start, table=table)
+
+
 # --- sol-2 ---------------------------------------------------------------------------------------------------------------
 def sol2_inputs(r, w):
     """A sol-2 attempt's draws from generator r, in the order of sampler_draft_samples.sol2_sample (D-37 to D-40)."""
@@ -352,20 +401,20 @@ def sol2_inputs(r, w):
 
 def well_fixed(w):
     """The inputs that sol-2 keeps fixed over a well's samples."""
-    if w['inflow'] == 'vogel':
-        coef = dict(w_l_max=w['w_l_max'], k_l=math.nan)
-    else:
-        coef = dict(k_l=w['k_l'], w_l_max=math.nan)
+    coef = {key: w.get(key, math.nan) for key in COEF_KEYS}
     return dict(h=w['h'], roughness=w['roughness'], **coef)
 
 
-def sol2_well(seed, k) -> dict:
+def sol2_well(seed, k, tables=None) -> dict:
     t_start = time.perf_counter()
+    table = table_for(seed, k, 'sol', tables)
+    if table is not None and table['status'] != 'ok':
+        return table_failed(seed, k, 'sol', table, t_start)
     # The well's life at one date in its drawn stage, as nsol-2 has it (Bjarne, 2026-11-06, 'one life for both')
-    nw = NsolWell(seed, k)
+    nw = NsolWell(seed, k, table)
     w, _, t = sol2_well_at(seed, k, nw.lf)
     st, lifted, stations, builder = nw.state(t), nw.lift_on(t), nw.stations, nw.builder
-    w.update(k_l=st['k_l'], w_l_max=st['w_l_max'], lift='gas_lift' if lifted else 'natural')
+    w.update({key: st[key] for key in COEF_KEYS}, lift='gas_lift' if lifted else 'natural')
     w.update({key: nw.design[key] if lifted else math.nan for key in LIFT_KEYS})
     w_max = w['w_lg_max'] if lifted else 0.0
     fixed = well_fixed(w)
@@ -375,7 +424,7 @@ def sol2_well(seed, k) -> dict:
         check(builder.case(dict(nominal, u=1.0, w_lg=0.0, lift_on=lifted, p_s=w['p_s']))[0], V2)
     except ValueError as e:
         info.update(outcome='invalid_input', error=str(e)[:300])
-        return dict(well=w, stations=stations, info=info, log=log, seconds=time.perf_counter() - t_start)
+        return dict(well=w, stations=stations, info=info, log=log, seconds=time.perf_counter() - t_start, table=table)
     floor = FLOOR[w['well_type']]
     br = best_rate(builder, nominal, lifted, w_max, floor, log, dict(draw_index=k, kind='best_rate', slot=-1))
     if not lifted and w['fluid_type'] in OILS and br['status'] in ('no_operating_point', 'below_floor'):
@@ -389,7 +438,7 @@ def sol2_well(seed, k) -> dict:
     if br['status'] != 'pass':
         info['outcome'] = 'best_rate_solver_failure' if br['status'] == 'solver_failure' else 'not_producible'
         info['not_producible_reason'] = br['status']
-        return dict(well=w, stations=stations, info=info, log=log, seconds=time.perf_counter() - t_start)
+        return dict(well=w, stations=stations, info=info, log=log, seconds=time.perf_counter() - t_start, table=table)
 
     def draw(j, a):
         r = rng_for(seed, k, j, 'v2', 'sample') if a == 0 else rng_for(seed, k, j, a, 'v2', 'redraw')
@@ -397,46 +446,81 @@ def sol2_well(seed, k) -> dict:
 
     accepted, outcome = solve_slots(k, draw, builder, log, t_start)
     info['outcome'] = outcome
-    return dict(well=w, stations=stations, info=info, log=log, seconds=time.perf_counter() - t_start)
+    return dict(well=w, stations=stations, info=info, log=log, seconds=time.perf_counter() - t_start, table=table)
 
 
 # --- nsol-2 --------------------------------------------------------------------------------------------------------------
 def inflow_at(w0, pvt, p_r, R_go, wlr, wgr):
-    """R3's inflow coefficient at a reservoir state (D-45): the oils' PI at the fluid's mu_o and B_o (Vogel's w_l_max
-    = k_l p_r / 1.8), or the gas wells' interim PI from Forchheimer's a and b at the gas's Z and mu_g."""
+    """R3's inflow coefficient at a reservoir state (D-45), with the well's PVT model pvt (its black oil or its
+    table set): the oils' PI at the fluid's mu_o and B_o (Vogel's w_l_max = k_l p_r / 1.8), or the gas and condensate
+    wells' Forchheimer coefficients fitted by D-61 (gas_inflow)."""
     T_r, ln_term, skin = w0['T_r'], w0['ln_re_rw'] - 0.75, w0['skin']
-    rho_lsc = (1 - wlr) * w0['rho_o'] + wlr * w0['rho_w']
-    if w0['fluid_type'] in OILS:
-        b = pvt.at_gor(R_go)
-        J = j_radial(w0['perm'], w0['h_net'], b.oil_viscosity(p_r, T_r), b.bo(p_r, T_r), ln_term, skin) * w0['f_geo']
-        k_l = float(J) * rho_lsc / DAY
-        if w0['inflow'] == 'vogel':
-            return dict(w_l_max=k_l * p_r / 1.8, k_l=math.nan)
-        return dict(k_l=k_l, w_l_max=math.nan)
-    Z = pvt.z_factor(p_r, T_r)
-    mu_g = pvt.gas_viscosity(p_r, T_r, pvt.gas_density(p_r, T_r))
-    a, b = forchheimer(w0['perm'], w0['h_net'], mu_g, Z, T_r, ln_term, skin, w0['D_nondarcy'])
+    out = dict.fromkeys(COEF_KEYS, math.nan)
+    if w0['fluid_type'] not in OILS:
+        return out | gas_inflow(w0, pvt, p_r, R_go)
+    rho_lsc = (1 - wlr) * pvt.rho_o + wlr * w0['rho_w']
+    b = pvt.at_gor(R_go)
+    J = j_radial(w0['perm'], w0['h_net'], float(b.oil_viscosity(p_r, T_r)), float(b.bo(p_r, T_r)), ln_term, skin)
+    k_l = J * w0['f_geo'] * rho_lsc / DAY
+    return out | (dict(w_l_max=k_l * p_r / 1.8) if w0['inflow'] == 'vogel' else dict(k_l=k_l))
+
+
+def gas_inflow(w0, pvt, p_r, R_go):
+    """
+    D-61: Forchheimer's a and b (INF-10) of a gas or condensate well at reservoir pressure p_r and producing GOR R_go,
+    in the model's units. The IPR in the pseudo-pressure, (mu_g Z)_r (m(p_r) - m(p_wf)) = a_ws q + b_ws q^2, with R3's
+    k h, skin and D and the drain's and slant's factors on a and b (a_ratio, b_ratio; D-21), and mu_g Z of the
+    reservoir gas at T_r: the black-oil gas at the wellstream's gravity for a wet or dry gas (and a condensate without
+    a table), the table's gas at R_go for a condensate. a and b are fitted by least squares of (p_r^2 - p_wf^2)/q
+    against q over p_wf/p_r from 0.2 to 0.95 and the AOF (gas_inflow_shapes.p2_fit, R5's), with b >= 0 as INF-10
+    needs (where the free fit's b is negative, b = 0 and a the least squares' mean), converted from the
+    wellstream to the separator gas, a_q = c a_ws and b_q = c^2 b_ws, and to kg/s by Forchheimer.from_gas_rate with
+    the fluid's rho_g.
+
+    c is 1 + C_og/R_go (Whitson and Brule 2000, Eqs. 3.73b and 3.73c; gas_inflow_shapes.wellstream_factor) for the
+    black-oil gas, whose standard volume is the wellstream's. A table's Z has the separator gas's gas constant
+    (PVT-TAB-4), so with the table's gas Darcy's standard volume is the wellstream's mass over rho_g, and c is the
+    mass ratio 1 + rho_o/(R_go rho_g): the same conversion in the table's units.
+    """
+    T_r = w0['T_r']
+    if isinstance(pvt, (PVTTable, PVTTableSet)):
+        gas = pvt.at_gor(R_go)
+        c = 1 + gas.rho_o / (R_go * gas.rho_g)
+    else:
+        c = wellstream_factor(dict(api=w0['api'], R_go=R_go))
+        rho_ws = (pvt.rho_g + pvt.rho_o / R_go) / c  # the wellstream as an ideal gas at standard conditions
+        gas = BlackOil(rho_o=pvt.rho_o, rho_g=rho_ws, gas_law='dak', p_sep=w0['p_sep'], T_sep=w0['T_sep'])
+    p, m, muz_r = pseudo_pressure(gas, p_r, T_r, n=N_PSEUDO)
+    Z, mu_g = float(gas.z_factor(p_r, T_r)), float(gas.gas_viscosity(p_r, T_r, gas.gas_density(p_r, T_r)))
+    a, b = forchheimer(w0['perm'], w0['h_net'], mu_g, Z, T_r, w0['ln_re_rw'] - 0.75, w0['skin'], w0['D_nondarcy'])
     a, b = a * w0['a_ratio'], b * w0['b_ratio']  # the geometry's factors at the drawn state (D-21)
-    d = w0['delta_d']
-    q_l = gas_rate(a, b, p_r**2 - ((1 - d) * p_r) ** 2) * (1e6 / R_go + wgr) / 1e6
-    return dict(k_l=float(q_l * rho_lsc / DAY / (d * p_r)), w_l_max=math.nan)
+
+    def q_pseudo(p_wf):
+        return gas_rate(a, b, muz_r * (m[-1] - np.interp(p_wf, p, m)))
+
+    a_ws, b_ws = p2_fit(q_pseudo, p_r, nonnegative=True)
+    inflow = Forchheimer.from_gas_rate(c * a_ws, c * c * b_ws, pvt.rho_g)
+    return dict(forchheimer_a=inflow.a, forchheimer_b=inflow.b)
 
 
 class NsolWell:
-    """An nsol-2 well: R4's Life (the trends), its lift design and start rules (D-49), and its state at a date."""
+    """An nsol-2 well: R4's Life (the trends), its lift design and start rules (D-49), and its state at a date. table
+    is a table well's loaded table (table_for), whose hook replaces the fluid block's values in every draw."""
 
-    def __init__(self, seed, k):
+    def __init__(self, seed, k, table=None):
         self.seed, self.k = seed, k
-        self.lf = lf = Life(seed, k)
+        hook = table['hook'] if table is not None else None
+        self.lf = lf = Life(seed, k, fluid=hook)
         self.w0 = w0 = lf.w0
         self.oil = lf.oil
-        _, self.stations = draw_well(seed, k, 'initial')
+        _, self.stations = draw_well(seed, k, 'initial', fluid=hook)
         late_lifted = lf.wL['lift'] == 'gas_lift'
         if w0['lift'] == 'gas_lift':
             self.design, self.lift_start, self.rule = w0, 0.0, 'from_start'
             self.rule2 = False
         else:
-            self.design = lf.wL if late_lifted else (draw_well(seed, k, 'late', force_lift=True)[0] if lf.oil else None)
+            late = draw_well(seed, k, 'late', force_lift=True, fluid=hook)[0] if lf.oil and not late_lifted else None
+            self.design = lf.wL if late_lifted else late
             cands = []
             if lf.oil:
                 t1 = lf.static_check_time()
@@ -446,7 +530,8 @@ class NsolWell:
                 cands.append((lf.t_lift_drawn, 'drawn_time'))
             self.lift_start, self.rule = min(cands) if cands else (None, None)
             self.rule2 = lf.oil or late_lifted  # D-49, rule 2 (D-84)
-        self.builder = Builder(w0, self.stations, design=self.design)
+        self.builder = Builder(w0, self.stations, design=self.design, pvt=table['pvt'] if table is not None else None)
+        self._coef = {}
 
     def lift_on(self, t):
         return self.lift_start is not None and t >= self.lift_start - 1e-12
@@ -463,7 +548,9 @@ class NsolWell:
         else:
             wlr, wgr = water / (water + 1e6 / R_go), water
             wlr_trend, wgr_trend = s['water'] / (s['water'] + 1e6 / s['R_go']), s['water']
-        coef = inflow_at(w0, self.builder.pvt, s['p_r'], s['R_go'], wlr_trend, wgr_trend)
+        if t not in self._coef:  # a date's coefficients, once: its slots' attempts share them
+            self._coef[t] = inflow_at(w0, self.builder.pvt, s['p_r'], s['R_go'], wlr_trend, wgr_trend)
+        coef = self._coef[t]
         return dict(
             t=t, p_r=s['p_r'], gor=R_go, wlr=wlr, wgr=wgr, h=lf.h(t), roughness=lf.roughness(t), p_s_nom=lf.p_s_nom(t),
             stage=lf.stage(t), **coef,
@@ -550,13 +637,16 @@ def nsol2_redraw(r, planned, lift_on, w_max, p_s_nom, dp_fl):
     return u, w_lg, separator_pressure(r, p_s_nom, dp_fl)
 
 
-def nsol2_well(seed, k) -> dict:
+def nsol2_well(seed, k, tables=None) -> dict:
     t_start = time.perf_counter()
-    nw = NsolWell(seed, k)
+    table = table_for(seed, k, 'nsol', tables)
+    if table is not None and table['status'] != 'ok':
+        return table_failed(seed, k, 'nsol', table, t_start)
+    nw = NsolWell(seed, k, table)
     w0, lf, builder = nw.w0, nw.lf, nw.builder
     log = []
     info = dict(draw_index=k, outcome=None, best_rate=math.nan, best_rate_w_lg=math.nan, T_life=lf.T)
-    out = dict(well=w0, stations=nw.stations, info=info, log=log, nsol=nw_summary(nw))
+    out = dict(well=w0, stations=nw.stations, info=info, log=log, nsol=nw_summary(nw), table=table)
     floor = FLOOR[w0['well_type']]
     try:
         check(builder.case(dict(nw.state(0.0), u=1.0, w_lg=0.0, lift_on=nw.lift_on(0.0), p_s=w0['p_s']))[0], V2)
@@ -658,7 +748,7 @@ LIFT_KEYS = ('md_inj', 'z_inj', 'T_lg', 'w_lg_max', 'glr_cap', 'p_inj', 'dp_valv
 
 # --- The pool --------------------------------------------------------------------------------------------------------------
 def run_task(task):
-    kind, seed, k, raw = task
+    kind, seed, k, raw, tables = task
     path = Path(raw) / f'{k:06d}.pkl'
     if path.exists():
         with open(path, 'rb') as f:
@@ -666,13 +756,15 @@ def run_task(task):
         return k, res['info']['outcome'], res['seconds']
     t0, cpu0 = time.perf_counter(), time.process_time()
     try:
-        res = (sol2_well if kind == 'sol' else nsol2_well)(seed, k)
+        res = (sol2_well if kind == 'sol' else nsol2_well)(seed, k, tables)
     except Exception:  # noqa: BLE001 - a crash of the prototype is logged as the well's outcome
         res = dict(well=None, stations=None, log=[], seconds=0.0)
         res['info'] = dict(draw_index=k, outcome='crash', error=traceback.format_exc()[-2000:])
     res['seconds'], res['cpu_seconds'] = time.perf_counter() - t0, time.process_time() - cpu0
     for rec in res['log']:
         rec.pop('_root', None)
+    if res.get('table') is not None:
+        res['table'] = {key: v for key, v in res['table'].items() if key != 'pvt'}  # the set is rebuilt from its CSV
     tmp = path.with_suffix('.tmp')
     with open(tmp, 'wb') as f:
         pickle.dump(res, f)
@@ -680,8 +772,15 @@ def run_task(task):
     return k, res['info']['outcome'], res['seconds']
 
 
-def run(kind, n_wells, out, seed, processes, wells=None):
+def run(kind, n_wells, out, seed, processes, wells=None, tables=None):
     out = Path(out)
+    if tables is not None:
+        spec = json.loads((Path(tables) / 'wells.json').read_text())
+        if (spec['kind'], spec['seed']) != (kind, seed):
+            raise ValueError(
+                f'{tables} holds the tables of {spec["kind"]}, seed {spec["seed"]}, not {kind}, seed {seed}'
+            )
+        tables = str(Path(tables).resolve())
     raw = out / 'raw'
     raw.mkdir(parents=True, exist_ok=True)
     t0 = time.perf_counter()
@@ -690,7 +789,7 @@ def run(kind, n_wells, out, seed, processes, wells=None):
     with ctx.Pool(processes) as pool:
         if wells is not None:
             ks = range(*wells)
-            for k, outcome, sec in pool.imap_unordered(run_task, [(kind, seed, k, str(raw)) for k in ks]):
+            for k, outcome, sec in pool.imap_unordered(run_task, [(kind, seed, k, str(raw), tables) for k in ks]):
                 done[k] = outcome
                 print(f'well {k}: {outcome} in {sec:.1f} s', flush=True)
         else:
@@ -702,7 +801,9 @@ def run(kind, n_wells, out, seed, processes, wells=None):
                 need = n_wells - len(accepted)
                 batch = range(nxt, nxt + max(processes, int(math.ceil(need * 1.15))))
                 nxt = batch[-1] + 1
-                for k, outcome, sec in pool.imap_unordered(run_task, [(kind, seed, k, str(raw)) for k in batch]):
+                for k, outcome, sec in pool.imap_unordered(
+                    run_task, [(kind, seed, k, str(raw), tables) for k in batch]
+                ):
                     done[k] = outcome
                     n_acc = sum(o == 'accepted' for o in done.values())
                     print(f'well {k}: {outcome} in {sec:.1f} s; {n_acc} accepted of {len(done)}', flush=True)
@@ -715,6 +816,7 @@ def run(kind, n_wells, out, seed, processes, wells=None):
         n_wells=n_wells,
         wells=wells,
         revision=REVISION,
+        tables=tables,
         python=sys.version,
         platform=platform.platform(),
     )
@@ -728,11 +830,16 @@ def run(kind, n_wells, out, seed, processes, wells=None):
 # --- The tables (datasets-draft.md) ---------------------------------------------------------------------------------------
 INPUT_COLS = {'u': 'CHK', 'p_s': 'PDC', 'w_lg': 'WGL', 'p_r': 'PRES', 'gor': 'GOR', 'wlr': 'WLR'}
 NSOL_COLS = {'lift_on': 'LIFT', 'h': 'HTC', 'roughness': 'ROUGH', 'k_l': 'KL', 'w_l_max': 'WLMAX'}
+NSOL_COLS |= {'forchheimer_a': 'FORCHA', 'forchheimer_b': 'FORCHB'}
 
 
-def well_columns(w, info, kind, stations, nsol=None, theta_grid=math.nan) -> dict:
-    """A drawn well's row of `wells` and `drawn_wells` (datasets-draft.md, Section 2), from R3's draws."""
+def well_columns(w, info, kind, stations, nsol=None, theta_grid=math.nan, table=None) -> dict:
+    """A drawn well's row of `wells` and `drawn_wells` (datasets-draft.md, Section 2), from R3's draws, and a table
+    well's table (its manifest): the labels and the composition of datasets-draft.md's Table fluids, and the drawn
+    values the table replaced."""
     g = lambda key: w.get(key, math.nan)  # noqa: E731
+    tab = table or {}
+    has_table = tab.get('status') == 'ok'
     oil, lifted = w['fluid_type'] in OILS, w['lift'] == 'gas_lift'
     stage = w['stage']
     life_state = (
@@ -753,10 +860,13 @@ def well_columns(w, info, kind, stations, nsol=None, theta_grid=math.nan) -> dic
         saturation=w['saturation'],
         geometry_class=w['geometry_class'],
         geometry_family=w['geometry_family'],
-        pvt_model='black_oil',
-        interim_pvt=w['fluid_class'] in ('volatile_oil', 'gas_condensate'),
+        pvt_model='table' if has_table else 'black_oil',
+        interim_pvt=w['fluid_class'] in TABLE_CLASSES and not has_table,
+        fluid_source=tab.get('source'),
+        saturation_kind=tab.get('saturation_kind'),
+        saturation_rule=tab.get('saturation_rule'),
         inflow=w['inflow'],
-        interim_inflow=w['inflow'] == 'gas_rate',
+        interim_inflow=False,  # gas and condensate wells on Forchheimer's inflow (feature 022, D-61) since R9
         tubing=TUBING_NAMES.get(round(w['D'], 4), str(w['D'])),
         choke_model='simpson',
         chk_profile=w['choke_profile'],
@@ -792,7 +902,7 @@ def well_columns(w, info, kind, stations, nsol=None, theta_grid=math.nan) -> dic
         rho_g=w['rho_g'],
         p_sat=w['p_sat'] if w['p_sat'] is not None else math.nan,
         R_si=w['R_i'],
-        pvt_table_id=None,
+        pvt_table_id=f'k{w["well"]:06d}' if has_table else None,
         kgko_weight=g('w_kgko') if oil else math.nan,
         gor_factor_cond=g('c_k') if w['fluid_class'] == 'gas_condensate' else math.nan,
         permeability=w['perm'],
@@ -803,8 +913,8 @@ def well_columns(w, info, kind, stations, nsol=None, theta_grid=math.nan) -> dic
         anisotropy=g('I_ani'),
         productivity_factor=w['f_geo'],
         J=g('J') if oil else math.nan,
-        forchheimer_a=math.nan if oil else w['a_gas'],
-        forchheimer_b=math.nan if oil else w['b_gas'],
+        forchheimer_a=g('forchheimer_a'),  # sol-2's at the nominal state (D-61); nsol-2's per sample, FORCHA
+        forchheimer_b=g('forchheimer_b'),
         non_darcy_D=math.nan if oil else w['D_nondarcy'] / 28.3168,  # d/Mscf to d/Sm3
         design_rate=w['q_l_ref'] if oil else w['q_g_ref'],
         floor=FLOOR[w['well_type']],
@@ -856,8 +966,8 @@ def well_columns(w, info, kind, stations, nsol=None, theta_grid=math.nan) -> dic
             gor_nom=w['R_go'],
             wlr_nom=w['wlr'],
             wgr_nom=math.nan if oil else w['wgr'],
-            k_l=w['k_l'] if w['inflow'] != 'vogel' else math.nan,
-            w_l_max=w['w_l_max'] if w['inflow'] == 'vogel' else math.nan,
+            k_l=g('k_l'),
+            w_l_max=g('w_l_max'),
             roughness=w['roughness'],
             h=w['h'],
         )
@@ -867,6 +977,22 @@ def well_columns(w, info, kind, stations, nsol=None, theta_grid=math.nan) -> dic
         row['lift'] = 'gas_lift' if ns.get('lift_start') is not None else 'natural'
         row['T_end'] = info.get('T_end', math.nan)
         row['p_change'] = info.get('p_change', math.nan)
+    if 'hook' in tab:  # the table's fluid: its composition (D-63, D-66) and what it replaced (D-65)
+        comp, drawn = tab['composition'], tab['drawn']
+        weights = list((comp.get('template_weights') or {}).values()) or [math.nan] * 3
+        offsets = comp.get('offsets') or {}
+        field = tab.get('field') or {}
+        row.update({f'comp_w{i + 1}': x for i, x in enumerate(weights)})
+        row.update(
+            z_c7p=comp.get('z7', math.nan), M_c7p=comp.get('M7', math.nan), alpha_c7p=comp.get('alpha', math.nan)
+        )
+        row.update(C_f=comp.get('Cf', math.nan), f_int=comp.get('intermediates_factor', math.nan))
+        row.update(api_drawn=drawn['api'], sg_gas_drawn=drawn['sg_gas'], R_si_drawn=drawn['R_si'])
+        row.update(p_sat_r3=drawn['p_sat'], gor_moved=tab.get('gor_moved') or math.nan, c7_mol=tab.get('c7_mol'))
+        row.update({f'offset_{key}': offsets.get(key, math.nan) for key in ('api', 'sg_gas', 'gor')})
+        row.update({f'field_{key}': field.get(key, math.nan) for key in ('api', 'sg_gas', 'gor')})
+        row.update(n_gors=len(tab.get('gors', [])), table_nodes=tab.get('nodes', math.nan))
+        row['table_seconds'] = sum(tab.get('seconds', {}).get(key, 0.0) for key in ('fluid', 'tables'))
     return row
 
 
@@ -883,7 +1009,7 @@ def assemble(kind, out, seed, n_wells):
     last = acc[-1] if acc else -1
     ks = [k for k in ks if k <= last]
     ids = {k: i for i, k in enumerate(acc)}
-    drawn, logs, geometry = [], [], []
+    drawn, logs, geometry, pvt = [], [], [], []
     for k in ks:
         r = res[k]
         info, w = r['info'], r['well']
@@ -892,7 +1018,7 @@ def assemble(kind, out, seed, n_wells):
             continue
         geo = WellGeometry.from_survey(r['stations'][0], r['stations'][1], N_CELLS, D=w['D'])
         theta = math.degrees(math.acos(min(1.0, float(np.min(np.asarray(geo.cos_incl))))))
-        row = well_columns(w, info, kind, r['stations'], r.get('nsol'), theta)
+        row = well_columns(w, info, kind, r['stations'], r.get('nsol'), theta, r.get('table'))
         lg = pd.DataFrame(r['log'])
         slot = lg[lg.kind == 'slot'] if len(lg) else lg
         n_red = int((slot.attempt > 0).sum()) if len(slot) else 0
@@ -920,6 +1046,8 @@ def assemble(kind, out, seed, n_wells):
             lg['ID'] = ids.get(k)
             lg['well_outcome'] = info['outcome']
             logs.append(lg)
+        if k in ids and row['pvt_table_id'] is not None:
+            pvt.append(pvt_rows(r['table'], row['pvt_table_id']))
         if k in ids:
             geometry.append(
                 pd.DataFrame(
@@ -942,7 +1070,8 @@ def assemble(kind, out, seed, n_wells):
     wells.to_parquet(out / 'wells.parquet', index=False)
     slots = attempts[(attempts.kind == 'slot') & attempts.ID.notna()]
     keys = ['ID', 'slot', 'attempt']
-    extra = ['WEEKS', 'STAGE', 'TEST', 'SWEEP', 'LIFT', 'HTC', 'ROUGH', 'KL', 'WLMAX'] if kind == 'nsol' else []
+    extra = ['WEEKS', 'STAGE', 'TEST', 'SWEEP', 'LIFT', 'HTC', 'ROUGH', 'KL', 'WLMAX', 'FORCHA', 'FORCHB']
+    extra = extra if kind == 'nsol' else []
     inputs = list(INPUT_COLS.values()) + extra
     samples = slots[slots.outcome.isin(['operating_point', 'recovered'])][keys + inputs + list(FEATURES)]
     samples = samples.astype({'ID': 'int32', 'slot': 'int16', 'attempt': 'int16'}).sort_values(['ID', 'slot'])
@@ -956,7 +1085,10 @@ def assemble(kind, out, seed, n_wells):
     red.to_parquet(out / 'redraws.parquet', index=False)
     pd.concat(geometry, ignore_index=True).to_parquet(out / 'geometry.parquet', index=False)
     pvt_cols = ['pvt_table_id', 'gor', 'p', 'T', 'R_so', 'B_o', 'Z', 'mu_o', 'mu_g', 'sigma', 'rho_o', 'rho_g']
-    pd.DataFrame(columns=pvt_cols).to_parquet(out / 'pvt.parquet', index=False)  # empty: the interim mapping
+    pvt_cols += ['name', 'source', 'separation']
+    (pd.concat(pvt, ignore_index=True) if pvt else pd.DataFrame(columns=pvt_cols)).to_parquet(
+        out / 'pvt.parquet', index=False
+    )
     meta = dict(
         dataset=f'manywells-{kind}-2 (R6 prototype)',
         revision=REVISION,
@@ -965,7 +1097,12 @@ def assemble(kind, out, seed, n_wells):
         n_cells=N_CELLS,
         backend='rust',
         retry_backend=None,
-        interim_mapping='volatile oils and condensates as BlackOil; gas and condensate wells on a ProductivityIndex',
+        interim_mapping=(
+            'none: volatile oils and condensates on their tables'
+            if (drawn.pvt_model == 'table').any()
+            else 'volatile oils and condensates as BlackOil'
+        ),
+        gas_inflow='Forchheimer, fitted to the pseudo-pressure (D-61)',
         limits=dict(slot=SLOT_LIMIT, redraws=REDRAW_LIMIT, solver_failures=SOLVER_FAILURE_LIMIT),
         producibility=dict(floor=FLOOR, margin=FLOOR_MARGIN, lift_fractions=BEST_RATE_LIFT, scan_points=N_SCAN),
         wells_drawn=len(drawn),
@@ -978,6 +1115,25 @@ def assemble(kind, out, seed, n_wells):
     with open(out / 'metadata.json', 'w') as f:
         json.dump(meta, f, indent=1, default=str)
     print(json.dumps(meta, indent=1, default=str))
+
+
+def pvt_rows(table, table_id):
+    """A table well's table set as rows of `pvt` (datasets-draft.md): its CSV's nodes, with its header's densities
+    and text in every row, so that PVTTable.read_csv's tables are rebuilt from them to the bit."""
+    path = Path(table['tables_dir']) / table['csv']
+    header = {}
+    with open(path) as fh:
+        for line in fh:
+            if not line.startswith('#'):
+                break
+            key, _, value = line[1:].partition(':')
+            header[key.strip()] = value.strip()
+    df = pd.read_csv(path, comment='#', float_precision='round_trip')
+    df.insert(0, 'pvt_table_id', table_id)
+    df['rho_o'], df['rho_g'] = float(header['rho_o']), float(header['rho_g'])
+    for key in ('name', 'source', 'separation'):
+        df[key] = header.get(key)
+    return df
 
 
 def split(wells, seed):
@@ -1000,6 +1156,7 @@ def main():
     r.add_argument('--seed', type=int, default=2026)
     r.add_argument('--processes', type=int, default=12)
     r.add_argument('--wells', type=int, nargs=2)
+    r.add_argument('--tables')
     a = sub.add_parser('assemble')
     a.add_argument('kind', choices=('sol', 'nsol'))
     a.add_argument('n', type=int)
@@ -1007,7 +1164,7 @@ def main():
     a.add_argument('--seed', type=int, default=2026)
     args = ap.parse_args()
     if args.cmd == 'run':
-        run(args.kind, args.n, args.out, args.seed, args.processes, args.wells)
+        run(args.kind, args.n, args.out, args.seed, args.processes, args.wells, args.tables)
     else:
         assemble(args.kind, args.out, args.seed, args.n)
 

@@ -190,7 +190,7 @@ Entries D-1 to D-36 are R3's (2026-10-30), for `sampling-draft.md`. R2's proposa
 - **Realism:** $R_{si}$ 71 / 168 / 356 Sm³/Sm³ and $p_i - p_b$ 0 / 26 / 209 bar, against the Gulf's [own analysis of BOEM's sands atlas]; rank correlations within 0.12 of the Gulf's but for $R_{si}$–$T_r$ (0.32 in the draws, stronger in the Gulf). The well's bubble point is the model's.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** Saturation pressure and the initial GOR; Reservoir state; Inflow.
-- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group A's bulk list): approved.
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group A's bulk list): approved. Then, 2026-11-09 (second checkpoint, L2): for a volatile oil or condensate the table's flash sets the saturation pressure and its label (D-65), so $x$ applies to black oils only.
 
 ### D-18 · Drive, life stage and the reservoir's state
 
@@ -617,7 +617,7 @@ Entries of R5, merged from its own file on 2026-11-02. The drafts they belong to
 - **Realism:** the fit is within 2% of the reference at the median and 6% at the 5th and 95th percentiles from 20% drawdown to the AOF. The wellstream factor $c$ is 1.01 / 1.05 / 1.14 for R3's condensates and at most 1.01 for wet and dry gas. `nsol-2` refits as $p_r$ falls, as R4 already recomputes $a$ and $b$ (D-45).
 - **Needs sign-off:** yes (sampling).
 - **Used by:** `sampling-draft.md`, Productivity; `specs/features/022-gas-rate-inflow.md`, Units; R6.
-- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group J's bulk list): approved.
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint, group J's bulk list): approved. Then, 2026-11-09 (second checkpoint, L3): $b = 0$ where the free slope is negative is kept; the $p^2$ form's limit at high pressure, where $\mu_g Z$ changes over the drawdown, and the fit's error there go into feature 022's spec and `validity.md` with R10's specs.
 
 ### D-62 · The non-Darcy coefficient from permeability, pay and the completion
 
@@ -870,7 +870,7 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Realism:** the rate is set by the productivity index (Spearman 0.84 between a core offshore oil well's median-sample rate and its $J$) and by the tubing sized for it (0.82). Reservoir permeabilities have medians of 10 to 570 mD by porosity (Ehrenberg and Nadeau 2005, Table 1), so 15 mD lies at the low end of the reservoirs: it stands for a well's effective permeability, which also carries what the model lacks, such as the oil's relative permeability below the bubble point and with water, a partial completion, and operating limits that hold a well below its potential. EIA's brackets are calendar-day averages of a mature shelf, and an offshore Norwegian well makes at least 10,000 bbl/d (Golan and Whitson 1991, Preface), so the median is not matched to the Gulf's: the target is the share above 1018 Sm³/d. Measured after the change (R6's `sol-2` pilot, seed 2026): 22.7% of the core offshore oil wells above 1018 Sm³/d and 11.6% above 2035 Sm³/d, a median of 197 and a mean of 822 Sm³/d; gas and condensate wells 0.9 million Sm³/d at the median (1.8 before); 5.5% of the core wells dropped as not producible (3.7% before). The share above 1018 Sm³/d is still four times EIA's: how close to come is Bjarne's call (`r6-measurements.md`, For Bjarne's ruling).
 - **Needs sign-off:** yes (sampling; it revises D-20 against D-24's check).
 - **Used by:** `sampling-draft.md`, Productivity; `sampler_draft_draws.py` (`PERM`); every rate in `r6-measurements.md`.
-- **Ruling:** Bjarne, 2026-11-06 (checkpoint D1): the permeability drawn by well type, each type's median and spread set on the rework's pilot against the per-well rates, keeping the support wide. The tubing's erosional capacity stays a check: D-25's test flags a well whose design rate exceeds the largest tubing's capacity, the rework's pilot measures the flagged share, and a redraw is added only if it stays above a few percent. Keep the method simple.
+- **Ruling:** Bjarne, 2026-11-06 (checkpoint D1): the permeability drawn by well type, each type's median and spread set on the rework's pilot against the per-well rates, keeping the support wide. The tubing's erosional capacity stays a check: D-25's test flags a well whose design rate exceeds the largest tubing's capacity, the rework's pilot measures the flagged share, and a redraw is added only if it stays above a few percent. Keep the method simple. Then, 2026-11-09 (second checkpoint, L5): the platform oil wells' upper tail is kept, under coverage first, and measured by well type on R11's pilot.
 
 ### D-101 · `sol-2`: an oil well that cannot flow at its best rate is lifted, not dropped
 
@@ -921,3 +921,23 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Needs sign-off:** yes (sampling).
 - **Used by:** `sampling-draft.md`, Reservoir state at the life stage and `nsol-2`: a well's life; `sampler_draft_samples.py` (`sol2_well_at`, `Life`); `sampler_prototype.py` (`sol2_well`).
 - **Ruling:** Bjarne, 2026-11-06: "One life for both", after asking for a simple and reasonable method and that `nsol-2`'s and `sol-2`'s late stages be the same.
+
+### D-106 · A table's pressure nodes where p/Z falls are dropped as flash artefacts
+
+- **Step:** R9, 2026-11-06. Amends D-67's table build.
+- **Choice made:** after a table is flashed (`table_fluids.py`, `rising_pz_nodes`), the pressures at which p/Z does not rise strictly at some temperature, the nodes outside the longest subsequence along which it rises (of the longest, the one ending highest, so that a spike goes), are dropped at every temperature of that GOR's table, so that the grid stays rectangular; a table that would lose more than 5% of its pressures fails, and its well is `table_failed`. The manifest records the dropped pressures.
+- **Alternatives:** drop the wells whose tables fail PVT-TAB-1 (`table_failed`), which in R9's check run took 12 of 86 table sets, 6 of 16 in `nsol-2` and 5 of its 9 condensates, all in hot reservoirs, and so biases the table classes; relax PVT-TAB-1's p/Z check, which K1 added to catch such errors; a better flash (NeqSim's settings changed nothing: the artefact is deterministic).
+- **Realism:** near a hot fluid's near-critical bubble point NeqSim's TP flash splits the stream into two near-identical liquids, or misses the split at a single node (R9's check run). The dropped nodes are 1 to 2 of 75 to 119 pressures in the affected tables; the bilinear interpolation bridges them.
+- **Needs sign-off:** yes (the table build behind the datasets; new data-side machinery).
+- **Used by:** `table_fluids.py` (`build_tables`, `rising_pz_nodes`, `MAX_DROPPED`); R9's pilots.
+- **Ruling:** Bjarne, 2026-11-09 (second checkpoint, L1): approved with the 5% limit; `table_failed` wells count with the drops that H3's targets judge on R11's pilot.
+
+### D-107 · A gas well with pressure support waters out: its life ends at a WGR of 10,000
+
+- **Step:** the second checkpoint, 2026-11-09 (`checkpoint-2.md`, L4). Revises D-105's end of a supported gas life and R3's tail draw of the WGR.
+- **Choice made:** a core gas or condensate well with pressure support ends its life with the water at a WGR of 10,000 Sm³ per 10⁶ Sm³ (`END_WGR`), in place of 1000; its reservoir pressure ends at R3's late draw, as before. The coverage tail's WGR becomes $\text{LogU}(1, 10\thinspace 000)$ in place of $\text{LogU}(1, 1000)$, so that the tail still spans the core; the draw takes the same random number, so no other draw moves.
+- **Alternatives:** partial water drive, the end pressure $U(0.3,\ \text{late draw})$ of $p_i$ (B: last fifth 0.53); both (C: 0.27, as A, with two more wells dropped); keep the end at 1000 (0.78).
+- **Realism:** the regions' stopped gas wells keep about a tenth of their first year's rate in their last fifth [own analysis of BOEM's OGOR-A production]; in the Gulf's gas sands water drive and partial water drive hold most of the completed wells, and the water-drive sands recover the least gas, so their wells stop at high pressure as they water out [own analysis of BOEM's sands atlas]; the Gulf's gas wells' WGR in their later years has an upper decile several times 1000 [own analysis of BOEM's OGOR-A production]. Measured on `nsol-2` (100 wells, seed 2027, without tables), the 21 supported core gas wells' last fifth falls from 0.78 to 0.27 of the first year's rate (depletion gas wells: 0.16), half their samples lie above a WGR of 1000, redraws per sample rise from 0.03 to 0.13 and no attempt fails in the solver. INF-11 lets the water take no inflow capacity from the gas, beyond INF-10's validity (single-phase gas near the well), so the model's watered-out wells decline less than real ones.
+- **Needs sign-off:** yes (sampling; the WGR bound and `validity.md`'s row).
+- **Used by:** `sampler_draft_samples.py` (`END_WGR`), `sampler_draft_draws.py` (the tail's WGR); `sampling-draft.md`, The reservoir state and `nsol-2`: a well's life.
+- **Ruling:** Bjarne, 2026-11-10 (second checkpoint, L4): approved as recommended. The rerun of 2026-11-09 took it as a working assumption (`r9-measurements.md`, The rerun after the second checkpoint).

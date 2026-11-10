@@ -49,7 +49,7 @@ WLR_MAX = 0.98  # Hasan et al.'s largest water cut, R3
 T_LIFE = (3.0, 30.0)  # years, log-uniform, D-41 as ruled: lives may be shorter than 8 years
 Q_END = (0.03, 0.3)  # the decline's rate at the end of the life over the plateau's, log-uniform, D-41 as ruled
 END_P_MIN = 0.15  # p_r/p_i of an exhausted reservoir under depletion: the coverage tail's floor (R3), D-41
-END_WGR = 1000.0  # Sm3 per 1e6 Sm3: a gas well's water at the end of a life with pressure support, the tail's top, D-41
+END_WGR = 10000.0  # Sm3 per 1e6 Sm3: a supported gas well's water at the end of its life, the tail's top, D-107
 N_OP, N_TESTS, N_SWEEP = 160, 8, 5  # operating samples, test periods, samples per test: 160 + 8 x 5 = 200, D-48
 P_OPEN_SET = 0.05  # Share of choke set points at fully open, D-47
 P_CHANGE = (0.5, 0.95)  # Per-operating-sample probability of a set-point change, log-uniform per well, D-47 as ruled
@@ -136,12 +136,12 @@ def expit(x):
 
 class Life:
     """An nsol-2 well: R3's well at its initial, mid-life and late stages (the same generators), and the trend
-    parameters drawn from its own generator."""
+    parameters drawn from its own generator. fluid is a table well's built table (draw_well's), or None."""
 
-    def __init__(self, seed, k):
-        self.w0, _ = draw_well(seed, k, 'initial')
-        self.wm, _ = draw_well(seed, k, 'mid_life')
-        self.wL, _ = draw_well(seed, k, 'late')
+    def __init__(self, seed, k, fluid=None):
+        self.w0, _ = draw_well(seed, k, 'initial', fluid=fluid)
+        self.wm, _ = draw_well(seed, k, 'mid_life', fluid=fluid)
+        self.wL, _ = draw_well(seed, k, 'late', fluid=fluid)
         w0 = self.w0
         self.oil = w0['fluid_type'] in OILS
         self.gas_depletion = not self.oil and w0['drive'] == 'depletion'
