@@ -1083,8 +1083,9 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Alternatives:** keep the constant.
 - **Basis:** physics, the model's own correlation: 0.49 mPa s at 330 K and 0.15 at 450 K.
 - **Realism:** the viscosity enters Chen's friction factor weakly; a drain's friction changes slightly.
+- **Implemented** (R10, 2026-11-10). Over the 225 oil drains with water among 3000 wells of seed 2026, the model's water at $T_r$ is 0.19 / 0.27 / 0.36 / 0.45 / 0.72 mPa s (5th / 25th / 50th / 75th / 95th percentiles), and the drains' friction efficiency changes by at most 1.2%, at the median by less than 0.1%; no other draw changes. The density's clamp is classed as a design choice of the build, as the triage proposes.
 - **Needs sign-off:** yes (sampling).
-- **Used by:** `specs/sampling.md`, SMP-72; `sampling/v2/reservoir.py`.
+- **Used by:** `specs/sampling.md`, SMP-72; `sampling/v2/draws.py` (`_inflow_at_stage`), not `reservoir.py`.
 - **Ruling:**
 
 ### D-120 · Lighter heptanes-plus for condensates

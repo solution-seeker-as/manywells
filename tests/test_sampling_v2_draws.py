@@ -26,6 +26,7 @@ from scipy.stats import rankdata
 from manywells.geometry import WellGeometry
 from manywells.pvt import density_from_api, gas_density_from_sg
 from manywells.pvt.black_oil import BlackOil
+from manywells.pvt.water import water_viscosity
 from manywells.sampling.v2 import draws
 from manywells.sampling.v2.draws import P_S_MAX, STAGES, TUBING, black_oil, draw_well, stream
 from manywells.sampling.v2.reservoir import slant_skin
@@ -706,6 +707,17 @@ def test_a_table_fluid_replaces_the_fluid_blocks_values(wells):
     table = dict(p_sat=1.0, R_i=oil0['R_i'], rho_o=oil0['rho_o'], rho_g=oil0['rho_g'])  # Two phases nowhere
     w, _ = draw_well(SEED, oil0['well'], fluid=table)
     assert w['saturation'] == 'undersaturated' and w['R_go'] == w['R_i']
+
+
+def test_a_drains_liner_takes_the_models_water_viscosity(wells, monkeypatch):
+    """SMP-72 (D-119): the liquid in an oil drain's liner takes PVT-WAT-3's water viscosity at T_r: with the water
+    ten times as viscous, a wet drain's friction efficiency falls, and a dry drain's stays."""
+    drains = [w for w, _ in wells if w['geometry_family'] == 'high_angle' and is_oil(w)]
+    wet = next(w for w in drains if w['wlr'] > 0.3 and w['eta_drain'] < 0.99)
+    dry = next(w for w in drains if w['wlr'] == 0 and w['eta_drain'] < 0.99)
+    monkeypatch.setattr(draws, 'water_viscosity', lambda T: 10 * water_viscosity(T))
+    assert draw_well(SEED, wet['well'])[0]['eta_drain'] < wet['eta_drain']
+    assert draw_well(SEED, dry['well'])[0]['eta_drain'] == dry['eta_drain']
 
 
 # --- The survey and the stream ---------------------------------------------------------------------------------------

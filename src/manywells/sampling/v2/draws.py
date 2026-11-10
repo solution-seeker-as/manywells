@@ -25,6 +25,7 @@ import numpy as np
 from manywells.choke import CHOKE_PROFILES
 from manywells.pvt import density_from_api, gas_density_from_sg
 from manywells.pvt.black_oil import BlackOil
+from manywells.pvt.water import water_viscosity
 from manywells.sampling.v2._distributions import logistic, logu, pick, tlognorm, tnorm, unused
 from manywells.sampling.v2.reservoir import (
     OILS,
@@ -554,10 +555,11 @@ def _inflow_at_stage(w, x):
     drain = w['geometry_family'] == 'high_angle'
     if w['fluid_type'] in OILS:
         J = x.J
-        if drain:  # spec: SMP-72. Dikken's model in closed form
+        if drain:  # spec: SMP-72. Dikken's model in closed form, the water at the model's viscosity (PVT-WAT-3)
             B_l = (1 - wlr) * x.B_o + wlr
             rho_l = ((1 - wlr) * (w['rho_o'] + w['R_go'] * w['rho_g']) + wlr * w['rho_w']) / B_l
-            c_lin = liner_liquid(D, min(max(rho_l, 400.0), 1100.0), (1 - wlr) * x.mu_o + wlr * 0.5e-3, B_l, eps)
+            mu_l = (1 - wlr) * x.mu_o + wlr * float(water_viscosity(T_r))
+            c_lin = liner_liquid(D, min(max(rho_l, 400.0), 1100.0), mu_l, B_l, eps)
             J_eff = drain_index(J, w['drain_length'], c_lin, delta_d * p_r, q_cap)
             w['eta_drain'] = J_eff / J
             J = J_eff
