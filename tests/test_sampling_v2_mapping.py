@@ -45,6 +45,7 @@ from manywells.sampling.v2.reservoir import (
     liner_liquid,
     nondarcy,
     producing_gor,
+    slant_skin,
 )
 from manywells.simulator import NoOperatingPoint, SSDFSimulator
 from manywells.units import P_REF, T_REF
@@ -120,6 +121,19 @@ def test_joshi_ratio_against_a_worked_example():
     limit = (7.5 - 0.75) / math.log((a + math.sqrt(a * a - 0.25)) / 0.5)
     assert joshi_ratio(2000.0, 1e-6, 1.0, 0.0, 7.5) == pytest.approx(limit, rel=1e-6)
     assert math.log((a + math.sqrt(a * a - 0.25)) / 0.5) == pytest.approx(math.log(2.53), rel=1e-3)
+
+
+def test_slant_skin_against_economides_table_5_1():
+    """SMP-72 (D-113): Cinco-Ley et al.'s skin of a slanted well, fully completed, at h_D = 100, against Economides et
+    al.'s (1994) Table 5-1, p. 91, within 3%; it grows with the angle and the pay, and anisotropy lessens it."""
+    table = {15: -0.128, 30: -0.517, 45: -1.178, 60: -2.149, 75: -3.577}
+    for theta, s in table.items():
+        assert slant_skin(theta, 100 * R_W, 1.0) == pytest.approx(s, rel=0.0301)
+    assert slant_skin(0.0, 15.0, 2.0) == 0.0
+    assert slant_skin(45.0, 50.0, 1.0) < slant_skin(45.0, 10.0, 1.0) < slant_skin(30.0, 10.0, 1.0) < 0
+    assert slant_skin(45.0, 10.0, 3.0) > slant_skin(45.0, 10.0 * 3, 1.0)  # The pay's thickness in h_D, not the angle
+    t, h_D = math.degrees(math.atan(math.tan(math.radians(60.0)) / 2.0)), 10.0 * 2.0 / R_W
+    assert slant_skin(60.0, 10.0, 2.0) == pytest.approx(-((t / 41) ** 2.06) - (t / 56) ** 1.865 * math.log10(h_D / 100))
 
 
 def test_liner_friction():

@@ -7,11 +7,12 @@ Created 10 November 2026
 Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
 The reservoir's closed forms that the v2 draws evaluate on floats (specs/sampling.md): the producing gas-oil ratio
-under solution-gas drive (SMP-70), an oil well's radial productivity index and a drain's (SMP-72), and a gas well's
-radial Forchheimer coefficients with their non-Darcy coefficient (SMP-71, SMP-73).
+under solution-gas drive (SMP-70), an oil well's radial productivity index, a slanted well's skin and a drain's index
+(SMP-72), and a gas well's radial Forchheimer coefficients with their non-Darcy coefficient (SMP-71, SMP-73).
 
 Sources: Craft and Hawkins (1991), Applied petroleum reservoir engineering, 2nd ed., Ch. 9 and 10; Economides, Hill
-and Ehlig-Economides (1994), Petroleum production systems; Joshi (1991), Horizontal well technology, Ch. 10 (Dikken's
+and Ehlig-Economides (1994), Petroleum production systems, with Cinco-Ley, Ramey and Miller's (1975) slant skin in
+Section 5-4; Joshi (1991), Horizontal well technology, Ch. 10 (Dikken's
 model); Brekke and Lien (1994), SPE Drilling & Completion 9(3); Chen (1979), Ind. Eng. Chem. Fundam. 18(3). The
 measurements behind the closed forms are plans/evidence/solution_gas_drive.py's and drain_friction.py's.
 """
@@ -166,6 +167,20 @@ def j_radial(k_md, h, mu, B, ln_term, s) -> float:  # spec: SMP-72
     :param s: Skin
     """
     return 2 * math.pi * k_md * _MD * h / (mu * B * (ln_term + s)) * _DAY * 1e5
+
+
+def slant_skin(theta, h, I_ani) -> float:  # spec: SMP-72
+    """
+    Cinco-Ley, Ramey and Miller's (1975) skin of a fully completed slanted well, by the fit to their tables
+    (Economides et al. 1994, Section 5-4, Tables 5-1 and 5-2): -(t/41)^2.06 - (t/56)^1.865 log10(h_D/100), with
+    t = arctan(tan(theta) / I_ani) in degrees and h_D = h I_ani / r_w. Valid to 75 degrees.
+
+    :param theta: The well's inclination through the pay (degrees)
+    :param h: Net pay (m)
+    :param I_ani: Anisotropy, sqrt(k_h/k_v)
+    """
+    t = math.degrees(math.atan(math.tan(math.radians(theta)) / I_ani))
+    return -((t / 41) ** 2.06) - (t / 56) ** 1.865 * math.log10(h * I_ani / R_W / 100)
 
 
 def joshi_ratio(L_d, h, I_ani, s, ln_re) -> float:  # spec: SMP-72

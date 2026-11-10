@@ -28,6 +28,7 @@ from manywells.pvt import density_from_api, gas_density_from_sg
 from manywells.pvt.black_oil import BlackOil
 from manywells.sampling.v2 import draws
 from manywells.sampling.v2.draws import P_S_MAX, STAGES, TUBING, black_oil, draw_well, stream
+from manywells.sampling.v2.reservoir import slant_skin
 from manywells.sampling.v2.survey import FAMILIES, survey
 from manywells.sampling.wells import rng_for, sample_well
 
@@ -220,10 +221,14 @@ def check_well(w, md, tvd):
     if family == 'high_angle':  # A drain: Joshi's ratio, times an oil drain's friction efficiency
         assert between(w['drain_length'], 300, 2500) and between(w['I_ani'], 1, 3) and w['J_H_over_J_V'] > 0
         assert w['f_geo'] == pytest.approx(w['J_H_over_J_V'] * w.get('eta_drain', 1.0), rel=1e-12)
-    else:  # The slant's factor on the radial index
+    elif family == 'vertical':
+        assert 'drain_length' not in w and 's_theta' not in w and w['f_geo'] == 1
+    else:  # Cinco-Ley's slant skin in the radial index, with its floor (SMP-72)
         assert 'drain_length' not in w and 'eta_drain' not in w and 'b_friction_share' not in w
-        slant = 1.0 if family == 'vertical' else math.cos(math.radians(w['theta_end'])) ** -0.5
-        assert w['f_geo'] == pytest.approx(slant, rel=1e-12)
+        s_theta = slant_skin(w['theta_end'], w['h_net'], w['I_ani'])
+        assert w['s_theta'] == s_theta and between(w['I_ani'], 1, 3) and s_theta < 1e-6
+        A_s = w['ln_re_rw'] - 0.75 + w['skin']
+        assert w['f_geo'] == pytest.approx(A_s / max(A_s + s_theta, 2.0), rel=1e-12) and w['f_geo'] > 1 - 1e-6
     if oil:
         rho_lsc = (1 - w['wlr']) * w['rho_o'] + w['wlr'] * w['rho_w']
         assert w['inflow'] == ('vogel' if w['p_sat'] >= 0.8 * w['p_r'] and w['wlr'] < 0.6 else 'productivity_index')
@@ -240,8 +245,8 @@ def check_well(w, md, tvd):
         if family == 'high_angle':  # The non-Darcy loss per completed length, and the liner's friction on top
             per_length = (w['I_ani'] * w['h_net'] / w['drain_length']) ** 2
             assert w['b_ratio'] * (1 - w['b_friction_share']) == pytest.approx(per_length, rel=1e-6)
-        else:
-            assert w['b_ratio'] == pytest.approx(1 / w['f_geo'], rel=1e-12)
+        else:  # A slanted well's non-Darcy loss is in its D, from its perforated length along the well (SMP-71)
+            assert w['b_ratio'] == 1
         assert w['q_l_ref'] == pytest.approx(w['q_g_ref'] * (w['ogr'] + w['wgr']) / 1e6, rel=1e-12)
 
     # Tubing and roughness (SMP-75, SMP-76)

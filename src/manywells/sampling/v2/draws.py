@@ -37,6 +37,7 @@ from manywells.sampling.v2.reservoir import (
     liner_liquid,
     nondarcy,
     producing_gor,
+    slant_skin,
 )
 from manywells.sampling.v2.survey import N_NUMBERS, survey
 from manywells.sampling.wells import rng_for
@@ -116,6 +117,7 @@ _DRAIN_LENGTH = (300.0, 2500.0)  # m  # spec: SMP-71
 _PERF_SHARE = (0.3, 1.0)  # The perforated share of the net pay  # spec: SMP-71
 _D_ERROR, _D_BOUNDS = 0.7, (1e-5, 2e-3)  # The non-Darcy estimate's log error, and its bounds (d/Mscf)  # spec: SMP-71
 _LINER_MAX = 0.1571  # m, the largest liner of a gas well's drain (7 in)  # spec: SMP-73
+_SLANT_FLOOR = 2.0  # The floor on ln(r_e/r_w) - 0.75 + s + s_theta of a slanted well  # spec: SMP-72
 _ROUGHNESS = {'initial': (1.5e-6, 3e-5), 'mid_life': (1e-5, 6e-5), 'late': (2e-5, 1.5e-4)}  # m  # spec: SMP-76
 _BEAN_MAX = 0.1016  # m, the fully open bean's largest diameter (4 in)  # spec: SMP-77
 _P_LIFT_OIL = {'offshore': (0.20, 0.45, 0.70), 'onshore': (0.15, 0.25, 0.35)}  # By stage  # spec: SMP-78
@@ -180,7 +182,7 @@ def draw_well(seed: int, k: int, stage: str | None = None, force_lift: bool = Fa
     - stage: `r_p`, `p_r`, `wlr`, `R_go`, `saturation`, `below_hydrostatic`, `ogr` and [`wgr`] (gas classes, else
       None and absent), [`w_kgko`] (oils), `c_k` (condensates, else None).
     - inflow: `perm`, `h_net`, `skin`, `ln_re_rw`, `delta_d`, [`drain_length`, `I_ani`, `J_H_over_J_V`] (drains),
-      `f_geo`, `inflow`, `q_l_ref`; oils: `mu_o`, `B_o`, `J`, `k_l`, `w_l_max`, [`eta_drain`]; gas classes:
+      [`I_ani`, `s_theta`] (slanted wells), `f_geo`, `inflow`, `q_l_ref`; oils: `mu_o`, `B_o`, `J`, `k_l`, `w_l_max`, [`eta_drain`]; gas classes:
       `perf_share`, `D_eq434`, `D_nondarcy` (d/Mscf), `a_gas`, `b_gas` (bar2 per Sm3/d and its square), `a_ratio`,
       `b_ratio` (over a vertical well's), `AOF`, `q_g_ref`, [`b_friction_share`].
     - completion: `c_e`, `q_design`, `D`, `tubing`, `q_cap`, `roughness`.
@@ -449,10 +451,11 @@ def _stage(r, w):
 
 def _on_geometry(w, x, a, b):  # spec: SMP-73
     """A vertical well's Forchheimer coefficients for the well's geometry: a over the geometry's factor, and for a
-    drain b scaled by (I_ani h / L_d)^2, the non-Darcy loss of the rate per completed length; else b over the factor."""
+    drain b scaled by (I_ani h / L_d)^2, the non-Darcy loss of the rate per completed length; else b as it is, a
+    slanted well's non-Darcy loss being in its D, from its perforated length along the well (SMP-71)."""
     if w['geometry_family'] == 'high_angle':
         return a / x.f_geo, b * (w['I_ani'] * w['h_net'] / w['drain_length']) ** 2
-    return a / x.f_geo, b / x.f_geo
+    return a / x.f_geo, b
 
 
 def _inflow(gen, w, x):
@@ -476,8 +479,10 @@ def _inflow(gen, w, x):
     if family == 'high_angle':
         x.f_geo = joshi_ratio(L_d, h_net, I_ani, skin, ln_re)
         w.update(drain_length=L_d, I_ani=I_ani, J_H_over_J_V=x.f_geo)
-    elif family in ('build_and_hold', 's_shaped'):
-        x.f_geo = math.cos(math.radians(w['theta_end'])) ** -0.5  # The slant's placeholder
+    elif family in ('build_and_hold', 's_shaped'):  # Cinco-Ley's slant skin in the radial index, with a floor
+        s_theta = slant_skin(w['theta_end'], h_net, I_ani)
+        x.f_geo = (ln_re - 0.75 + skin) / max(ln_re - 0.75 + skin + s_theta, _SLANT_FLOOR)
+        w.update(I_ani=I_ani, s_theta=s_theta)
     else:
         x.f_geo = 1.0
     w.update(perm=perm, h_net=h_net, skin=skin, delta_d=delta_d, ln_re_rw=ln_re)
@@ -490,9 +495,11 @@ def _inflow(gen, w, x):
         x.Z = bo.z_factor(p_r, T_r)
         x.mu_g = bo.gas_viscosity(p_r, T_r, bo.gas_density(p_r, T_r))
         # spec: SMP-71. Eq. 4-34 at a perforated share of the net pay, times a log-normal error factor, truncated
+        # A slanted or vertical well's perforated length along the well, theta_end being 0 in a vertical one
         r_nd = gen('nondarcy')
         f_perf = r_nd.uniform(*_PERF_SHARE)
-        estimate = nondarcy(w['sg_gas'], perm, h_net, x.mu_g, f_perf * h_net)
+        along = 1.0 if family == 'high_angle' else 1 / math.cos(math.radians(w['theta_end']))
+        estimate = nondarcy(w['sg_gas'], perm, h_net, x.mu_g, f_perf * h_net * along)
         x.D_nd = tlognorm(r_nd, estimate, _D_ERROR, *_D_BOUNDS)
         w.update(perf_share=f_perf, D_eq434=nondarcy(w['sg_gas'], perm, h_net, x.mu_g, h_net))
         x.a_v, x.b_v = forchheimer(perm, h_net, x.mu_g, x.Z, T_r, ln_re - 0.75, skin, x.D_nd)  # spec: SMP-73
