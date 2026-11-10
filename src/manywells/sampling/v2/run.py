@@ -19,12 +19,17 @@ dataset and seed, the configuration, the grid, the backend, the limits and the f
 size, the folder of tables and the code's record (datasets.v2.code_record). A restart checks them, and stops on any
 difference, so that every chunk of a run is made by the same code with the same settings.
 
-A crash of a well's generation, an exception that the generation does not catch (a GOR off a table's axis, say), is
+A crash of a well's generation, an exception or a panic of the Rust core that the generation does not catch, is
 logged as the well's outcome, `crash`, with its traceback, and the run carries on. Each result records its wall time
 `seconds` and its CPU time `cpu_seconds`.
 
 A pool's processes may each be capped (memory_cap, bytes of address space), below the cap of the process that runs
-the pool: each well takes about 2.6 GB.
+the pool. With OMP_NUM_THREADS=1 a well takes about 0.5 GB of address space at its peak and a table well 1.6 GB (on
+one process, and the same in the pool; 2026-11-10); without it numpy's OpenBLAS starts a thread per core, which adds
+about 1.9 GB more. A well that runs out of memory at its process's cap (a MemoryError) depends on the process, not
+on its draws, so it is no outcome: it is not kept, and once the other wells of its batch are done it is solved again
+in a fresh process of its own, up to MEMORY_RETRIES times; if it runs out of memory there too, the run stops with
+OutOfMemory, which names the well, and a rerun resumes from it.
 
 A table well takes its table from the folder that table_wells.py and table_build.py made for the dataset and seed;
 the run runs no chunk beyond the draw indices that the folder covers (its wells.json's `wells_range`), since a table
@@ -60,17 +65,23 @@ GENERATE = {'sol': generate.generate_sol2_well, 'nsol': generate.generate_nsol2_
 _FIRST_RATE = 1.0  # The share of wells accepted that a run assumes before its first chunk: it does not overshoot
 _LEAST_RATE = 0.05  # The least share it plans with
 _TASKS_PER_PROCESS = 100  # A pool's process is renewed after this many wells, so that no leak grows over a run
+MEMORY_RETRIES = 2  # The fresh processes in which a well that ran out of memory is solved again
 
 
 class SettingsMismatch(ValueError):
     """A run's folder holds the chunks of another run: other settings or another code."""
 
 
+class OutOfMemory(RuntimeError):
+    """A well ran out of memory at its process's cap, in the run's pool and in every fresh process it was given."""
+
+
 # --- One well ---------------------------------------------------------------------------------------------------------
 def run_well(kind: str, seed: int, k: int, tables=None) -> dict:  # spec: SMP-110
     """
     Well k's result (generate's module docstring), with `seconds` its wall time and `cpu_seconds` its CPU time. A
-    crash of the generation is the well's outcome, `crash`, with the traceback as its error.
+    crash of the generation, an exception or a panic of the Rust core, is the well's outcome, `crash`, with the
+    traceback as its error. A MemoryError is not: it is raised, and the run solves the well again.
 
     :param kind: 'sol' or 'nsol'
     :param seed: The dataset's seed
@@ -80,7 +91,11 @@ def run_well(kind: str, seed: int, k: int, tables=None) -> dict:  # spec: SMP-11
     t0, cpu0 = time.perf_counter(), time.process_time()
     try:
         res = GENERATE[kind](seed, k, tables)
-    except Exception:  # noqa: BLE001 - a crash is logged as the well's outcome, and the run carries on
+    except MemoryError:
+        raise
+    except BaseException as e:  # noqa: BLE001 - a crash is logged as the well's outcome, and the run carries on
+        if not (isinstance(e, Exception) or generate._is_panic(e)):
+            raise  # An interrupt or an exit stops the run
         info = generate._info(k, outcome='crash', error=traceback.format_exc()[-2000:])
         if kind == 'nsol':
             info.update(scan=[], T_end=math.nan, p_change=math.nan)
@@ -109,15 +124,43 @@ def _well_path(run_dir, k) -> Path:
 
 def _task(task) -> tuple:
     """A pool's task: well k's result, solved, or read from its file where a stopped run left it. Returns (k, its
-    outcome, its wall time (s), whether it was read)."""
+    outcome, its wall time (s), whether it was read); the outcome is None, and nothing is kept, where the well ran out
+    of memory."""
     kind, seed, k, run_dir, tables = task
     path = _well_path(run_dir, k)
     if path.exists():
         res = _load(path)
         return k, res['info']['outcome'], res['seconds'], True
-    res = run_well(kind, seed, k, tables)
+    t0 = time.perf_counter()
+    try:
+        res = run_well(kind, seed, k, tables)
+    except MemoryError:
+        return k, None, time.perf_counter() - t0, False
     _dump(res, path)
     return k, res['info']['outcome'], res['seconds'], False
+
+
+def _fresh(task, memory_cap) -> tuple:
+    """_task in a fresh process of its own, capped at memory_cap bytes, which ends with it."""
+    ctx = multiprocessing.get_context('forkserver')
+    with ProcessPoolExecutor(1, mp_context=ctx, initializer=_cap, initargs=(memory_cap,), max_tasks_per_child=1) as p:
+        return p.submit(_task, task).result()
+
+
+def _retry(task, memory_cap, log) -> tuple:
+    """A well that ran out of memory, solved again in fresh processes (_fresh), up to MEMORY_RETRIES times. Returns
+    _task's result; raises OutOfMemory if the well runs out of memory every time."""
+    k = task[2]
+    for i in range(MEMORY_RETRIES):
+        log(f'well {k}: out of memory; solved again in a fresh process ({i + 1} of {MEMORY_RETRIES})')
+        out = _fresh(task, memory_cap)
+        if out[1] is not None:
+            return out
+    cap = 'no cap' if memory_cap is None else f'a cap of {memory_cap / 1e9:.2f} GB'
+    raise OutOfMemory(
+        f'well {k} ran out of memory, with {cap}, in the pool and in {MEMORY_RETRIES} fresh processes: it is not '
+        f'kept. Raise the cap, or free memory, and run again: the run resumes from it.'
+    )
 
 
 # --- Settings and chunks ----------------------------------------------------------------------------------------------
@@ -281,6 +324,8 @@ def run(
         wells up to the n-th accepted, or all of the chunks made), `next_chunk` (the first chunk not made, after those
         up to the n-th accepted), `outcomes` (the drawn wells' outcomes, counted), `limit` (the draw indices that the
         tables cover, or None) and `seconds` (the call's wall time)
+    :raises OutOfMemory: where a well runs out of memory in the pool and in each of its fresh processes, once the
+        batch's other wells are kept
     """
     run_dir = Path(out)
     (run_dir / 'wells').mkdir(parents=True, exist_ok=True)
@@ -310,15 +355,25 @@ def run(
             log(f'the tables cover draw indices below {limit}: chunk {state["next_chunk"]} needs more')
             break
         log(f'chunks {batch[0]} to {batch[-1]}: {len(batch) * chunk_size} wells')
-        tasks = [(kind, seed, k, str(run_dir), settings['tables']) for c in batch for k in _ks(c, chunk_size)]
+        tasks = {k: (kind, seed, k, str(run_dir), settings['tables']) for c in batch for k in _ks(c, chunk_size)}
         pending = {c: set(_ks(c, chunk_size)) for c in batch}
-        for k, outcome, sec, read in _imap(_task, tasks, processes, memory_cap):
+
+        def done(k, outcome, sec, read):
             c = k // chunk_size
             pending[c].discard(k)
             log(f'well {k}: {outcome} in {sec:.1f} s' + (' (kept)' if read else ''))
             if not pending[c]:
                 headers[c] = _pack(run_dir, settings, c)
                 log(f'chunk {c} done: {dict(collections.Counter(headers[c]["outcomes"]))}')
+
+        out_of_memory = []
+        for k, outcome, sec, read in _imap(_task, list(tasks.values()), processes, memory_cap):
+            if outcome is None:  # Solved again once the batch's other wells are done, so that they are kept
+                out_of_memory.append(k)
+            else:
+                done(k, outcome, sec, read)
+        for k in sorted(out_of_memory):
+            done(*_retry(tasks[k], memory_cap, log))
     state = _summary(headers, n_wells)
     state.update(limit=limit, seconds=time.perf_counter() - t0)
     log(f'{state["accepted"]} wells accepted of {state["drawn"]} drawn; complete: {state["complete"]}')
@@ -336,9 +391,16 @@ def run_wells(kind: str, seed: int, ks, out, processes: int = 6, tables=None, me
     """
     (Path(out) / 'wells').mkdir(parents=True, exist_ok=True)
     tables = None if tables is None else str(Path(tables).resolve())
-    tasks = [(kind, seed, k, str(out), tables) for k in ks]
-    for k, outcome, sec, read in _imap(_task, tasks, processes, memory_cap):
-        log(f'well {k}: {outcome} in {sec:.1f} s' + (' (kept)' if read else ''))
+    tasks = {k: (kind, seed, k, str(out), tables) for k in ks}
+    out_of_memory = []
+    for k, outcome, sec, read in _imap(_task, list(tasks.values()), processes, memory_cap):
+        if outcome is None:
+            out_of_memory.append(k)
+        else:
+            log(f'well {k}: {outcome} in {sec:.1f} s' + (' (kept)' if read else ''))
+    for k in sorted(out_of_memory):
+        k, outcome, sec, _ = _retry(tasks[k], memory_cap, log)
+        log(f'well {k}: {outcome} in {sec:.1f} s')
 
 
 def load_wells(out, ks) -> list:

@@ -197,6 +197,71 @@ def test_a_crash_is_logged_and_counted(monkeypatch, tmp_path):
     assert crashed[0]['log'] == [] and crashed[0]['cpu_seconds'] >= 0 and crashed[0]['seconds'] >= 0
 
 
+PanicException = type('PanicException', (BaseException,), {'__module__': 'pyo3_runtime'})  # PyO3's, as it raises it
+
+
+def test_a_panic_outside_a_solve_is_a_crash(monkeypatch):
+    def gen(seed, k, tables):
+        raise PanicException('called `Option::unwrap()` on a `None` value')
+
+    monkeypatch.setitem(runner.GENERATE, 'nsol', gen)
+    res = runner.run_well('nsol', SEED, 3)
+    assert res['info']['outcome'] == 'crash' and res['info']['error'].rstrip().endswith('on a `None` value')
+    assert (res['info']['scan'], res['log'], res['samples']) == ([], [], [])
+
+
+def out_of_memory(monkeypatch, fails):
+    """A stand-in generation in which well k runs out of memory in its first fails(k) processes, and a stand-in for
+    the fresh process (run._fresh), the same process here. Returns the processes each well was given."""
+    tries = {}
+
+    def gen(seed, k, tables):
+        tries[k] = tries.get(k, 0) + 1
+        if tries[k] <= fails(k):
+            raise MemoryError
+        return dict(well={'well': k}, stations=None, table=None, nsol=None, samples=[], log=[], info=accepted(k))
+
+    fresh = []
+    monkeypatch.setitem(runner.GENERATE, 'sol', gen)
+    monkeypatch.setattr(runner, '_fresh', lambda task, cap: fresh.append(task[2]) or runner._task(task))
+    return tries, fresh
+
+
+def test_a_well_out_of_memory_is_solved_again_in_a_fresh_process(monkeypatch, tmp_path):
+    """A MemoryError is the process's, not the well's: it is no outcome, and the well is solved again, after the other
+    wells of its batch, in a fresh process; its result is then the one a run without the error gives."""
+    tries, fresh = out_of_memory(monkeypatch, lambda k: 1 if k in (4, 12) else 0)
+    lines = []
+    state = runner.run('sol', 12, tmp_path / 'a', SEED, processes=1, chunk_size=10, log=lines.append)
+    assert state['complete'] and 'crash' not in state['outcomes'] and fresh == [4, 12]
+    assert tries[4] == tries[12] == 2 and all(n == 1 for k, n in tries.items() if k not in (4, 12))
+    assert (
+        lines.index('well 4: out of memory; solved again in a fresh process (1 of 2)')
+        > [i for i, line in enumerate(lines) if line.startswith('well 9:')][0]
+    )
+    out_of_memory(monkeypatch, lambda k: 0)
+    runner.run('sol', 12, tmp_path / 'b', SEED, processes=1, chunk_size=10, log=lambda x: None)
+    a, b = list(runner.read_results(tmp_path / 'a')), list(runner.read_results(tmp_path / 'b'))
+    assert [r['info'] for r in a] == [r['info'] for r in b]
+
+
+def test_a_well_always_out_of_memory_stops_the_run_and_is_not_kept(monkeypatch, tmp_path):
+    """After MEMORY_RETRIES fresh processes the run stops with a message that names the well; the batch's other
+    wells are kept, the well is not, and a rerun solves it."""
+    tries, fresh = out_of_memory(monkeypatch, lambda k: 99 if k == 6 else 0)
+    with pytest.raises(
+        runner.OutOfMemory, match='well 6 ran out of memory, with a cap of 2.50 GB, in the pool and in 2'
+    ):
+        runner.run('sol', 5, tmp_path, SEED, processes=1, chunk_size=10, memory_cap=2.5e9, log=lambda x: None)
+    assert tries[6] == 1 + runner.MEMORY_RETRIES and fresh == [6, 6]
+    assert sorted(p.name for p in (tmp_path / 'wells').iterdir()) == [f'k{k:06d}.pkl' for k in range(10) if k != 6]
+    assert not list((tmp_path / 'chunks').iterdir())
+    tries, fresh = out_of_memory(monkeypatch, lambda k: 0)
+    state = runner.run('sol', 5, tmp_path, SEED, processes=1, chunk_size=10, log=lambda x: None)
+    assert state['complete'] and tries == {6: 1} and fresh == []
+    assert [r['info']['outcome'] for r in runner.read_results(tmp_path)][6] == accepted(6)['outcome']
+
+
 def test_another_runs_settings_stop_the_run(monkeypatch, tmp_path):
     stand_in_run(monkeypatch)
     runner.run('sol', 5, tmp_path, SEED, processes=1, chunk_size=10, log=lambda line: None)

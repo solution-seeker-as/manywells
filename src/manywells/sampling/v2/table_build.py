@@ -744,6 +744,8 @@ def build_task(task) -> tuple:  # spec: SMP-116
     if not fpath.exists():
         try:
             rec = build_fluid(w)
+        except MemoryError:
+            raise  # The process's, not the fluid's: nothing is recorded, and a rerun builds it
         except Exception:  # noqa: BLE001 - a failed fluid is recorded, and its well is not solved
             rec = dict(well=k, status='failed', step='fluid', error=traceback.format_exc()[-1500:])
         rec['seconds'] = rec.get('seconds', {}) | dict(fluid=time.time() - t0)
@@ -760,6 +762,8 @@ def build_task(task) -> tuple:  # spec: SMP-116
             nodes, dropped = build_tables(w, fluid, axis, outdir / f'k{k:06d}.csv')
             man |= dict(csv=f'k{k:06d}.csv', gors=axis['gors'], nodes=nodes, n_T=len(w['T_axis']), p_top=w['p_top'])
             man['dropped_pressures'] = dropped
+        except MemoryError:
+            raise
         except Exception:  # noqa: BLE001 - a failed table set is recorded, and its well is not solved
             man |= dict(status='failed', step='tables', error=traceback.format_exc()[-1500:])
     man['seconds'] = fluid['seconds'] | dict(tables=time.time() - t0)

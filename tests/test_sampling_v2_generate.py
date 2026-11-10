@@ -197,6 +197,32 @@ def test_an_exception_is_a_solver_failure(monkeypatch):
     assert out['n_roots'] == 0 and all(math.isnan(out[key]) for key in ('marches', 'non_finite', 'rejected'))
 
 
+PanicException = type('PanicException', (BaseException,), {'__module__': 'pyo3_runtime'})  # PyO3's, as it raises it
+
+
+def test_a_panic_of_the_core_is_a_solver_failure(monkeypatch):
+    """A panic follows from the inputs, as an exception does: it is the attempt's solver failure, and reproducible."""
+    lf, w = a_sol2_well(oil=True)
+    wp, bc = solve_inputs(lf, w)
+    monkeypatch.setattr(generate, 'RustRootFinder', StandInFinder(error=PanicException('index out of bounds')))
+    out = generate._solve(wp, bc)
+    assert (out['outcome'], out['reason'], out['error']) == (
+        'solver_failure',
+        'exception',
+        'PanicException: index out of bounds',
+    )
+
+
+@pytest.mark.parametrize('error', [MemoryError(), KeyboardInterrupt(), type('Other', (BaseException,), {})()])
+def test_a_memory_error_or_an_interrupt_is_not_an_outcome(monkeypatch, error):
+    """A MemoryError is the process's cap, not the inputs': it goes on to the run (run.py), as an interrupt does."""
+    lf, w = a_sol2_well(oil=True)
+    wp, bc = solve_inputs(lf, w)
+    monkeypatch.setattr(generate, 'RustRootFinder', StandInFinder(error=error))
+    with pytest.raises(type(error)):
+        generate._solve(wp, bc)
+
+
 def test_no_solve_where_p_r_is_not_above_p_s(monkeypatch):
     """SMP-96 and SMP-104: an attempt with p_r <= p_s has no operating point, without a solve."""
     lf, w = a_sol2_well(oil=True)

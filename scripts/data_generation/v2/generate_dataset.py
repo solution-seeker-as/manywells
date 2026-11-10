@@ -41,7 +41,7 @@ from pathlib import Path
 
 from manywells.sampling.v2 import table_build
 from manywells.sampling.v2.assemble import write_dataset
-from manywells.sampling.v2.run import CHUNK, run
+from manywells.sampling.v2.run import CHUNK, OutOfMemory, run
 from manywells.sampling.v2.table_wells import write_axes, write_table_wells
 
 NEQSIM_CAP = 8_000_000_000  # bytes of address space per process of NeqSim's build
@@ -114,13 +114,16 @@ def main():
     parser.add_argument('--n', type=int, required=True, help='the accepted wells of the dataset')
     parser.add_argument('--seed', type=int, required=True)
     parser.add_argument('--processes', type=int, default=6, help="the run's pool")
-    parser.add_argument('--memory-cap', type=float, default=3.0, help='GB of address space per process of the run')
+    parser.add_argument('--memory-cap', type=float, default=4.0, help='GB of address space per process of the run')
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--draws', type=int, help='the draw indices to build tables for first')
     parser.add_argument('--neqsim', choices=('run', 'print'), default='run')
     parser.add_argument('--neqsim-processes', type=int, default=4, help='JVMs of the build, about 1 GB each')
     parser.add_argument('--allow-dirty', action='store_true', help='write the dataset from code with changes')
     args = parser.parse_args()
+    # The run's processes import numpy after this: with a thread of OpenBLAS's per core a well takes about 1.9 GB
+    # more address space, and a table well passes 3 GB (run.py's docstring)
+    os.environ.setdefault('OMP_NUM_THREADS', '1')
 
     out, t0 = args.out, time.perf_counter()
     tables = out / 'tables'
@@ -130,7 +133,10 @@ def main():
     while True:
         tables_for(args.kind, args.seed, tables, n_draws, args.neqsim, args.neqsim_processes)
         cap = int(args.memory_cap * 1e9)
-        state = run(args.kind, args.n, out / 'run', args.seed, args.processes, tables, memory_cap=cap)
+        try:
+            state = run(args.kind, args.n, out / 'run', args.seed, args.processes, tables, memory_cap=cap)
+        except OutOfMemory as e:
+            sys.exit(f'the run stopped: {e}')
         if state['complete']:
             break
         rate = max(state['accepted'], 1) / max(state['drawn'], 1)

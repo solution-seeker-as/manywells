@@ -90,9 +90,16 @@ def _oil_equivalent(row) -> float:  # spec: SMP-103
     return 24 * (row['QOIL'] + row['QGAS'] / 1000)
 
 
+def _is_panic(e: BaseException) -> bool:
+    """Whether e is a panic of the Rust core: PyO3's PanicException, a BaseException of the module pyo3_runtime,
+    which Python cannot import by name. A panic follows from its inputs, as an exception does."""
+    return type(e).__name__ == 'PanicException' and type(e).__module__ == 'pyo3_runtime'
+
+
 def _solve(wp, bc) -> dict:  # spec: SMP-104
     """
-    One solve of a well at its boundary conditions by the Rust core, and its outcome.
+    One solve of a well at its boundary conditions by the Rust core, and its outcome. A MemoryError is the process's
+    memory cap, not the inputs': it is not an outcome, and goes on to the run, which solves the well again (run.py).
 
     :return: A dict of `outcome`, `reason` and `error`; `n_roots`, `n_stable` and `several_stable`; the search's
         counts `marches`, `non_finite` and `rejected` (NaN without a search); `t_solve` (s); and `row`, the
@@ -112,7 +119,11 @@ def _solve(wp, bc) -> dict:  # spec: SMP-104
             )
         finder = RustRootFinder(wp)
         rs = finder.find(bc)
-    except Exception as e:  # noqa: BLE001 - any exception of a solve is a solver failure
+    except MemoryError:
+        raise
+    except BaseException as e:  # noqa: BLE001 - an exception or a panic of a solve is a solver failure
+        if not (isinstance(e, Exception) or _is_panic(e)):
+            raise  # An interrupt or an exit, not the solve's
         out.update(outcome='solver_failure', reason='exception', error=f'{type(e).__name__}: {e}'[:300])
         out['t_solve'] = time.perf_counter() - t0
         return out

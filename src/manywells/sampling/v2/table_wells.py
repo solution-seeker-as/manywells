@@ -156,6 +156,8 @@ def write_axes(tables_dir) -> dict:  # spec: SMP-116
         if fluid['status'] == 'ok':
             try:
                 out[str(k)] = gor_axis(spec['kind'], spec['seed'], k, fluid['hook'])
+            except MemoryError:
+                raise  # The process's, not the well's: nothing is recorded, and a rerun makes the axis
             except Exception:  # noqa: BLE001 - the well's tables are not built, and its manifest says why
                 out[str(k)] = dict(error=traceback.format_exc()[-1500:])
     write_json(path, out)
