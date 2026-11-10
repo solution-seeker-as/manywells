@@ -1035,7 +1035,7 @@ What the tests check on drawn wells, core and tail apart, without solving them (
 
 ## Coverage
 
-The v2 rows (SMP-50 to SMP-117) are spec-only until R10's code carries their `# spec:` tags: the code column names where the code is planned, and the planned checks are in brackets. Each row becomes `property:` when its test exists.
+A v2 row (SMP-50 to SMP-117) is spec-only until R10's code carries its `# spec:` tag: its code column then names where the code is planned, and its planned check is in brackets. It becomes `property:` when its test exists.
 
 | ID | Paper | v1.0.0 code | Checked by |
 |---|---|---|---|
@@ -1137,9 +1137,9 @@ The v2 rows (SMP-50 to SMP-117) are spec-only until R10's code carries their `# 
 | SMP-109 | — | — (`sampling/v2/draws.py` `draw_well`, the blocks' generators; the life's, the samples' and the split's: planned, R10) | property: tests/test_sampling_v2_draws.py (a rerun gives the same draws, whatever was drawn before and in a process of its own, every key holds `v2`) |
 | SMP-110 | — | — (planned: `manywells.datasets`, R10) | spec-only: until R10 implements it (planned property: the counts, the split, and a re-solved row) |
 | SMP-111 | — | — (`sampling/v2/mapping.py` `WellBuilder`) | property: tests/test_sampling_v2_mapping.py (every drawn well at its nominal state passes `configurations.check`, with each input from its draws) |
-| SMP-112 | — | — (planned: the generator's NeqSim step, R10) | spec-only: until R10 implements it (planned property: the table checks, v2: checks) |
-| SMP-113 | — | — (planned: the generator's NeqSim step, R10) | spec-only: until R10 implements it (planned property: the table checks, v2: checks) |
-| SMP-114 | — | — (planned: the generator's NeqSim step, R10) | spec-only: until R10 implements it (planned property: the table checks, v2: checks) |
-| SMP-115 | — | — (planned: the generator's NeqSim step, R10) | spec-only: until R10 implements it (planned property: the table checks, v2: checks) |
-| SMP-116 | — | — (planned: the generator's NeqSim step, R10) | spec-only: until R10 implements it (planned property: the table checks, v2: checks) |
+| SMP-112 | — | — (`sampling/v2/table_build.py` `fluid_source`, `NEQSIM_VERSION` and the flash; the choice of the table wells: planned, R10) | property: tests/test_sampling_v2_tables.py (the source's shares and keys, the build refuses another NeqSim, the module imports nothing of ManyWells) |
+| SMP-113 | — | — (`sampling/v2/table_build.py`: the composition's draws, the gamma split, Søreide's gravities, the match) | property: tests/test_sampling_v2_tables.py (the gamma split and Søreide's gravities against their closed forms, the composition's draws and levers, with NeqSim, a matched fluid's GOR and gravities) |
+| SMP-114 | — | — (`sampling/v2/table_build.py` `EXAMPLES`, the example's stream and its match) | property: tests/test_sampling_v2_tables.py (the examples' compositions sum to one and name their class) |
+| SMP-115 | — | — (`sampling/v2/table_build.py` `build_fluid`, the saturation pressure and its rule; `sampling/v2/draws.py`, the `fluid` hook) | property: tests/test_sampling_v2_tables.py (a well's steps and files with the flash replaced, each rule and each failure), tests/test_sampling_v2_draws.py (the hook replaces the fluid block's values and moves no draw) |
+| SMP-116 | — | — (`sampling/v2/table_build.py` `well_grid`, `build_tables`, `build`; `sampling/v2/tables.py` `read_table`; the GOR axis: planned, R10) | property: tests/test_sampling_v2_tables.py (the grid, the repair on a spike, a dip and ties, the 5% limit, the files' round trip, each failure gives `table_failed`'s status) |
 | SMP-117 | — | — (`sampling/v2/inflow.py` `gas_inflow`, `fit_pressure_squared`) | property: tests/test_sampling_v2_mapping.py (the fit reproduces a pressure-squared law, $b = 0$ where the slope is negative, the fit against the pseudo-pressure) |
