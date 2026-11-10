@@ -293,6 +293,68 @@ def test_a_table_that_loses_more_than_five_percent_of_its_pressures_fails():
 
 
 # ---------------------------------------------------------------------------
+# SMP-115: the saturation pressure's rule, with the flash replaced
+# ---------------------------------------------------------------------------
+
+
+class SaturationFlash:
+    """In place of the NeqSim system: the stream is its GOR, and its saturation pressure at T is p_of(gor), a dew
+    point above the critical GOR G_C and a bubble point below it. The GORs asked for are kept."""
+
+    G_C = 1000.0
+
+    def __init__(self, p_of):
+        self.p_of, self.asked = p_of, []
+
+    def recombine(self, sep, gor):
+        return gor
+
+    def saturation(self, z, T, p_hi):
+        self.asked.append(z)
+        p = self.p_of(z)
+        if p is None:
+            return None
+        return dict(p=min(p, p_hi), kind='dew' if z > self.G_C else 'bubble', lo=None, p_flash=p)
+
+
+def near_critical(g):
+    """A saturation pressure that peaks at the critical GOR: 400 bar there, falling on both sides."""
+    return 400.0 - 150.0 * abs(math.log(g / SaturationFlash.G_C))
+
+
+@pytest.mark.parametrize(
+    'cls, gor, side',
+    [
+        ('gas_condensate', 1100.0, 'dew'),  # A rich condensate, near critical: a leaner gas, not an oil
+        ('gas_condensate', 2000.0, 'dew'),
+        ('volatile_oil', 900.0, 'bubble'),  # A near-critical oil: a lighter oil, not a gas
+        ('volatile_oil', 500.0, 'bubble'),
+    ],
+)
+def test_the_gor_moves_in_its_classs_direction_only(cls, gor, side):
+    """SMP-115: an oil's bubble point falls as its GOR falls, and a condensate's dew point falls as it grows leaner;
+    the search takes only its class's direction, so that the fluid stays on its side of the critical point."""
+    p_i = near_critical(gor) - 40.0
+    fl = SaturationFlash(near_critical)
+    g = tb._saturated_at(fl, SEP, gor, 350.0, p_i, cls)
+    assert g is not None and near_critical(g) == pytest.approx(p_i, abs=1e-3)
+    assert (g > SaturationFlash.G_C) == (side == 'dew') and (g > gor) == (cls == 'gas_condensate')
+    ratio = np.array(fl.asked) / gor  # exp(ln gor) may differ from gor in the last bit
+    assert np.all(ratio > 1 - 1e-12) if cls == 'gas_condensate' else np.all(ratio < 1 + 1e-12)
+
+
+@pytest.mark.parametrize('cls', ['gas_condensate', 'volatile_oil'])
+def test_no_crossing_in_the_classs_direction_is_the_equilibrium_phase(cls):
+    """Where the saturation pressure stays above p_i over the class's factor of 4, the search gives None (and
+    build_fluid takes the class's phase in equilibrium), even if the other direction would cross."""
+    rising = (lambda g: 300.0 * math.sqrt(g / 100.0)) if cls == 'gas_condensate' else (lambda g: 300.0 * 100.0 / g)
+    fl = SaturationFlash(rising)
+    assert tb._saturated_at(fl, SEP, 100.0, 350.0, 250.0, cls) is None
+    assert np.array(fl.asked) / 100.0 == pytest.approx(tb._GOR_FACTORS[cls])  # Out to a factor of 4, one way
+    assert tb._GOR_FACTORS == dict(volatile_oil=(0.8, 0.6, 0.4, 0.25), gas_condensate=(1.25, 1.6, 2.5, 4.0))
+
+
+# ---------------------------------------------------------------------------
 # SMP-116: the files, with the flash replaced
 # ---------------------------------------------------------------------------
 

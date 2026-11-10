@@ -1175,3 +1175,26 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Needs sign-off:** yes (the dataset layout).
 - **Used by:** `sampling/v2/run.py`, `sampling/v2/assemble.py`, `datasets/v2.py`; `scripts/data_generation/v2/generate_dataset.py`.
 - **Ruling:**
+
+*Entries from D-127 on are R10's too (2026-11-10), from the review of R10's port: each fixes a rule that the port's code and the spec's text gave differently, or a draw that the physics contradicts.*
+
+### D-127 · A table fluid's GOR moves only in its class's direction
+
+- **Step:** R10, 2026-11-10 (the review of R10). Revises D-65's search.
+- **Choice made:** where a table fluid's saturation pressure at $T_r$ lies above $p_i$, its GOR moves along its tie line only in its class's direction: down for a volatile oil, trying the factors 0.8, 0.6, 0.4 and 0.25 in turn, and up for a gas condensate, 1.25, 1.6, 2.5 and 4, each then bisected on $\ln R$ (`gor_moved`); where that direction finds no GOR whose saturation pressure is $p_i$, the fluid is the class's phase in equilibrium at $(p_i, T_r)$ (`equilibrium_phase`), as before.
+- **Alternatives:** the port's search, 0.8 down to 0.25 and then 1.25 up to 4 for both classes, which tries a condensate richer first; for a condensate that does not cross, a third lever on the composition, which D-65 set aside.
+- **Basis:** physics: an oil's bubble point falls as its GOR falls, and a condensate's dew point falls as its GOR rises and it grows leaner. Made richer, a condensate passes the critical region to the bubble side, where its bubble point falls again with the GOR, so the port's richer steps could find a crossing there: a near-critical oil at a black oil's or volatile oil's GOR, still labelled a gas condensate.
+- **Realism:** the fluids of the 195 table wells among `sol-2`'s draw indices 0 to 646 at seed 2026, which hold the test build's wells (D-120) and more, built by NeqSim 3.4.0 with the port's search and with this one: 91 volatile oils (69 synthetic, 22 examples) and 104 condensates (92 synthetic, 12 examples).
+
+  | Class | Search | `matched` | `gor_moved` | `equilibrium_phase` | `bubble` | `dew` |
+  |---|---|---|---|---|---|---|
+  | volatile oil | port | 62 | 22 | 7 | 89 | 2 |
+  | volatile oil | class's direction | 62 | 22 | 7 | 89 | 2 |
+  | gas condensate | port | 73 | 9 (3 to the bubble side) | 22 | 12 | 92 |
+  | gas condensate | class's direction | 73 | 6 | 25 | 9 | 95 |
+
+  The volatile oils keep their rules and values: their search already went down first, and the fluids that no longer try the upward factors differ by at most $2\cdot10^{-13}$ relative, the flash's warm start. Three condensates of 104 (2.9%) change: the port moved them to 0.58, 0.27 and 0.51 of their GOR, to field GORs of 489, 396 and 426 Sm³/Sm³ on the bubble side; in the class's direction no GOR within a factor of 4 crosses, and they take the equilibrium vapour at 2.0 to 5.1 times their GOR, field GORs of 2144 to 4000 Sm³/Sm³ with a dew point. Two findings remain, which the rule does not touch: 9 condensates (8.7%) are `matched` with a bubble point below $p_i$, near-critical oils as drawn by their composition (D-63), and the equilibrium vapour can be far leaner than the drawn fluid, its field GOR at the median 2.2 times the drawn $R_{si}$ and at most 2179 times (a field GOR of 2.2 million Sm³/Sm³, one well), where the fluid at $(p_i, T_r)$ lies deep in its two-phase region.
+- **Implemented** (R10, 2026-11-10): `table_build._saturated_at` takes the class and searches its direction only (`_GOR_FACTORS`); SMP-115's rule and Basis line say so. Tests with a stand-in flash: a near-critical condensate moves to the dew side and an oil to the bubble side, and a class whose direction does not cross is the equilibrium phase, the other direction not tried.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-115; `sampling/v2/table_build.py` (`_GOR_FACTORS`, `_saturated_at`, `build_fluid`); `tests/test_sampling_v2_tables.py`.
+- **Ruling:**

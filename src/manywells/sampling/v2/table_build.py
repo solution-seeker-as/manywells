@@ -498,15 +498,22 @@ def _example_matched(w, passes=2):  # spec: SMP-114
 
 
 # --- The saturation pressure --------------------------------------------------------------------------------------------
-def _saturated_at(fl, sep, gor, T, p_i):  # spec: SMP-115
+_GOR_FACTORS = {  # The GOR's steps out from the fluid's, in its class's direction  # spec: SMP-115
+    'volatile_oil': (0.8, 0.6, 0.4, 0.25),  # An oil's bubble point falls as its GOR falls
+    'gas_condensate': (1.25, 1.6, 2.5, 4.0),  # A condensate's dew point falls as its GOR rises: it grows leaner
+}
+
+
+def _saturated_at(fl, sep, gor, T, p_i, cls):  # spec: SMP-115
     """The GOR on sep's recombination line whose saturation pressure at T is p_i, by bisection on ln GOR, searching
-    out from gor; None if there is none within a factor 4."""
+    out from gor in the direction of the class cls only (_GOR_FACTORS), so that the fluid stays on its side of the
+    critical point; None if there is none within a factor 4."""
 
     def excess(g):
         s = fl.saturation(fl.recombine(sep, g), T, 1.3 * p_i)
         return (s['p'] if s else 0.0) - p_i
 
-    for f in (0.8, 0.6, 0.4, 0.25, 1.25, 1.6, 2.5, 4.0):
+    for f in _GOR_FACTORS[cls]:
         if excess(gor * f) < 0:
             lo, hi = sorted((math.log(gor), math.log(gor * f)))
             e_lo = excess(math.exp(lo))
@@ -524,7 +531,8 @@ def build_fluid(w) -> dict:  # spec: SMP-115
     """
     A table well's fluid, from its record w of wells.json: the example or the synthetic composition, matched; its
     saturation pressure at T_r; and, where that lies above p_i, the GOR moved along the tie line until
-    p_sat(T_r) = p_i, else the class's phase in equilibrium at (p_i, T_r). Returns the fluid's record: the labels,
+    p_sat(T_r) = p_i, in the class's direction (_saturated_at), else the class's phase in equilibrium at (p_i, T_r).
+    Returns the fluid's record: the labels,
     hook, the values that replace the fluid block's draws (the table's p_sat and initial GOR, its single-stage rho_o
     and rho_g, and the fluid's field-reported API and gas gravity where they are not the drawn ones), and stream, which
     build_tables reads (its fractions, its composition and its separation).
@@ -536,7 +544,7 @@ def build_fluid(w) -> dict:  # spec: SMP-115
     sat = fl.saturation(z, w['T_r'], 1.3 * w['p_i'])
     moved, rule = None, 'matched'
     if sat and sat['p'] > w['p_i']:  # It could not be one phase at p_i: saturated at discovery
-        g = _saturated_at(fl, sep, gor, w['T_r'], w['p_i'])
+        g = _saturated_at(fl, sep, gor, w['T_r'], w['p_i'], w['fluid_class'])
         if g is not None:
             moved, gor, rule = g / gor, g, 'gor_moved'
             z = fl.recombine(sep, gor)
