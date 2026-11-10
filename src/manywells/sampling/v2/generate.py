@@ -33,7 +33,8 @@ A well's result (generate_sol2_well, generate_nsol2_well) is a dict of:
   scan's points up to the one that ends the life, each a dict of `t` (years), `status`, `best` and `lift_on`;
   `T_end` (years), the end of the life (NaN for a well dropped before the scan ends it); and `p_change`, the
   well's probability of a set-point change (NaN before the plan is drawn).
-- `samples`: the accepted attempts' records, by slot: all N_SLOTS of an accepted well.
+- `samples`: the records of the attempts that gave a slot its operating point, in the order of the slots: all
+  N_SLOTS of an accepted well, those found before the drop of a well dropped at a limit. Each is also in `log`.
 - `log`: the record of every attempt, in the order solved: the best rate's, the life scan's and the slots'.
 - `seconds`: the wall time.
 
@@ -138,7 +139,7 @@ def _solve(wp, bc) -> dict:  # spec: SMP-104
             out.update(outcome='operating_point', row=row)
         else:
             out.update(outcome='solver_failure', reason='invalid_row')
-    elif rs.roots:  # A continuous R(p_0) has a stable root for every unstable one: the search missed it
+    elif rs.roots:  # A continuous R(p_0) has at least as many stable roots as unstable ones: the search missed one
         out.update(outcome='solver_failure', reason='unstable_only')
     elif counts['rejected'] > 0:  # A sign change of R that the search could not resolve to a root
         out.update(outcome='solver_failure', reason='incomplete_scan')
