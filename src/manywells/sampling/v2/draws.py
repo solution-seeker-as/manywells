@@ -567,6 +567,16 @@ def _choke(r, w, x):  # spec: SMP-77
     w.update(choke_model='simpson', chk_profile=pick(r, CHOKE_PROFILES, (1,) * 4))
 
 
+def _needs_lift(w, bo, p_r, p_s, R_go, wlr) -> bool:  # spec: SMP-78
+    """The static check of an oil well at a reservoir state: whether its no-slip column, at the mean of the
+    reservoir's and the wellhead's conditions, is too heavy for p_r to lift it to the surface against p_s."""
+    T_r, T_s = w['T_r'], w['T_s']
+    T_wh = T_s + 0.6 * (T_r - T_s)
+    p_m, T_m = 0.5 * (p_r + p_s), 0.5 * (T_r + T_wh)
+    vol_m, mass_m = stream(bo, R_go, wlr, w['rho_w'], p_m, T_m)
+    return p_r < p_s + mass_m / vol_m * STD_GRAVITY * w['L'] / 1e5
+
+
 def _lift(r, w, x, force_lift):
     tail, wt, bo = _is_tail(w), w['well_type'], x.bo
     oil = w['fluid_type'] in OILS
@@ -576,11 +586,8 @@ def _lift(r, w, x, force_lift):
     # spec: SMP-78
     i_st = STAGES.index(w['life_stage'])
     need = False
-    if oil:  # The static check: can the column reach the surface?
-        T_wh = T_s + 0.6 * (T_r - T_s)
-        p_m, T_m = 0.5 * (p_r + p_s), 0.5 * (T_r + T_wh)
-        vol_m, mass_m = stream(bo, R_go, wlr, rho_w, p_m, T_m)
-        need = p_r < p_s + mass_m / vol_m * STD_GRAVITY * L / 1e5
+    if oil:
+        need = _needs_lift(w, bo, p_r, p_s, R_go, wlr)
         p_lift = 0.5 if tail else _P_LIFT_OIL['offshore' if wt != 'onshore' else 'onshore'][i_st]
     else:
         p_lift = 0.25 if tail else _P_LIFT_GAS[i_st]
@@ -626,15 +633,21 @@ def _cp_methane(p, T):
     return (1 - f) * np.interp(p, _CH4_CP_P, _CH4_CP[0]) + f * np.interp(p, _CH4_CP_P, _CH4_CP[1])
 
 
+def _heat_transfer(D, U_t, k_e, age) -> float:  # spec: SMP-81
+    """The heat-transfer coefficient h (W/(m2 K)) of a well with the tubing diameter D (m), the tubing-to-formation
+    coefficient U_t (W/(m2 K)) and the formation's conductivity k_e (W/(m K)), after `age` seconds on production."""
+    r_hole = 0.108 if D <= 0.101 else 0.156
+    t_d = 1.03e-6 * age / r_hole**2
+    T_D = math.log(math.exp(-0.2 * t_d) + (1.5 - 0.3719 * math.exp(-t_d)) * math.sqrt(t_d))
+    return U_t * k_e / (k_e + D / 2 * U_t * T_D)
+
+
 def _heat(r, w):
     D, T_s, T_r = w['D'], w['T_s'], w['T_r']
     # spec: SMP-81
     age = logu(r, *_AGE[w['life_stage']]) * 86400
     U_t, k_e = logu(r, 11, 85), r.uniform(1.5, 2.6)
-    r_hole = 0.108 if D <= 0.101 else 0.156
-    t_d = 1.03e-6 * age / r_hole**2
-    T_D = math.log(math.exp(-0.2 * t_d) + (1.5 - 0.3719 * math.exp(-t_d)) * math.sqrt(t_d))
-    h = U_t * k_e / (k_e + D / 2 * U_t * T_D)
+    h = _heat_transfer(D, U_t, k_e, age)
     if _is_tail(w):
         h = r.uniform(2, 40)
     # spec: SMP-82

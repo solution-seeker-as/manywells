@@ -6,27 +6,43 @@ terms of the CC BY-NC 4.0 International Public License.
 Created 10 November 2026
 Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
-Drawn wells for the tests of the v2 sampler (manywells.sampling.v2, specs/sampling.md, SMP-50 on): the wells are drawn
-once per session, and none is solved here.
+Drawn wells for the tests of the v2 sampler (manywells.sampling.v2, specs/sampling.md, SMP-50 on): the wells and
+their lives are drawn once per session, and none is solved here.
 
-This module is a helper, not a test module: test_sampling_v2_draws.py and test_sampling_v2_mapping.py import it.
+This module is a helper, not a test module: test_sampling_v2_draws.py, test_sampling_v2_mapping.py,
+test_sampling_v2_life.py and test_sampling_v2_samples.py import it.
 """
 
 import functools
 
 from manywells.sampling.v2.draws import black_oil, draw_well
 from manywells.sampling.v2.inflow import inflow_at
+from manywells.sampling.v2.life import Life, sol2_well
 from manywells.sampling.v2.reservoir import OILS
 
 SEED = 11
 N_WELLS = 300  # About 5 s of draws: enough for the bounds, and for the shares within wide sampling errors
 N_MANY = 3000  # The slow tests' wells, for the shares and marginals within tighter ones
+N_LIVES = 80  # A life takes its well at three stages: enough for every drive, class and lift rule
+N_MANY_LIVES = N_WELLS  # The slow tests' lives
 
 
 @functools.cache
 def drawn_wells(n=N_WELLS) -> tuple:
     """The first n wells of the tests' seed, each as draw_well gives it: (draws, (md, tvd))."""
     return tuple(draw_well(SEED, k) for k in range(n))
+
+
+@functools.cache
+def drawn_lives(n=N_LIVES) -> tuple:
+    """The lives of the first n wells of the tests' seed (life.Life)."""
+    return tuple(Life(SEED, k) for k in range(n))
+
+
+@functools.cache
+def drawn_sol2_wells(n=N_LIVES) -> tuple:
+    """The sol-2 wells of drawn_lives(n): each life at its date (life.sol2_well)."""
+    return tuple(sol2_well(lf) for lf in drawn_lives(n))
 
 
 def is_oil(w) -> bool:
