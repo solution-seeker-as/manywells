@@ -357,15 +357,15 @@ From D-8 (ruled 2026-11-06). Sources: [RF §1]; $m$ and $s$ an own fit to the P5
 
 ### SMP-58 · Water depth and length
 
-- platform: with probability 0.85 a shelf platform, $d_w \sim \text{LogN}_ {[15, 400]}(90, 0.6)$ m, else a deep-water dry tree, $\text{LogU}(400, 2000)$ m; tail $\text{LogU}(15, 2000)$ m;
-- subsea: $d_w \sim \text{LogN}_ {[80, 3000]}(350, 0.8)$ m; tail $\text{LogU}(50, 3000)$ m;
+- platform: with probability 0.90 a shelf platform, $d_w \sim \text{LogN}_ {[5, 400]}(90, 0.6)$ m, else a deep-water dry tree, $\text{LogU}(400, 2000)$ m; tail $\text{LogU}(5, 2000)$ m;
+- subsea: $d_w \sim \text{LogU}(80, 3000)$ m; tail $\text{LogU}(50, 3000)$ m;
 - onshore: $d_w = 0$.
 
 $L = z + d_w$ for a platform well, whose riser is part of the flow path, and $L = z$ for subsea and onshore wells. $d_\text{mud}$, the mudline's TVD in the modelled well, is $d_w$ for a platform well and 0 otherwise.
 
-From D-8 (ruled 2026-11-06). Sources: [WP §2]; Liu, Wang and Kaiser (2014); [own analysis of Sodir's FactMaps]; [own analysis of BOEM's borehole file].
+From D-8 (ruled 2026-11-06) and D-110. Sources: [WP §2]; Liu, Wang and Kaiser (2014); [own analysis of Sodir's FactMaps]; [own analysis of BOEM's borehole file]; [own analysis of BOEM's directional surveys and borehole file, Sodir's FactMaps, NSTA's wellbore layer and NOAA's World Ocean Atlas 2023], which separates the producing wells by type.
 
-**Basis:** data for the spans of the water depths, those of Norway's platform and subsea wellbores [own analysis of Sodir's FactMaps] and of the Gulf of Mexico's development boreholes [own analysis of BOEM's borehole file], and for dry trees to about 2000 m (Liu, Wang and Kaiser 2014). The shelf share of 0.85, the medians of 90 and 350 m and the log spreads are guesses, own choices that span those statistics and are not fits: the Gulf's file does not separate subsea wells ([WP §2]), and a fit to producing wells' water depths by type would replace them. The lengths are physics, the model's flow path from the wellhead (GEO-3), with a platform's riser in it. The tail's log-uniforms, the subsea one from 50 m, are a design choice for coverage (SMP-53).
+**Basis:** data for the spans of the water depths, those of Norway's platform and subsea wellbores [own analysis of Sodir's FactMaps] and of the Gulf of Mexico's development boreholes [own analysis of BOEM's borehole file], and for dry trees to about 2000 m (Liu, Wang and Kaiser 2014). Data for the subsea wells' range of 80 to 3000 m: the subsea wells of three regions together span it, one region's centred near 350 m and another's mostly in deep water [own analysis of BOEM's directional surveys and borehole file, Sodir's FactMaps, NSTA's wellbore layer and NOAA's World Ocean Atlas 2023]; its log-uniform shape is a design choice, D-104's rule of a uniform draw over the pooled range (D-110). Data also for the platforms: the deep-water dry trees' share of 0.10 lies between one region's present-day share and the other regions' none, a sizeable minority of one region's shelf wells stand in water shallower than 15 m, which the floor of 5 m covers, and the shelf's median of 90 m and log spread of 0.6 are chosen, not fitted, with the median between the Gulf's shelf wells' and Norway's and the UK's and the Gulf's spread wider [same analyses] (D-110). The lengths are physics, the model's flow path from the wellhead (GEO-3), with a platform's riser in it. The tail's log-uniforms, the subsea one from 50 m, are a design choice for coverage (SMP-53).
 
 ### SMP-59 · Geometry: classes and families
 
@@ -1137,7 +1137,6 @@ From D-61 (ruled 2026-11-06; $b = 0$ kept, L3 of 2026-11-09) and D-60. Sources: 
 | Rule | Value | Looked for | Would replace it |
 |---|---|---|---|
 | SMP-56 | Pressure support with probability 0.7 for oils and 0.4 for gas classes | A count of wells by drive: the Gulf of Mexico's atlas records natural drive, not injection ([RF §3], Gaps) | A count of producing wells under pressure support |
-| SMP-58 | The shelf platforms' share of 0.85, and the medians (90 and 350 m) and log spreads (0.6 and 0.8) of the water depths | Water depths of wells by type: the Gulf's borehole file does not separate subsea wells ([WP §2]) | A fit to producing wells' water depths by type |
 | SMP-60 | The S wells' hold angle of 15° to 45° and end section of 100 to 400 m; the drain's tangent of 50 to 300 m at the heel; the holds' least 50 and 100 m of TVD | Not recorded: R3's values, from before the surveys were read | Not recorded |
 | SMP-63 | The lithostatic gradient of 0.226 bar/m (1 psi/ft) | A published review of overpressure: on the resource list, not in hand (`checkpoint.md`, section 6) | A sourced lithostatic gradient offshore |
 | SMP-63 | The caps on $\lambda$: 0.85, and 0.8 in the tail | Not recorded | Not recorded |
@@ -1189,6 +1188,7 @@ From D-61 (ruled 2026-11-06; $b = 0$ kept, L3 of 2026-11-09) and D-60. Sources: 
 | SMP-55 | Volatile oils at 0.10 and condensates at 0.15 | Coverage: the Goals' floor of about 10% of the wells per fluid type |
 | SMP-55 | McCain's class limits among the published ones, with tables for volatile oils and condensates | The model's validity: its black oil carries McCain's black oils |
 | SMP-56 | Stage shares of 0.25, 0.40 and 0.35 | Wells at every stage of life, with depleted and watered-out ones (Bjarne's goal 1) |
+| SMP-58 | The subsea wells' water depth log-uniform over the pooled range | Simplicity: D-104's uniform draw over the pooled range (D-110) |
 | SMP-59 | An even mix of the four geometry classes | Coverage of inclinations, where real offshore wells are mostly deviated |
 | SMP-59 | The classes' ranges of inclination, uniform angles within them, and the highly deviated class's two halves | Coverage, with a class label that names one range |
 | SMP-60 | Each shape parameter uniform over its pooled range | Simplicity |
@@ -1340,7 +1340,7 @@ A v2 row (SMP-50 to SMP-117) is spec-only until R10's code carries its `# spec:`
 | SMP-55 | — | — (`sampling/v2/draws.py` `_labels`) | property: tests/test_sampling_v2_draws.py (the shares, core and tail, each class's range of the initial GOR) |
 | SMP-56 | — | — (`sampling/v2/draws.py` `_labels`) | property: tests/test_sampling_v2_draws.py (the shares, core and tail) |
 | SMP-57 | — | — (`sampling/v2/draws.py` `_depth`) | property: tests/test_sampling_v2_draws.py (the bounds and the marginals, core and tail) |
-| SMP-58 | — | — (`sampling/v2/draws.py` `_depth`) | property: tests/test_sampling_v2_draws.py (the bounds, the share of deep-water platforms) |
+| SMP-58 | — | — (`sampling/v2/draws.py` `_depth`) | property: tests/test_sampling_v2_draws.py (the bounds, the share of deep-water platforms, the subsea and shelf marginals) |
 | SMP-59 | — | — (`sampling/v2/draws.py` `_geometry`) | property: tests/test_sampling_v2_draws.py (the shares of the classes and of their families, the class's inclination) |
 | SMP-60 | — | — (`sampling/v2/survey.py` `survey`; `sampling/v2/draws.py` `_geometry`) | property: tests/test_sampling_v2_draws.py (each family's sections, ranges, kickoff and least hold, MD at most 9342 m) |
 | SMP-61 | — | — (`sampling/v2/draws.py` `_geometry`) | property: tests/test_sampling_v2_draws.py (every cell within 75° of vertical) |

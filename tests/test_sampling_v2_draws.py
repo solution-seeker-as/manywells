@@ -133,7 +133,7 @@ def check_well(w, md, tvd):
 
     # Depth and survey (SMP-57 to SMP-61): every cell within 75 degrees of vertical, MD at most 9342 m
     assert between(z, 600, 7000 if tail else 6500)
-    d_w_range = {'platform': (15, 2000), 'subsea': (50 if tail else 80, 3000), 'onshore': (0, 0)}[wt]
+    d_w_range = {'platform': (5, 2000), 'subsea': (50 if tail else 80, 3000), 'onshore': (0, 0)}[wt]
     assert between(d_w, *d_w_range)
     assert L == (z + d_w if wt == 'platform' else z)
     assert md[0] == tvd[0] == 0.0 and tvd[-1] == pytest.approx(L, rel=1e-12) and md[-1] == w['md'] <= 9342
@@ -403,7 +403,7 @@ def share_failures(wells):
         ('tail underpressured', tail, lambda w: w['pressure_class'] == 'under', 0.10),
         ('S-shaped of the deviated', deviated, lambda w: w['geometry_family'] == 's_shaped', 1 / 3),
         ('drains of the highly deviated', highly_deviated, lambda w: w['geometry_family'] == 'high_angle', 1 / 2),
-        ('deep-water platforms', platforms, lambda w: w['d_w'] > 400, 0.15),
+        ('deep-water platforms', platforms, lambda w: w['d_w'] > 400, 0.10),
     ]
     failures = []
     for name, subset, hit, p in checks:
@@ -440,8 +440,12 @@ def marginal_failures(wells):
     black = [w for w in core if w['fluid_class'] == 'black_oil']
     offshore = [w for w in core if w['well_type'] != 'onshore']
     platform_oils = [w for w in core if w['well_type'] == 'platform' and is_oil(w)]
+    subsea = [w for w in core if w['well_type'] == 'subsea']
+    shelf = [w for w in core if w['well_type'] == 'platform' and w['d_w'] < 400]
     checks = [
         ('z, core black oils', black, 'z', truncated_lognormal(2674, 0.317, 600, 6500)),  # SMP-57
+        ('d_w, core subsea', subsea, 'd_w', log_uniform(80, 3000)),  # SMP-58
+        ('d_w, core shelf platforms', shelf, 'd_w', truncated_lognormal(90, 0.6, 5, 400)),
         ('salinity, core', core, 'salinity', truncated_lognormal(0.06, 0.6, 0.002, 0.25)),  # SMP-62
         ('p_sep, core offshore', offshore, 'p_sep', truncated_lognormal(35, 0.45, 5, 85)),  # SMP-66
         ('API, core black oils', black, 'api', truncated_normal(33, 4.5, 16, 45)),  # SMP-67

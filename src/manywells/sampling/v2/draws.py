@@ -67,6 +67,7 @@ _DEPTH = {  # Median (m below the mudline) and log standard deviation  # spec: S
     'wet_gas': (2419, 0.422),
     'dry_gas': (1141, 0.586),
 }
+_P_DEEP_TREE = 0.10  # Share of deep-water dry trees among a core's platform wells  # spec: SMP-58
 _GEOMETRY_CLASSES = ('vertical', 'slightly_deviated', 'deviated', 'highly_deviated')  # spec: SMP-59
 _P_GEOMETRY = (0.25, 0.25, 0.25, 0.25)
 _THETA_CLASS = {'slightly_deviated': (5.0, 20.0), 'deviated': (20.0, 60.0), 'highly_deviated': (60.0, 75.0)}
@@ -239,11 +240,11 @@ def _depth(r, w):
     u_deep = r.random()  # spec: SMP-51. A deep-water dry tree's number, drawn for every well
     if wt == 'platform':  # spec: SMP-58
         if tail:
-            d_w = logu(r, 15, 2000)
+            d_w = logu(r, 5, 2000)
         else:
-            d_w = logu(r, 400, 2000) if u_deep < 0.15 else tlognorm(r, 90, 0.6, 15, 400)
+            d_w = logu(r, 400, 2000) if u_deep < _P_DEEP_TREE else tlognorm(r, 90, 0.6, 5, 400)
     elif wt == 'subsea':
-        d_w = logu(r, 50, 3000) if tail else tlognorm(r, 350, 0.8, 80, 3000)
+        d_w = logu(r, 50, 3000) if tail else logu(r, 80, 3000)
     else:
         unused(r)  # The water depth's number
         d_w = 0.0
