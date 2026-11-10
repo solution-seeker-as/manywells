@@ -862,14 +862,14 @@ From D-48 and D-84 (ruled 2026-11-06). Sources: Golan and Whitson (1991), §5.3.
 The choke and the lift gas follow set points $u_\text{sp}$ and $w_\text{sp}$, constant between changes and open loop:
 
 - **Start:** $u_\text{sp} = 1$ with probability 0.05, else $U(0.05, 1)$. When lift starts, $w_\text{sp} = U(0.1, 1)\thinspace w_{lg,\max}$.
-- **Changes:** at each operating sample after the first, each set point changes with probability $p_c \sim \text{LogU}(0.5, 0.95)$, drawn once per well; the lift gas's only while lift is installed.
+- **Changes:** at each operating sample after the first, each set point changes with probability $p_c \sim \text{LogU}(0.2, 0.95)$, drawn once per well; the lift gas's only while lift is installed.
 - **A change** is, with probability 0.9, a step of $U(-0.1, 0.1)$, times $w_{lg,\max}$ for the lift gas, reflected into its range; else a new draw: the choke 1 with probability 0.05, else $U(0.05, 1)$; the lift gas 0 with probability 0.20, else $U(0.1, 1)\thinspace w_{lg,\max}$.
 - **Ranges:** the choke's $[0.05, 1]$; the lift gas's $[0.1, 1]\thinspace w_{lg,\max}$ between changes, so that only a new draw shuts it in.
 - The set points never follow a solve; a redraw (SMP-105) changes its own slot only.
 
-From D-47 (ruled 2026-11-06, with the lift gas's floor of the same day). Sources: [own analysis of Petrobras' 3W Dataset]. The step's size and the probabilities are own choices, set on the rework's pilot.
+From D-47 (ruled 2026-11-06, with the lift gas's floor of the same day) and D-118. Sources: [own analysis of Petrobras' 3W Dataset]; [own analysis of NSTA's production by well]. The step's size and the share of new draws are own choices, set on the rework's pilot.
 
-**Basis:** data for how often a set point changes: operators move production chokes every day or so in normal operation [own analysis of Petrobras' 3W Dataset], so it changes at most samples (D-47 as ruled). The probability $p_c$, the step's size and the share of new draws are guesses, own choices set on the rework's pilot: the 3W windows last hours to weeks, so they do not show how far a set point travels over a life, and long histories of set points would replace them. Open-loop set points are a design choice of the Goals; the lift gas's floor of 0.1 of the capacity is a design choice from the rework's pilot, where a walk near zero left lifted wells at the redraw limit (D-47). The masses of 0.05 and 0.20 are SMP-93's and SMP-94's.
+**Basis:** data for how often a set point changes, from two regions: sampled at `nsol-2`'s spacings, one region's gas wells change their choke opening in fewer intervals than the earlier floor of 0.5, from well below it to within the range, and the other's wells move theirs about daily [own analysis of NSTA's production by well and Petrobras' 3W Dataset]; $p_c$'s range of 0.2 to 0.95 spans the two (D-118). The step's size and the share of new draws are guesses, own choices set on the rework's pilot: the one history in hand over whole lives is of swing producers, whose shape is not an oil well's, and histories of oil wells' set points over their lives would replace them. Open-loop set points are a design choice of the Goals; the lift gas's floor of 0.1 of the capacity is a design choice from the rework's pilot, where a walk near zero left lifted wells at the redraw limit (D-47). The masses of 0.05 and 0.20 are SMP-93's and SMP-94's.
 
 ### SMP-99 · Test periods
 
@@ -1168,7 +1168,7 @@ From D-61 (ruled 2026-11-06; $b = 0$ kept, L3 of 2026-11-09) and D-60. Sources: 
 | SMP-88 | The roughness's log-linear path from its initial to its late draw | As SMP-76 | As SMP-76 |
 | SMP-94 | The lift gas off in 0.20 of a lifted well's slots | A share of time with the lift gas off: none public (D-38) | A record of lifted wells' injection over time |
 | SMP-95 | The separator pressure within ±10% of its nominal | A spread of separator or manifold pressures: none public ([WP §7]) | Such a spread |
-| SMP-98 | The change probability $p_c \sim \text{LogU}(0.5, 0.95)$, the step of ±0.1 of the range and the share of 0.1 of new draws | Histories of choke and lift-gas set points: 3W's windows last hours to weeks | Histories of set points over wells' lives |
+| SMP-98 | The step of ±0.1 of the range and the share of 0.1 of new draws | Histories of choke and lift-gas set points: 3W's windows last hours to weeks, and the one history over whole lives is of swing producers (D-118) | Histories of oil wells' set points over their lives |
 | SMP-113 | The Dirichlet weights of the light ends, and the uniform shapes of the heptanes-plus ranges | Statistics of compositions per fluid class ([RF §8], Gaps) | A published set of measured condensate and volatile-oil compositions |
 | SMP-116 | The table's margin of 15 K below $T_s$ | Not recorded | The share of `off_table` roots on a pilot (`fluids-draft.md`, Validity) |
 

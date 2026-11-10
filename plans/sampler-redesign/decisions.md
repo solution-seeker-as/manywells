@@ -1071,8 +1071,9 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Alternatives:** keep the draft's, set by one operator's subsea wells.
 - **Basis:** data from two regions: sampled at `nsol-2`'s spacings, one region's gas wells change their choke opening in fewer intervals than the draft's lowest 0.5, and the other's wells move theirs about daily [own analysis of NSTA's production by well and Petrobras' 3W Dataset]. The step and the share stay guesses: the one history in hand over whole lives is of swing producers.
 - **Realism:** `nsol-2` gains wells whose set points move less often.
+- **Implemented** (R10, 2026-11-10). Over the plans of 400 lives of seed 2026, before and after (5th / 25th / 50th / 75th / 95th percentiles): $p_c$ 0.52 / 0.59 / 0.69 / 0.80 / 0.91 becomes 0.22 / 0.30 / 0.43 / 0.63 / 0.86; the share of operating samples at which the choke's set point changes follows it, 0.50 / 0.69 / 0.93 becoming 0.21 / 0.43 / 0.87 (5th / 50th / 95th); the range its set point spans over the life, 0.76 / 0.93 / 0.95 of the choke's range, becomes 0.54 / 0.91 / 0.95, and its standard deviation's median 0.26 becomes 0.25.
 - **Needs sign-off:** yes (sampling).
-- **Used by:** `specs/sampling.md`, SMP-98; `sampling/v2/samples.py`.
+- **Used by:** `specs/sampling.md`, SMP-98; `sampling/v2/samples.py` (`_P_CHANGE`).
 - **Ruling:**
 
 ### D-119 · The liner's water takes the model's viscosity
