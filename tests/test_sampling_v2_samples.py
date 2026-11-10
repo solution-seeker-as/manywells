@@ -184,7 +184,7 @@ def check_plan(lf, plan, p_c, T_end, lift_start) -> dict:
     in their ranges, for the shares."""
     w0 = lf.w0
     w_max = lf.design['w_lg_max'] if lf.design is not None else None
-    assert len(plan) == N_SLOTS == 200 and between(p_c, 0.5, 0.95)
+    assert len(plan) == N_SLOTS == 200 and between(p_c, 0.2, 0.95)
 
     # Dates and slots (SMP-97): 160 operating samples and 8 tests of 5, in the order of their dates
     op = [s for s in plan if s['kind'] == 'operating']
@@ -292,7 +292,7 @@ def test_set_points_at_the_start(lives):
     p_c = np.array([p_c for _, p_c in drawn])
     assert not off_share(np.sum(u_0 == 1), len(u_0), 0.05) and ks((u_0[u_0 < 1] - 0.05) / 0.95) < 1.95
     assert ks((w_0 - 0.1) / 0.9) < 1.95
-    assert ks(np.log(p_c / 0.5) / math.log(0.95 / 0.5)) < 1.95
+    assert ks(np.log(p_c / 0.2) / math.log(0.95 / 0.2)) < 1.95
     stats = [check_plan(lf, plan, p_c, lf.T_life, lf.lift_start) for plan, p_c in drawn[:40]]
     assert plan_failures(stats) == []
 
@@ -302,7 +302,7 @@ def test_a_plans_first_draws(lives, plans):
     then the set points at the start, which the first operating sample holds."""
     for lf, (plan, p_c) in list(zip(lives, plans))[:30]:
         r = rng_for(SEED, lf.k, 'v2', 'controls')
-        assert p_c == math.exp(r.uniform(math.log(0.5), math.log(0.95)))
+        assert p_c == math.exp(r.uniform(math.log(0.2), math.log(0.95)))
         fully_open, u_0, w_0 = r.random(), r.uniform(0.05, 1.0), r.random()
         assert plan[0]['t'] == 0 and plan[0]['u'] == (1.0 if fully_open < 0.05 else u_0)
         if lf.lift_start == 0:

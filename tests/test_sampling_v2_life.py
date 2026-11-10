@@ -29,7 +29,7 @@ from manywells.sampling.wells import rng_for
 
 from .sampling_v2_wells import N_MANY_LIVES, SEED, drawn_lives, drawn_sol2_wells, drawn_wells, is_oil
 
-LIFT_KEYS = 'z_inj injection_md z_inj_frac p_inj dp_valve packer_offset T_lg phi_lg T_lg_below_ambient glr_cap w_lg_max'
+LIFT_KEYS = 'z_inj injection_md z_inj_frac p_inj dp_valve packer_offset T_lg psi_lg glr_cap w_lg_max'
 LIFT_KEYS = LIFT_KEYS.split()
 AT_THE_DATE = (  # The keys of a sol-2 well that hold its life's state at its date (SMP-92)
     'life_stage date p_r r_p R_go wlr wgr ogr saturation below_hydrostatic p_s r_s h roughness lift lift_start_rule'
@@ -110,7 +110,7 @@ def check_life(lf):
     p_i = w0['p_i']
     p_r = [lf.p_r(t) for t in ts]
     assert p_r[0] == pytest.approx(r0 * p_i, rel=1e-9) and p_r[-1] == pytest.approx(r1 * p_i, rel=1e-9)
-    assert np.all(np.diff(p_r) <= 1e-9 * p_i) and between(prm['gamma_p'], 1, 2)
+    assert np.all(np.diff(p_r) <= 1e-9 * p_i) and between(prm['gamma_p'], 0.7, 2.3)
     if oil or support:
         t = ts[17]
         assert lf.p_r(t) == pytest.approx(p_i * (r1 + (r0 - r1) * (1 - lf.F(t)) ** prm['gamma_p']), rel=1e-12)
@@ -136,7 +136,7 @@ def check_life(lf):
 
     # The separator (SMP-89)
     t_1, t_2, r_mid, r_late = prm['t_sep_1'], prm['t_sep_2'], prm['r_s_mid'], prm['r_s_late']
-    assert 0.25 * T <= t_1 <= t_2 <= 0.9 * T and between(r_mid, 0.5, 1) and between(r_late, 0.1, 0.6)
+    assert 0.1 * T <= t_1 <= t_2 <= 0.9 * T and between(r_mid, 0.5, 1) and between(r_late, 0.1, 0.6)
     steps = [(0.0, 1.0), (0.999 * t_1, 1.0), (t_1, r_mid), (0.5 * (t_1 + t_2), r_mid), (t_2, min(r_mid, r_late))]
     for t, r_s in steps + [(T, min(r_mid, r_late))]:
         assert lf.r_s(t) == r_s
@@ -180,11 +180,11 @@ def check_life(lf):
         if rule == 'static_check':
             assert start == failed
         elif rule == 'drawn_time':
-            assert between(start, 0.2 * T, 0.9 * T) and (failed is None or failed >= start)
+            assert between(start, 0.05 * T, 0.9 * T) and (failed is None or failed >= start)
         else:
             assert failed is None
     elif rule == 'drawn_time':
-        assert between(start, 0.2 * T, 0.9 * T)
+        assert between(start, 0.05 * T, 0.9 * T)
 
 
 def check_state(lf, t, eps=(1.0, 1.0)):
@@ -293,13 +293,13 @@ def test_the_evolution_generators_numbers(lives):
         b, tau = prm['decline_b'], T - prm['t_plateau']
         assert b == (uniform(3, 0.3, 0.5) if support else uniform(3, 0, 0.4))
         assert b < 1e-6 or (1 + b * prm['decline_D'] * tau) ** (-1 / b) == log_uniform(2, 0.03, 0.3)
-        assert prm['gamma_p'] == uniform(4, 1, 2)
+        assert prm['gamma_p'] == uniform(4, 0.7, 2.3)
         assert prm['F_bt'] == (uniform(5, 0.05, 0.4) if support else uniform(5, 0.2, 0.7))
         assert prm['wlr_bt'] == (uniform(6, 0.05, 0.3) if support else uniform(6, 0.02, 0.1))
-        steps = sorted(0.25 + 0.65 * x for x in u[7:9])
+        steps = sorted(0.1 + 0.8 * x for x in u[7:9])
         assert [prm['t_sep_1'] / T, prm['t_sep_2'] / T] == pytest.approx(steps, rel=1e-12)
         if lf.lift_start_rule == 'drawn_time':
-            assert lf.lift_start / T == uniform(9, 0.2, 0.9)
+            assert lf.lift_start / T == uniform(9, 0.05, 0.9)
         if tail:
             assert prm['r_p_start'] == uniform(10, 0.97 if support else 0.85, 1)
             if oil:
@@ -372,7 +372,7 @@ def test_an_oils_water_jumps_at_breakthrough(lives):
             if jump <= a:
                 continue
             seen += 1
-            assert lf.water(t_bt) >= jump > a  # The jump
+            assert lf.water(t_bt) >= jump * (1 - 1e-12) and jump > a  # The jump, to the logit's rounding
             logit = math.log(jump / (1 - jump)) + x * (math.log(z / (1 - z)) - math.log(jump / (1 - jump)))
             assert lf.water(t_mid) == pytest.approx(1 / (1 + math.exp(-logit)), rel=1e-12)
         else:

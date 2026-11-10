@@ -26,12 +26,14 @@ from scipy.stats import rankdata
 from manywells.geometry import WellGeometry
 from manywells.pvt import density_from_api, gas_density_from_sg
 from manywells.pvt.black_oil import BlackOil
+from manywells.pvt.water import water_viscosity
 from manywells.sampling.v2 import draws
 from manywells.sampling.v2.draws import P_S_MAX, STAGES, TUBING, black_oil, draw_well, stream
+from manywells.sampling.v2.reservoir import slant_skin
 from manywells.sampling.v2.survey import FAMILIES, survey
 from manywells.sampling.wells import rng_for, sample_well
 
-from .sampling_v2_wells import N_MANY, SEED, drawn_wells, is_oil
+from .sampling_v2_wells import N_MANY, SEED, counting, drawn_wells, is_oil
 
 BLOCKS = 'labels depth geometry water pressure temperature separator fluid stage inflow completion choke lift heat'
 LABELS = {  # SMP-52, the labels that the well draws set
@@ -133,7 +135,7 @@ def check_well(w, md, tvd):
 
     # Depth and survey (SMP-57 to SMP-61): every cell within 75 degrees of vertical, MD at most 9342 m
     assert between(z, 600, 7000 if tail else 6500)
-    d_w_range = {'platform': (15, 2000), 'subsea': (50 if tail else 80, 3000), 'onshore': (0, 0)}[wt]
+    d_w_range = {'platform': (5, 2000), 'subsea': (50 if tail else 80, 3000), 'onshore': (0, 0)}[wt]
     assert between(d_w, *d_w_range)
     assert L == (z + d_w if wt == 'platform' else z)
     assert md[0] == tvd[0] == 0.0 and tvd[-1] == pytest.approx(L, rel=1e-12) and md[-1] == w['md'] <= 9342
@@ -145,7 +147,7 @@ def check_well(w, md, tvd):
     if family == 'vertical':
         assert w['theta_max'] == 0 and md == tvd
     elif family == 's_shaped':
-        assert between(w['theta_max'], 15, 45, 1e-6) and w['theta_end'] <= 35 + 1e-6
+        assert between(w['theta_max'], 20, 60, 1e-6) and w['theta_end'] <= 35 + 1e-6
     else:  # The hold's inclination (build_and_hold) or the heel's (high_angle) is the class's
         assert between(w['theta_max'], *THETA[gcl], 1e-6) and w['theta_end'] == pytest.approx(w['theta_max'], abs=1e-9)
 
@@ -172,7 +174,7 @@ def check_well(w, md, tvd):
     # Separator and the nominal downstream pressure (SMP-66)
     p_sep_range, T_sep_range = {
         'platform': ((5, 85), (300, 340)),
-        'subsea': ((5, 85), (290, 320)),
+        'subsea': ((5, 85), (290, 340)),
         'onshore': ((2, 70), (285, 320)),
     }[wt]
     assert between(w['p_sep'], *p_sep_range) and between(w['T_sep'], *T_sep_range)
@@ -220,10 +222,14 @@ def check_well(w, md, tvd):
     if family == 'high_angle':  # A drain: Joshi's ratio, times an oil drain's friction efficiency
         assert between(w['drain_length'], 300, 2500) and between(w['I_ani'], 1, 3) and w['J_H_over_J_V'] > 0
         assert w['f_geo'] == pytest.approx(w['J_H_over_J_V'] * w.get('eta_drain', 1.0), rel=1e-12)
-    else:  # The slant's factor on the radial index
+    elif family == 'vertical':
+        assert 'drain_length' not in w and 's_theta' not in w and w['f_geo'] == 1
+    else:  # Cinco-Ley's slant skin in the radial index, with its floor (SMP-72)
         assert 'drain_length' not in w and 'eta_drain' not in w and 'b_friction_share' not in w
-        slant = 1.0 if family == 'vertical' else math.cos(math.radians(w['theta_end'])) ** -0.5
-        assert w['f_geo'] == pytest.approx(slant, rel=1e-12)
+        s_theta = slant_skin(w['theta_end'], w['h_net'], w['I_ani'])
+        assert w['s_theta'] == s_theta and between(w['I_ani'], 1, 3) and s_theta < 1e-6
+        A_s = w['ln_re_rw'] - 0.75 + w['skin']
+        assert w['f_geo'] == pytest.approx(A_s / max(A_s + s_theta, 2.0), rel=1e-12) and w['f_geo'] > 1 - 1e-6
     if oil:
         rho_lsc = (1 - w['wlr']) * w['rho_o'] + w['wlr'] * w['rho_w']
         assert w['inflow'] == ('vogel' if w['p_sat'] >= 0.8 * w['p_r'] and w['wlr'] < 0.6 else 'productivity_index')
@@ -240,8 +246,8 @@ def check_well(w, md, tvd):
         if family == 'high_angle':  # The non-Darcy loss per completed length, and the liner's friction on top
             per_length = (w['I_ani'] * w['h_net'] / w['drain_length']) ** 2
             assert w['b_ratio'] * (1 - w['b_friction_share']) == pytest.approx(per_length, rel=1e-6)
-        else:
-            assert w['b_ratio'] == pytest.approx(1 / w['f_geo'], rel=1e-12)
+        else:  # A slanted well's non-Darcy loss is in its D, from its perforated length along the well (SMP-71)
+            assert w['b_ratio'] == 1
         assert w['q_l_ref'] == pytest.approx(w['q_g_ref'] * (w['ogr'] + w['wgr']) / 1e6, rel=1e-12)
 
     # Tubing and roughness (SMP-75, SMP-76)
@@ -261,9 +267,9 @@ def check_well(w, md, tvd):
         H = w['z_inj']
         assert between(w['packer_offset'], 30, 150) and between(H, 0.3 * L, L - w['packer_offset'])
         assert w['injection_md'] == float(np.interp(H, tvd, md)) and H - 1e-9 <= w['injection_md'] < md[-1]
-        assert between(w['p_inj'], *P_INJ[wt]) and between(w['dp_valve'], 3.4, 13.8) and between(w['phi_lg'], 0, 0.3)
-        T_a = T_s + (T_r - T_s) * H / L
-        assert w['T_lg'] == pytest.approx(T_a - w['phi_lg'] * (T_a - T_s), rel=1e-12) and T_s <= w['T_lg'] <= T_a
+        assert between(w['p_inj'], *P_INJ[wt]) and between(w['dp_valve'], 3.4, 13.8) and between(w['psi_lg'], 0, 0.75)
+        T_a = T_s + (T_r - T_s) * H / L  # The ambient at the valve; the lift gas between it and T_r (SMP-79)
+        assert w['T_lg'] == pytest.approx(T_a + w['psi_lg'] * (T_r - T_a), rel=1e-12) and T_a <= w['T_lg'] <= T_r
         assert between(w['w_lg_max'], 0.1, 3.5)
         if 'lift_capacity_at_bound' not in w['flags']:
             assert between(w['glr_cap'], 30, 1000)
@@ -353,17 +359,15 @@ def test_truncations_of_pressure_and_temperature(part):
     assert onshore['T_s'] == (308 if part == 'tail' else 303) and onshore['G'] == pytest.approx(55)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason='SMP-63, an open finding of R10: where the hydrostatic pressure alone is above 950 bar, a deep reservoir '
-    'under deep water (about 1 draw in 10 000, most of them tail subsea wells), lambda_max is floored at 0.001 and '
-    'p_i exceeds the cap that the rule and v2: checks state',
-)
-def test_initial_pressure_cap_where_the_hydrostatic_pressure_exceeds_it():
-    w = dict(coverage_tail='tail', z=6900.0, d_w=2300.0, rho_w=1150.0)
-    draws._pressure(Extreme(True), w, SimpleNamespace(flags=[]))
-    assert w['p_h'] > 950
-    assert w['p_i'] <= 950
+@pytest.mark.parametrize('part', ['core', 'tail'])
+@pytest.mark.parametrize('top', [True, False])
+def test_initial_pressure_cap_where_the_hydrostatic_pressure_exceeds_it(part, top):
+    """SMP-63 (D-109): where the hydrostatic pressure alone is above 950 bar, a deep reservoir under deep water, p_i
+    is 950 bar and the reservoir underpressured, whatever its numbers."""
+    w = dict(coverage_tail=part, z=6400.0, d_w=2900.0, rho_w=1150.0)
+    draws._pressure(Extreme(top), w, SimpleNamespace(flags=[]))
+    assert w['p_h'] > 950 and w['p_i'] == 950 and w['pressure_class'] == 'under' and w['lam'] == 0
+    assert 0.8 * w['p_h'] <= w['p_i'] < w['p_h']
 
 
 # --- Shares and marginals --------------------------------------------------------------------------------------------
@@ -405,7 +409,7 @@ def share_failures(wells):
         ('tail underpressured', tail, lambda w: w['pressure_class'] == 'under', 0.10),
         ('S-shaped of the deviated', deviated, lambda w: w['geometry_family'] == 's_shaped', 1 / 3),
         ('drains of the highly deviated', highly_deviated, lambda w: w['geometry_family'] == 'high_angle', 1 / 2),
-        ('deep-water platforms', platforms, lambda w: w['d_w'] > 400, 0.15),
+        ('deep-water platforms', platforms, lambda w: w['d_w'] > 400, 0.10),
     ]
     failures = []
     for name, subset, hit, p in checks:
@@ -442,8 +446,12 @@ def marginal_failures(wells):
     black = [w for w in core if w['fluid_class'] == 'black_oil']
     offshore = [w for w in core if w['well_type'] != 'onshore']
     platform_oils = [w for w in core if w['well_type'] == 'platform' and is_oil(w)]
+    subsea = [w for w in core if w['well_type'] == 'subsea']
+    shelf = [w for w in core if w['well_type'] == 'platform' and w['d_w'] < 400]
     checks = [
         ('z, core black oils', black, 'z', truncated_lognormal(2674, 0.317, 600, 6500)),  # SMP-57
+        ('d_w, core subsea', subsea, 'd_w', log_uniform(80, 3000)),  # SMP-58
+        ('d_w, core shelf platforms', shelf, 'd_w', truncated_lognormal(90, 0.6, 5, 400)),
         ('salinity, core', core, 'salinity', truncated_lognormal(0.06, 0.6, 0.002, 0.25)),  # SMP-62
         ('p_sep, core offshore', offshore, 'p_sep', truncated_lognormal(35, 0.45, 5, 85)),  # SMP-66
         ('API, core black oils', black, 'api', truncated_normal(33, 4.5, 16, 45)),  # SMP-67
@@ -548,6 +556,88 @@ def test_each_block_has_its_own_generator(wells, monkeypatch):
         assert w[key] == base[key], key
 
 
+BLOCK_NUMBERS = dict(  # The numbers that each block takes of its generator, for every well (SMP-51)
+    labels=6,
+    depth=3,
+    geometry=2 + 20 * 6,  # The class and the family, and 20 surveys of six numbers
+    water=1,
+    pressure=2,
+    temperature=3,
+    separator=7,
+    fluid=5,
+    stage=14,
+    inflow=7,
+    nondarcy=2,  # A gas well's block
+    completion=3,
+    choke=3,
+    lift=7,
+    heat=4,
+)
+
+
+def test_every_block_takes_the_same_numbers_for_every_well(wells, monkeypatch):
+    """SMP-51 (D-108): each block takes the same count of its generator's numbers, call by call, for every well,
+    whatever its branches: core and tail, every well type, fluid class, drive, stage and geometry family, a survey
+    redrawn or not, saturated or not, lifted or natural. Only gas wells have the `nondarcy` block."""
+    made = counting(monkeypatch, draws)
+    cases = [(w0['well'], None, False) for w0, _ in wells]
+    cases += [(k, stage, force) for k in range(30) for stage in STAGES for force in (False, True)]
+    calls, seen = {}, set()
+    for k, stage, force in cases:
+        del made[:]
+        w, _ = draw_well(SEED, k, stage, force_lift=force)
+        blocks = [parts[2] for parts, _ in made]
+        gas = not is_oil(w)
+        assert blocks == BLOCKS.replace('inflow', 'inflow nondarcy' if gas else 'inflow').split()
+        for (_, _, block), counts in made:
+            assert calls.setdefault(block, counts) == counts, (k, block)
+        seen |= {w['coverage_tail'], w['well_type'], w['fluid_class'], w['drive'], w['life_stage'], w['lift']}
+        seen |= {w['geometry_family'], w['pressure_class'], w['saturation'], *filter(None, w['flags'].split(';'))}
+    assert {block: sum(counts) for block, counts in calls.items()} == BLOCK_NUMBERS
+    assert all(count == 1 for counts in calls.values() for count in counts)  # A call takes one number
+    branches = set().union(*(LABELS[key] for key in ('coverage_tail', 'well_type', 'fluid_class', 'drive')))
+    branches |= set().union(*(LABELS[key] for key in ('life_stage', 'lift', 'geometry_family', 'pressure_class')))
+    assert seen >= branches | LABELS['saturation'] | {'geometry_redrawn', 'lift_not_installed_strong_well'}
+
+
+def test_a_branchs_constant_moves_no_later_draw(wells, monkeypatch):
+    """SMP-51 (D-108): where a constant that decides a branch changes, the block's later numbers are as they were.
+    The dry-gas share (`labels`): the drive and the stage stay. The saturated shares (`fluid`): the initial GOR's
+    number stays. The lift's need and shares (`lift`): a lifted well's design stays."""
+    base = [w for w, _ in wells[:120]]
+
+    def redrawn():
+        return [draw_well(SEED, w['well'])[0] for w in base]
+
+    with monkeypatch.context() as m:
+        m.setattr(draws, '_P_DRY_GAS', 0.9)
+        other = redrawn()
+    assert any(a['fluid_class'] != b['fluid_class'] for a, b in zip(base, other))
+    for key in ('coverage_tail', 'well_type', 'fluid_type', 'drive', 'life_stage'):
+        assert [w[key] for w in other] == [w[key] for w in base], key
+
+    with monkeypatch.context() as m:
+        m.setattr(draws, '_P_SATURATED', dict.fromkeys(draws._P_SATURATED, 1.0))
+        other = redrawn()
+    drawn_gor = [i for i, w in enumerate(base) if w['fluid_class'] != 'black_oil']
+    assert any(other[i]['p_sat'] != base[i]['p_sat'] for i in drawn_gor) and len(drawn_gor) > 30
+    assert all(w['p_sat'] is None or w['p_sat'] == w['p_i'] or 'p_b_lowered' in w['flags'] for w in other)
+    for key in ('api', 'sg_gas'):
+        assert [w[key] for w in other] == [w[key] for w in base], key
+    assert [other[i]['R_i'] for i in drawn_gor] == [base[i]['R_i'] for i in drawn_gor]
+
+    with monkeypatch.context() as m:  # No well needs lift, and the draw lifts every well
+        m.setattr(draws, '_needs_lift', lambda *args: False)
+        m.setattr(draws, '_P_LIFT_OIL', dict.fromkeys(draws._P_LIFT_OIL, (1.0, 1.0, 1.0)))
+        m.setattr(draws, '_P_LIFT_GAS', (1.0, 1.0, 1.0))
+        other = redrawn()
+    lifted = [(a, b) for a, b in zip(base, other) if a['lift'] == b['lift'] == 'gas_lift']
+    assert sum(a['needs_lift'] for a, _ in lifted) >= 3 and sum(not a['needs_lift'] for a, _ in lifted) >= 3
+    assert sum(b['lift'] == 'gas_lift' for b in other) > sum(a['lift'] == 'gas_lift' for a in base)
+    for key in ('packer_offset', 'p_inj', 'dp_valve', 'psi_lg'):
+        assert [b[key] for _, b in lifted] == [a[key] for a, _ in lifted], key
+
+
 def test_v2_generators_are_not_v1s():
     """SMP-109: every v2 key holds 'v2', and drawing a v2 well leaves v1's draws (SMP-31) as they were."""
     before = sample_well(SEED, 3)
@@ -619,10 +709,21 @@ def test_a_table_fluid_replaces_the_fluid_blocks_values(wells):
     assert w['saturation'] == 'undersaturated' and w['R_go'] == w['R_i']
 
 
+def test_a_drains_liner_takes_the_models_water_viscosity(wells, monkeypatch):
+    """SMP-72 (D-119): the liquid in an oil drain's liner takes PVT-WAT-3's water viscosity at T_r: with the water
+    ten times as viscous, a wet drain's friction efficiency falls, and a dry drain's stays."""
+    drains = [w for w, _ in wells if w['geometry_family'] == 'high_angle' and is_oil(w)]
+    wet = next(w for w in drains if w['wlr'] > 0.3 and w['eta_drain'] < 0.99)
+    dry = next(w for w in drains if w['wlr'] == 0 and w['eta_drain'] < 0.99)
+    monkeypatch.setattr(draws, 'water_viscosity', lambda T: 10 * water_viscosity(T))
+    assert draw_well(SEED, wet['well'])[0]['eta_drain'] < wet['eta_drain']
+    assert draw_well(SEED, dry['well'])[0]['eta_drain'] == dry['eta_drain']
+
+
 # --- The survey and the stream ---------------------------------------------------------------------------------------
 def test_survey_vertical_and_refusals():
-    assert survey(None, 'vertical', 1234.0) == ([0.0, 1234.0], [0.0, 1234.0], {})
     rng = np.random.default_rng(1)
+    assert survey(rng, 'vertical', 1234.0) == ([0.0, 1234.0], [0.0, 1234.0], {})
     assert survey(rng, 'build_and_hold', 300.0, (60.0, 75.0)) is None  # No room for the build above 300 m
     with pytest.raises(ValueError, match='family'):
         survey(rng, 'l_shaped', 2000.0)
@@ -653,14 +754,16 @@ def test_survey_shapes(family):
             assert len(md) == 3 + int(th)  # The wellhead, the kickoff, a station per degree of the build, the bottom
             assert tvd[-1] - tvd[-2] >= 50 - 1e-6
         elif family == 's_shaped':
-            assert between(th, 15, 45) and incl.max() == pytest.approx(th, abs=1e-6)
+            assert between(th, 20, 60) and incl.max() == pytest.approx(th, abs=1e-6)
             assert prm['theta_end'] <= min(35, th) and incl[-1] == pytest.approx(prm['theta_end'], abs=1e-6)
-            assert between(prm['drop_rate'], 0.2, 2.2) and prm['end_section_tvd'] <= min(400, L / 4)
+            assert between(prm['drop_rate'], 0.2, 2.2) and between(prm['end_section_tvd'], 0, min(1200, L / 3))
             assert tvd[-1] - tvd[-2] == pytest.approx(prm['end_section_tvd'], abs=1e-6)
+            hold = [i for i in range(len(incl)) if incl[i] == pytest.approx(th, abs=1e-6)]
+            assert tvd[hold[-1] + 1] - tvd[hold[0]] >= 100 - 1e-6  # The hold's least TVD
         else:
             assert between(prm['theta_heel'], *theta) and th <= prm['theta_heel'] and between(th, 10, 65)
             assert incl.max() == incl[-1] == pytest.approx(prm['theta_heel'], abs=1e-6)
-            assert between(prm['build_rate_2'], 1.5, 7) and between(prm['tangent_md'], 50, 300)
+            assert between(prm['build_rate_2'], 1.5, 7) and between(prm['tangent_md'], 0, 300)
             assert md[-1] - md[-2] == pytest.approx(prm['tangent_md'], abs=1e-6)
     assert fitted > 100
 

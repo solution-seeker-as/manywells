@@ -8,20 +8,24 @@ Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
 The survey of a v2 well (specs/sampling.md, SMP-60): stations (MD, TVD) from the wellhead to the bottom of the
 modelled flow path, by the well's geometry family. Straight sections, and circular builds and drops with one station
-per degree.
+per degree. A survey takes N_NUMBERS numbers of its generator, whatever its family and whether it fits (SMP-51).
 """
 
 import math
 
 import numpy as np
 
+from manywells.sampling.v2._distributions import unused
+
+N_NUMBERS = 6  # A survey's numbers: five of the shape and the kickoff's, whatever the family  # spec: SMP-51
 FAMILIES = ('vertical', 'build_and_hold', 's_shaped', 'high_angle')  # spec: SMP-59
 _KICKOFF = (0.05, 0.75)  # The kickoff's share of the TVD below the mudline
 _BUILD = (0.3, 3.6)  # Build rate (degrees per 30 m)
 _DROP, _S_BOTTOM = (0.2, 2.2), (0.0, 35.0)  # An S well's drop rate (degrees per 30 m) and bottom inclination (degrees)
-_S_HOLD, _S_END = (15.0, 45.0), (100.0, 400.0)  # An S well's hold inclination (degrees) and end section (m of TVD)
+_S_HOLD, _S_END = (20.0, 60.0), (100.0, 1200.0)  # An S well's hold inclination (degrees) and end section (m of TVD)
+_S_END_SHARE = 1 / 3  # An S well's end section at most this share of L  # spec: SMP-60
 _TANGENT, _LANDING = (10.0, 65.0), (1.5, 7.0)  # A drain well's tangent before landing (degrees) and landing build
-_HEEL_TANGENT = (50.0, 300.0)  # A drain well's tangent at the heel's inclination (m of MD)
+_HEEL_TANGENT = (0.0, 300.0)  # A drain well's tangent at the heel's inclination (m of MD)
 
 
 def _arc(st, th1, rate):
@@ -62,7 +66,8 @@ def survey(rng, family, L, theta=None, d_mud=0.0):  # spec: SMP-60
 
     Each shape parameter is uniform over its range, and the kickoff over the part of 0.05 to 0.75 of the depth below
     the mudline that leaves room for the rest of the shape. A build or drop too gentle for the well's depth is raised
-    towards its range's top; the angles are never lowered.
+    towards its range's top; the angles are never lowered. Every draw takes N_NUMBERS numbers of the generator: a
+    family draws the numbers that it does not use, and a shape that does not fit its kickoff's (SMP-51).
 
     :param rng: The geometry block's generator
     :param family: One of FAMILIES
@@ -73,6 +78,7 @@ def survey(rng, family, L, theta=None, d_mud=0.0):  # spec: SMP-60
     """
     prm = {}
     if family == 'vertical':
+        unused(rng, N_NUMBERS)
         return [0.0, L], [0.0, L], prm
     z = L - d_mud
     room = L - d_mud - _KICKOFF[0] * z  # The TVD below the shallowest kickoff
@@ -80,11 +86,15 @@ def survey(rng, family, L, theta=None, d_mud=0.0):  # spec: SMP-60
     def kickoff(below):
         """Uniform over the part of the kickoff's range that leaves the TVD below for the rest of the shape."""
         f_max = min(_KICKOFF[1], (L - below - d_mud) / z)
-        return None if f_max < _KICKOFF[0] else d_mud + z * rng.uniform(_KICKOFF[0], f_max)
+        if f_max < _KICKOFF[0]:
+            unused(rng)  # The kickoff's number
+            return None
+        return d_mud + z * rng.uniform(_KICKOFF[0], f_max)
 
     st = [(0.0, 0.0, 0.0)]
     if family == 'build_and_hold':
         th, b = rng.uniform(*theta), rng.uniform(*_BUILD)
+        unused(rng, 3)  # The other families' three further numbers
         b = _raise_rate(b, _BUILD[1], lambda x: _arc_tvd(0, th, x), room - 50)
         K = kickoff(50 + _arc_tvd(0, th, b))
         if K is None:
@@ -95,7 +105,7 @@ def survey(rng, family, L, theta=None, d_mud=0.0):  # spec: SMP-60
         prm.update(kickoff=K, theta_hold=th, build_rate=b)
     elif family == 's_shaped':
         th, b, d = rng.uniform(*_S_HOLD), rng.uniform(*_BUILD), rng.uniform(*_DROP)
-        th_e, end_tvd = min(rng.uniform(*_S_BOTTOM), th), min(rng.uniform(*_S_END), 0.25 * L)
+        th_e, end_tvd = min(rng.uniform(*_S_BOTTOM), th), min(rng.uniform(*_S_END), _S_END_SHARE * L)
         left = room - 100 - end_tvd
         b = _raise_rate(b, _BUILD[1], lambda x: _arc_tvd(0, th, x) + _arc_tvd(th, th_e, d), left)
         d = _raise_rate(d, _DROP[1], lambda x: _arc_tvd(0, th, b) + _arc_tvd(th, th_e, x), left)

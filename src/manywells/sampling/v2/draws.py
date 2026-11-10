@@ -8,7 +8,9 @@ Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
 The v2 well draws (specs/sampling.md, SMP-51 to SMP-82): a well's labels, depths, survey, fluid, reservoir state at a
 life stage, inflow, completion, choke, gas lift and heat transfer, drawn in blocks. Each block has a generator of its
-own, rng_for(seed, k, 'v2', block) (SMP-109), and may use the blocks above it. Nothing here solves a well.
+own, rng_for(seed, k, 'v2', block) (SMP-109), and may use the blocks above it. A block takes the same numbers of its
+generator in the same order for every well: a number that the well's branch does not use is drawn and left unused, so
+that a change of one rule moves no other draw (SMP-51). Nothing here solves a well.
 
 draw_well gives a well's draws as a dict, with its survey. The dict holds the labels (SMP-52), the drawn numbers and
 the values derived from them, in the model's units (m, bar, K, kg/s, kg/m3, Sm3/Sm3); rates are Sm3/d. Its keys are
@@ -23,7 +25,8 @@ import numpy as np
 from manywells.choke import CHOKE_PROFILES
 from manywells.pvt import density_from_api, gas_density_from_sg
 from manywells.pvt.black_oil import BlackOil
-from manywells.sampling.v2._distributions import logistic, logu, pick, tlognorm, tnorm
+from manywells.pvt.water import water_viscosity
+from manywells.sampling.v2._distributions import logistic, logu, pick, tlognorm, tnorm, unused
 from manywells.sampling.v2.reservoir import (
     OILS,
     drain_index,
@@ -35,8 +38,9 @@ from manywells.sampling.v2.reservoir import (
     liner_liquid,
     nondarcy,
     producing_gor,
+    slant_skin,
 )
-from manywells.sampling.v2.survey import survey
+from manywells.sampling.v2.survey import N_NUMBERS, survey
 from manywells.sampling.wells import rng_for
 from manywells.units import P_REF, STD_GRAVITY
 
@@ -65,6 +69,7 @@ _DEPTH = {  # Median (m below the mudline) and log standard deviation  # spec: S
     'wet_gas': (2419, 0.422),
     'dry_gas': (1141, 0.586),
 }
+_P_DEEP_TREE = 0.10  # Share of deep-water dry trees among a core's platform wells  # spec: SMP-58
 _GEOMETRY_CLASSES = ('vertical', 'slightly_deviated', 'deviated', 'highly_deviated')  # spec: SMP-59
 _P_GEOMETRY = (0.25, 0.25, 0.25, 0.25)
 _THETA_CLASS = {'slightly_deviated': (5.0, 20.0), 'deviated': (20.0, 60.0), 'highly_deviated': (60.0, 75.0)}
@@ -113,12 +118,14 @@ _DRAIN_LENGTH = (300.0, 2500.0)  # m  # spec: SMP-71
 _PERF_SHARE = (0.3, 1.0)  # The perforated share of the net pay  # spec: SMP-71
 _D_ERROR, _D_BOUNDS = 0.7, (1e-5, 2e-3)  # The non-Darcy estimate's log error, and its bounds (d/Mscf)  # spec: SMP-71
 _LINER_MAX = 0.1571  # m, the largest liner of a gas well's drain (7 in)  # spec: SMP-73
+_SLANT_FLOOR = 2.0  # The floor on ln(r_e/r_w) - 0.75 + s + s_theta of a slanted well  # spec: SMP-72
 _ROUGHNESS = {'initial': (1.5e-6, 3e-5), 'mid_life': (1e-5, 6e-5), 'late': (2e-5, 1.5e-4)}  # m  # spec: SMP-76
 _BEAN_MAX = 0.1016  # m, the fully open bean's largest diameter (4 in)  # spec: SMP-77
 _P_LIFT_OIL = {'offshore': (0.20, 0.45, 0.70), 'onshore': (0.15, 0.25, 0.35)}  # By stage  # spec: SMP-78
 _P_LIFT_GAS = (0.0, 0.05, 0.15)  # spec: SMP-78
 _P_INJ = {'platform': (48.0, 85.0), 'subsea': (130.0, 210.0), 'onshore': (48.0, 85.0)}  # bar  # spec: SMP-79
 _GILBERT_H = 12192.0  # m: Gilbert's 40,000 ft (Golan and Whitson 1991, Eq. 5.17)  # spec: SMP-79
+_PSI_LG = (0.0, 0.75)  # The lift gas's share of the way from the ambient at the valve to T_r  # spec: SMP-79
 _W_LG_MAX = (0.1, 3.5)  # kg/s, the lift-gas capacity's bounds  # spec: SMP-80
 _AGE = {'initial': (30, 365), 'mid_life': (365, 8 * 365), 'late': (5 * 365, 25 * 365)}  # days  # spec: SMP-81
 _CH4_CP_P, _CH4_CP_T = (1.0, 101.0, 201.0, 401.0), (300.0, 380.0)  # bar, K  # spec: SMP-82
@@ -177,13 +184,13 @@ def draw_well(seed: int, k: int, stage: str | None = None, force_lift: bool = Fa
     - stage: `r_p`, `p_r`, `wlr`, `R_go`, `saturation`, `below_hydrostatic`, `ogr` and [`wgr`] (gas classes, else
       None and absent), [`w_kgko`] (oils), `c_k` (condensates, else None).
     - inflow: `perm`, `h_net`, `skin`, `ln_re_rw`, `delta_d`, [`drain_length`, `I_ani`, `J_H_over_J_V`] (drains),
-      `f_geo`, `inflow`, `q_l_ref`; oils: `mu_o`, `B_o`, `J`, `k_l`, `w_l_max`, [`eta_drain`]; gas classes:
+      [`I_ani`, `s_theta`] (slanted wells), `f_geo`, `inflow`, `q_l_ref`; oils: `mu_o`, `B_o`, `J`, `k_l`, `w_l_max`, [`eta_drain`]; gas classes:
       `perf_share`, `D_eq434`, `D_nondarcy` (d/Mscf), `a_gas`, `b_gas` (bar2 per Sm3/d and its square), `a_ratio`,
       `b_ratio` (over a vertical well's), `AOF`, `q_g_ref`, [`b_friction_share`].
     - completion: `c_e`, `q_design`, `D`, `tubing`, `q_cap`, `roughness`.
     - choke: `beta`, `d_bean`, `c_d`, `K_c`, `choke_model`, `chk_profile`.
     - lift: `lift`, `needs_lift`, and for a lifted well `z_inj`, `injection_md`, `z_inj_frac`, `p_inj`, `dp_valve`,
-      `packer_offset`, `T_lg`, `phi_lg`, `T_lg_below_ambient`, `glr_cap`, `w_lg_max`.
+      `packer_offset`, `T_lg`, `psi_lg` (its share of the way from the ambient to T_r), `glr_cap`, `w_lg_max`.
     - heat: `h`, `age_years`, `U_t`, `k_e`, `cp_o`, `cp_w`, `cp_g`.
     """
     if stage is not None and stage not in STAGES:
@@ -222,7 +229,8 @@ def _labels(r, w, stage):  # spec: SMP-52
     tail = bool(r.random() < _TAIL_SHARE)  # spec: SMP-53
     wt = pick(r, _WELL_TYPES, (1, 1, 1) if tail else _P_WELL_TYPE)  # spec: SMP-54
     ft = pick(r, _FLUID_TYPES, (1, 1, 1, 1) if tail else _P_FLUID)  # spec: SMP-55
-    fc = ft if ft != 'gas' else ('dry_gas' if r.random() < (0.25 if tail else _P_DRY_GAS) else 'wet_gas')
+    u_dry = r.random()  # spec: SMP-51. Drawn for every well, whatever its fluid type
+    fc = ft if ft != 'gas' else ('dry_gas' if u_dry < (0.25 if tail else _P_DRY_GAS) else 'wet_gas')
     p_support = 0.5 if tail else (0.7 if ft in OILS else 0.4)  # spec: SMP-56
     drive = 'pressure_support' if r.random() < p_support else 'depletion'
     drawn = pick(r, STAGES, (1, 1, 1) if tail else _P_STAGE)
@@ -233,14 +241,16 @@ def _labels(r, w, stage):  # spec: SMP-52
 def _depth(r, w):
     tail, wt = _is_tail(w), w['well_type']
     z = logu(r, 600, 7000) if tail else tlognorm(r, *_DEPTH[w['fluid_class']], 600, 6500)  # spec: SMP-57
+    u_deep = r.random()  # spec: SMP-51. A deep-water dry tree's number, drawn for every well
     if wt == 'platform':  # spec: SMP-58
         if tail:
-            d_w = logu(r, 15, 2000)
+            d_w = logu(r, 5, 2000)
         else:
-            d_w = logu(r, 400, 2000) if r.random() < 0.15 else tlognorm(r, 90, 0.6, 15, 400)
+            d_w = logu(r, 400, 2000) if u_deep < _P_DEEP_TREE else tlognorm(r, 90, 0.6, 5, 400)
     elif wt == 'subsea':
-        d_w = logu(r, 50, 3000) if tail else tlognorm(r, 350, 0.8, 80, 3000)
+        d_w = logu(r, 50, 3000) if tail else logu(r, 80, 3000)
     else:
+        unused(r)  # The water depth's number
         d_w = 0.0
     w.update(z=z, d_w=d_w, L=z + d_w if wt == 'platform' else z)
 
@@ -256,15 +266,16 @@ def _geometry(r, w, x):
         'deviated': 's_shaped' if sub < _P_S_SHAPED else 'build_and_hold',
         'highly_deviated': 'high_angle' if sub < _P_DRAIN else 'build_and_hold',
     }[gcl]
-    for _ in range(_GEOMETRY_REDRAWS):  # spec: SMP-60
+    for attempt in range(_GEOMETRY_REDRAWS):  # spec: SMP-60
         res = survey(r, family, L, _THETA_CLASS.get(gcl), d_mud)
         if res is not None and res[0][-1] <= _MD_MAX:
             md, tvd, prm = res
             break
         x.flags.append('geometry_redrawn')
     else:
-        gcl, family, (md, tvd, prm) = 'vertical', 'vertical', survey(r, 'vertical', L)
+        gcl, family, (md, tvd, prm) = 'vertical', 'vertical', ([0.0, L], [0.0, L], {})
         x.flags.append('geometry_to_vertical')
+    unused(r, (_GEOMETRY_REDRAWS - 1 - attempt) * N_NUMBERS)  # spec: SMP-51. The numbers of the redraws not made
     incl = [  # spec: SMP-61
         math.degrees(math.acos(min(1.0, (tvd[i] - tvd[i - 1]) / (md[i] - md[i - 1])))) for i in range(1, len(md))
     ]
@@ -294,6 +305,8 @@ def _pressure(r, w, x):  # spec: SMP-63
             lam = logistic(tnorm(r, mu, 0.9, -12.0, math.log(lam_cap / (1 - lam_cap))))
         p_i = p_h + lam * (p_lith - p_h)
         pclass = 'over' if lam >= 0.25 else 'normal'
+    if p_h > _P_MAX:  # The hydrostatic pressure alone passes the cap: the reservoir is held at it, underpressured
+        p_i, lam, pclass = _P_MAX, 0.0, 'under'
     if lam_cap < logistic(mu + 1.645 * 0.9):
         x.flags.append('p_i_cap_binds')
     w.update(p_h=p_h, p_lith=p_lith, lam=lam, p_i=p_i, pressure_class=pclass, grad_i=(p_i - P_ATM) / (z + d_w))
@@ -306,6 +319,7 @@ def _temperature(r, w, x):
         T_s = t_deep + (t_shelf - t_deep) * math.exp(-d_w / 400)
     else:
         T_s = r.uniform(258, 308) if tail else r.uniform(268, 303)
+        unused(r)  # spec: SMP-51. The seabed's second number
     g_lo = max(12.0, _G_EFF_MIN * L / z)  # spec: SMP-65
     g_hi = min(55.0, (_T_MAX - T_s) / (z / 1000))
     if g_lo > g_hi:
@@ -326,13 +340,16 @@ def _separator(r, w):  # spec: SMP-66
     if wt == 'onshore':
         p_sep, T_sep = tlognorm(r, 15, 0.6, 2, 70), r.uniform(285, 320)
     else:
-        p_sep, T_sep = tlognorm(r, 35, 0.45, 5, 85), r.uniform(300, 340) if wt == 'platform' else r.uniform(290, 320)
+        p_sep, T_sep = tlognorm(r, 35, 0.45, 5, 85), r.uniform(300, 340) if wt == 'platform' else r.uniform(290, 340)
     r_mid, r_late = r.uniform(0.5, 1.0), r.uniform(0.1, 0.6)
     r_s = {'initial': 1.0, 'mid_life': r_mid, 'late': r_late}[w['life_stage']]
-    dp_fl = r.uniform(5, 30) + r.uniform(*_RISER) * w['d_w'] if wt == 'subsea' else 0.0  # Flowline and riser
+    # spec: SMP-51. The flowline's two numbers and the tail's pressure are drawn for every well
+    dp_subsea = r.uniform(5, 30) + r.uniform(*_RISER) * w['d_w']  # Flowline and riser
+    dp_fl = dp_subsea if wt == 'subsea' else 0.0
     p_cap = P_S_MAX[wt]
+    p_s_tail = logu(r, P_S_MIN, 120)
     if _is_tail(w):
-        p_s = min(logu(r, P_S_MIN, 120) + dp_fl, p_cap)
+        p_s = min(p_s_tail + dp_fl, p_cap)
     else:
         p_s = min(max(r_s * p_sep + dp_fl, P_S_MIN), p_cap)
     w.update(p_sep=p_sep, T_sep=T_sep, p_s=p_s, r_s=r_s, dp_fl=dp_fl)
@@ -360,13 +377,15 @@ def _fluid(r, w, x, fluid):
     bo = black_oil(w)
     # spec: SMP-68
     p_sat = None
+    # spec: SMP-51. Whether the fluid is saturated, and its undersaturation, are drawn for every well
+    u_sat = r.random()
+    u = r.uniform(0.0, 0.85) if tail else tlognorm(r, 0.10 if fc == 'black_oil' else 0.05, 1.2, 0.005, 0.85)
     if fc in _P_SATURATED:
-        if r.random() < _P_SATURATED[fc]:
+        if u_sat < _P_SATURATED[fc]:
             u = 0.0  # Saturated at discovery
-        else:
-            u = r.uniform(0.0, 0.85) if tail else tlognorm(r, 0.10 if fc == 'black_oil' else 0.05, 1.2, 0.005, 0.85)
         p_sat = p_i * (1 - u)
     if fc == 'black_oil':
+        unused(r)  # spec: SMP-51. The other classes' number of the initial GOR
         R_i = bo.rs(p_sat, T_r)
         if R_i > _R_BLACK_OIL:
             p_sat, R_i = _rs_inverse(bo, _R_BLACK_OIL, T_r, p_sat), _R_BLACK_OIL
@@ -392,28 +411,33 @@ def _stage(r, w):
     tail, fc, drive, stage = _is_tail(w), w['fluid_class'], w['drive'], w['life_stage']
     oil = w['fluid_type'] in OILS
     # spec: SMP-69
+    # spec: SMP-51. Every number below is drawn for every well: the tail's forms, an oil's and a gas class's
     r_p = r.uniform(*_R_P[stage, drive]) if (stage, drive) in _R_P else r.uniform(*_R_P_DEPLETED[oil])
+    r_p_tail = r.uniform(0.15, 1.0)
     if tail:
-        r_p = r.uniform(0.15, 1.0)
+        r_p = r_p_tail
     p_r = r_p * w['p_i']
     ogr = c_k = None
+    dry_support, wlr_support = r.random() < 0.5, r.uniform(0, 0.1)
+    dry_depletion, wlr_depletion = r.random() < 0.5, r.uniform(0, 0.1)
+    wlr = {
+        ('initial', 'pressure_support'): 0.0 if dry_support else wlr_support,
+        ('initial', 'depletion'): 0.0 if dry_depletion else wlr_depletion,
+        ('mid_life', 'pressure_support'): r.uniform(0.1, 0.6),
+        ('mid_life', 'depletion'): r.uniform(0.0, 0.3),
+        ('late', 'pressure_support'): r.uniform(0.6, 0.98),
+        ('late', 'depletion'): r.uniform(0.05, 0.4),
+    }[stage, drive]
+    wlr_tail, u_kgko = r.uniform(0, 0.98), r.random()
+    wgr = logu(r, 1, 10000) if tail else logu(r, *_WGR[stage, drive])
+    u_ck = r.uniform(0.5, 3.0)
     if oil:
-        wlr = {
-            ('initial', 'pressure_support'): 0.0 if r.random() < 0.5 else r.uniform(0, 0.1),
-            ('initial', 'depletion'): 0.0 if r.random() < 0.5 else r.uniform(0, 0.1),
-            ('mid_life', 'pressure_support'): r.uniform(0.1, 0.6),
-            ('mid_life', 'depletion'): r.uniform(0.0, 0.3),
-            ('late', 'pressure_support'): r.uniform(0.6, 0.98),
-            ('late', 'depletion'): r.uniform(0.05, 0.4),
-        }[stage, drive]
         if tail:
-            wlr = r.uniform(0, 0.98)
-        u_kgko = r.random()
+            wlr = wlr_tail
         w['w_kgko'] = u_kgko if tail else 0.0  # spec: SMP-70. Fig. 9.16 in the core, the book's range in the tail
     else:
-        wgr = logu(r, 1, 10000) if tail else logu(r, *_WGR[stage, drive])
         if fc == 'gas_condensate':
-            c_k = r.uniform(0.5, 3.0)  # spec: SMP-70
+            c_k = u_ck  # spec: SMP-70
         w['wgr'] = wgr
     w['c_k'] = c_k
     R_go = producing_gor(w, p_r)
@@ -429,10 +453,11 @@ def _stage(r, w):
 
 def _on_geometry(w, x, a, b):  # spec: SMP-73
     """A vertical well's Forchheimer coefficients for the well's geometry: a over the geometry's factor, and for a
-    drain b scaled by (I_ani h / L_d)^2, the non-Darcy loss of the rate per completed length; else b over the factor."""
+    drain b scaled by (I_ani h / L_d)^2, the non-Darcy loss of the rate per completed length; else b as it is, a
+    slanted well's non-Darcy loss being in its D, from its perforated length along the well (SMP-71)."""
     if w['geometry_family'] == 'high_angle':
         return a / x.f_geo, b * (w['I_ani'] * w['h_net'] / w['drain_length']) ** 2
-    return a / x.f_geo, b / x.f_geo
+    return a / x.f_geo, b
 
 
 def _inflow(gen, w, x):
@@ -456,8 +481,10 @@ def _inflow(gen, w, x):
     if family == 'high_angle':
         x.f_geo = joshi_ratio(L_d, h_net, I_ani, skin, ln_re)
         w.update(drain_length=L_d, I_ani=I_ani, J_H_over_J_V=x.f_geo)
-    elif family in ('build_and_hold', 's_shaped'):
-        x.f_geo = math.cos(math.radians(w['theta_end'])) ** -0.5  # The slant's placeholder
+    elif family in ('build_and_hold', 's_shaped'):  # Cinco-Ley's slant skin in the radial index, with a floor
+        s_theta = slant_skin(w['theta_end'], h_net, I_ani)
+        x.f_geo = (ln_re - 0.75 + skin) / max(ln_re - 0.75 + skin + s_theta, _SLANT_FLOOR)
+        w.update(I_ani=I_ani, s_theta=s_theta)
     else:
         x.f_geo = 1.0
     w.update(perm=perm, h_net=h_net, skin=skin, delta_d=delta_d, ln_re_rw=ln_re)
@@ -470,9 +497,11 @@ def _inflow(gen, w, x):
         x.Z = bo.z_factor(p_r, T_r)
         x.mu_g = bo.gas_viscosity(p_r, T_r, bo.gas_density(p_r, T_r))
         # spec: SMP-71. Eq. 4-34 at a perforated share of the net pay, times a log-normal error factor, truncated
+        # A slanted or vertical well's perforated length along the well, theta_end being 0 in a vertical one
         r_nd = gen('nondarcy')
         f_perf = r_nd.uniform(*_PERF_SHARE)
-        estimate = nondarcy(w['sg_gas'], perm, h_net, x.mu_g, f_perf * h_net)
+        along = 1.0 if family == 'high_angle' else 1 / math.cos(math.radians(w['theta_end']))
+        estimate = nondarcy(w['sg_gas'], perm, h_net, x.mu_g, f_perf * h_net * along)
         x.D_nd = tlognorm(r_nd, estimate, _D_ERROR, *_D_BOUNDS)
         w.update(perf_share=f_perf, D_eq434=nondarcy(w['sg_gas'], perm, h_net, x.mu_g, h_net))
         x.a_v, x.b_v = forchheimer(perm, h_net, x.mu_g, x.Z, T_r, ln_re - 0.75, skin, x.D_nd)  # spec: SMP-73
@@ -526,10 +555,11 @@ def _inflow_at_stage(w, x):
     drain = w['geometry_family'] == 'high_angle'
     if w['fluid_type'] in OILS:
         J = x.J
-        if drain:  # spec: SMP-72. Dikken's model in closed form
+        if drain:  # spec: SMP-72. Dikken's model in closed form, the water at the model's viscosity (PVT-WAT-3)
             B_l = (1 - wlr) * x.B_o + wlr
             rho_l = ((1 - wlr) * (w['rho_o'] + w['R_go'] * w['rho_g']) + wlr * w['rho_w']) / B_l
-            c_lin = liner_liquid(D, min(max(rho_l, 400.0), 1100.0), (1 - wlr) * x.mu_o + wlr * 0.5e-3, B_l, eps)
+            mu_l = (1 - wlr) * x.mu_o + wlr * float(water_viscosity(T_r))
+            c_lin = liner_liquid(D, min(max(rho_l, 400.0), 1100.0), mu_l, B_l, eps)
             J_eff = drain_index(J, w['drain_length'], c_lin, delta_d * p_r, q_cap)
             w['eta_drain'] = J_eff / J
             J = J_eff
@@ -591,12 +621,16 @@ def _lift(r, w, x, force_lift):
         p_lift = 0.5 if tail else _P_LIFT_OIL['offshore' if wt != 'onshore' else 'onshore'][i_st]
     else:
         p_lift = 0.25 if tail else _P_LIFT_GAS[i_st]
-    lift = need or r.random() < p_lift or force_lift
+    # spec: SMP-51. The lift's number and the design's are drawn for every well, lifted or not
+    u_lift = r.random()
+    dz_pk = r.uniform(30, 150)
+    p_inj, dp_v = r.uniform(*_P_INJ[wt]), r.uniform(3.4, 13.8)  # At the top: the surface or the tree
+    delta_lift = r.uniform(0.3, 0.7)  # A lifted well's design drawdown
+    psi, u_glr = r.uniform(*_PSI_LG), r.random()
+    lift = need or u_lift < p_lift or force_lift
     q_l_now = min(w['q_l_ref'], w['q_cap'])
     if lift:  # spec: SMP-79
-        dz_pk = r.uniform(30, 150)
-        p_inj, dp_v = r.uniform(*_P_INJ[wt]), r.uniform(3.4, 13.8)  # At the top: the surface or the tree
-        p_wf_d = (1 - r.uniform(0.3, 0.7)) * p_r  # A lifted well's design drawdown
+        p_wf_d = (1 - delta_lift) * p_r
         vol_b, mass_b = stream(bo, R_go, wlr, rho_w, p_wf_d, T_r)  # The flowing column below the valve, no slip
         G_l = mass_b / vol_b * STD_GRAVITY / 1e5
         den = G_l - p_inj / _GILBERT_H
@@ -610,10 +644,9 @@ def _lift(r, w, x, force_lift):
         if H != H_bal:
             x.flags.append('injection_at_packer' if H == L - dz_pk else 'injection_raised_to_0.3L')
         T_a = T_s + (T_r - T_s) * H / L
-        phi = r.uniform(0, 0.3)
         # spec: SMP-80. GLR_cap log-uniform over the part of 30 to 1000 Sm3/Sm3 whose capacity lies within the bounds
         kq = w['rho_g'] * q_l_now / 86400  # kg/s per unit of GLR
-        lo, hi, u_glr = max(30.0, _W_LG_MAX[0] / kq), min(1000.0, _W_LG_MAX[1] / kq), r.random()
+        lo, hi = max(30.0, _W_LG_MAX[0] / kq), min(1000.0, _W_LG_MAX[1] / kq)
         if lo <= hi:
             glr = lo * (hi / lo) ** u_glr
             w_lg_max = kq * glr
@@ -622,8 +655,8 @@ def _lift(r, w, x, force_lift):
             glr = w_lg_max / kq
             x.flags.append('lift_capacity_at_bound')
         w.update(z_inj=H, injection_md=float(np.interp(H, tvd, md)), z_inj_frac=H / L, p_inj=p_inj, dp_valve=dp_v)
-        w.update(T_lg=T_a - phi * (T_a - T_s), packer_offset=dz_pk, phi_lg=phi)
-        w.update(T_lg_below_ambient=phi * (T_a - T_s), glr_cap=glr, w_lg_max=w_lg_max)
+        w.update(T_lg=T_a + psi * (T_r - T_a), packer_offset=dz_pk, psi_lg=psi)  # At most T_r
+        w.update(glr_cap=glr, w_lg_max=w_lg_max)
 
 
 def _cp_methane(p, T):
@@ -648,8 +681,9 @@ def _heat(r, w):
     age = logu(r, *_AGE[w['life_stage']]) * 86400
     U_t, k_e = logu(r, 11, 85), r.uniform(1.5, 2.6)
     h = _heat_transfer(D, U_t, k_e, age)
+    h_tail = r.uniform(2, 40)  # spec: SMP-51. Drawn for every well
     if _is_tail(w):
-        h = r.uniform(2, 40)
+        h = h_tail
     # spec: SMP-82
     T_rep = T_s + 0.8 * (T_r - T_s)
     t_f = (T_rep - 273.15) * 1.8 + 32

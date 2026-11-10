@@ -66,7 +66,7 @@ _LIFT = {  # A lift design's columns, by its draws' keys
     'p_inj': 'p_inj',
     'dp_valve': 'dp_valve',
     'packer_offset': 'packer_offset',
-    'phi_lg': 'phi_lg',
+    'psi_lg': 'psi_lg',
 }
 _GEOMETRY = {  # The survey's parameters, by the draws' keys
     'kickoff_tvd': 'geo_kickoff',
