@@ -93,3 +93,46 @@ Two costs are new:
 - The tables' saturation pressures against R3's (a third of the table wells change their saturation label), and the condensates' lower liquid rates.
 - $b = 0$ in D-61's fit for most gas wells.
 - The rework's items: the gas wells with pressure support, the redraw-limit drops, the dead dates and the best-rate solver failures, and the platform oil wells' upper tail.
+
+## The rerun after the second checkpoint (2026-11-09)
+
+*The pilots again, on the same seeds, with the two working assumptions of `checkpoint-2.md` that wait for Bjarne's ruling: D-107 (a gas well with pressure support waters out at a WGR of 10,000, and the tail's WGR up to 10,000) and L6's guard in the Rust core (DAK's Joule–Thomson factor undefined beyond its pole), run from the branch `fix/table-jt-temperature-solve`'s environment. Nothing else changed. The `sol-2` tables are those rebuilt for L6's investigation (draws 0 to 559; D-107 leaves their GOR axes identical); the `nsol-2` tables were rebuilt for draws 0 to 159: 52 table wells, 51 built, 1 volatile oil over D-106's limit, in 191 s on 6 processes.*
+
+| Run | Seed | Draw indices | Result | Wall time | Processes |
+|---|---|---|---|---|---|
+| `sol-2` | 2026 | 0 to 495 | 400 kept of 496 | 38 min | 10 |
+| `nsol-2` | 2027 | 0 to 114 | 100 kept of 115 | 29 min | 6 |
+
+**Outcomes.** `sol-2` keeps 80.6% of its drawn wells (core 84.5%, tail 66.0%), against R9's 82.1% (85.3%, 70.0%): 81 not producible (R9 73), 10 at the redraw limit (8 core, 2.0% of the core's drawn wells), 2 at the solver-failure limit and 3 best-rate solver failures (R9 10, 2 and 2). The tail loses the most, as its gas wells now reach a WGR of 10,000; the causes are not separated further. `nsol-2`'s outcomes are R9's well for well: 100 kept, 6 at the redraw limit, 5 not producible, 2 dead dates, 1 short life, 1 `table_failed`. Redraws per sample: 0.111 (`sol-2`, R9 0.106) and 0.132 (`nsol-2`, R9 0.110).
+
+**The decline of a life** (core `nsol-2` wells, the median last fifth over the first year, as above):
+
+| Run | All | Oil, support | Oil, depletion | Gas, support | Gas, depletion |
+|---|---|---|---|---|---|
+| R9 | 0.14 | 0.03 | 0.22 | 0.76 | 0.18 |
+| The rerun | 0.14 | 0.03 | 0.23 | 0.25 | 0.19 |
+
+The supported gas wells end at a WGR of 10,000 and 0.89 of $p_i$ at the median, their last rate at 0.20 of their first year's; one of 21 is stopped by the floor.
+
+**Rates.** Core gas and condensate wells, median-sample gas rate P10 / P50 / P90: 27,000 / 128,000 / 842,000 Sm³/d, 30.6% above 270,000 (R9: 25,000 / 154,000 / 973,000, 32.4%). Core offshore oil wells: 6 / 93 / 1965 Sm³/d of oil equivalent, 18.8% above 1018, a mean of 664 (R9: 6 / 91 / 1985, 19.0%, 663). By well type (`pilot_by_well_type.py`), core median-sample rates:
+
+| Well type | Oil wells: P50 (Sm³/d oe), above 1018, below 16, lifted | Gas wells: P50 (Sm³/d), above 270,000 |
+|---|---|---|
+| platform | 80, 16%, 23%, 47% | 114,000, 21% |
+| subsea | 112, 24%, 13%, 51% | 306,000, 56% |
+| onshore | 22, 6%, 41%, 44% | 35,000, 7% |
+
+**Flow regimes** (G1). Churn flow is 0.9% of `sol-2`'s samples at the bottom and 2.3% at the top (`nsol-2`: 1.8% and 1.0%), still thin.
+
+**Cost.**
+
+| | Rework (final) | R9 | The rerun |
+|---|---|---|---|
+| Mean Rust solve, volatile oils (s), `sol-2` | 0.186 | 0.812 | 0.221 |
+| CPU per accepted `sol-2` well (s) | 41.3 | 70.1 | 53.6 |
+| CPU per accepted `nsol-2` well (s) | 50.4 | 106.4 | 99.3 |
+| CPU outside the core, `sol-2` / `nsol-2` | 0.3% / 0.2% | 11.0% / 20.2% | 16.9% / 32.5% |
+| Pool efficiency, `sol-2` / `nsol-2` | 0.96 / 0.92 | 0.46 / 0.42 | 0.94 / 0.96 |
+| Projected CPU-hours, 10,000 wells, `sol-2` / `nsol-2` | 115 / 140 | 195 / 295 | 149 / 276 |
+
+The guard removes the slow volatile oils: the pool runs at full efficiency again, and `sol-2`'s CPU falls by a quarter. What remains above the rework's cost is outside the core: building each attempt's table at its GOR in Python (`PVTTableSet.at_gor`, 37 ms per solve in `sol-2`, 57 ms in `nsol-2`, whose lives cross more GORs) and `nsol-2`'s 303 solves per accepted well. R10 moves the sampler into `manywells.sampling` and should make the attempt's table cheap; that alone would bring both datasets near the rework's cost.
