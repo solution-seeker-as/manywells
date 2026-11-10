@@ -57,6 +57,8 @@ _TABLE_10_2 = np.array(
 _S_W_FIG, _S_W_TABLE = 0.20, 0.37
 _FIG_X, _FIG_Y = _FIG_9_16[:, 0], np.log10(_FIG_9_16[:, 1])
 _X = np.linspace(1.0, 0.05, 2 * 380 + 1)  # p/p_sat from the saturation pressure down, with RK4's midpoints
+GOR_NODES = _X[::2][::-1].copy()  # p_r/p_sat at the nodes of an oil's GOR curve, ascending: linear between them
+GOR_NODES.setflags(write=False)
 
 
 def _kgko_fig_9_16(sg):
@@ -128,7 +130,7 @@ def _gor_curve(rho_o, rho_g, p_sep, T_sep, T_r, p_sat, w_kgko):  # spec: SMP-70
         out[k + 1] = s[0]
     e = slice(0, None, 2)
     R = Rs[e] + _kgko(1 - out, w_kgko) * mu_r[e] * Bo[e] / Bg[e]  # Eq. 9.33
-    return _X[::2][::-1], R[::-1] / Rs[0]
+    return GOR_NODES, R[::-1] / Rs[0]
 
 
 def producing_gor(w, p_r) -> float:  # spec: SMP-70
@@ -136,7 +138,7 @@ def producing_gor(w, p_r) -> float:  # spec: SMP-70
     The producing gas-oil ratio (Sm3/Sm3) of a drawn well at reservoir pressure p_r (bar).
 
     Oils: R_si at or above the saturation pressure, and below it R_si times the material balance's factor at
-    p_r/p_sat. Gas condensates: R_si (1 + c_k max(0, 1 - p_r/p_sat)). Wet and dry gas: R_si.
+    p_r/p_sat, linear between GOR_NODES. Gas condensates: R_si (1 + c_k max(0, 1 - p_r/p_sat)). Wet and dry gas: R_si.
 
     :param w: The well's draws (draws.draw_well): its fluid, separator, T_r, p_sat, R_i, and w_kgko or c_k
     """

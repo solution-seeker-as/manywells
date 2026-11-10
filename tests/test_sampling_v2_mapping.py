@@ -34,6 +34,7 @@ from manywells.sampling.v2.inflow import (
 )
 from manywells.sampling.v2.mapping import N_CELLS, WellBuilder
 from manywells.sampling.v2.reservoir import (
+    GOR_NODES,
     R_W,
     drain_index,
     forchheimer,
@@ -77,6 +78,11 @@ def test_producing_gor_of_an_oil(wells):
     mobile = dict(w, w_kgko=1.0)  # Table 10.2's k_g/k_o
     assert producing_gor(mobile, 0.5 * p_sat) > producing_gor(w, 0.5 * p_sat)
     assert producing_gor(mobile, p_sat) == R_i
+    # The curve is linear in p_r / p_sat between its nodes, from 0.05 to 1
+    assert GOR_NODES[0] == 0.05 and GOR_NODES[-1] == 1.0 and len(GOR_NODES) == 381 and np.all(np.diff(GOR_NODES) > 0)
+    lo, hi = GOR_NODES[200] * p_sat, GOR_NODES[201] * p_sat
+    middle = 0.5 * (producing_gor(w, lo) + producing_gor(w, hi))
+    assert producing_gor(w, 0.5 * (lo + hi)) == pytest.approx(middle, rel=1e-12)
 
 
 def test_producing_gor_of_gas_classes(gas_wells):
