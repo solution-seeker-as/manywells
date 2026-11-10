@@ -1047,8 +1047,9 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Alternatives:** the triage's $U(0.1, 0.8)$, which also follows one region's medians; keep the draft's.
 - **Basis:** data, thinly and by a proxy: one region's gas wells, with the choke open, lose wellhead pressure earlier in their lives than the draft's first step in most wells [own analysis of NSTA's production by well]. The upper end is kept, since one region's shape is weak evidence (the Goals, coverage first).
 - **Realism:** the separator steps down earlier in some lives.
+- **Implemented** (R10, 2026-11-10). Over 1500 lives of seed 2026, before and after (5th / 25th / 50th / 75th / 95th percentiles): the first step's date over the life span 0.27 / 0.33 / 0.44 / 0.56 / 0.74 becomes 0.12 / 0.20 / 0.33 / 0.49 / 0.70, the second's 0.38 / 0.56 / 0.71 / 0.81 / 0.88 becomes 0.27 / 0.49 / 0.66 / 0.79 / 0.88; the core wells' nominal pressure downstream of the choke at a quarter of the life 14 / 28 / 43 / 69 / 151 bar becomes 9 / 24 / 39 / 66 / 145 bar, and at half the life its median 34 bar becomes 31 bar.
 - **Needs sign-off:** yes (sampling).
-- **Used by:** `specs/sampling.md`, SMP-89; `sampling/v2/life.py`.
+- **Used by:** `specs/sampling.md`, SMP-89; `sampling/v2/life.py` (`_T_SEP`).
 - **Ruling:**
 
 ### D-117 · Lift's drawn start from a twentieth of the life

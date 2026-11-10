@@ -769,11 +769,11 @@ From D-45 (ruled 2026-11-06). Sources: Hasan and Kabir (2012), Eq. 2; [WP §6, �
 
 ### SMP-89 · Separator along the life
 
-$p_{s,\text{nom}}(t)$ is SMP-66's with the factor $r_s(t)$: 1 until $t_1$, the mid-life draw's $r_s$ until $t_2$, and the smaller of it and the late draw's after, with $t_1 < t_2$ the sorted pair of two draws of $U(0.25, 0.9)\thinspace T_\text{life}$. A tail well scales its $p_{s,\text{nom}} - \Delta p_\text{fl}$ by the same factor, with $p_{s,\text{nom}}(t)$ at least 1.5 bar.
+$p_{s,\text{nom}}(t)$ is SMP-66's with the factor $r_s(t)$: 1 until $t_1$, the mid-life draw's $r_s$ until $t_2$, and the smaller of it and the late draw's after, with $t_1 < t_2$ the sorted pair of two draws of $U(0.1, 0.9)\thinspace T_\text{life}$. A tail well scales its $p_{s,\text{nom}} - \Delta p_\text{fl}$ by the same factor, with $p_{s,\text{nom}}(t)$ at least 1.5 bar.
 
-From D-46 (ruled 2026-11-06). Sources: [WP §7].
+From D-46 (ruled 2026-11-06) and D-116. Sources: [WP §7]; [own analysis of NSTA's production by well].
 
-**Basis:** a guess: two step-downs at dates of $U(0.25, 0.9)\thinspace T_\text{life}$, after two fields that moved to lower stages late in life (trade press, [WP §7]); no public record of separator pressures over wells' lives was found, and one would replace it. The steps' sizes are SMP-66's stage factors.
+**Basis:** data, thinly and by a proxy, for the lower end of the dates: one region's gas wells, with the choke open, lose wellhead pressure earlier in their lives than R3's first step at 0.25 of the life in most wells, so the dates start at a tenth of it [own analysis of NSTA's production by well] (D-116). Keeping the upper end of 0.9, since one region's shape is weak evidence, and two steps, whose sizes are SMP-66's stage factors, is a design choice for coverage and simplicity: the pressure falls in more steps in that region.
 
 ### SMP-90 · Gas lift along the life
 
@@ -1166,7 +1166,6 @@ From D-61 (ruled 2026-11-06; $b = 0$ kept, L3 of 2026-11-09) and D-60. Sources: 
 | SMP-85 | The pressure's form and $\gamma$'s range for wells with pressure support | Not recorded: the material balance covers oils under depletion (D-115) | None named |
 | SMP-86 | The breakthrough recoveries and jumps, and the gases' log-linear WGR | Per-well water-cut curves offshore, and a text on fractional flow ([RF §9], Gaps) | Per-well water-cut curves |
 | SMP-88 | The roughness's log-linear path from its initial to its late draw | As SMP-76 | As SMP-76 |
-| SMP-89 | Two step-downs of the separator, at dates of $U(0.25, 0.9)\thinspace T_\text{life}$ | Separator pressures over wells' lives: two trade-press examples only ([WP §7]) | A record of separator pressures over wells' lives |
 | SMP-90 | Lift's drawn start at $U(0.2, 0.9)\thinspace T_\text{life}$ | Not recorded | Not recorded |
 | SMP-94 | The lift gas off in 0.20 of a lifted well's slots | A share of time with the lift gas off: none public (D-38) | A record of lifted wells' injection over time |
 | SMP-95 | The separator pressure within ±10% of its nominal | A spread of separator or manifold pressures: none public ([WP §7]) | Such a spread |
@@ -1213,6 +1212,7 @@ From D-61 (ruled 2026-11-06; $b = 0$ kept, L3 of 2026-11-09) and D-60. Sources: 
 | SMP-84 | A clock that follows no solve | The Goals: open-loop controls and trends |
 | SMP-85 | $\gamma$ uniform over the material balance's 5th to 95th percentiles, one range for oils and supported wells | Simplicity, with the material balance's own path per well as the replacement (D-115) |
 | SMP-88 | The inflow model, the completion and the fluid's descriptors fixed for the life | Simplicity |
+| SMP-89 | Two step-downs of the separator, with the dates' upper end of 0.9 of the life kept | Coverage first and simplicity: one region's shape is weak evidence (D-116) |
 | SMP-90 | Lift starts where natural flow ends, with the late-stage draw's design | Acceptance criterion 2: a well that an operator would lift is not dropped |
 | SMP-91 | The stages' limits: the first year, and half the life span | Labels that mean the same in both datasets |
 | SMP-92 | A `sol-2` well's date uniform within its drawn stage; a tail well's at the end of its life | One life for both datasets, with the drawn stage shares |

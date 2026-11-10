@@ -136,7 +136,7 @@ def check_life(lf):
 
     # The separator (SMP-89)
     t_1, t_2, r_mid, r_late = prm['t_sep_1'], prm['t_sep_2'], prm['r_s_mid'], prm['r_s_late']
-    assert 0.25 * T <= t_1 <= t_2 <= 0.9 * T and between(r_mid, 0.5, 1) and between(r_late, 0.1, 0.6)
+    assert 0.1 * T <= t_1 <= t_2 <= 0.9 * T and between(r_mid, 0.5, 1) and between(r_late, 0.1, 0.6)
     steps = [(0.0, 1.0), (0.999 * t_1, 1.0), (t_1, r_mid), (0.5 * (t_1 + t_2), r_mid), (t_2, min(r_mid, r_late))]
     for t, r_s in steps + [(T, min(r_mid, r_late))]:
         assert lf.r_s(t) == r_s
@@ -296,7 +296,7 @@ def test_the_evolution_generators_numbers(lives):
         assert prm['gamma_p'] == uniform(4, 0.7, 2.3)
         assert prm['F_bt'] == (uniform(5, 0.05, 0.4) if support else uniform(5, 0.2, 0.7))
         assert prm['wlr_bt'] == (uniform(6, 0.05, 0.3) if support else uniform(6, 0.02, 0.1))
-        steps = sorted(0.25 + 0.65 * x for x in u[7:9])
+        steps = sorted(0.1 + 0.8 * x for x in u[7:9])
         assert [prm['t_sep_1'] / T, prm['t_sep_2'] / T] == pytest.approx(steps, rel=1e-12)
         if lf.lift_start_rule == 'drawn_time':
             assert lf.lift_start / T == uniform(9, 0.2, 0.9)
