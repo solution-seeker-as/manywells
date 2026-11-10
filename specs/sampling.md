@@ -1076,38 +1076,38 @@ The v2 rows (SMP-50 to SMP-117) are spec-only until R10's code carries their `# 
 | SMP-43 | — | — | property: tests/test_sampling.py (the mapped fluid) |
 | SMP-44 | — | — | spec-only: a rule that nothing is drawn |
 | SMP-50 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the datasets' counts and configuration) |
-| SMP-51 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: a change of one block moves no other block's draws) |
-| SMP-52 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: every label set, with its shares) |
-| SMP-53 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-54 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-55 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-56 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-57 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-58 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-59 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-60 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-61 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-62 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-63 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-64 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-65 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-66 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-67 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-68 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-69 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-70 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-71 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-72 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-73 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-74 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-75 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-76 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-77 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-78 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-79 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-80 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-81 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
-| SMP-82 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the draws' bounds, shares and marginals, v2: checks) |
+| SMP-51 | — | — (`sampling/v2/draws.py` `draw_well`) | property: tests/test_sampling_v2_draws.py (the blocks' generators in their order, a block drawn from another seed moves no other block's numbers, a stage override changes only what depends on the stage. Not implemented yet: every number of a block drawn whatever its branch, since the port keeps the prototype's draws) |
+| SMP-52 | — | — (`sampling/v2/draws.py`, the labels that the well draws set; the tables', the life's and the generation's labels: planned, R10) | property: tests/test_sampling_v2_draws.py (every label of the well draws within its values) |
+| SMP-53 | — | — (`sampling/v2/draws.py` `_labels`, and each block's tail form) | property: tests/test_sampling_v2_draws.py (the tail's share, the tail wells' bounds, shares and marginals) |
+| SMP-54 | — | — (`sampling/v2/draws.py` `_labels`) | property: tests/test_sampling_v2_draws.py (the shares, core and tail) |
+| SMP-55 | — | — (`sampling/v2/draws.py` `_labels`) | property: tests/test_sampling_v2_draws.py (the shares, core and tail, each class's range of the initial GOR) |
+| SMP-56 | — | — (`sampling/v2/draws.py` `_labels`) | property: tests/test_sampling_v2_draws.py (the shares, core and tail) |
+| SMP-57 | — | — (`sampling/v2/draws.py` `_depth`) | property: tests/test_sampling_v2_draws.py (the bounds and the marginals, core and tail) |
+| SMP-58 | — | — (`sampling/v2/draws.py` `_depth`) | property: tests/test_sampling_v2_draws.py (the bounds, the share of deep-water platforms) |
+| SMP-59 | — | — (`sampling/v2/draws.py` `_geometry`) | property: tests/test_sampling_v2_draws.py (the shares of the classes and of their families, the class's inclination) |
+| SMP-60 | — | — (`sampling/v2/survey.py` `survey`; `sampling/v2/draws.py` `_geometry`) | property: tests/test_sampling_v2_draws.py (each family's sections, ranges, kickoff and least hold, MD at most 9342 m) |
+| SMP-61 | — | — (`sampling/v2/draws.py` `_geometry`) | property: tests/test_sampling_v2_draws.py (every cell within 75° of vertical) |
+| SMP-62 | — | — (`sampling/v2/draws.py` `_water`) | property: tests/test_sampling_v2_draws.py (the bounds, the density and the marginals) |
+| SMP-63 | — | — (`sampling/v2/draws.py` `_pressure`) | property: tests/test_sampling_v2_draws.py (the bounds, the truncations and the shares of underpressure. An open finding, kept as a strict expected failure: $p_i$ exceeds 950 bar where the hydrostatic pressure alone does) |
+| SMP-64 | — | — (`sampling/v2/draws.py` `_temperature`) | property: tests/test_sampling_v2_draws.py (the bounds) |
+| SMP-65 | — | — (`sampling/v2/draws.py` `_temperature`) | property: tests/test_sampling_v2_draws.py (the bounds and the truncations: $T_r$ at most 450 K, at least 10 K/km over the well) |
+| SMP-66 | — | — (`sampling/v2/draws.py` `_separator`) | property: tests/test_sampling_v2_draws.py (the bounds, the nominal pressure's formula and a marginal) |
+| SMP-67 | — | — (`sampling/v2/draws.py` `_fluid`) | property: tests/test_sampling_v2_draws.py (the bounds and the marginals) |
+| SMP-68 | — | — (`sampling/v2/draws.py` `_fluid`, and `_stage` for `saturation`) | property: tests/test_sampling_v2_draws.py ($p_\text{sat}$ at most $p_i$, a black oil's $R_{si}$ on its correlation and at most 356 Sm³/Sm³, the label) |
+| SMP-69 | — | — (`sampling/v2/draws.py` `_stage`) | property: tests/test_sampling_v2_draws.py (the bounds by stage and drive, the tail's marginal) |
+| SMP-70 | — | — (`sampling/v2/reservoir.py` `producing_gor`; `sampling/v2/draws.py` `_stage`) | property: tests/test_sampling_v2_mapping.py (the curve below the saturation pressure, its dip and rise, the condensates' factor) |
+| SMP-71 | — | — (`sampling/v2/draws.py` `_inflow`; `sampling/v2/reservoir.py` `nondarcy`) | property: tests/test_sampling_v2_draws.py (the bounds and the marginals); property: tests/test_sampling_v2_mapping.py (Eq. 4-34 in field units) |
+| SMP-72 | — | — (`sampling/v2/reservoir.py` `j_radial`, `joshi_ratio`, `liner_liquid`, `drain_index`; `sampling/v2/draws.py` `_inflow`, `_inflow_at_stage`; `sampling/v2/inflow.py` `inflow_at`) | property: tests/test_sampling_v2_mapping.py (the radial index in field units, Joshi's index against Economides et al.'s Example 2-10, the closed form's efficiency, the index at a state); property: tests/test_sampling_v2_draws.py (the geometry's factor of every well) |
+| SMP-73 | — | — (`sampling/v2/reservoir.py` `forchheimer`, `liner_gas`; `sampling/v2/draws.py` `_on_geometry`, `_inflow_at_stage`) | property: tests/test_sampling_v2_mapping.py (the coefficients in field units, the liner's friction); property: tests/test_sampling_v2_draws.py (the geometry's factors of every gas well) |
+| SMP-74 | — | — (`sampling/v2/draws.py` `_inflow_at_stage`) | property: tests/test_sampling_v2_draws.py (the rule on every oil well, gas classes take `forchheimer`) |
+| SMP-75 | — | — (`sampling/v2/draws.py` `_completion`) | property: tests/test_sampling_v2_draws.py (the sizes, 9-5/8 in for gas classes only, the marginal of $C$) |
+| SMP-76 | — | — (`sampling/v2/draws.py` `_completion`) | property: tests/test_sampling_v2_draws.py (the ranges by stage, and the tail's) |
+| SMP-77 | — | — (`sampling/v2/draws.py` `_choke`) | property: tests/test_sampling_v2_draws.py (the bounds, $K_c$ and the profiles' shares) |
+| SMP-78 | — | — (`sampling/v2/draws.py` `_lift`) | property: tests/test_sampling_v2_draws.py (a well that needs lift is lifted, no core gas well is lifted at its start) |
+| SMP-79 | — | — (`sampling/v2/draws.py` `_lift`) | property: tests/test_sampling_v2_draws.py (the valve's depth within its bounds, its MD on the survey, the lift gas's temperature) |
+| SMP-80 | — | — (`sampling/v2/draws.py` `_lift`) | property: tests/test_sampling_v2_draws.py ($w_{lg,\max}$ within 0.1 to 3.5 kg/s) |
+| SMP-81 | — | — (`sampling/v2/draws.py` `_heat`) | property: tests/test_sampling_v2_draws.py (the bounds, the tail's marginal) |
+| SMP-82 | — | — (`sampling/v2/draws.py` `_heat`) | property: tests/test_sampling_v2_draws.py ($c_{po}$ and $c_{pw}$ by their formulas, $c_{pg}$ within the table's range) |
 | SMP-83 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the life's trends, and the two datasets' states by stage) |
 | SMP-84 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the life's trends, and the two datasets' states by stage) |
 | SMP-85 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the life's trends, and the two datasets' states by stage) |
@@ -1134,12 +1134,12 @@ The v2 rows (SMP-50 to SMP-117) are spec-only until R10's code carries their `# 
 | SMP-106 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the drops against their targets, on R11's pilot) |
 | SMP-107 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: a comparison run's starts) |
 | SMP-108 | — | — (planned: `manywells.datasets`, R10) | spec-only: until R10 implements it (planned property: the logs hold every draw of a pilot) |
-| SMP-109 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: a rerun gives the same draws, whatever the order) |
+| SMP-109 | — | — (`sampling/v2/draws.py` `draw_well`, the blocks' generators; the life's, the samples' and the split's: planned, R10) | property: tests/test_sampling_v2_draws.py (a rerun gives the same draws, whatever was drawn before and in a process of its own, every key holds `v2`) |
 | SMP-110 | — | — (planned: `manywells.datasets`, R10) | spec-only: until R10 implements it (planned property: the counts, the split, and a re-solved row) |
-| SMP-111 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: every mapped well passes configurations.check) |
+| SMP-111 | — | — (`sampling/v2/mapping.py` `WellBuilder`) | property: tests/test_sampling_v2_mapping.py (every drawn well at its nominal state passes `configurations.check`, with each input from its draws) |
 | SMP-112 | — | — (planned: the generator's NeqSim step, R10) | spec-only: until R10 implements it (planned property: the table checks, v2: checks) |
 | SMP-113 | — | — (planned: the generator's NeqSim step, R10) | spec-only: until R10 implements it (planned property: the table checks, v2: checks) |
 | SMP-114 | — | — (planned: the generator's NeqSim step, R10) | spec-only: until R10 implements it (planned property: the table checks, v2: checks) |
 | SMP-115 | — | — (planned: the generator's NeqSim step, R10) | spec-only: until R10 implements it (planned property: the table checks, v2: checks) |
 | SMP-116 | — | — (planned: the generator's NeqSim step, R10) | spec-only: until R10 implements it (planned property: the table checks, v2: checks) |
-| SMP-117 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the fit against the pseudo-pressure) |
+| SMP-117 | — | — (`sampling/v2/inflow.py` `gas_inflow`, `fit_pressure_squared`) | property: tests/test_sampling_v2_mapping.py (the fit reproduces a pressure-squared law, $b = 0$ where the slope is negative, the fit against the pseudo-pressure) |
