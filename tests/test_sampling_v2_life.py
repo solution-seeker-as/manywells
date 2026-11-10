@@ -180,11 +180,11 @@ def check_life(lf):
         if rule == 'static_check':
             assert start == failed
         elif rule == 'drawn_time':
-            assert between(start, 0.2 * T, 0.9 * T) and (failed is None or failed >= start)
+            assert between(start, 0.05 * T, 0.9 * T) and (failed is None or failed >= start)
         else:
             assert failed is None
     elif rule == 'drawn_time':
-        assert between(start, 0.2 * T, 0.9 * T)
+        assert between(start, 0.05 * T, 0.9 * T)
 
 
 def check_state(lf, t, eps=(1.0, 1.0)):
@@ -299,7 +299,7 @@ def test_the_evolution_generators_numbers(lives):
         steps = sorted(0.1 + 0.8 * x for x in u[7:9])
         assert [prm['t_sep_1'] / T, prm['t_sep_2'] / T] == pytest.approx(steps, rel=1e-12)
         if lf.lift_start_rule == 'drawn_time':
-            assert lf.lift_start / T == uniform(9, 0.2, 0.9)
+            assert lf.lift_start / T == uniform(9, 0.05, 0.9)
         if tail:
             assert prm['r_p_start'] == uniform(10, 0.97 if support else 0.85, 1)
             if oil:

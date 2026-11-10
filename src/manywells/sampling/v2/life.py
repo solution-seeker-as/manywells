@@ -29,6 +29,7 @@ _T_LIFE = (3.0, 30.0)  # years  # spec: SMP-84
 _Q_END = (0.03, 0.3)  # The decline's rate at the end of the life over the plateau's  # spec: SMP-84
 _GAMMA = (0.7, 2.3)  # The pressure path's exponent  # spec: SMP-85
 _T_SEP = (0.1, 0.9)  # The separator's step dates over the life span  # spec: SMP-89
+_T_LIFT = (0.05, 0.9)  # The lift's drawn start over the life span  # spec: SMP-90
 _R_END = 0.15  # p_r / p_i of an exhausted reservoir under depletion  # spec: SMP-83
 _R_END_TOP = {True: 0.3, False: 0.2}  # The top of a core well's end under depletion: oils, gas classes  # spec: SMP-83
 _WGR_END = 10000.0  # Sm3 per 1e6 Sm3: a gas well with pressure support waters out  # spec: SMP-83
@@ -119,7 +120,7 @@ class Life:
         else:
             self._F_bt, self._wlr_bt = r.uniform(0.2, 0.7), r.uniform(0.02, 0.1)
         self._t_sep = tuple(float(t) for t in np.sort(r.uniform(*_T_SEP, 2)) * self.T_life)  # spec: SMP-89
-        t_lift = r.uniform(0.2, 0.9) * self.T_life  # spec: SMP-90
+        t_lift = r.uniform(*_T_LIFT) * self.T_life  # spec: SMP-90
         # spec: SMP-83. The start: the initial-stage draw's state, and for a tail well a core initial state. Its
         # numbers are drawn for every well
         r0_core, dry = r.uniform(0.97 if support else 0.85, 1.0), r.random()

@@ -780,16 +780,16 @@ From D-46 (ruled 2026-11-06) and D-116. Sources: [WP §7]; [own analysis of NSTA
 - A well that its initial-stage draw lifts (SMP-78) is lifted from the start, with that draw's design (SMP-79, SMP-80): `lift_start_rule` is `from_start`.
 - For any other well lift starts at the earliest of:
   1. for an oil well, the first of 41 dates $t = i\thinspace T_\text{life}/40$ at which SMP-78's static check fails at the trends' state and $p_{s,\text{nom}}(t)$ (`static_check`);
-  2. for a well that its late-stage draw lifts, a drawn date $U(0.2, 0.9)\thinspace T_\text{life}$ (`drawn_time`);
+  2. for a well that its late-stage draw lifts, a drawn date $U(0.05, 0.9)\thinspace T_\text{life}$ (`drawn_time`);
   3. in `nsol-2`, for an oil well or a well that its late-stage draw lifts, the last scan point before the natural well's best rate first fails (SMP-101; `end_of_natural_flow`).
 
   Its design is the late-stage draw's (SMP-79, SMP-80), made as if lifted where that draw leaves the well natural. A well that none of these start stays natural.
 - Before lift starts the well has no injection point and $w_{lg} = 0$; from the start, its controls of SMP-94 or SMP-98.
 - A `sol-2` oil well that is natural at its date and cannot flow at its best rate is lifted by SMP-103 (`no_natural_flow`).
 
-From D-49 and D-84 (ruled 2026-11-06), D-101 (ruled 2026-11-06, checkpoint F2) and D-105. Sources: Golan and Whitson (1991), Example 4.11; Goh et al. (2007); [WP §9].
+From D-49 and D-84 (ruled 2026-11-06), D-101 (ruled 2026-11-06, checkpoint F2), D-105 and D-117. Sources: Golan and Whitson (1991), Example 4.11; Goh et al. (2007); [WP §9]; [own analysis of BOEM's OGOR-A production and BSEE's well tests].
 
-**Basis:** physics for the static check, SMP-78's, on a grid of 41 dates. Starting lift where natural flow ends, or where a `sol-2` well cannot flow, with the late-stage draw's design for a lift that starts later, is a design choice after operating practice (Golan and Whitson 1991, Example 4.11; [WP §9]; D-49; checkpoint F2). The drawn date of $U(0.2, 0.9)\thinspace T_\text{life}$ is a guess with no source and no replacement recorded.
+**Basis:** physics for the static check, SMP-78's, on a grid of 41 dates. Starting lift where natural flow ends, or where a `sol-2` well cannot flow, with the late-stage draw's design for a lift that starts later, is a design choice after operating practice (Golan and Whitson 1991, Example 4.11; [WP §9]; D-49; checkpoint F2). Data for the drawn date's range, 0.05 to 0.9 of the life: of one region's oil wells that were ever on gas lift and not from their start, the first month on lift spans a range that starts well below R3's 0.2 and ends near 0.9, by two sources [own analysis of BOEM's OGOR-A production and BSEE's well tests] (D-117); its uniform shape is a design choice for simplicity.
 
 ### SMP-91 · Life stage of a date
 
@@ -1166,7 +1166,6 @@ From D-61 (ruled 2026-11-06; $b = 0$ kept, L3 of 2026-11-09) and D-60. Sources: 
 | SMP-85 | The pressure's form and $\gamma$'s range for wells with pressure support | Not recorded: the material balance covers oils under depletion (D-115) | None named |
 | SMP-86 | The breakthrough recoveries and jumps, and the gases' log-linear WGR | Per-well water-cut curves offshore, and a text on fractional flow ([RF §9], Gaps) | Per-well water-cut curves |
 | SMP-88 | The roughness's log-linear path from its initial to its late draw | As SMP-76 | As SMP-76 |
-| SMP-90 | Lift's drawn start at $U(0.2, 0.9)\thinspace T_\text{life}$ | Not recorded | Not recorded |
 | SMP-94 | The lift gas off in 0.20 of a lifted well's slots | A share of time with the lift gas off: none public (D-38) | A record of lifted wells' injection over time |
 | SMP-95 | The separator pressure within ±10% of its nominal | A spread of separator or manifold pressures: none public ([WP §7]) | Such a spread |
 | SMP-98 | The change probability $p_c \sim \text{LogU}(0.5, 0.95)$, the step of ±0.1 of the range and the share of 0.1 of new draws | Histories of choke and lift-gas set points: 3W's windows last hours to weeks | Histories of set points over wells' lives |
@@ -1213,6 +1212,7 @@ From D-61 (ruled 2026-11-06; $b = 0$ kept, L3 of 2026-11-09) and D-60. Sources: 
 | SMP-85 | $\gamma$ uniform over the material balance's 5th to 95th percentiles, one range for oils and supported wells | Simplicity, with the material balance's own path per well as the replacement (D-115) |
 | SMP-88 | The inflow model, the completion and the fluid's descriptors fixed for the life | Simplicity |
 | SMP-89 | Two step-downs of the separator, with the dates' upper end of 0.9 of the life kept | Coverage first and simplicity: one region's shape is weak evidence (D-116) |
+| SMP-90 | Lift's drawn start uniform over its range | Simplicity (D-117) |
 | SMP-90 | Lift starts where natural flow ends, with the late-stage draw's design | Acceptance criterion 2: a well that an operator would lift is not dropped |
 | SMP-91 | The stages' limits: the first year, and half the life span | Labels that mean the same in both datasets |
 | SMP-92 | A `sol-2` well's date uniform within its drawn stage; a tail well's at the end of its life | One life for both datasets, with the drawn stage shares |

@@ -1059,8 +1059,9 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Alternatives:** keep the draft's.
 - **Basis:** data: of one region's oil wells that were ever on gas lift and not from their start, the first month on lift spans a range that starts well below the draft's 0.2 and ends near its 0.9, by two sources [own analysis of BOEM's OGOR-A production and BSEE's well tests]. The uniform shape is a design choice for simplicity.
 - **Realism:** the drawn date is one of three rules, and the earliest wins; some lifts start earlier.
+- **Implemented** (R10, 2026-11-10). Over 1500 lives of seed 2026, before and after: the lives whose lift starts at the drawn date rise from 244 to 275 and those by the static check fall from 305 to 274; the drawn starts over the life span, 0.22 / 0.33 / 0.48 / 0.69 / 0.86 (5th / 25th / 50th / 75th / 95th percentiles), become 0.07 / 0.20 / 0.37 / 0.60 / 0.85, and every later start, by either rule, 0.10 / 0.25 / 0.37 / 0.56 / 0.81 becomes 0.07 / 0.19 / 0.30 / 0.51 / 0.80. The lives lifted by a quarter of their span rise from 27.7% to 31.3%, and by half of it from 43.5% to 44.4%. The life scan's earlier start in `nsol-2` (SMP-101) is not measured here.
 - **Needs sign-off:** yes (sampling).
-- **Used by:** `specs/sampling.md`, SMP-90; `sampling/v2/life.py`.
+- **Used by:** `specs/sampling.md`, SMP-90; `sampling/v2/life.py` (`_T_LIFT`).
 - **Ruling:**
 
 ### D-118 · Set points that change less often: the change probability from 0.2
