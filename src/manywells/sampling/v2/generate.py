@@ -57,8 +57,7 @@ import time
 import numpy as np
 
 from manywells.configurations import V2, check
-from manywells.datasets import schema
-from manywells.datasets.rows import root_features
+from manywells.datasets.v2 import FEATURES, sample_features  # noqa: F401 - FEATURES: the columns a record holds
 from manywells.sampling.v2.draws import draw_well
 from manywells.sampling.v2.inflow import COEF_KEYS
 from manywells.sampling.v2.life import _LIFT_KEYS, WLR_MAX, Life, lift_on, sol2_well
@@ -71,8 +70,6 @@ from manywells.solvers.rust import RustRootFinder
 FLOOR = {'platform': 1.6, 'onshore': 1.6, 'subsea': 20.0}  # Sm3/d of oil equivalent, by well type  # spec: SMP-102
 FLOOR_MARGIN = 0.5  # A well is not produced below this share of its floor  # spec: SMP-102
 SLOT_LIMIT, REDRAW_LIMIT, SOLVER_FAILURE_LIMIT = 50, 400, 10  # spec: SMP-106
-# The operating point's columns of a sample: SMP-30's features but the inputs
-FEATURES = tuple(key for key in schema.FEATURES if key not in ('CHK', 'PDC', 'WGL'))
 _BEST_RATE_LIFT = (0.0, 0.5, 1.0)  # The best rate's lift-gas rates, shares of the capacity  # spec: SMP-103
 _N_SCAN = 21  # Dates of the life scan  # spec: SMP-101
 _NO_SEARCH = dict(n_roots=0, n_stable=0, several_stable=False, marches=math.nan, non_finite=math.nan)
@@ -80,15 +77,6 @@ _NO_SEARCH |= dict(rejected=math.nan, t_solve=0.0)
 
 
 # --- One attempt -----------------------------------------------------------------------------------------------------
-def _features(root, bc, fluid) -> dict:  # spec: SMP-30
-    """The operating point's features of a sample (FEATURES): the root's, and the stream's mass fractions."""
-    x_w = 1 - fluid.f_o_in_liquid
-    row = root_features(root, bc, fluid.rho_o, fluid.rho_w, fluid.rho_g, x_w)
-    f_g = fluid.f_g
-    row |= {'FGAS': f_g, 'FOIL': (1 - f_g) * (1 - x_w), 'FWAT': (1 - f_g) * x_w}
-    return {key: row[key] for key in FEATURES}
-
-
 def _valid_row(row) -> bool:  # spec: SMP-104
     """Whether every number of a row is finite, its liquid and gas rates are not negative and its mass fractions lie
     in [0, 1]. The lift gas is at least 0 by its draw."""
@@ -134,7 +122,7 @@ def _solve(wp, bc) -> dict:  # spec: SMP-104
     out['several_stable'] = bool(rs.several_stable)
     op = rs.operating_point
     if op is not None:
-        row = _features(op, bc, wp.fluid)
+        row = sample_features(op, bc, wp.fluid)
         if _valid_row(row):
             out.update(outcome='operating_point', row=row)
         else:
