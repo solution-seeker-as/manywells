@@ -23,6 +23,9 @@ A crash of a well's generation, an exception that the generation does not catch 
 logged as the well's outcome, `crash`, with its traceback, and the run carries on. Each result records its wall time
 `seconds` and its CPU time `cpu_seconds`.
 
+A pool's processes may each be capped (memory_cap, bytes of address space), below the cap of the process that runs
+the pool: each well takes about 2.6 GB.
+
 A table well takes its table from the folder that table_wells.py and table_build.py made for the dataset and seed;
 the run runs no chunk beyond the draw indices that the folder covers (its wells.json's `wells_range`), since a table
 well there would have no table, and returns incomplete, so that the tables are extended first. Without a folder of
@@ -41,6 +44,7 @@ import json
 import math
 import multiprocessing
 import pickle
+import resource
 import time
 import traceback
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -205,14 +209,25 @@ def _tables_limit(tables, kind, seed):
 
 
 # --- The run ----------------------------------------------------------------------------------------------------------
-def _imap(fn, tasks, processes):
-    """fn's results over the tasks, as they finish: in a pool of processes, or in this process for one. A worker that
-    dies (a process killed at its memory cap, say) stops the run with BrokenProcessPool, and a rerun resumes it."""
+def _cap(memory_cap):
+    """A pool process's address space capped at memory_cap bytes, or at its hard limit if that is lower."""
+    if memory_cap is not None:
+        _, hard = resource.getrlimit(resource.RLIMIT_AS)
+        cap = memory_cap if hard == resource.RLIM_INFINITY else min(memory_cap, hard)
+        resource.setrlimit(resource.RLIMIT_AS, (cap, hard))
+
+
+def _imap(fn, tasks, processes, memory_cap=None):
+    """fn's results over the tasks, as they finish: in a pool of processes, each capped at memory_cap bytes, or in
+    this process for one. A worker that dies (a process killed at its memory cap, say) stops the run with
+    BrokenProcessPool, and a rerun resumes it."""
     if processes <= 1:
         yield from map(fn, tasks)
         return
     ctx = multiprocessing.get_context('forkserver')
-    pool = ProcessPoolExecutor(processes, mp_context=ctx, max_tasks_per_child=_TASKS_PER_PROCESS)
+    pool = ProcessPoolExecutor(
+        processes, mp_context=ctx, initializer=_cap, initargs=(memory_cap,), max_tasks_per_child=_TASKS_PER_PROCESS
+    )
     try:
         for future in as_completed([pool.submit(fn, t) for t in tasks]):
             yield future.result()
@@ -238,7 +253,15 @@ def _summary(headers, n_wells) -> dict:
 
 
 def run(
-    kind: str, n_wells: int, out, seed: int, processes: int = 6, tables=None, chunk_size: int = CHUNK, log=print
+    kind: str,
+    n_wells: int,
+    out,
+    seed: int,
+    processes: int = 6,
+    tables=None,
+    chunk_size: int = CHUNK,
+    memory_cap=None,
+    log=print,
 ) -> dict:  # spec: SMP-109, SMP-110
     """
     Generate wells k = 0, 1, 2, ... of a dataset in chunks of draw indices until its first n_wells accepted wells are
@@ -252,6 +275,7 @@ def run(
     :param processes: The pool's processes; 1 runs the wells in this process
     :param tables: The folder of the dataset's tables (table_wells.py, table_build.py), or None
     :param chunk_size: Draw indices per chunk
+    :param memory_cap: Each pool process's cap of address space (bytes), or None
     :param log: Called with each line of progress
     :return: A dict of `complete` (whether the first n_wells accepted wells are known), `accepted` and `drawn` (the
         wells up to the n-th accepted, or all of the chunks made), `next_chunk` (the first chunk not made, after those
@@ -288,7 +312,7 @@ def run(
         log(f'chunks {batch[0]} to {batch[-1]}: {len(batch) * chunk_size} wells')
         tasks = [(kind, seed, k, str(run_dir), settings['tables']) for c in batch for k in _ks(c, chunk_size)]
         pending = {c: set(_ks(c, chunk_size)) for c in batch}
-        for k, outcome, sec, read in _imap(_task, tasks, processes):
+        for k, outcome, sec, read in _imap(_task, tasks, processes, memory_cap):
             c = k // chunk_size
             pending[c].discard(k)
             log(f'well {k}: {outcome} in {sec:.1f} s' + (' (kept)' if read else ''))
@@ -305,14 +329,15 @@ def _ks(c, chunk_size):
     return range(c * chunk_size, (c + 1) * chunk_size)
 
 
-def run_wells(kind: str, seed: int, ks, out, processes: int = 6, tables=None, log=print) -> None:
+def run_wells(kind: str, seed: int, ks, out, processes: int = 6, tables=None, memory_cap=None, log=print) -> None:
     """
     The given draw indices' wells only, each result kept in OUT/wells/kK.pkl as run keeps them, without chunks: a
     check of a few wells, or of the port against the prototype. load_wells reads them.
     """
     (Path(out) / 'wells').mkdir(parents=True, exist_ok=True)
     tables = None if tables is None else str(Path(tables).resolve())
-    for k, outcome, sec, read in _imap(_task, [(kind, seed, k, str(out), tables) for k in ks], processes):
+    tasks = [(kind, seed, k, str(out), tables) for k in ks]
+    for k, outcome, sec, read in _imap(_task, tasks, processes, memory_cap):
         log(f'well {k}: {outcome} in {sec:.1f} s' + (' (kept)' if read else ''))
 
 

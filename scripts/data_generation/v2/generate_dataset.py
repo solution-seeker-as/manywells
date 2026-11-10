@@ -10,9 +10,10 @@ A v2 dataset, manywells-sol-2 or manywells-nsol-2 (specs/sampling.md, SMP-50 to 
 fluids' build (manywells.sampling.v2.table_wells and table_build.py, SMP-112 to SMP-116), the run over the wells
 (manywells.sampling.v2.run, SMP-109 and SMP-110) and the assembly of the dataset and its logs
 (manywells.sampling.v2.assemble, SMP-108 and SMP-110). From the project root, with the sandbox off (the pools need
-Unix sockets, and NeqSim's environment uv's cache), each process capped:
+Unix sockets, and NeqSim's environment uv's cache), under a cap of 8 GB of address space, which NeqSim's JVMs take;
+the run's processes cap themselves at --memory-cap:
 
-    (ulimit -v 3000000; OMP_NUM_THREADS=1 uv run python -m scripts.data_generation.v2.generate_dataset sol \
+    (ulimit -v 8000000; OMP_NUM_THREADS=1 uv run python -m scripts.data_generation.v2.generate_dataset sol \
         --n 100 --seed 2026 --processes 6 --out data/pilot-sol-2 --allow-dirty)
     (... nsol --n 100 --seed 2027 --processes 6 --out data/pilot-nsol-2 --allow-dirty)
 
@@ -86,7 +87,9 @@ def build_with_neqsim(tables: Path, step: str, mode: str, processes: int):
     print(f'NeqSim: the {step} of {tables}', flush=True)
 
     def cap():
-        resource.setrlimit(resource.RLIMIT_AS, (NEQSIM_CAP, NEQSIM_CAP))
+        _, hard = resource.getrlimit(resource.RLIMIT_AS)
+        limit = NEQSIM_CAP if hard == resource.RLIM_INFINITY else min(NEQSIM_CAP, hard)
+        resource.setrlimit(resource.RLIMIT_AS, (limit, hard))
 
     subprocess.run(cmd, env=env, preexec_fn=cap, check=True)
 
@@ -111,6 +114,7 @@ def main():
     parser.add_argument('--n', type=int, required=True, help='the accepted wells of the dataset')
     parser.add_argument('--seed', type=int, required=True)
     parser.add_argument('--processes', type=int, default=6, help="the run's pool")
+    parser.add_argument('--memory-cap', type=float, default=3.0, help='GB of address space per process of the run')
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--draws', type=int, help='the draw indices to build tables for first')
     parser.add_argument('--neqsim', choices=('run', 'print'), default='run')
@@ -125,7 +129,8 @@ def main():
         n_draws = max(n_draws, json.loads((tables / 'wells.json').read_text())['wells_range'][1])
     while True:
         tables_for(args.kind, args.seed, tables, n_draws, args.neqsim, args.neqsim_processes)
-        state = run(args.kind, args.n, out / 'run', args.seed, args.processes, tables)
+        cap = int(args.memory_cap * 1e9)
+        state = run(args.kind, args.n, out / 'run', args.seed, args.processes, tables, memory_cap=cap)
         if state['complete']:
             break
         rate = max(state['accepted'], 1) / max(state['drawn'], 1)
