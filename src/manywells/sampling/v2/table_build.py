@@ -368,9 +368,12 @@ def _example_stream(name, alpha=1.0):  # spec: SMP-114
 def _draw_composition(cls, rng):  # spec: SMP-113
     """The draws of a synthetic composition of class cls from the generator rng: the weights of the class's examples
     and their mixed light ends (normalised over N2 to C6), the heptanes-plus mole fraction z7 and molar mass M7, the
-    gamma distribution's shape alpha, and the split's mole fractions and molar masses."""
+    gamma distribution's shape alpha, and the split's mole fractions and molar masses. The weights are
+    Dirichlet(1, 1, 1) as exponential variates over their sum, each the inverse CDF of one uniform number, so that
+    the draw takes the same count of the generator's numbers for every well (SMP-51); numpy's dirichlet does not."""
     c = CLASSES[cls]
-    w = rng.dirichlet(np.ones(len(c['templates'])))
+    e = -np.log1p(-rng.random(len(c['templates'])))
+    w = e / e.sum()
     light = sum(wi * np.array(EXAMPLES[t]['light']) / sum(EXAMPLES[t]['light']) for wi, t in zip(w, c['templates']))
     z7 = rng.uniform(*c['z7'])
     M7 = rng.uniform(*c['M7'])

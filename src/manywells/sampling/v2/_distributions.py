@@ -7,7 +7,8 @@ Created 10 November 2026
 Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
 The distributions of the v2 draws (specs/sampling.md, v2: scope and conventions). Each takes the draw's generator and
-uses one uniform number of it, so a truncated draw never loops.
+uses one uniform number of it, so a truncated draw never loops, and unused takes the numbers that a well's branch
+leaves unused (SMP-51).
 """
 
 import math
@@ -36,6 +37,13 @@ def logu(rng, lo, hi) -> float:
 def pick(rng, names, p) -> str:
     """One of names, with the probabilities p (normalised here)."""
     return str(names[rng.choice(len(names), p=np.asarray(p) / np.sum(p))])
+
+
+def unused(rng, n=1) -> None:  # spec: SMP-51
+    """Take n uniform numbers that the well's branch does not use, so that a block takes the same numbers in the
+    same order for every well."""
+    for _ in range(n):
+        rng.random()
 
 
 def logistic(x) -> float:

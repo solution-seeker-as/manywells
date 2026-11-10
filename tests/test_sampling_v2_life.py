@@ -372,7 +372,7 @@ def test_an_oils_water_jumps_at_breakthrough(lives):
             if jump <= a:
                 continue
             seen += 1
-            assert lf.water(t_bt) >= jump > a  # The jump
+            assert lf.water(t_bt) >= jump * (1 - 1e-12) and jump > a  # The jump, to the logit's rounding
             logit = math.log(jump / (1 - jump)) + x * (math.log(z / (1 - z)) - math.log(jump / (1 - jump)))
             assert lf.water(t_mid) == pytest.approx(1 / (1 + math.exp(-logit)), rel=1e-12)
         else:

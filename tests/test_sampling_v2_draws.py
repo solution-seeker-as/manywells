@@ -31,7 +31,7 @@ from manywells.sampling.v2.draws import P_S_MAX, STAGES, TUBING, black_oil, draw
 from manywells.sampling.v2.survey import FAMILIES, survey
 from manywells.sampling.wells import rng_for, sample_well
 
-from .sampling_v2_wells import N_MANY, SEED, drawn_wells, is_oil
+from .sampling_v2_wells import N_MANY, SEED, counting, drawn_wells, is_oil
 
 BLOCKS = 'labels depth geometry water pressure temperature separator fluid stage inflow completion choke lift heat'
 LABELS = {  # SMP-52, the labels that the well draws set
@@ -548,6 +548,88 @@ def test_each_block_has_its_own_generator(wells, monkeypatch):
         assert w[key] == base[key], key
 
 
+BLOCK_NUMBERS = dict(  # The numbers that each block takes of its generator, for every well (SMP-51)
+    labels=6,
+    depth=3,
+    geometry=2 + 20 * 6,  # The class and the family, and 20 surveys of six numbers
+    water=1,
+    pressure=2,
+    temperature=3,
+    separator=7,
+    fluid=5,
+    stage=14,
+    inflow=7,
+    nondarcy=2,  # A gas well's block
+    completion=3,
+    choke=3,
+    lift=7,
+    heat=4,
+)
+
+
+def test_every_block_takes_the_same_numbers_for_every_well(wells, monkeypatch):
+    """SMP-51 (D-108): each block takes the same count of its generator's numbers, call by call, for every well,
+    whatever its branches: core and tail, every well type, fluid class, drive, stage and geometry family, a survey
+    redrawn or not, saturated or not, lifted or natural. Only gas wells have the `nondarcy` block."""
+    made = counting(monkeypatch, draws)
+    cases = [(w0['well'], None, False) for w0, _ in wells]
+    cases += [(k, stage, force) for k in range(30) for stage in STAGES for force in (False, True)]
+    calls, seen = {}, set()
+    for k, stage, force in cases:
+        del made[:]
+        w, _ = draw_well(SEED, k, stage, force_lift=force)
+        blocks = [parts[2] for parts, _ in made]
+        gas = not is_oil(w)
+        assert blocks == BLOCKS.replace('inflow', 'inflow nondarcy' if gas else 'inflow').split()
+        for (_, _, block), counts in made:
+            assert calls.setdefault(block, counts) == counts, (k, block)
+        seen |= {w['coverage_tail'], w['well_type'], w['fluid_class'], w['drive'], w['life_stage'], w['lift']}
+        seen |= {w['geometry_family'], w['pressure_class'], w['saturation'], *filter(None, w['flags'].split(';'))}
+    assert {block: sum(counts) for block, counts in calls.items()} == BLOCK_NUMBERS
+    assert all(count == 1 for counts in calls.values() for count in counts)  # A call takes one number
+    branches = set().union(*(LABELS[key] for key in ('coverage_tail', 'well_type', 'fluid_class', 'drive')))
+    branches |= set().union(*(LABELS[key] for key in ('life_stage', 'lift', 'geometry_family', 'pressure_class')))
+    assert seen >= branches | LABELS['saturation'] | {'geometry_redrawn', 'lift_not_installed_strong_well'}
+
+
+def test_a_branchs_constant_moves_no_later_draw(wells, monkeypatch):
+    """SMP-51 (D-108): where a constant that decides a branch changes, the block's later numbers are as they were.
+    The dry-gas share (`labels`): the drive and the stage stay. The saturated shares (`fluid`): the initial GOR's
+    number stays. The lift's need and shares (`lift`): a lifted well's design stays."""
+    base = [w for w, _ in wells[:120]]
+
+    def redrawn():
+        return [draw_well(SEED, w['well'])[0] for w in base]
+
+    with monkeypatch.context() as m:
+        m.setattr(draws, '_P_DRY_GAS', 0.9)
+        other = redrawn()
+    assert any(a['fluid_class'] != b['fluid_class'] for a, b in zip(base, other))
+    for key in ('coverage_tail', 'well_type', 'fluid_type', 'drive', 'life_stage'):
+        assert [w[key] for w in other] == [w[key] for w in base], key
+
+    with monkeypatch.context() as m:
+        m.setattr(draws, '_P_SATURATED', dict.fromkeys(draws._P_SATURATED, 1.0))
+        other = redrawn()
+    drawn_gor = [i for i, w in enumerate(base) if w['fluid_class'] != 'black_oil']
+    assert any(other[i]['p_sat'] != base[i]['p_sat'] for i in drawn_gor) and len(drawn_gor) > 30
+    assert all(w['p_sat'] is None or w['p_sat'] == w['p_i'] or 'p_b_lowered' in w['flags'] for w in other)
+    for key in ('api', 'sg_gas'):
+        assert [w[key] for w in other] == [w[key] for w in base], key
+    assert [other[i]['R_i'] for i in drawn_gor] == [base[i]['R_i'] for i in drawn_gor]
+
+    with monkeypatch.context() as m:  # No well needs lift, and the draw lifts every well
+        m.setattr(draws, '_needs_lift', lambda *args: False)
+        m.setattr(draws, '_P_LIFT_OIL', dict.fromkeys(draws._P_LIFT_OIL, (1.0, 1.0, 1.0)))
+        m.setattr(draws, '_P_LIFT_GAS', (1.0, 1.0, 1.0))
+        other = redrawn()
+    lifted = [(a, b) for a, b in zip(base, other) if a['lift'] == b['lift'] == 'gas_lift']
+    assert sum(a['needs_lift'] for a, _ in lifted) >= 3 and sum(not a['needs_lift'] for a, _ in lifted) >= 3
+    assert sum(b['lift'] == 'gas_lift' for b in other) > sum(a['lift'] == 'gas_lift' for a in base)
+    for key in ('packer_offset', 'p_inj', 'dp_valve', 'phi_lg'):
+        assert [b[key] for _, b in lifted] == [a[key] for a, _ in lifted], key
+
+
 def test_v2_generators_are_not_v1s():
     """SMP-109: every v2 key holds 'v2', and drawing a v2 well leaves v1's draws (SMP-31) as they were."""
     before = sample_well(SEED, 3)
@@ -621,8 +703,8 @@ def test_a_table_fluid_replaces_the_fluid_blocks_values(wells):
 
 # --- The survey and the stream ---------------------------------------------------------------------------------------
 def test_survey_vertical_and_refusals():
-    assert survey(None, 'vertical', 1234.0) == ([0.0, 1234.0], [0.0, 1234.0], {})
     rng = np.random.default_rng(1)
+    assert survey(rng, 'vertical', 1234.0) == ([0.0, 1234.0], [0.0, 1234.0], {})
     assert survey(rng, 'build_and_hold', 300.0, (60.0, 75.0)) is None  # No room for the build above 300 m
     with pytest.raises(ValueError, match='family'):
         survey(rng, 'l_shaped', 2000.0)

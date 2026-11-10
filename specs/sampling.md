@@ -262,13 +262,13 @@ A well's draws are made in blocks, in this order. Each block may use the blocks 
 | `lift` | lift at the stage, injection depth, $T_{lg}$, $w_{lg,\max}$ | class, stage, pressures, rates, survey |
 | `heat` | $h$, $c_{po}$, $c_{pw}$, $c_{pg}$ | tubing, stage, fluid, salinity, temperatures |
 
-- Each block draws its numbers in a fixed order, and draws every one of them whatever branch the well takes, so that a change of one rule moves no other draw.
+- Each block draws its numbers in a fixed order, and draws every one of them whatever branch the well takes, so that a change of one rule moves no other draw: a number that the well's branch does not use, such as a tail form in a core well, a subsea flowline in a platform well or a lifted well's design in a natural one, is drawn and left unused. Every draw takes a fixed count of numbers: a continuous draw one, by its inverse CDF; a survey six, whatever its family and whether it fits, and the `geometry` block all 20 surveys' numbers (SMP-60); and a Dirichlet's weights one each, as exponential draws over their sum (SMP-113).
 - **The same well at another stage.** A well's draws at stage $s$ are its draws with the life stage set to $s$ after the `labels` block has drawn it, from the same generators, so that only the draws that depend on the stage change. The life (SMP-83) uses the well at its three stages.
 - A table fluid's table (SMP-112 to SMP-116) is made after the `fluid` block, and its saturation pressure and initial GOR replace the `fluid` block's before the `stage` block; its tables are made at the GORs its life reaches.
 
-From D-7 (ruled 2026-11-06, with the checkpoint's note that every number of a block is drawn whatever its branch) and D-105. Sources: `sampling-draft.md`, The order of the draws.
+From D-7 (ruled 2026-11-06, with the checkpoint's note that every number of a block is drawn whatever its branch), D-105 and D-108. Sources: `sampling-draft.md`, The order of the draws.
 
-**Basis:** a design choice for reproducibility (D-7): one generator per block, and every number drawn whatever the branch, so that a change of one rule moves no other draw. The order puts each block after the draws that condition it: the brine before the pressure, whose hydrostatic part it sets, and the separator before the fluid, whose $R_{so}$ it corrects (PVT-OIL-5).
+**Basis:** a design choice for reproducibility (D-7, D-108): one generator per block, and every number drawn whatever the branch, in a fixed count, so that a change of one rule moves no other draw. The order puts each block after the draws that condition it: the brine before the pressure, whose hydrostatic part it sets, and the separator before the fluid, whose $R_{so}$ it corrects (PVT-OIL-5).
 
 ### SMP-52 · Labels
 
@@ -1332,7 +1332,7 @@ A v2 row (SMP-50 to SMP-117) is spec-only until R10's code carries its `# spec:`
 | SMP-43 | — | — | property: tests/test_sampling.py (the mapped fluid) |
 | SMP-44 | — | — | spec-only: a rule that nothing is drawn |
 | SMP-50 | — | — (planned: `manywells.sampling`, R10) | spec-only: until R10 implements it (planned property: the datasets' counts and configuration) |
-| SMP-51 | — | — (`sampling/v2/draws.py` `draw_well`) | property: tests/test_sampling_v2_draws.py (the blocks' generators in their order, a block drawn from another seed moves no other block's numbers, a stage override changes only what depends on the stage. Not implemented yet: every number of a block drawn whatever its branch, since the port keeps the prototype's draws) |
+| SMP-51 | — | — (`sampling/v2/draws.py` `draw_well`; `sampling/v2/survey.py` `survey`; `sampling/v2/_distributions.py` `unused`) | property: tests/test_sampling_v2_draws.py (the blocks' generators in their order, a block drawn from another seed moves no other block's numbers, a stage override changes only what depends on the stage, every block takes the same numbers for every well, a branch's constant moves no later draw); property: tests/test_sampling_v2_tables.py (a composition's six numbers) |
 | SMP-52 | — | — (`sampling/v2/draws.py`, the labels that the well draws set; `sampling/v2/life.py`, a date's `life_stage`, and `lift` and `lift_start_rule` by the draws; the tables' and the generation's labels: planned, R10) | property: tests/test_sampling_v2_draws.py (every label of the well draws within its values); property: tests/test_sampling_v2_life.py (the stage of a date, a `sol-2` well's stage and lift labels) |
 | SMP-53 | — | — (`sampling/v2/draws.py` `_labels`, and each block's tail form) | property: tests/test_sampling_v2_draws.py (the tail's share, the tail wells' bounds, shares and marginals) |
 | SMP-54 | — | — (`sampling/v2/draws.py` `_labels`) | property: tests/test_sampling_v2_draws.py (the shares, core and tail) |

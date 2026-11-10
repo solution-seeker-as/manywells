@@ -148,14 +148,16 @@ def test_soreides_gravities():
 
 @pytest.mark.parametrize('cls', ['gas_condensate', 'volatile_oil'])
 def test_a_compositions_draws(cls):
-    """The weights, then z7, M7 and alpha, from the generator in this order; within the class's ranges."""
+    """The weights, then z7, M7 and alpha, from the generator in this order; within the class's ranges. SMP-51: the
+    draw takes six numbers of the generator for every well, the weights one each."""
     c = tb.CLASSES[cls]
     for seed in range(20):
         d = tb._draw_composition(cls, np.random.default_rng(seed))
-        r = np.random.default_rng(seed)
-        w = r.dirichlet(np.ones(3))
-        assert np.array_equal(d['w'], w) and w.sum() == pytest.approx(1.0)
-        assert (d['z7'], d['M7'], d['alpha']) == (r.uniform(*c['z7']), r.uniform(*c['M7']), r.uniform(0.5, 2.5))
+        u = np.random.default_rng(seed).random(6)
+        e = -np.log1p(-u[:3])
+        assert d['w'] == pytest.approx(e / e.sum(), rel=1e-14) and d['w'].sum() == pytest.approx(1.0)
+        lo, hi = np.array([c['z7'][0], c['M7'][0], 0.5]), np.array([c['z7'][1], c['M7'][1], 2.5])
+        assert [d['z7'], d['M7'], d['alpha']] == pytest.approx(lo + (hi - lo) * u[3:], rel=1e-14)
         assert c['z7'][0] <= d['z7'] < c['z7'][1] and c['M7'][0] <= d['M7'] < c['M7'][1] and 0.5 <= d['alpha'] < 2.5
         assert d['light'].shape == (10,) and d['light'].sum() == pytest.approx(1.0, abs=1e-14)
         lights = [np.array(tb.EXAMPLES[t]['light']) / sum(tb.EXAMPLES[t]['light']) for t in c['templates']]
@@ -508,8 +510,8 @@ def test_a_well_built_with_neqsim(tmp_path):
     assert tb.build_task((str(tmp_path), w, None))[:3] == (83, 'fluid', 'ok')
     fluid = json.loads((tmp_path / 'fluids' / 'k000083.json').read_text())
     assert (fluid['saturation_kind'], fluid['saturation_rule']) == ('bubble', 'matched')
-    assert fluid['p_sat'] == pytest.approx(274.007, abs=0.01) and fluid['p_sat'] <= w['p_i']
-    assert fluid['R_i'] == pytest.approx(507.815, abs=0.01) == fluid['hook']['R_i']
+    assert fluid['p_sat'] == pytest.approx(270.560, abs=0.01) and fluid['p_sat'] <= w['p_i']
+    assert fluid['R_i'] == pytest.approx(510.742, abs=0.01) == fluid['hook']['R_i']
     assert fluid['field']['gor'] == pytest.approx(w['R_si'], rel=0.02)
     assert fluid['field']['api'] == pytest.approx(w['api'], abs=1.0)
     assert fluid['composition']['api_error'] == pytest.approx(0.0, abs=0.5)
