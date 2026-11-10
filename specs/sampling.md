@@ -728,12 +728,12 @@ From D-41 (ruled 2026-11-06, with the steeper decline and lives shorter than 8 y
 
 ### SMP-85 · Reservoir pressure along the life
 
-- Oils, and every well under pressure support: $p_r(t) = p_i\big(r_1 + (r_0 - r_1)(1 - F)^\gamma\big)$, $\gamma \sim U(1, 2)$.
+- Oils, and every well under pressure support: $p_r(t) = p_i\big(r_1 + (r_0 - r_1)(1 - F)^\gamma\big)$, $\gamma \sim U(0.7, 2.3)$.
 - Gas and condensate wells under depletion: $p/Z$ linear in $F$, $p_r/Z(p_r) = (1 - F)\thinspace p_0/Z_0 + F\thinspace p_1/Z_1$, with $p_0 = r_0 p_i$, $p_1 = r_1 p_i$ and the well's DAK $Z$ (PVT-GAS-11) at $T_r$, solved for $p_r$ by linear interpolation in $p/Z$ between 200 pressures from $0.5\thinspace p_1$ to $1.02\thinspace p_0$.
 
-From D-42 (ruled 2026-11-06). Sources: Ahmed (2006), Eq. 13-8 (p. 861); Golan and Whitson (1991), Example 4.11 (Table E4.11a, p. 454).
+From D-42 (ruled 2026-11-06) and D-115. Sources: Ahmed (2006), Eq. 13-8 (p. 861); Golan and Whitson (1991), Example 4.11 (Table E4.11a, p. 454); Craft and Hawkins (1991), Ch. 9 (Eqs. 9.6, 9.34 and 9.57); Vazquez and Beggs (1980); `plans/evidence/pressure_exponent.py`.
 
-**Basis:** physics for gas and condensate wells under depletion: the gas material balance, $p/Z$ linear in the cumulative production (Ahmed 2006, Eq. 13-8). The form for oils and for supported wells, with $\gamma \sim U(1, 2)$, is a guess after one textbook well, which it fits at $\gamma$ = 1.40 (Golan and Whitson 1991, Example 4.11): a material balance of solution-gas drive, D-42's alternative, would replace it for oils under depletion, and the plans name none for supported wells.
+**Basis:** physics for gas and condensate wells under depletion: the gas material balance, $p/Z$ linear in the cumulative production (Ahmed 2006, Eq. 13-8). Physics for the range of $\gamma$ for oils under depletion: 0.7 and 2.3 are the 5th and 95th percentiles, rounded, of the exponent fitted to each drawn core black oil's material balance from its life's start to its end, Muskat's equation on the well's black oil below the bubble point (Craft and Hawkins 1991, Eq. 9.34) and the oil's expansion above it by Vazquez and Beggs's (1980) compressibility, since the model's $B_o$ is constant there (`plans/evidence/pressure_exponent.py`; D-115). Saturated oils fit from 0.6 to 1.0 and the most undersaturated ones above 2, as Golan and Whitson's (1991) Example 4.11, an undersaturated oil, fits at 1.40. The uniform shape over that range is a design choice for simplicity, which puts its median at 1.5 where the material balance's is about 0.95; the material balance's own $p_r(F)$ per well would replace it. For wells with pressure support the form and the range are a guess: no physics is in hand for them, and their pressure moves little.
 
 ### SMP-86 · Water along the life
 
@@ -1163,7 +1163,7 @@ From D-61 (ruled 2026-11-06; $b = 0$ kept, L3 of 2026-11-09) and D-60. Sources: 
 | SMP-82 | The factor $(0.554/\gamma_g)^{0.4}$ on methane's $c_p$ | An open correlation of a natural gas's $c_p$ against gas gravity at pressure ([RF §10], Gaps) | Such a correlation |
 | SMP-82 | The representative temperature at 0.8 of the way from $T_s$ to $T_r$ | Not recorded | $c_p(p, T)$ along the well, which the model does not have |
 | SMP-84 | The plateau of $U(0, 0.25)\thinspace T_\text{life}$ | Plateau lengths per well ([RF §11], Gaps) | Per-well plateau lengths |
-| SMP-85 | The pressure's form for oils and supported wells, with $\gamma \sim U(1, 2)$ | Not recorded: one textbook well | A material balance of solution-gas drive for oils under depletion (D-42's alternative); none named for supported wells |
+| SMP-85 | The pressure's form and $\gamma$'s range for wells with pressure support | Not recorded: the material balance covers oils under depletion (D-115) | None named |
 | SMP-86 | The breakthrough recoveries and jumps, and the gases' log-linear WGR | Per-well water-cut curves offshore, and a text on fractional flow ([RF §9], Gaps) | Per-well water-cut curves |
 | SMP-88 | The roughness's log-linear path from its initial to its late draw | As SMP-76 | As SMP-76 |
 | SMP-89 | Two step-downs of the separator, at dates of $U(0.25, 0.9)\thinspace T_\text{life}$ | Separator pressures over wells' lives: two trade-press examples only ([WP §7]) | A record of separator pressures over wells' lives |
@@ -1211,6 +1211,7 @@ From D-61 (ruled 2026-11-06; $b = 0$ kept, L3 of 2026-11-09) and D-60. Sources: 
 | SMP-81 | The well's age by stage | The stages' meaning (SMP-91) |
 | SMP-83 | One life for both datasets | Simplicity and consistency: a stage means the same state in both |
 | SMP-84 | A clock that follows no solve | The Goals: open-loop controls and trends |
+| SMP-85 | $\gamma$ uniform over the material balance's 5th to 95th percentiles, one range for oils and supported wells | Simplicity, with the material balance's own path per well as the replacement (D-115) |
 | SMP-88 | The inflow model, the completion and the fluid's descriptors fixed for the life | Simplicity |
 | SMP-90 | Lift starts where natural flow ends, with the late-stage draw's design | Acceptance criterion 2: a well that an operator would lift is not dropped |
 | SMP-91 | The stages' limits: the first year, and half the life span | Labels that mean the same in both datasets |
@@ -1285,6 +1286,7 @@ What the tests check on drawn wells, core and tail apart, without solving them (
 - Ramey, H.J. (1962), *Journal of Petroleum Technology* 14(4), 427–435.
 - Sharqawy, M.H., Lienhard, J.H. and Zubair, S.M. (2010), *Desalination and Water Treatment* 16, 354–380.
 - Valkó, P.P. and McCain, W.D. (2003), *Journal of Petroleum Science and Engineering* 37, 153–169.
+- Vazquez, M. and Beggs, H.D. (1980), "Correlations for fluid physical property prediction", *Journal of Petroleum Technology* 32(6), 968–970.
 - Vogel, J.V. (1968), *Journal of Petroleum Technology* 20(1), 83–92.
 - von Flatern, R. (2015), "The defining series: gas lift", *Oilfield Review*.
 - Whitson, C.H. and Brulé, M.R. (2000), *Phase behavior*, SPE Monograph 20.

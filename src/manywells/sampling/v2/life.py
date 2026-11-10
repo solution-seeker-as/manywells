@@ -27,6 +27,7 @@ from manywells.sampling.wells import rng_for
 WLR_MAX = 0.98  # An oil's largest water-liquid ratio  # spec: SMP-83, SMP-96, SMP-100
 _T_LIFE = (3.0, 30.0)  # years  # spec: SMP-84
 _Q_END = (0.03, 0.3)  # The decline's rate at the end of the life over the plateau's  # spec: SMP-84
+_GAMMA = (0.7, 2.3)  # The pressure path's exponent  # spec: SMP-85
 _R_END = 0.15  # p_r / p_i of an exhausted reservoir under depletion  # spec: SMP-83
 _R_END_TOP = {True: 0.3, False: 0.2}  # The top of a core well's end under depletion: oils, gas classes  # spec: SMP-83
 _WGR_END = 10000.0  # Sm3 per 1e6 Sm3: a gas well with pressure support waters out  # spec: SMP-83
@@ -110,7 +111,7 @@ class Life:
         tau = self.T_life - self._t_pl  # Arps's D from the rate at the end of the life: q = (1 + b D tau)^(-1/b)
         self._D = (q_end**-self._b - 1) / (self._b * tau) if self._b > 1e-6 else -math.log(q_end) / tau
         self._N_T = _cumulative(self.T_life, self._t_pl, self._D, self._b)
-        self._gamma = r.uniform(1.0, 2.0)  # spec: SMP-85
+        self._gamma = r.uniform(*_GAMMA)  # spec: SMP-85
         # spec: SMP-86. Breakthrough: its recovery, and the water-liquid ratio that an oil jumps to
         if support:
             self._F_bt, self._wlr_bt = r.uniform(0.05, 0.4), r.uniform(0.05, 0.3)

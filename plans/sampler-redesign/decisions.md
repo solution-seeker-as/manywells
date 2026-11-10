@@ -1028,15 +1028,16 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Used by:** `specs/sampling.md`, SMP-79; `sampling/v2/draws.py` (`_lift`, `_PSI_LG`), `life.py` (`_LIFT_KEYS`); `datasets-draft.md`, the lift design's columns.
 - **Ruling:**
 
-### D-115 · The pressure's exponent over a life: 0.7 to 1.5
+### D-115 · The pressure's exponent over a life: 0.7 to 2.3
 
 - **Step:** R10, 2026-11-10. Revises D-42 (`guesses.md`, G29).
-- **Choice made:** $\gamma \sim U(0.7, 1.5)$ for oils and wells with pressure support, in place of $U(1, 2)$.
+- **Choice made:** $\gamma \sim U(0.7, 2.3)$ for oils and wells with pressure support, in place of $U(1, 2)$: the 5th and 95th percentiles, rounded, of the exponent fitted to the drawn oils' material balance, which replaced the range of 0.7 to 1.5 logged first (below).
 - **Alternatives:** keep the draft's, fitted to one textbook well; the material balance's own $p_r(F)$ with a term for the oil above the bubble point, which adds a compressibility to the draws and stays the named replacement.
 - **Basis:** physics, the model's own result: Muskat's material balance on the model's black oil, from the bubble point down, gives exponents from about 0.7 to 1 (`plans/evidence/solution_gas_drive.py`), and the oil above its bubble point raises the exponent of the whole path, as in Golan and Whitson's (1991) Example 4.11, fitted at 1.4. For wells with pressure support the form stays a guess; their pressure moves little.
 - **Realism:** depletion oils hold a higher pressure in mid-life than the draft's.
+- **Implemented** (R10, 2026-11-10). `plans/evidence/pressure_exponent.py` fits $\gamma$ to each drawn core black oil under depletion, from its life's start $r_0 p_i$ to its end $r_1 p_i$: Muskat's equation with Fig. 9.16's $k_g/k_o$ below the bubble point, and above it the oil's expansion by Vazquez and Beggs's (1980) compressibility, the model's $B_o$ being constant there. Over 1281 such oils of 10,000 wells (seed 2026), $\gamma$ is 0.69 / 0.95 / 2.29 (5th / 50th / 95th percentiles): 0.64 / 0.83 / 0.98 for oils saturated at discovery, 0.70 / 1.02 / 2.72 for undersaturated ones, and 0.78 / 1.17 / 3.55 where the life starts above the bubble point; 400 oils of another seed give 0.69 / 0.94 / 2.20. The computed range differs from 0.7 to 1.5, so the rule takes 0.7 to 2.3. Two sensitivities: with the pore space's and connate water's expansion at typical values (own assumptions) the 95th percentile is 1.97; with the tail's $k_g/k_o$ blend at $w$ = 0.5 the path is 0.48 / 0.65 / 1.81. **Unsure:** a uniform draw over the 5th to 95th percentiles has its median at 1.5 where the material balance's is 0.95, so the realism above does not follow at the median: over 1500 lives, the core depletion oils' $\gamma$ 1.07 / 1.47 / 1.95 becomes 0.81 / 1.45 / 2.22, their $p_r/p_i$ at half the life 0.208 / 0.298 / 0.404 becomes 0.203 / 0.305 / 0.449, and the share of the pressure's fall still to come at half the life 0.032 / 0.103 / 0.244 becomes 0.020 / 0.111 / 0.306; the supported wells' paths spread the same way. A draw closer to the material balance, or its own $p_r(F)$ per well, would follow the oils better; that is for Bjarne's ruling.
 - **Needs sign-off:** yes (sampling).
-- **Used by:** `specs/sampling.md`, SMP-85; `sampling/v2/life.py`; the evidence script's fit of the exponent.
+- **Used by:** `specs/sampling.md`, SMP-85; `sampling/v2/life.py` (`_GAMMA`); `plans/evidence/pressure_exponent.py`.
 - **Ruling:**
 
 ### D-116 · The separator's steps may come from a tenth of the life

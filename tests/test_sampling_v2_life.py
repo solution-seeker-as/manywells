@@ -110,7 +110,7 @@ def check_life(lf):
     p_i = w0['p_i']
     p_r = [lf.p_r(t) for t in ts]
     assert p_r[0] == pytest.approx(r0 * p_i, rel=1e-9) and p_r[-1] == pytest.approx(r1 * p_i, rel=1e-9)
-    assert np.all(np.diff(p_r) <= 1e-9 * p_i) and between(prm['gamma_p'], 1, 2)
+    assert np.all(np.diff(p_r) <= 1e-9 * p_i) and between(prm['gamma_p'], 0.7, 2.3)
     if oil or support:
         t = ts[17]
         assert lf.p_r(t) == pytest.approx(p_i * (r1 + (r0 - r1) * (1 - lf.F(t)) ** prm['gamma_p']), rel=1e-12)
@@ -293,7 +293,7 @@ def test_the_evolution_generators_numbers(lives):
         b, tau = prm['decline_b'], T - prm['t_plateau']
         assert b == (uniform(3, 0.3, 0.5) if support else uniform(3, 0, 0.4))
         assert b < 1e-6 or (1 + b * prm['decline_D'] * tau) ** (-1 / b) == log_uniform(2, 0.03, 0.3)
-        assert prm['gamma_p'] == uniform(4, 1, 2)
+        assert prm['gamma_p'] == uniform(4, 0.7, 2.3)
         assert prm['F_bt'] == (uniform(5, 0.05, 0.4) if support else uniform(5, 0.2, 0.7))
         assert prm['wlr_bt'] == (uniform(6, 0.05, 0.3) if support else uniform(6, 0.02, 0.1))
         steps = sorted(0.25 + 0.65 * x for x in u[7:9])
