@@ -1,6 +1,6 @@
 # Sampling
 
-*Owner: Bjarne Grimstad. Status: two parts in use and one in draft. v1's procedure (SMP-1 to SMP-31) and its extension to `develop`'s inputs (SMP-40 to SMP-44) are in use since 2026-09-30 (Step 4 of `plans/manywells-v2-plan.md`): the v1 procedure records v1.0.0's code, with the rulings of `specs/discrepancies.md`; Step 7 (2026-10-01) implemented the sampler (`manywells.sampling`, `manywells.datasets`) and wrote SMP-31 and SMP-40; Bjarne kept the starting points of SMP-41 to SMP-43 until the sampling redesign (2026-10-01). The v2 procedure (SMP-50 to SMP-117) is a draft for Bjarne's sign-off, 2026-11-09 (Step R10 of `plans/sampler-redesign-plan.md`); two items in it wait for his ruling (v2: scope and conventions, Pending). Any change to this file needs his sign-off.*
+*Owner: Bjarne Grimstad. Status: two parts in use and one in draft. v1's procedure (SMP-1 to SMP-31) and its extension to `develop`'s inputs (SMP-40 to SMP-44) are in use since 2026-09-30 (Step 4 of `plans/manywells-v2-plan.md`): the v1 procedure records v1.0.0's code, with the rulings of `specs/discrepancies.md`; Step 7 (2026-10-01) implemented the sampler (`manywells.sampling`, `manywells.datasets`) and wrote SMP-31 and SMP-40; Bjarne kept the starting points of SMP-41 to SMP-43 until the sampling redesign (2026-10-01). The v2 procedure (SMP-50 to SMP-117) is a draft for Bjarne's sign-off, 2026-11-10 (Step R10 of `plans/sampler-redesign-plan.md`): every rule in it rests on a ruling, and the text as a whole waits for his sign-off. Any change to this file needs his sign-off.*
 
 How ManyWells draws wells and operating points for its datasets. This is not physics, so it lives outside `specs/model/`. The file has three parts:
 
@@ -214,11 +214,6 @@ Not drawn: the lift gas enters at $T_r$, as in v1 (THM-3).
 ## v2: scope and conventions
 
 *A draft for Bjarne's sign-off (status line). The v2 procedure states the rules: distributions, bounds and the order of the draws. The reasons, the evidence and the measurements behind them stay in `plans/sampler-redesign/`: the decision log `decisions.md` (D-1 to D-107, each with its ruling), the drafts `sampling-draft.md`, `fluids-draft.md` and `datasets-draft.md`, the checkpoints `checkpoint.md` and `checkpoint-2.md`, and the pilots' measurements. Each rule ends with its decision entries and its sources.*
-
-**Pending.** Two items of the second checkpoint (2026-11-09) wait for Bjarne's ruling. The procedure takes the recommendations as working assumptions and marks them where they apply:
-
-- **D-107 (L4).** A core gas or condensate well with pressure support ends its life with its water at a WGR of 10,000 Sm³ per 10⁶ Sm³ (SMP-83), and the coverage tail draws the WGR from $\text{LogU}(1, 10\thinspace 000)$ (SMP-69). Without the ruling, D-105's 1000 and $\text{LogU}(1, 1000)$ stand.
-- **L6.** The Rust core's guard against the pole of DAK's Joule–Thomson factor on table fluids (branch `fix/table-jt-temperature-solve`, not merged). It changes the cost of some table wells' solves and no rule here: the roots it was measured on are the same to the bit.
 
 **Conventions** for SMP-50 on; v1's Conventions above hold for SMP-1 to SMP-44.
 
@@ -481,11 +476,11 @@ The `stage` block draws the well's reservoir state at its stage (SMP-51): the pr
 | mid-life | $U(0, 0.3)$ | $U(0.1, 0.6)$ | $\text{LogU}(5, 50)$ | $\text{LogU}(10, 150)$ |
 | late | $U(0.05, 0.4)$ | $U(0.6, 0.98)$ | $\text{LogU}(5, 80)$ | $\text{LogU}(50, 500)$ |
 
-Tail, at every stage: $r_p \sim U(0.15, 1.0)$; oils' WLR $U(0, 0.98)$; gases' WGR $\text{LogU}(1, 10\thinspace 000)$ (*pending D-107*; D-105's tail is $\text{LogU}(1, 1000)$, from the same uniform number). The state's producing GOR is SMP-70's at $p_r$.
+Tail, at every stage: $r_p \sim U(0.15, 1.0)$; oils' WLR $U(0, 0.98)$; gases' WGR $\text{LogU}(1, 10\thinspace 000)$ (D-107; D-105's tail was $\text{LogU}(1, 1000)$, from the same uniform number). The state's producing GOR is SMP-70's at $p_r$.
 
 These states anchor the life (SMP-83): its start is the initial stage's, its end and its later lift (SMP-90) the late stage's, and its separator's middle step the mid-life stage's. Neither dataset samples them directly.
 
-From D-18 (ruled 2026-11-06, checkpoint C1), D-105 (ruled 2026-11-06) and D-107 (pending). Sources: [RF §3, §9, §11]; [own analysis of BOEM's sands atlas]; [own analysis of Sodir's FactMaps]; Hasan et al.'s water cuts to 0.98 (`validity.md`).
+From D-18 (ruled 2026-11-06, checkpoint C1), D-105 (ruled 2026-11-06) and D-107 (ruled 2026-11-10, L4). Sources: [RF §3, §9, §11]; [own analysis of BOEM's sands atlas]; [own analysis of Sodir's FactMaps]; Hasan et al.'s water cuts to 0.98 (`validity.md`).
 
 ### SMP-70 · Producing GOR
 
@@ -637,13 +632,13 @@ From D-33 (ruled 2026-11-06). Sources: [RF §10], with NIST's methane values in 
 Every well has one life, which both datasets use: an `nsol-2` well lives it, and a `sol-2` well is the same life at one date (SMP-92).
 
 - **Start**, $t = 0$: the well's initial-stage draw, its $r_0 = p_r/p_i$ and its water (SMP-69).
-- **End**, $t = T_\text{life}$, of a core well, its reservoir run towards exhausted: under depletion $r_1 = \min\big(U(0.15, 0.3), r_0\big)$ for oils and $\min\big(U(0.15, 0.2), r_0\big)$ for gas classes, with the late-stage draw's water; under pressure support $r_1 = \min(r_{p,L}, r_0)$, with $r_{p,L}$ the late-stage draw's, and the water at its cap: a WLR of 0.98 for oils, and a WGR of 10,000 Sm³ per 10⁶ Sm³ for gas classes (*pending D-107*; D-105 has 1000).
+- **End**, $t = T_\text{life}$, of a core well, its reservoir run towards exhausted: under depletion $r_1 = \min\big(U(0.15, 0.3), r_0\big)$ for oils and $\min\big(U(0.15, 0.2), r_0\big)$ for gas classes, with the late-stage draw's water; under pressure support $r_1 = \min(r_{p,L}, r_0)$, with $r_{p,L}$ the late-stage draw's, and the water at its cap: a WLR of 0.98 for oils, and a WGR of 10,000 Sm³ per 10⁶ Sm³ for gas classes, where the well waters out (D-107; D-105 had 1000).
 - **A tail well** starts from a core initial state drawn for it, $r_0 \sim U(0.85, 1)$ under depletion and $U(0.97, 1)$ under pressure support, with a WLR of 0 with probability 0.5 and else $U(0, 0.1)$, or a WGR of $\text{LogU}(2, 20)$; it ends at its tail state, $r_1 = \min(r_{p,\text{tail}}, r_0)$, with its tail water.
 - The life stops where the well stops paying: `nsol-2`'s life scan (SMP-101) and `sol-2`'s producibility filter (SMP-103) apply the economic floor along it.
 
 The trends between the start and the end (SMP-84 to SMP-90) take their parameters from the `evolution` block.
 
-From D-105 (ruled 2026-11-06: one life for both datasets), D-41, D-42 and D-107 (pending). Sources: [own analysis of BOEM's OGOR-A production, ANP's production by well and NSTA's production by well]; [own analysis of BOEM's sands atlas].
+From D-105 (ruled 2026-11-06: one life for both datasets), D-41, D-42 and D-107 (ruled 2026-11-10, L4). Sources: [own analysis of BOEM's OGOR-A production, ANP's production by well and NSTA's production by well]; [own analysis of BOEM's sands atlas].
 
 ### SMP-84 · Life span and the depletion clock
 
