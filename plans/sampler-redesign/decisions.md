@@ -1097,3 +1097,67 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Needs sign-off:** yes (sampling).
 - **Used by:** `specs/sampling.md`, SMP-73; `sampling/v2/reservoir.py`.
 - **Ruling:**
+
+*Entries D-122 to D-126 are R10's too (2026-11-10): the working assumptions of the run over many wells and of the datasets' assembly, where `datasets-draft.md`'s Section 2, written before the checkpoint, and the port's results disagree. Each follows the spec where the spec decides, and the prototype's columns elsewhere; the assembly was proved against the prototype's on 44 wells of both datasets, column by column.*
+
+### D-122 · No columns of the CasADi retry
+
+- **Step:** R10, 2026-11-10. Follows the checkpoint's H1 (D-54 dropped).
+- **Choice made:** `redraws` has no `retried` or `start`, and its outcomes no `recovered`; `wells` and `drawn_wells` have no `n_recovered`; the metadata's `retry_backend` is null.
+- **Alternatives:** keep the columns, always false or null, which describe a mechanism the generator no longer has.
+- **Basis:** a design choice following H1's ruling: the retry was dropped for want of a measured gain (constitution, principle 7), so no attempt is retried or recovered.
+- **Realism:** not applicable.
+- **Needs sign-off:** yes (the dataset schema).
+- **Used by:** `datasets-draft.md`, Section 2 (`redraws`, the generation summary) and Section 4 (the outcomes' codes); `sampling/v2/assemble.py`, `datasets/v2.py`.
+- **Ruling:**
+
+### D-123 · `sol-2`'s lift label is `lift_start_rule`
+
+- **Step:** R10, 2026-11-10. Bjarne ruled on 2026-11-10 to follow the recommendations of the spec draft's points, which named this label (SMP-52).
+- **Choice made:** both datasets' `wells` have `lift_start_rule`: `from_start`, `static_check` and `drawn_time` from the life, `end_of_natural_flow` from `nsol-2`'s life scan and `no_natural_flow` from `sol-2`'s producibility filter, null for a natural well. The draft's `sol-2` column `lift_reason` (`drawn`, `needs_lift`, `no_natural_flow`), which the prototype derived from the lift block's draw at the date, is not written.
+- **Alternatives:** the draft's `lift_reason`, which names the lift block's draw at one stage, not the rule of the life that `sol-2` now shares with `nsol-2` (D-105).
+- **Basis:** a design choice of the labels (SMP-52), one label for both datasets.
+- **Realism:** not applicable. In the equivalence check every `sol-2` well that the filter lifted has `no_natural_flow` in both the prototype's column and the port's, and the natural wells have neither.
+- **Needs sign-off:** yes, as part of the schema; the label follows the ruling of 2026-11-10.
+- **Used by:** `datasets-draft.md`, Section 2 (Labels) and Section 4; `sampling/v2/assemble.py`.
+- **Ruling:**
+
+### D-124 · The well log counts attempts by reason, and the labels take the spec's values
+
+- **Step:** R10, 2026-11-10. Where the draft and the spec differ, the spec's.
+- **Choice made:** `drawn_wells` and `wells` count a well's slot attempts without an operating point by reason, `n_redraws_<reason>` for SMP-104's six reasons, besides the draft's counts by outcome (SMP-108: "the counts of its attempts by outcome and reason"). The labels' codes are Section 4's with the spec's values added at the end of each list: `saturation_kind` `none` (SMP-115), `lift_start_rule` `no_natural_flow` (SMP-52), `drawn_wells.outcome` `table_failed` (SMP-106) and `crash`, a well whose generation raised (logged and counted, as the prototype's run did); `redraws.outcome` loses `recovered` (D-122); `not_producible_reason` takes `water_cut`, `below_floor`, `no_operating_point` and `solver_failure` (SMP-103). A value without a code stops the assembly.
+- **Alternatives:** the draft's counts by outcome only, which leaves a user to count the reasons in the redraw log; free strings for the labels, which D-89 ruled out.
+- **Basis:** a design choice following SMP-108 and SMP-52 to SMP-115; the codes' order is D-89's rule that a later version adds categories at the end.
+- **Realism:** not applicable.
+- **Needs sign-off:** yes (the dataset schema).
+- **Used by:** `datasets-draft.md`, Sections 2 and 4; `datasets/v2.py` (`CODES`, `WELL_OUTCOMES`), `sampling/v2/assemble.py`.
+- **Ruling:**
+
+### D-125 · The wells table as the port gives it
+
+- **Step:** R10, 2026-11-10. Where the draft's columns and the port's results disagree otherwise.
+- **Choice made:**
+  - `kgko_weight`, the oils' blend of the $k_g/k_o$ curves (SMP-70), in place of the draft's `k_g`, R3's GOR factor, which the material balance replaced (D-19).
+  - `pvt_model` is `table` for every volatile oil and condensate (SMP-112), a `table_failed` one included; the prototype's `interim_pvt` and `interim_inflow` are not written, since no table well is solved on the black oil and every gas well takes Forchheimer's inflow (R9).
+  - In `nsol-2` the inflow's coefficients are in `samples` only (`KL`, `WLMAX`, `FORCHA`, `FORCHB`): the prototype also wrote `forchheimer_a` and `forchheimer_b` columns, always null, in `nsol-2`'s `wells`.
+  - `wells` holds the draft's generation summary (`n_redraws` and its splits); `n_attempts`, `n_several_stable`, the times and the life scan's lists are in `drawn_wells` only, as the draft has them. `n_several_stable` counts the samples whose root set had several stable roots, as the draft defines it, where the prototype counted every slot attempt; the two agree on every well of the equivalence check.
+  - `J` and `well_age` are the well's start's, its initial-stage draw's, in both datasets, as the port and the prototype give them; in `sol-2` the date's inflow is in `k_l`, `w_l_max` or `forchheimer_a` and `forchheimer_b`, and the date's heat transfer in `h`. The draft's "at the stage" is corrected.
+  - Beyond the draft, the prototype's records of the draws are kept: `life_date` (`sol-2`'s date, years), `design_rate` (the rate the tubing was sized for), `flags` (the draws' truncations), and a table fluid's build: `c7_mol`, `gor_moved`, the drawn `api_drawn`, `sg_gas_drawn`, `R_si_drawn` and `p_sat_drawn` (the prototype's `p_sat_r3`), the offsets `offset_*` and field values `field_*` (SMP-113), `n_gors` and `table_nodes`; and in `drawn_wells` the build's `table_seconds`.
+  - A dropped well's row in `drawn_wells` is the port's: an `nsol-2` well dropped before its scan (`table_failed`, `invalid_input`) has its life's parameters and lift, where the prototype left them null, and a `sol-2` `table_failed` well has its date's inflow coefficients, where the prototype had the initial draw's (the port's per-well generation, proved against the prototype with these two differences); a well without best-rate solves has an empty list of their outcomes, where the prototype had null. In the equivalence check these are the only differences: 31 values of one `nsol-2` `table_failed` well.
+- **Alternatives:** the draft's columns as written, which name a factor the sampler no longer draws and leave a user without the draws behind a table fluid; the prototype's columns as written, with two flags that are constant since R9.
+- **Basis:** a design choice of the schema, following SMP-70, SMP-112 and SMP-113 to SMP-115 where they decide.
+- **Realism:** not applicable.
+- **Needs sign-off:** yes (the dataset schema).
+- **Used by:** `datasets-draft.md`, Section 2 (`wells`, `drawn_wells`); `sampling/v2/assemble.py` (`well_columns`, `drawn_well_columns`, `well_row`).
+- **Ruling:**
+
+### D-126 · The files of a dataset and of its run
+
+- **Step:** R10, 2026-11-10. Implements D-85, D-87 and D-93 as ruled.
+- **Choice made:** a dataset is a folder `manywells-<kind>-2/` with `wells`, `samples`, `geometry` and `pvt` as one parquet file each and a `metadata.json` (the records of SMP-110 and each file's rows and SHA-256), and its logs a companion folder `manywells-<kind>-2-logs/` next to it with `drawn_wells`, `redraws` and its own `metadata.json` (I1). The split is the `wells` column `split`; the train and test files of `datasets-draft.md`'s Hugging Face layout are left to the release (D-86). A run keeps each well's result as a pickle until its chunk of 100 draw indices is complete, then one pickle per chunk with the run's settings; a restart with other settings or other code stops. The attempts' search counts and times stay in the chunks, and the assembly writes them as the run's attempt log, one parquet file per hundred wells. A dataset is written only from a clean working tree, unless a pilot asks otherwise.
+- **Alternatives:** the logs inside the dataset's folder, against I1; one file per well (D-93's rejected alternative), which the run keeps only while a chunk is open; the chunks as parquet, which would fix the attempts' columns before the assembly.
+- **Basis:** a design choice of the generation, following D-85, D-87 and D-93 as ruled.
+- **Realism:** not applicable.
+- **Needs sign-off:** yes (the dataset layout).
+- **Used by:** `sampling/v2/run.py`, `sampling/v2/assemble.py`, `datasets/v2.py`; `scripts/data_generation/v2/generate_dataset.py`.
+- **Ruling:**
