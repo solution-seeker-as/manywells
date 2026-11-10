@@ -78,10 +78,18 @@ pub fn dak_z_factor(r: f64, t: f64) -> f64 {  // spec: PVT-GAS-9
 }
 
 /// The gas's Joule-Thomson factor J = T (d ln Z / dT)_p of the DAK equation of state at reduced density r and
-/// pseudo-reduced temperature t: (t Z_t - r Z_r) / (Z + r Z_r)
+/// pseudo-reduced temperature t: (t Z_t - r Z_r) / (Z + r Z_r). NaN where the denominator, proportional to
+/// (dp/d rho_g)_T, is not positive, where DAK's isotherm falls (only below T_pr = 1.05); J has its pole at the edge
+/// (PVT-GAS-10, Safeguards). A state there fails, as where DAK's density solve does not converge; without this, a
+/// table's gas law, which gives a density at every temperature, lets the temperature solve converge onto the pole
+/// (specs/features/018-pvt-tables.md, Findings)
 pub fn dak_jt_factor(r: f64, t: f64) -> f64 {  // spec: PVT-GAS-10
     let (z, z_r, tz_t) = dak_terms(r, t);
-    (tz_t - r * z_r) / (z + r * z_r)
+    let den = z + r * z_r;
+    if !(den > 0.0) {
+        return f64::NAN;
+    }
+    (tz_t - r * z_r) / den
 }
 
 /// DAK's reduced density Z_c rho_g R_s T_pc / p_pc of gas density rho_g (kg/m³), for the specific gas constant r_s
@@ -147,6 +155,29 @@ mod tests {
             let j = dak_jt_factor(dak_reduced_density(ppr, t), t);
             assert!((j - fd).abs() <= 1e-7 * (1.0 + j.abs()), "{j} vs {fd}");
         }
+    }
+
+    #[test]
+    fn the_jt_factor_is_undefined_where_the_isotherm_falls() {
+        let den = |r: f64, t: f64| {
+            let (z, z_r, _) = dak_terms(r, t);
+            z + r * z_r
+        };
+        // Finite over DAK's range, where the isotherm rises at every density
+        for t in [1.05, 1.15, 1.5, 2.0, 3.0] {
+            for k in 1..=300 {
+                let r = 0.01 * k as f64;
+                assert!(den(r, t) > 0.0 && dak_jt_factor(r, t).is_finite(), "r = {r}, t = {t}");
+            }
+        }
+        // Below it, the pole where the isotherm turns, and NaN beyond it: at t = 0.6 the turn is near r = 0.127
+        let (t, mut r) = (0.6, 0.05);
+        while den(r, t) > 0.0 {
+            assert!(dak_jt_factor(r, t).is_finite());
+            r += 1e-4;
+        }
+        assert!(dak_jt_factor(r - 1e-4, t) > 50.0, "J grows towards the pole");
+        assert!(dak_jt_factor(r, t).is_nan() && dak_jt_factor(0.3, 0.7).is_nan());
     }
 
     #[test]
