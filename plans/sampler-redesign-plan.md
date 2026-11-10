@@ -1,6 +1,6 @@
 # Sampler redesign — plan
 
-*Draft 2026-10-30. Owner: Bjarne Grimstad. Status: R1 to R8 done; the rework and R9's integration done; the second checkpoint ruled on 2026-11-09 and 2026-11-10; R10 in progress.*
+*Draft 2026-10-30. Owner: Bjarne Grimstad. Status: R1 to R8 done; the rework and R9's integration done; the second checkpoint ruled on 2026-11-09 and 2026-11-10; R10 done on 2026-11-10 and handed over for sign-off.*
 
 ## Where we are (2026-11-10)
 
@@ -37,8 +37,13 @@
   - Ruled by Bjarne the same day: D-106's repair of the tables approved (L1); a table fluid's saturation pressure is its flash's, and R3's undersaturation draw applies to black oils only (L2); $b = 0$ in D-61's fit kept as a known limit of the $p^2$ form (L3); the platform oil wells' upper tail kept and measured by well type on R11's pilot (L5).
   - Ruled on 2026-11-10, after a day as working assumptions: a gas well with pressure support waters out at a WGR of 10,000 (L4, D-107); the Rust core's guard against DAK's Joule–Thomson pole on tables is approved (L6; branch `fix/table-jt-temperature-solve`, its PR to `develop`), which makes the volatile oils' solves five times cheaper with the same roots; and the points of R10's spec draft follow the recommendations (`checkpoint-2.md`, section 3).
   - The rerun of both pilots with the tables, D-107 and the guard (`r9-measurements.md`): the supported gas wells decline as the regions' do, and the cost falls back near the rework's apart from building each attempt's table.
-  - R10's spec: a first draft on the local branch `r10-sampling-spec`, with points for Bjarne in `checkpoint-2.md`, section 3.
-  - Next: R10's code and tests, and the other specs R10 carries; then Bjarne's sign-off of the new `specs/sampling.md` with R10's PR.
+- **R10, 2026-11-10** (branch `r10-sampling-spec`, one PR for sign-off):
+  - The new `specs/sampling.md`: the v2 procedure as SMP-50 to SMP-117, each rule with its decision entries, its sources and a **Basis** line (data, physics, a design choice or a guess), and a section that tabulates the guesses and the design choices. v1's procedure is unchanged.
+  - The sampler in the package, `manywells.sampling.v2` and `manywells.datasets.v2`, and the generator `scripts/data_generation/v2/generate_dataset.py`: each part proved bit for bit against the prototype before the rules changed; an attempt's PVT table read about a hundred times faster.
+  - The triage of the guesses (`guesses.md`): data, published sources or physics replaced most of them. R10's working assumptions are D-108 to D-133: a fixed count of numbers per block, the guesses replaced, the schema's choices, and an independent review's fixes. Two of the triage's proposals wait for Bjarne (G7, G30).
+  - The approved changes to `specs/goals.md`, `specs/constitution.md`, `specs/model/validity.md` and feature 022.
+  - The pilots from the package (`r10-measurements.md`): 400 `sol-2` and 100 `nsol-2` wells; a dataset of 10,000 wells costs about 120 to 150 CPU-hours.
+  - Next: Bjarne's sign-off of R10 and its working assumptions; then R11, a pilot dataset for his review and the full generation.
 
 This plan replaces v1's sampling procedure for the v2 datasets (`specs/goals.md`, limitation 5: unrealistic sampled wells). It ends with:
 
