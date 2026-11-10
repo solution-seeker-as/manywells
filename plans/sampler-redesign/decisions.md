@@ -1023,8 +1023,9 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Alternatives:** the draft's, which cools the gas below the ambient at the valve; THM-9's default, the ambient itself, with no draw.
 - **Basis:** physics, from published solutions: in Hasan and Kabir's (2018, §12.2.3, Figs. 12.16 to 12.22) examples the annulus gas warms within the first few hundred feet and then runs between the geotherm and the tubing's fluid, about two thirds to three quarters of the way from the formation's temperature to the reservoir's in a deep well at a high rate, and a little above the geotherm at a low rate; it is below the ambient only by a few kelvin, at a valve near the bottom. The uniform shape and the top of 0.75 are a guess read off three examples; a solution of the annulus' energy balance per well would replace them.
 - **Realism:** a few kelvin in a lifted well's stream above the valve. $T_{lg}$ stays at or below $T_r$, inside the solver's temperature bound.
+- **Implemented** (R10, 2026-11-10). The draw is stored as `psi_lg` in place of `phi_lg`, and `T_lg_below_ambient`, the amount below the ambient, is removed, since the gas is no longer below it; `datasets-draft.md`'s column follows. Over the 964 lifted wells of 3000 (seed 2026), before and after (5th / 25th / 50th / 75th / 95th percentiles): $T_{lg} - T_a(H)$ −20.2 / −11.3 / −6.7 / −3.0 / −0.6 K becomes 0.1 / 0.6 / 1.8 / 8.2 / 28.0 K, small at the median because most valves lie near the packer, where the ambient is near $T_r$; $T_{lg}$ 296 / 311 / 325 / 340 / 376 K becomes 303 / 323 / 339 / 359 / 399 K; and $T_r - T_{lg}$ is at least 0.19 K, so $T_{lg} \le T_r$ in every well.
 - **Needs sign-off:** yes (sampling).
-- **Used by:** `specs/sampling.md`, SMP-79; `sampling/v2/draws.py`.
+- **Used by:** `specs/sampling.md`, SMP-79; `sampling/v2/draws.py` (`_lift`, `_PSI_LG`), `life.py` (`_LIFT_KEYS`); `datasets-draft.md`, the lift design's columns.
 - **Ruling:**
 
 ### D-115 · The pressure's exponent over a life: 0.7 to 1.5

@@ -124,6 +124,7 @@ _P_LIFT_OIL = {'offshore': (0.20, 0.45, 0.70), 'onshore': (0.15, 0.25, 0.35)}  #
 _P_LIFT_GAS = (0.0, 0.05, 0.15)  # spec: SMP-78
 _P_INJ = {'platform': (48.0, 85.0), 'subsea': (130.0, 210.0), 'onshore': (48.0, 85.0)}  # bar  # spec: SMP-79
 _GILBERT_H = 12192.0  # m: Gilbert's 40,000 ft (Golan and Whitson 1991, Eq. 5.17)  # spec: SMP-79
+_PSI_LG = (0.0, 0.75)  # The lift gas's share of the way from the ambient at the valve to T_r  # spec: SMP-79
 _W_LG_MAX = (0.1, 3.5)  # kg/s, the lift-gas capacity's bounds  # spec: SMP-80
 _AGE = {'initial': (30, 365), 'mid_life': (365, 8 * 365), 'late': (5 * 365, 25 * 365)}  # days  # spec: SMP-81
 _CH4_CP_P, _CH4_CP_T = (1.0, 101.0, 201.0, 401.0), (300.0, 380.0)  # bar, K  # spec: SMP-82
@@ -188,7 +189,7 @@ def draw_well(seed: int, k: int, stage: str | None = None, force_lift: bool = Fa
     - completion: `c_e`, `q_design`, `D`, `tubing`, `q_cap`, `roughness`.
     - choke: `beta`, `d_bean`, `c_d`, `K_c`, `choke_model`, `chk_profile`.
     - lift: `lift`, `needs_lift`, and for a lifted well `z_inj`, `injection_md`, `z_inj_frac`, `p_inj`, `dp_valve`,
-      `packer_offset`, `T_lg`, `phi_lg`, `T_lg_below_ambient`, `glr_cap`, `w_lg_max`.
+      `packer_offset`, `T_lg`, `psi_lg` (its share of the way from the ambient to T_r), `glr_cap`, `w_lg_max`.
     - heat: `h`, `age_years`, `U_t`, `k_e`, `cp_o`, `cp_w`, `cp_g`.
     """
     if stage is not None and stage not in STAGES:
@@ -623,7 +624,7 @@ def _lift(r, w, x, force_lift):
     dz_pk = r.uniform(30, 150)
     p_inj, dp_v = r.uniform(*_P_INJ[wt]), r.uniform(3.4, 13.8)  # At the top: the surface or the tree
     delta_lift = r.uniform(0.3, 0.7)  # A lifted well's design drawdown
-    phi, u_glr = r.uniform(0, 0.3), r.random()
+    psi, u_glr = r.uniform(*_PSI_LG), r.random()
     lift = need or u_lift < p_lift or force_lift
     q_l_now = min(w['q_l_ref'], w['q_cap'])
     if lift:  # spec: SMP-79
@@ -652,8 +653,8 @@ def _lift(r, w, x, force_lift):
             glr = w_lg_max / kq
             x.flags.append('lift_capacity_at_bound')
         w.update(z_inj=H, injection_md=float(np.interp(H, tvd, md)), z_inj_frac=H / L, p_inj=p_inj, dp_valve=dp_v)
-        w.update(T_lg=T_a - phi * (T_a - T_s), packer_offset=dz_pk, phi_lg=phi)
-        w.update(T_lg_below_ambient=phi * (T_a - T_s), glr_cap=glr, w_lg_max=w_lg_max)
+        w.update(T_lg=T_a + psi * (T_r - T_a), packer_offset=dz_pk, psi_lg=psi)  # At most T_r
+        w.update(glr_cap=glr, w_lg_max=w_lg_max)
 
 
 def _cp_methane(p, T):

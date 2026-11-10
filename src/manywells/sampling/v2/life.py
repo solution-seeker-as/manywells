@@ -31,8 +31,8 @@ _R_END = 0.15  # p_r / p_i of an exhausted reservoir under depletion  # spec: SM
 _R_END_TOP = {True: 0.3, False: 0.2}  # The top of a core well's end under depletion: oils, gas classes  # spec: SMP-83
 _WGR_END = 10000.0  # Sm3 per 1e6 Sm3: a gas well with pressure support waters out  # spec: SMP-83
 _N_STATIC = 41  # Dates of the static check along the life  # spec: SMP-90
-_LIFT_KEYS = ('z_inj', 'injection_md', 'z_inj_frac', 'p_inj', 'dp_valve', 'packer_offset', 'T_lg', 'phi_lg')
-_LIFT_KEYS += ('T_lg_below_ambient', 'glr_cap', 'w_lg_max')  # A lift design's keys (draws.draw_well)
+_LIFT_KEYS = ('z_inj', 'injection_md', 'z_inj_frac', 'p_inj', 'dp_valve', 'packer_offset', 'T_lg', 'psi_lg')
+_LIFT_KEYS += ('glr_cap', 'w_lg_max')  # A lift design's keys (draws.draw_well)
 
 
 def _cumulative(t, t_pl, D, b) -> float:  # spec: SMP-84

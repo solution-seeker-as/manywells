@@ -29,7 +29,7 @@ from manywells.sampling.wells import rng_for
 
 from .sampling_v2_wells import N_MANY_LIVES, SEED, drawn_lives, drawn_sol2_wells, drawn_wells, is_oil
 
-LIFT_KEYS = 'z_inj injection_md z_inj_frac p_inj dp_valve packer_offset T_lg phi_lg T_lg_below_ambient glr_cap w_lg_max'
+LIFT_KEYS = 'z_inj injection_md z_inj_frac p_inj dp_valve packer_offset T_lg psi_lg glr_cap w_lg_max'
 LIFT_KEYS = LIFT_KEYS.split()
 AT_THE_DATE = (  # The keys of a sol-2 well that hold its life's state at its date (SMP-92)
     'life_stage date p_r r_p R_go wlr wgr ogr saturation below_hydrostatic p_s r_s h roughness lift lift_start_rule'

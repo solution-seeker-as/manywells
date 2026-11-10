@@ -233,7 +233,7 @@ One row per accepted well, sorted by `ID`. The columns marked (s) are in `sol-2`
 | `injection_tvd` | m | float64 | $H$ | Gas lift: injection depth | new |
 | `T_lg` | K | float64 | `BoundaryConditions.T_lg`; null for a natural well | Gas lift: lift-gas temperature | new |
 | `w_lg_max` | kg/s | float64 | the lift-gas capacity; null for a natural well | Gas lift: capacity | new |
-| `glr_cap`, `p_inj`, `dp_valve`, `packer_offset`, `phi_lg` | Sm³/Sm³, bar, bar, m, – | float64 | the lift design's draws | Gas lift | new |
+| `glr_cap`, `p_inj`, `dp_valve`, `packer_offset`, `psi_lg` | Sm³/Sm³, bar, bar, m, – | float64 | the lift design's draws | Gas lift | new |
 | `h` (s) | W/(m² K) | float64 | `ThermalModel.h` | Heat-transfer coefficient | kept |
 | `U_t`, `k_e`, `well_age` | W/(m² K), W/(m K), d | float64 | the draws behind $h$ (`nsol-2`: `well_age` at the start) | Heat-transfer coefficient | new |
 | `cp_o`, `cp_w`, `cp_g` | J/(kg K) | float64 | heat capacities (`FluidModel`) | Heat capacities | kept |

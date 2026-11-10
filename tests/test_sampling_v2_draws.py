@@ -266,9 +266,9 @@ def check_well(w, md, tvd):
         H = w['z_inj']
         assert between(w['packer_offset'], 30, 150) and between(H, 0.3 * L, L - w['packer_offset'])
         assert w['injection_md'] == float(np.interp(H, tvd, md)) and H - 1e-9 <= w['injection_md'] < md[-1]
-        assert between(w['p_inj'], *P_INJ[wt]) and between(w['dp_valve'], 3.4, 13.8) and between(w['phi_lg'], 0, 0.3)
-        T_a = T_s + (T_r - T_s) * H / L
-        assert w['T_lg'] == pytest.approx(T_a - w['phi_lg'] * (T_a - T_s), rel=1e-12) and T_s <= w['T_lg'] <= T_a
+        assert between(w['p_inj'], *P_INJ[wt]) and between(w['dp_valve'], 3.4, 13.8) and between(w['psi_lg'], 0, 0.75)
+        T_a = T_s + (T_r - T_s) * H / L  # The ambient at the valve; the lift gas between it and T_r (SMP-79)
+        assert w['T_lg'] == pytest.approx(T_a + w['psi_lg'] * (T_r - T_a), rel=1e-12) and T_a <= w['T_lg'] <= T_r
         assert between(w['w_lg_max'], 0.1, 3.5)
         if 'lift_capacity_at_bound' not in w['flags']:
             assert between(w['glr_cap'], 30, 1000)
@@ -633,7 +633,7 @@ def test_a_branchs_constant_moves_no_later_draw(wells, monkeypatch):
     lifted = [(a, b) for a, b in zip(base, other) if a['lift'] == b['lift'] == 'gas_lift']
     assert sum(a['needs_lift'] for a, _ in lifted) >= 3 and sum(not a['needs_lift'] for a, _ in lifted) >= 3
     assert sum(b['lift'] == 'gas_lift' for b in other) > sum(a['lift'] == 'gas_lift' for a in base)
-    for key in ('packer_offset', 'p_inj', 'dp_valve', 'phi_lg'):
+    for key in ('packer_offset', 'p_inj', 'dp_valve', 'psi_lg'):
         assert [b[key] for _, b in lifted] == [a[key] for a, _ in lifted], key
 
 
