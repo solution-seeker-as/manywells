@@ -627,6 +627,32 @@ def test_an_nsol2_wells_scan_lift_and_slots(monkeypatch):
         )
 
 
+def test_an_nsol2_well_whose_life_ends_before_its_lift_starts_is_natural(monkeypatch):
+    """SMP-52, SMP-90 (D-131): where the draws start lift between two scan points and the lifted well fails at the
+    later one, the life ends before lift starts; no date of it is lifted, so the well is natural, with no rule."""
+    T = lambda lf: lf.T_life  # noqa: E731
+    lf = next(
+        lf
+        for lf in drawn_lives()
+        if lf.lift_start_rule in ('drawn_time', 'static_check')
+        and (lf.lift_start * 20 / T(lf)) % 1 > 0.1
+        and lf.w0['fluid_class'] not in TABLE_CLASSES
+    )
+    attempt, _ = stand_in_attempt(
+        lambda inp: ('no_operating_point', None) if inp['lift_on'] else ('operating_point', 50.0)
+    )
+    monkeypatch.setattr(generate, '_attempt', attempt)
+    res = generate_nsol2_well(SEED, lf.k)
+    info, nsol = res['info'], res['nsol']
+    dates = np.linspace(0.0, T(lf), 21)
+    assert info['T_end'] == dates[dates < lf.lift_start][-1] and info['outcome'] == 'accepted'
+    assert info['scan'][-1]['lift_on'] and info['scan'][-1]['status'] == 'no_operating_point'
+    assert (nsol['lift_start'], nsol['lift_start_rule']) == (None, None)
+    assert not any(rec['lift_on'] for rec in res['samples']) and len(res['samples']) == N_SLOTS
+    plan, p_c = nsol2_plan(lf, info['T_end'], None)  # The plan of a natural well: the same draws
+    assert info['p_change'] == p_c and [rec['u'] for rec in res['samples']] == [slot['u'] for slot in plan]
+
+
 def test_an_nsol2_wells_short_life_and_dead_date(monkeypatch):
     """SMP-101: a life that ends at its first point is `short_life`, without slots; SMP-106: a slot that has no
     operating point at 50 attempts is a dead date."""

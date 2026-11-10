@@ -896,10 +896,10 @@ Before its slots are drawn, the well's best rate (SMP-103) is solved at the 21 d
 
 - A point fails where its status (SMP-103) is `below_floor`, `no_operating_point` or `water_cut`. A point with the status `solver_failure` is skipped.
 - At a point $i > 0$ where the well is natural and its status is `below_floor` or `no_operating_point`, rule 3 of SMP-90 starts lift at $t_{i-1}$ where that is earlier than its start so far, and the point is solved again with lift.
-- The life ends at $T_\text{end}$, the last point that passes before the first that fails, or at $T_\text{life}$ if none fails.
+- The life ends at $T_\text{end}$, the last point that passes before the first that fails, or at $T_\text{life}$ if none fails. Where it ends before its lift starts, as where a drawn or static-check start falls between two points and the lifted well fails at the later one, no date of the life is lifted: the well is natural, with no `lift_start_rule` (SMP-52).
 - A well whose first point does not pass is dropped as `not_producible`, or as `best_rate_solver_failure` (SMP-103); one whose life ends at $T_\text{end} = 0$ is dropped as `short_life`.
 
-From D-50 and D-84 (ruled 2026-11-06) and D-49. Sources: D-34's floor; [WP §11]. The scan's step of 5% of the life is the ruled one; a finer scan is the named fix if dead dates (SMP-106) stay above their target.
+From D-50 and D-84 (ruled 2026-11-06), D-49 and D-131. Sources: D-34's floor; [WP §11]. The scan's step of 5% of the life is the ruled one; a finer scan is the named fix if dead dates (SMP-106) stay above their target.
 
 **Basis:** a design choice of the generation: the scan's 21 points are the ruled resolution, and ending the life at the last point that passes gives every date an operating point (D-84); the floor it applies is SMP-102's.
 

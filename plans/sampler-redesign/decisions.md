@@ -1234,3 +1234,15 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Needs sign-off:** yes (sampling).
 - **Used by:** `specs/sampling.md`, SMP-75; `sampling/v2/draws.py` (`_inflow`, `_completion`), `sampling/v2/_distributions.py` (`tnorm_at`); `tests/test_sampling_v2_draws.py`, `tests/test_sampling_v2_life.py`.
 - **Ruling:**
+
+### D-131 · An `nsol-2` well whose life ends before its lift starts is natural
+
+- **Step:** R10, 2026-11-10 (the review of R10). Implements SMP-52 as written.
+- **Choice made:** where the life scan ends an `nsol-2` well's life before the lift's start by the draws (SMP-90's `drawn_time` or `static_check`, a start that falls between two scan points, with the lifted well failing at the later one), the well is labelled `natural`, with no `lift_start` and no `lift_start_rule`. Its plan and its samples do not change: no slot's date reaches the start, and the plan draws the same numbers either way.
+- **Alternatives:** the port's label `gas_lift`, with a start after $T_\text{end}$, for a well none of whose samples is lifted.
+- **Basis:** a design choice of the labels: SMP-52's `lift` in `nsol-2` is a well lifted at some date of its life.
+- **Realism:** it follows from the solves: the start must lie within the scan's step of 5% of the life before the first point at which the lifted well fails. Not measured here; R11's pilot counts the `nsol-2` wells with a lift design that stay natural.
+- **Implemented** (R10, 2026-11-10): `generate.generate_nsol2_well`; SMP-101 says so. Test with stand-in solves: such a well is natural, and its samples are the plan's of a natural well.
+- **Needs sign-off:** yes (the labels).
+- **Used by:** `specs/sampling.md`, SMP-101; `sampling/v2/generate.py`; `tests/test_sampling_v2_generate.py`.
+- **Ruling:**

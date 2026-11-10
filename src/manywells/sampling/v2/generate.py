@@ -455,6 +455,8 @@ def generate_nsol2_well(seed: int, k: int, tables=None) -> dict:
         return _best_rate(builder, life.state(t), lifted, w_lg_max, floor, log, base)
 
     scan, first, T_end, lift_start, rule = _life_scan(life, best_rate_at)
+    if T_end is not None and lift_start is not None and not lift_on(T_end, lift_start):  # spec: SMP-52, SMP-90
+        lift_start, rule = None, None  # The life ends before its lift starts: no date of it is lifted
     nsol = _life_summary(life, lift_start, rule)
     info.update(scan=scan, best_rate=first['best'], best_rate_w_lg=first['best_w_lg'])
     info['best_rate_outcomes'] = first['outcomes']
