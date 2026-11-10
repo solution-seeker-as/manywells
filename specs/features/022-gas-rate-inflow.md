@@ -229,6 +229,12 @@ The missed root is at `v1.0.0+forchheimer` #17, where the CasADi search finds tw
 
 **The suites.** `cargo test --no-default-features` (57 tests, the three new test wells among them); the develop and `v2.0.0` vectors in both backends, with every table but INF-10's and INF-11's and every row of V1 to V4 the same to the bit; both verifier candidates in the `v1.0.0` configuration: PASS, 0 failures, no expected failures, a stable-root rate of 100.0% (136 of 136), and the baseline's report unchanged (PASS, 35 expected failures, 74.3%).
 
+## A known limit of the fit (2026-11-09)
+
+With the non-Darcy coefficient the sampler draws since D-62 (Economides et al.'s Eq. 4-34, several times below R3's at the median), the sampler's fit of $a$ and $b$ to the pseudo-pressure (design choice 2; `specs/sampling.md`, SMP-117) gives $b = 0$ in most high-pressure gas wells: 60% of the states of the 73 gas and condensate wells of R9's check run, and every attempt of at least half the wells of its pilots (`plans/sampler-redesign/r9-measurements.md`). At high pressure $\mu_g Z$ grows with $p$, so $(p_r^2 - p_{wf}^2)/q$ falls as the rate rises, a negative slope, where non-Darcy flow gives a positive one; INF-10 needs $b \ge 0$, so the fit takes $b = 0$ and the mean for $a$. The fit's largest error from 20% drawdown to the AOF is then 5.4% at the median and 22% at the 95th percentile, against 0.7% and 5.6% where $b > 0$.
+
+Bjarne accepted this on 2026-11-09 as a known limit of the pressure-squared form (the second checkpoint's L3; `specs/model/validity.md`, note 12). The form in $p$ (design choice 2's alternative) stays out of scope.
+
 ## Acceptance
 
 After implementation, on a branch in its own worktree:
