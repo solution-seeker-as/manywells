@@ -653,7 +653,7 @@ From D-41 (ruled 2026-11-06, with the steeper decline and lives shorter than 8 y
 ### SMP-85 · Reservoir pressure along the life
 
 - Oils, and every well under pressure support: $p_r(t) = p_i\big(r_1 + (r_0 - r_1)(1 - F)^\gamma\big)$, $\gamma \sim U(1, 2)$.
-- Gas and condensate wells under depletion: $p/Z$ linear in $F$, $p_r/Z(p_r) = (1 - F)\thinspace p_0/Z_0 + F\thinspace p_1/Z_1$, with $p_0 = r_0 p_i$, $p_1 = r_1 p_i$ and the well's DAK $Z$ (PVT-GAS-11) at $T_r$, solved for $p_r$.
+- Gas and condensate wells under depletion: $p/Z$ linear in $F$, $p_r/Z(p_r) = (1 - F)\thinspace p_0/Z_0 + F\thinspace p_1/Z_1$, with $p_0 = r_0 p_i$, $p_1 = r_1 p_i$ and the well's DAK $Z$ (PVT-GAS-11) at $T_r$, solved for $p_r$ by linear interpolation in $p/Z$ between 200 pressures from $0.5\thinspace p_1$ to $1.02\thinspace p_0$.
 
 From D-42 (ruled 2026-11-06). Sources: Ahmed (2006), Eq. 13-8 (p. 861); Golan and Whitson (1991), Example 4.11 (Table E4.11a, p. 454).
 
@@ -761,7 +761,7 @@ The choke and the lift gas follow set points $u_\text{sp}$ and $w_\text{sp}$, co
 
 - **Start:** $u_\text{sp} = 1$ with probability 0.05, else $U(0.05, 1)$. When lift starts, $w_\text{sp} = U(0.1, 1)\thinspace w_{lg,\max}$.
 - **Changes:** at each operating sample after the first, each set point changes with probability $p_c \sim \text{LogU}(0.5, 0.95)$, drawn once per well; the lift gas's only while lift is installed.
-- **A change** is, with probability 0.9, a step of $U(-0.1, 0.1)$ times its range's width ($w_{lg,\max}$ for the lift gas), reflected into its range; else a new draw: the choke 1 with probability 0.05, else $U(0.05, 1)$; the lift gas 0 with probability 0.20, else $U(0.1, 1)\thinspace w_{lg,\max}$.
+- **A change** is, with probability 0.9, a step of $U(-0.1, 0.1)$, times $w_{lg,\max}$ for the lift gas, reflected into its range; else a new draw: the choke 1 with probability 0.05, else $U(0.05, 1)$; the lift gas 0 with probability 0.20, else $U(0.1, 1)\thinspace w_{lg,\max}$.
 - **Ranges:** the choke's $[0.05, 1]$; the lift gas's $[0.1, 1]\thinspace w_{lg,\max}$ between changes, so that only a new draw shuts it in.
 - The set points never follow a solve; a redraw (SMP-105) changes its own slot only.
 
@@ -830,7 +830,7 @@ Each well has 200 slots, $j$ = 0 to 199, and each slot ends with an operating po
 
 - **Passes.** Pass 0 solves attempt 0 of every slot, and pass $a$ attempt $a$ of each slot still without an operating point, in the order of $j$. A slot's draws do not depend on the other slots' outcomes.
 - **`sol-2`:** a redraw draws the slot's whole draw again (SMP-93 to SMP-96), so the samples follow the drawn distribution conditioned on an operating point.
-- **`nsol-2`:** a redraw keeps the slot's date and everything that follows from it: the reservoir's state with the date's drift, $h$, $\varepsilon$, the inflow's coefficients, $p_{s,\text{nom}}$ and whether lift is installed. It draws the separator pressure again (SMP-95), and both controls from the slot's planned values (in a test, the sweep's point): each, with probability 0.6, a step of $U(-0.2, 0.2)$ times its range's width, reflected into its range (the lift gas's $[0.1, 1]\thinspace w_{lg,\max}$), else a new draw as in SMP-98; the lift gas only where lift is installed. The redrawn controls hold for that slot only.
+- **`nsol-2`:** a redraw keeps the slot's date and everything that follows from it: the reservoir's state with the date's drift, $h$, $\varepsilon$, the inflow's coefficients, $p_{s,\text{nom}}$ and whether lift is installed. It draws the separator pressure again (SMP-95), and both controls from the slot's planned values (in a test, the sweep's point): each, with probability 0.6, a step of $U(-0.2, 0.2)$, times $w_{lg,\max}$ for the lift gas, reflected into its range (the lift gas's $[0.1, 1]\thinspace w_{lg,\max}$), else a new draw as in SMP-98; the lift gas only where lift is installed. The redrawn controls hold for that slot only.
 
 From D-52 (ruled 2026-11-02), D-80 and D-83 (ruled 2026-11-06, with R4's step kept for redraws). Sources: `sampling-draft.md`, Slots and outcomes and Redraws in `nsol-2`.
 
