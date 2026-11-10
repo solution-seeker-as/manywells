@@ -12,7 +12,7 @@ state. An nsol-2 well draws a plan of its 200 slots over its life: the dates, th
 and the drift; a redraw changes the controls of its own slot. Nothing here solves a well.
 
 An attempt's inputs are the dict that mapping.WellBuilder.case takes: `p_r` and `p_s` (bar), `u`, `w_lg` (kg/s),
-`lift_on`, `gor` (Sm3/Sm3), `wlr`, `h` (W/(m2 K)), `roughness` (m) and the inflow's coefficients (inflow.COEF_KEYS),
+`lift_on`, `gor` (Sm3/Sm3), `wlr`, `h` (W/(m2 K)), `roughness` (m) and the inflow's coefficients (inflow._COEF_KEYS),
 with `wgr` (Sm3 per 1e6 Sm3; NaN for an oil) beside them.
 """
 
@@ -21,13 +21,13 @@ import math
 import numpy as np
 
 from manywells.sampling.v2._distributions import logu
-from manywells.sampling.v2.draws import P_S_MIN
-from manywells.sampling.v2.inflow import COEF_KEYS
-from manywells.sampling.v2.life import WLR_MAX, lift_on
-from manywells.sampling.v2.reservoir import OILS, producing_gor
+from manywells.sampling.v2.draws import _P_S_MIN
+from manywells.sampling.v2.inflow import _COEF_KEYS
+from manywells.sampling.v2.life import _WLR_MAX, _lift_on
+from manywells.sampling.v2.reservoir import _OILS, _producing_gor
 from manywells.sampling.wells import rng_for
 
-N_SLOTS = 200  # A well's slots  # spec: SMP-105
+_N_SLOTS = 200  # A well's slots  # spec: SMP-105
 _N_OPERATING, _N_TESTS, _N_SWEEP = 160, 8, 5  # Operating samples, test periods, samples of a test  # spec: SMP-97
 _U_MIN = 0.05  # The smallest choke position  # spec: SMP-93
 _P_OPEN = 0.05  # Share of fully open chokes: of the sol-2 slots, and of the set point's draws  # spec: SMP-93, SMP-98
@@ -47,7 +47,7 @@ def _generator(seed, k, j, a):  # spec: SMP-109
 
 def _separator_pressure(r, p_nom, dp_fl) -> float:  # spec: SMP-95
     """Within 10% of the nominal pressure, at least 1.5 bar and a subsea well's flowline loss."""
-    lo, hi, x = max((1 - _P_S_JITTER) * p_nom, P_S_MIN, dp_fl), (1 + _P_S_JITTER) * p_nom, r.random()
+    lo, hi, x = max((1 - _P_S_JITTER) * p_nom, _P_S_MIN, dp_fl), (1 + _P_S_JITTER) * p_nom, r.random()
     return lo + (hi - lo) * x if lo < hi else hi
 
 
@@ -60,7 +60,7 @@ def _reflect(x, lo, hi) -> float:
 
 
 # --- sol-2 -----------------------------------------------------------------------------------------------------------
-def sol2_attempt(seed: int, w: dict, j: int, a: int = 0) -> dict:  # spec: SMP-105
+def _sol2_attempt(seed: int, w: dict, j: int, a: int = 0) -> dict:  # spec: SMP-105
     """
     The inputs of attempt a of slot j of a sol-2 well: its controls, its separator pressure and the reservoir's
     drift, around the well's nominal state. Attempt 0 draws from the slot's generator and a redraw draws the whole
@@ -82,20 +82,20 @@ def sol2_attempt(seed: int, w: dict, j: int, a: int = 0) -> dict:  # spec: SMP-1
     p_s = _separator_pressure(r, w['p_s'], w['dp_fl'])
     # spec: SMP-96
     p_r = w['p_r'] * r.uniform(1 - _P_R_DRIFT, 1 + _P_R_DRIFT)
-    R_go = producing_gor(w, p_r) * r.uniform(1 - _RATIO_DRIFT, 1 + _RATIO_DRIFT)
+    R_go = _producing_gor(w, p_r) * r.uniform(1 - _RATIO_DRIFT, 1 + _RATIO_DRIFT)
     x = r.uniform(1 - _RATIO_DRIFT, 1 + _RATIO_DRIFT)
-    if w['fluid_type'] in OILS:
-        wlr, wgr = min(WLR_MAX, w['wlr'] * x), math.nan
+    if w['fluid_type'] in _OILS:
+        wlr, wgr = min(_WLR_MAX, w['wlr'] * x), math.nan
     else:
         wgr = w['wgr'] * x
         wlr = wgr / (wgr + 1e6 / R_go)
-    inp = dict(h=w['h'], roughness=w['roughness'], **{key: w[key] for key in COEF_KEYS})
+    inp = dict(h=w['h'], roughness=w['roughness'], **{key: w[key] for key in _COEF_KEYS})
     inp.update(lift_on=lifted, u=u, w_lg=w_lg, p_s=p_s, p_r=p_r, gor=R_go, wlr=wlr, wgr=wgr)
     return inp
 
 
 # --- nsol-2 ----------------------------------------------------------------------------------------------------------
-def nsol2_plan(life, T_end: float, lift_start: float | None) -> tuple:  # spec: SMP-97
+def _nsol2_plan(life, T_end: float, lift_start: float | None) -> tuple:  # spec: SMP-97
     """
     The plan of an nsol-2 well's 200 slots over [0, T_end], drawn in slot order from the well's `controls`
     generator before any slot is solved: the dates, the control history, the test periods' sweeps, the separator
@@ -128,7 +128,7 @@ def nsol2_plan(life, T_end: float, lift_start: float | None) -> tuple:  # spec: 
     w_max = life.design['w_lg_max'] if life.design is not None else math.nan
     w_sp, plan, sweep, eps = None, [], None, None
     for t, kind, test in slots:
-        lifted = lift_on(t, lift_start)
+        lifted = _lift_on(t, lift_start)
         if lifted and w_sp is None:
             w_sp = (_LIFT_FLOOR + (1 - _LIFT_FLOOR) * w_0) * w_max
         if kind == 'operating' and t > 0:  # spec: SMP-98. Each set point may change
@@ -187,14 +187,14 @@ def _nsol2_redraw(r, slot, w_max, p_s_nom, dp_fl) -> tuple:  # spec: SMP-105
     return u, w_lg, _separator_pressure(r, p_s_nom, dp_fl)
 
 
-def nsol2_attempt(life, plan: list, j: int, a: int = 0) -> dict:  # spec: SMP-105
+def _nsol2_attempt(life, plan: list, j: int, a: int = 0) -> dict:  # spec: SMP-105
     """
     The inputs of attempt a of slot j of an nsol-2 well: the life's state at the slot's date with the date's drift,
     and the slot's planned controls and separator pressure, or for a redraw the controls changed from the planned
     ones and the separator pressure drawn again, from the redraw's own generator. A redraw holds for its slot only.
 
     :param life: The well's life (life.Life)
-    :param plan: The well's plan (nsol2_plan)
+    :param plan: The well's plan (_nsol2_plan)
     :param j: The slot, 0 to N_SLOTS - 1
     :param a: The attempt, 0 for the planned one
     :return: The attempt's inputs (the module's docstring), with the state's `t`, `p_s_nom` and `life_stage`

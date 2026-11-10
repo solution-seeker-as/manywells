@@ -19,7 +19,7 @@ A well's result (generate_sol2_well, generate_nsol2_well) is a dict of:
   `lift_start_rule` `no_natural_flow` where the producibility filter lifted it. nsol-2: the initial-stage draws
   (draws.draw_well), which hold what is fixed for the life. A `table_failed` well's are drawn without its table.
 - `stations`: the survey, (md, tvd).
-- `table`: a table well's manifest (tables.read_table) without its PVTTableSet, with `status` `ok`, or `failed` with
+- `table`: a table well's manifest (tables._read_table) without its PVTTableSet, with `status` `ok`, or `failed` with
   the `step` and the `error`; None for a well of another fluid class.
 - `nsol`: None for a sol-2 well. nsol-2: the life's parameters (life.Life.parameters) with `lift_start` (years; None
   for a well that stays natural) and `lift_start_rule` after the life scan, and `design`, the lift design's draws
@@ -40,7 +40,7 @@ A well's result (generate_sol2_well, generate_nsol2_well) is a dict of:
 
 An attempt's record is a flat dict of:
 
-- its inputs (samples.sol2_attempt or samples.nsol2_attempt; a best-rate solve's are the state's, with `p_s_nom`);
+- its inputs (samples._sol2_attempt or samples._nsol2_attempt; a best-rate solve's are the state's, with `p_s_nom`);
 - `draw_index`; `kind`, `best_rate`, `best_rate_lifted` (a sol-2 well's best rate with the filter's lift), `scan` or
   `slot`; `slot`, j for a slot, -1 for a best-rate solve and -1 - i for the life scan's point i; `attempt`, a for a
   slot, else the index of the lift-gas rate, whose share of the capacity is `lift_fraction`;
@@ -58,19 +58,19 @@ import time
 import numpy as np
 
 from manywells.configurations import V2, check
-from manywells.datasets.v2 import FEATURES, sample_features  # noqa: F401 - FEATURES: the columns a record holds
-from manywells.sampling.v2.inflow import COEF_KEYS
-from manywells.sampling.v2.life import _LIFT_KEYS, WLR_MAX, Life, lift_on, sol2_well
+from manywells.datasets.v2 import FEATURES, _sample_features  # noqa: F401 - FEATURES: the columns a record holds
+from manywells.sampling.v2.inflow import _COEF_KEYS
+from manywells.sampling.v2.life import _LIFT_KEYS, _WLR_MAX, Life, _lift_on, sol2_well
 from manywells.sampling.v2.mapping import WellBuilder
-from manywells.sampling.v2.reservoir import OILS
-from manywells.sampling.v2.samples import N_SLOTS, nsol2_attempt, nsol2_plan, sol2_attempt
-from manywells.sampling.v2.table_wells import gor_axis, table_well
-from manywells.sampling.v2.tables import TableMismatch, read_table, wells_file
+from manywells.sampling.v2.reservoir import _OILS
+from manywells.sampling.v2.samples import _N_SLOTS, _nsol2_attempt, _nsol2_plan, _sol2_attempt
+from manywells.sampling.v2.table_wells import _gor_axis, _table_well
+from manywells.sampling.v2.tables import TableMismatch, _read_table, _wells_file
 from manywells.solvers.rust import RustRootFinder
 
-FLOOR = {'platform': 1.6, 'onshore': 1.6, 'subsea': 20.0}  # Sm3/d of oil equivalent, by well type  # spec: SMP-102
-FLOOR_MARGIN = 0.5  # A well is not produced below this share of its floor  # spec: SMP-102
-SLOT_LIMIT, REDRAW_LIMIT, SOLVER_FAILURE_LIMIT = 50, 400, 10  # spec: SMP-106
+_FLOOR = {'platform': 1.6, 'onshore': 1.6, 'subsea': 20.0}  # Sm3/d of oil equivalent, by well type  # spec: SMP-102
+_FLOOR_MARGIN = 0.5  # A well is not produced below this share of its floor  # spec: SMP-102
+_SLOT_LIMIT, _REDRAW_LIMIT, _SOLVER_FAILURE_LIMIT = 50, 400, 10  # spec: SMP-106
 _BEST_RATE_LIFT = (0.0, 0.5, 1.0)  # The best rate's lift-gas rates, shares of the capacity  # spec: SMP-103
 _N_SCAN = 21  # Dates of the life scan  # spec: SMP-101
 _NO_SEARCH = dict(n_roots=0, n_stable=0, several_stable=False, marches=math.nan, non_finite=math.nan)
@@ -134,7 +134,7 @@ def _solve(wp, bc) -> dict:  # spec: SMP-104
     out['several_stable'] = bool(rs.several_stable)
     op = rs.operating_point
     if op is not None:
-        row = sample_features(op, bc, wp.fluid)
+        row = _sample_features(op, bc, wp.fluid)
         if _valid_row(row):
             out.update(outcome='operating_point', row=row)
         else:
@@ -196,12 +196,12 @@ def _best_rate(builder, state, lifted, w_lg_max, floor, log, base) -> dict:  # s
         log.append(rec)
     ops = [rec for rec in recs if rec['outcome'] == 'operating_point']
     out = dict(best=math.nan, best_w_lg=math.nan, outcomes=[rec['outcome'] for rec in recs])
-    if builder.w['fluid_type'] in OILS and state['wlr'] > WLR_MAX:  # spec: SMP-102
+    if builder.w['fluid_type'] in _OILS and state['wlr'] > _WLR_MAX:  # spec: SMP-102
         out['status'] = 'water_cut'
     elif ops:
         top = max(ops, key=lambda rec: rec['q_oe'])
         out.update(best=top['q_oe'], best_w_lg=top['w_lg'])
-        out['status'] = 'pass' if top['q_oe'] >= FLOOR_MARGIN * floor else 'below_floor'  # spec: SMP-102
+        out['status'] = 'pass' if top['q_oe'] >= _FLOOR_MARGIN * floor else 'below_floor'  # spec: SMP-102
     elif any(rec['outcome'] == 'solver_failure' for rec in recs):
         out['status'] = 'solver_failure'
     else:
@@ -221,12 +221,12 @@ def _solve_slots(k, draw, builder, log, slot_limit_outcome) -> tuple:  # spec: S
     :param slot_limit_outcome: The outcome of a well with a slot at the slot limit: `slot_limit` or `dead_date`
     :return: (the accepted record of each slot, by slot; the well's outcome)
     """
-    accepted, open_slots = {}, list(range(N_SLOTS))
+    accepted, open_slots = {}, list(range(_N_SLOTS))
     n_redraws = n_failures = 0
-    for a in range(SLOT_LIMIT):
+    for a in range(_SLOT_LIMIT):
         for j in open_slots:
             if a > 0:
-                if n_redraws >= REDRAW_LIMIT:
+                if n_redraws >= _REDRAW_LIMIT:
                     return accepted, 'redraw_limit'
                 n_redraws += 1
             rec = _attempt(builder, draw(j, a))
@@ -236,7 +236,7 @@ def _solve_slots(k, draw, builder, log, slot_limit_outcome) -> tuple:  # spec: S
                 accepted[j] = rec
             elif rec['outcome'] == 'solver_failure':
                 n_failures += 1
-                if n_failures > SOLVER_FAILURE_LIMIT:
+                if n_failures > _SOLVER_FAILURE_LIMIT:
                     return accepted, 'solver_failure_limit'
         open_slots = [j for j in open_slots if j not in accepted]
         if not open_slots:
@@ -247,19 +247,19 @@ def _solve_slots(k, draw, builder, log, slot_limit_outcome) -> tuple:  # spec: S
 # --- A well ----------------------------------------------------------------------------------------------------------
 def _table(seed, k, kind, tables):  # spec: SMP-112, SMP-116
     """
-    A table well's manifest with its PVTTableSet (tables.read_table), or with the status `failed`; None for a well
+    A table well's manifest with its PVTTableSet (tables._read_table), or with the status `failed`; None for a well
     of another fluid class. Without a folder of tables the well's table is missing, and so it is for a draw index
     beyond the folder's.
 
-    :raises TableMismatch: where the folder covers the draw index and its record of the well (table_wells.table_well,
+    :raises TableMismatch: where the folder covers the draw index and its record of the well (table_wells._table_well,
         or none for a well of another class) or the well's GOR axis is not the one the run's draws give
     """
-    own = table_well(seed, k)
+    own = _table_well(seed, k)
     if tables is None:
         return None if own is None else dict(status='failed', step='missing', error='no folder of tables was given')
-    f_kind, f_seed, (k0, k1), records = wells_file(tables)
+    f_kind, f_seed, (k0, k1), records = _wells_file(tables)
     if (f_kind, f_seed) != (kind, seed) or not k0 <= k < k1:
-        return None if own is None else read_table(tables, k, kind, seed)  # Another's folder, or beyond its range
+        return None if own is None else _read_table(tables, k, kind, seed)  # Another's folder, or beyond its range
     if json.loads(json.dumps(own)) != records.get(k):
         raise TableMismatch(
             f'the tables of {tables} were not built from the draws of draw index {k}: its record in wells.json is '
@@ -267,9 +267,9 @@ def _table(seed, k, kind, tables):  # spec: SMP-112, SMP-116
         )
     if own is None:
         return None
-    table = read_table(tables, k, kind, seed)
+    table = _read_table(tables, k, kind, seed)
     if table['status'] == 'ok':
-        axis = json.loads(json.dumps(gor_axis(kind, seed, k, table['hook'])))['gors']
+        axis = json.loads(json.dumps(_gor_axis(kind, seed, k, table['hook'])))['gors']
         if axis != table['gors']:
             raise TableMismatch(
                 f"the table of draw index {k} in {tables} was built on another GOR axis than the well's life gives "
@@ -330,7 +330,7 @@ def _dropped_at_best_rate(info, br) -> bool:  # spec: SMP-103
 
 def _sol2_nominal(w) -> dict:  # spec: SMP-92
     """A sol-2 well's nominal state, as its best rate takes it: life.Life.state's keys but the date and its stage."""
-    state = dict(h=w['h'], roughness=w['roughness'], **{key: w[key] for key in COEF_KEYS})
+    state = dict(h=w['h'], roughness=w['roughness'], **{key: w[key] for key in _COEF_KEYS})
     state.update(p_r=w['p_r'], gor=w['R_go'], wlr=w['wlr'], wgr=w.get('wgr', math.nan), p_s_nom=w['p_s'])
     return state
 
@@ -357,7 +357,7 @@ def generate_sol2_well(seed: int, k: int, tables=None) -> dict:
         w = sol2_well(life)
     except ValueError as e:
         info.update(outcome='invalid_input', error=str(e)[:300])
-        w = sol2_well(Life(seed, k, fluid=hook)) | dict.fromkeys(COEF_KEYS, math.nan)  # The draws without the table
+        w = sol2_well(Life(seed, k, fluid=hook)) | dict.fromkeys(_COEF_KEYS, math.nan)  # The draws without the table
         return _result(t_start, w, life.stations, table, info)
     builder = WellBuilder(life.w0, life.stations, design=life.design, pvt=pvt)
     lifted = w['lift'] == 'gas_lift'
@@ -367,7 +367,7 @@ def generate_sol2_well(seed: int, k: int, tables=None) -> dict:
     except ValueError as e:
         info.update(outcome='invalid_input', error=str(e)[:300])
         return _result(t_start, w, life.stations, table, info)
-    floor = FLOOR[w['well_type']]
+    floor = _FLOOR[w['well_type']]
     base = dict(draw_index=k, kind='best_rate', slot=-1)
     br = _best_rate(builder, nominal, lifted, w['w_lg_max'] if lifted else 0.0, floor, log, base)
     if not lifted and life.oil and br['status'] in ('no_operating_point', 'below_floor'):
@@ -377,7 +377,7 @@ def generate_sol2_well(seed: int, k: int, tables=None) -> dict:
     info.update(best_rate=br['best'], best_rate_w_lg=br['best_w_lg'], best_rate_outcomes=br['outcomes'])
     if _dropped_at_best_rate(info, br):
         return _result(t_start, w, life.stations, table, info, log)
-    accepted, info['outcome'] = _solve_slots(k, lambda j, a: sol2_attempt(seed, w, j, a), builder, log, 'slot_limit')
+    accepted, info['outcome'] = _solve_slots(k, lambda j, a: _sol2_attempt(seed, w, j, a), builder, log, 'slot_limit')
     return _result(t_start, w, life.stations, table, info, log, accepted)
 
 
@@ -401,7 +401,7 @@ def _life_scan(life, best_rate_at) -> tuple:  # spec: SMP-101
     scan, first, last_pass, failed = [], None, None, False
     for i in range(_N_SCAN):
         t = float(dates[i])
-        lifted = lift_on(t, lift_start)
+        lifted = _lift_on(t, lift_start)
         br = best_rate_at(i, t, lifted)
         if i > 0 and not lifted and life.design is not None and br['status'] in ('below_floor', 'no_operating_point'):
             # spec: SMP-90. Rule 3: lift starts at the last scan point before natural flow fails
@@ -442,12 +442,12 @@ def generate_nsol2_well(seed: int, k: int, tables=None) -> dict:
     log, info = [], _info(k, scan=[], T_end=math.nan, p_change=math.nan)
     lift_start, rule = life.lift_start, life.lift_start_rule
     try:  # spec: SMP-106
-        start = dict(life.state(0.0), u=1.0, w_lg=0.0, lift_on=lift_on(0.0, lift_start), p_s=w0['p_s'])
+        start = dict(life.state(0.0), u=1.0, w_lg=0.0, lift_on=_lift_on(0.0, lift_start), p_s=w0['p_s'])
         check(builder.case(start)[0], V2)
     except ValueError as e:
         info.update(outcome='invalid_input', error=str(e)[:300])
         return _result(t_start, w0, life.stations, table, info, nsol=_life_summary(life, lift_start, rule))
-    floor = FLOOR[w0['well_type']]
+    floor = _FLOOR[w0['well_type']]
     w_lg_max = life.design['w_lg_max'] if life.design is not None else 0.0
 
     def best_rate_at(i, t, lifted):
@@ -455,7 +455,7 @@ def generate_nsol2_well(seed: int, k: int, tables=None) -> dict:
         return _best_rate(builder, life.state(t), lifted, w_lg_max, floor, log, base)
 
     scan, first, T_end, lift_start, rule = _life_scan(life, best_rate_at)
-    if T_end is not None and lift_start is not None and not lift_on(T_end, lift_start):  # spec: SMP-52, SMP-90
+    if T_end is not None and lift_start is not None and not _lift_on(T_end, lift_start):  # spec: SMP-52, SMP-90
         lift_start, rule = None, None  # The life ends before its lift starts: no date of it is lifted
     nsol = _life_summary(life, lift_start, rule)
     info.update(scan=scan, best_rate=first['best'], best_rate_w_lg=first['best_w_lg'])
@@ -466,6 +466,8 @@ def generate_nsol2_well(seed: int, k: int, tables=None) -> dict:
     if T_end <= 0.0:  # spec: SMP-101
         info['outcome'] = 'short_life'
         return _result(t_start, w0, life.stations, table, info, log, nsol=nsol)
-    plan, info['p_change'] = nsol2_plan(life, T_end, lift_start)
-    accepted, info['outcome'] = _solve_slots(k, lambda j, a: nsol2_attempt(life, plan, j, a), builder, log, 'dead_date')
+    plan, info['p_change'] = _nsol2_plan(life, T_end, lift_start)
+    accepted, info['outcome'] = _solve_slots(
+        k, lambda j, a: _nsol2_attempt(life, plan, j, a), builder, log, 'dead_date'
+    )
     return _result(t_start, w0, life.stations, table, info, log, accepted, nsol)

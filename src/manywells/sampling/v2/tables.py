@@ -16,7 +16,7 @@ from pathlib import Path
 
 from manywells.pvt.table import PVTTable
 
-TABLE_CLASSES = ('volatile_oil', 'gas_condensate')  # The fluid classes that take a PVT table  # spec: SMP-112
+_TABLE_CLASSES = ('volatile_oil', 'gas_condensate')  # The fluid classes that take a PVT table  # spec: SMP-112
 
 
 class TableMismatch(RuntimeError):
@@ -26,21 +26,21 @@ class TableMismatch(RuntimeError):
 
 
 @functools.lru_cache(maxsize=4)
-def _wells_file(path: str, stamp: tuple) -> tuple:
+def _read_wells_file(path: str, stamp: tuple) -> tuple:
     """A folder's wells.json as (kind, seed, wells_range, {draw index: record}), read once per version of the file
     (stamp: its modification time and size)."""
     spec = json.loads(Path(path).read_text())
     return spec['kind'], spec['seed'], tuple(spec['wells_range']), {w['well']: w for w in spec['wells']}
 
 
-def wells_file(tables_dir) -> tuple:  # spec: SMP-116
+def _wells_file(tables_dir) -> tuple:  # spec: SMP-116
     """The folder's wells.json (table_wells.py's docstring) as (kind, seed, wells_range, {draw index: record})."""
     path = Path(tables_dir) / 'wells.json'
     stat = path.stat()
-    return _wells_file(str(path.resolve()), (stat.st_mtime_ns, stat.st_size))
+    return _read_wells_file(str(path.resolve()), (stat.st_mtime_ns, stat.st_size))
 
 
-def read_table(tables_dir, k, kind, seed) -> dict:  # spec: SMP-116
+def _read_table(tables_dir, k, kind, seed) -> dict:  # spec: SMP-116
     """
     Table well k's manifest from the folder that table_build.py built for the dataset kind ('sol' or 'nsol') and
     seed, with its PVTTableSet under 'pvt'. Its status is 'ok', or 'failed' with the step and the error: a step of the

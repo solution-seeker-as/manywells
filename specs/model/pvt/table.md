@@ -15,7 +15,7 @@ The hydrocarbon PVT of a fluid from a table (feature 018, `specs/features/018-pv
 | the table from a flash's phase split | the separation, $X$, $\rho_L$, $\rho_V$ at the nodes, and the trace $\delta$ | the table | no |
 | the table at the fluid's GOR | the tables at several GORs, $R_{go}$ | the table | no |
 
-In code, `PVTTable` (`pvt/table.py`) is a `PVTModel` whose `gas_law` is `'table'`; `PVTTableSet` holds the tables of one stream at several GORs. In the Rust core, the fluid's `Pvt::Table` (`rust/src/pvt/fluid.rs`, `table.rs`) holds the table at the fluid's GOR, which `solvers/rust.py` passes it; the core never sees a GOR axis. `PVTTable.read_csv` reads either from a file, and `write_csv` writes one: `# key: value` lines (`rho_o` and `rho_g`, and the free-text `name`, `source`, `separation` and `gor`), then the columns `[gor,] p, T, R_so, B_o, Z[, mu_o, mu_g, sigma]`, one row per node, in Sm³/Sm³, bar, K and SI units.
+In code, `PVTTable` (`pvt/table.py`) is a `PVTModel` whose `gas_law` is `'table'`; `PVTTableSet` holds the tables of one stream at several GORs. In the Rust core, the fluid's `Pvt::Table` (`rust/src/pvt/fluid.rs`, `table.rs`) holds the table at the fluid's GOR, which `solvers/rust.py` passes it; the core never sees a GOR axis. `PVTTable.read_csv` reads either from a file, and `write_csv` writes one: `# key: value` lines (`rho_o` and `rho_g`, and the free-text `name`, `source`, `separation` and `gor`), then the columns `[gor,] p, T, R_so, B_o, Z[, mu_o, mu_g, sigma]`, one row per node, in Sm³/Sm³, bar, K and SI units. `PVTTable.from_frame` builds a table from such rows of one GOR in a DataFrame, with the header's values as its fields, as a dataset's `pvt` rows give them (`datasets.v2.pvt_from_rows`).
 
 ## Equations
 

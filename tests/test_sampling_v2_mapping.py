@@ -23,29 +23,29 @@ from manywells.friction import RoughnessFriction, chen_friction_factor
 from manywells.inflow import Forchheimer, ProductivityIndex, Vogel
 from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.table import PVTTable
-from manywells.sampling.v2.draws import P_ATM, black_oil
+from manywells.sampling.v2.draws import _P_ATM, _black_oil
 from manywells.sampling.v2.inflow import (
-    COEF_KEYS,
+    _COEF_KEYS,
     _pseudo_pressure,
     _wellstream_factor,
-    fit_pressure_squared,
-    gas_inflow,
-    inflow_at,
+    _fit_pressure_squared,
+    _gas_inflow,
+    _inflow_at,
 )
-from manywells.sampling.v2.mapping import N_CELLS, WellBuilder
+from manywells.sampling.v2.mapping import _N_CELLS, WellBuilder
 from manywells.sampling.v2.reservoir import (
-    GOR_NODES,
-    R_W,
-    drain_index,
-    forchheimer,
-    gas_rate,
-    j_radial,
-    joshi_ratio,
-    liner_gas,
-    liner_liquid,
-    nondarcy,
-    producing_gor,
-    slant_skin,
+    _GOR_NODES,
+    _R_W,
+    _drain_index,
+    _forchheimer,
+    _gas_rate,
+    _j_radial,
+    _joshi_ratio,
+    _liner_gas,
+    _liner_liquid,
+    _nondarcy,
+    _producing_gor,
+    _slant_skin,
 )
 from manywells.simulator import NoOperatingPoint, SSDFSimulator
 from manywells.units import P_REF, T_REF
@@ -72,36 +72,38 @@ def test_producing_gor_of_an_oil(wells):
     is below its critical saturation, then a rise; and a more mobile gas (the tail's blend) gives the higher GOR."""
     w = next(w for w, _ in wells if w['fluid_class'] == 'black_oil' and w['coverage_tail'] == 'core')
     p_sat, R_i = w['p_sat'], w['R_i']
-    assert producing_gor(w, p_sat) == producing_gor(w, 1.3 * p_sat) == R_i
-    factor = [producing_gor(w, x * p_sat) / R_i for x in (0.999, 0.95, 0.9, 0.5, 0.3)]
+    assert _producing_gor(w, p_sat) == _producing_gor(w, 1.3 * p_sat) == R_i
+    factor = [_producing_gor(w, x * p_sat) / R_i for x in (0.999, 0.95, 0.9, 0.5, 0.3)]
     assert factor[0] == pytest.approx(1, abs=5e-3)  # Continuous at the saturation pressure
     assert factor[2] < factor[1] < factor[0] < 1 and factor[4] > factor[3] > 1.5
     mobile = dict(w, w_kgko=1.0)  # Table 10.2's k_g/k_o
-    assert producing_gor(mobile, 0.5 * p_sat) > producing_gor(w, 0.5 * p_sat)
-    assert producing_gor(mobile, p_sat) == R_i
+    assert _producing_gor(mobile, 0.5 * p_sat) > _producing_gor(w, 0.5 * p_sat)
+    assert _producing_gor(mobile, p_sat) == R_i
     # The curve is linear in p_r / p_sat between its nodes, from 0.05 to 1
-    assert GOR_NODES[0] == 0.05 and GOR_NODES[-1] == 1.0 and len(GOR_NODES) == 381 and np.all(np.diff(GOR_NODES) > 0)
-    lo, hi = GOR_NODES[200] * p_sat, GOR_NODES[201] * p_sat
-    middle = 0.5 * (producing_gor(w, lo) + producing_gor(w, hi))
-    assert producing_gor(w, 0.5 * (lo + hi)) == pytest.approx(middle, rel=1e-12)
+    assert (
+        _GOR_NODES[0] == 0.05 and _GOR_NODES[-1] == 1.0 and len(_GOR_NODES) == 381 and np.all(np.diff(_GOR_NODES) > 0)
+    )
+    lo, hi = _GOR_NODES[200] * p_sat, _GOR_NODES[201] * p_sat
+    middle = 0.5 * (_producing_gor(w, lo) + _producing_gor(w, hi))
+    assert _producing_gor(w, 0.5 * (lo + hi)) == pytest.approx(middle, rel=1e-12)
 
 
 def test_producing_gor_of_gas_classes(gas_wells):
     cond = next(w for w in gas_wells if w['fluid_class'] == 'gas_condensate')
     p_sat, R_i, c_k = cond['p_sat'], cond['R_i'], cond['c_k']
-    assert producing_gor(cond, p_sat) == producing_gor(cond, 1.2 * p_sat) == R_i
-    assert producing_gor(cond, 0.6 * p_sat) == pytest.approx(R_i * (1 + 0.4 * c_k))
+    assert _producing_gor(cond, p_sat) == _producing_gor(cond, 1.2 * p_sat) == R_i
+    assert _producing_gor(cond, 0.6 * p_sat) == pytest.approx(R_i * (1 + 0.4 * c_k))
     wet = next(w for w in gas_wells if w['fluid_class'] == 'wet_gas')
-    assert producing_gor(wet, 0.3 * wet['p_r']) == wet['R_i']
+    assert _producing_gor(wet, 0.3 * wet['p_r']) == wet['R_i']
 
 
 # --- Productivity (SMP-72) and the radial gas coefficients (SMP-71, SMP-73) ------------------------------------------
 def test_j_radial_in_field_units():
     """Darcy's radial flow in SI against the oilfield form, J = k h / (141.2 mu B (ln(r_e/r_w) - 0.75 + s)) STB/(d psi)
     with k in md, h in ft and mu in cp."""
-    J = j_radial(100.0, 10.0, 1e-3, 1.2, 7.25, 0.75)
+    J = _j_radial(100.0, 10.0, 1e-3, 1.2, 7.25, 0.75)
     assert J == pytest.approx(100 * (10 / FT) / (141.2 * 1.0 * 1.2 * 8.0) * STB / PSI, rel=1e-3)
-    assert j_radial(100.0, 10.0, 2e-3, 1.2, 7.25, 0.75) == pytest.approx(J / 2)
+    assert _j_radial(100.0, 10.0, 2e-3, 1.2, 7.25, 0.75) == pytest.approx(J / 2)
 
 
 def test_joshi_ratio_against_a_worked_example():
@@ -109,17 +111,17 @@ def test_joshi_ratio_against_a_worked_example():
     r_eH = 2980 ft, mu = 1.7 cp and B = 1.1 gives 1634 STB/d at a drawdown of 2151 psi. The example's wellbore radius
     is 0.328 ft where the sampler's is 0.354 ft, which changes the rate by less than 1%."""
     L_d, h, k, mu, B = 2000 * FT, 53 * FT, 8.2, 1.7e-3, 1.1
-    ln_re = math.log(2980 * FT / R_W)
-    ratio = joshi_ratio(L_d, h, 3.0, 0.0, ln_re)
-    q = ratio * j_radial(k, h, mu, B, ln_re - 0.75, 0.0) * (5651 - 3500) * PSI / STB
+    ln_re = math.log(2980 * FT / _R_W)
+    ratio = _joshi_ratio(L_d, h, 3.0, 0.0, ln_re)
+    q = ratio * _j_radial(k, h, mu, B, ln_re - 0.75, 0.0) * (5651 - 3500) * PSI / STB
     assert q == pytest.approx(1634, rel=0.01)
-    assert joshi_ratio(L_d, h, 3.0, 5.0, ln_re) > ratio  # Skin hurts a drain less than a vertical well
+    assert _joshi_ratio(L_d, h, 3.0, 5.0, ln_re) > ratio  # Skin hurts a drain less than a vertical well
     # A long drain's drainage length grows with it, r_eH = max(r_e, L_d / 1.6): its ellipse keeps its shape, and in
     # thin pay the index tends to 2 pi k h / (mu B ln 2.53)
-    assert joshi_ratio(2400.0, h, 3.0, 0.0, 7.5) > joshi_ratio(1200.0, h, 3.0, 0.0, 7.5) > 1
+    assert _joshi_ratio(2400.0, h, 3.0, 0.0, 7.5) > _joshi_ratio(1200.0, h, 3.0, 0.0, 7.5) > 1
     a = 0.5 * math.sqrt(0.5 + math.sqrt(0.25 + 1.25**4))  # The ellipse's half-axis over L_d, at 2 r_eH / L_d = 1.25
     limit = (7.5 - 0.75) / math.log((a + math.sqrt(a * a - 0.25)) / 0.5)
-    assert joshi_ratio(2000.0, 1e-6, 1.0, 0.0, 7.5) == pytest.approx(limit, rel=1e-6)
+    assert _joshi_ratio(2000.0, 1e-6, 1.0, 0.0, 7.5) == pytest.approx(limit, rel=1e-6)
     assert math.log((a + math.sqrt(a * a - 0.25)) / 0.5) == pytest.approx(math.log(2.53), rel=1e-3)
 
 
@@ -128,12 +130,14 @@ def test_slant_skin_against_economides_table_5_1():
     al.'s (1994) Table 5-1, p. 91, within 3%; it grows with the angle and the pay, and anisotropy lessens it."""
     table = {15: -0.128, 30: -0.517, 45: -1.178, 60: -2.149, 75: -3.577}
     for theta, s in table.items():
-        assert slant_skin(theta, 100 * R_W, 1.0) == pytest.approx(s, rel=0.0301)
-    assert slant_skin(0.0, 15.0, 2.0) == 0.0
-    assert slant_skin(45.0, 50.0, 1.0) < slant_skin(45.0, 10.0, 1.0) < slant_skin(30.0, 10.0, 1.0) < 0
-    assert slant_skin(45.0, 10.0, 3.0) > slant_skin(45.0, 10.0 * 3, 1.0)  # The pay's thickness in h_D, not the angle
-    t, h_D = math.degrees(math.atan(math.tan(math.radians(60.0)) / 2.0)), 10.0 * 2.0 / R_W
-    assert slant_skin(60.0, 10.0, 2.0) == pytest.approx(-((t / 41) ** 2.06) - (t / 56) ** 1.865 * math.log10(h_D / 100))
+        assert _slant_skin(theta, 100 * _R_W, 1.0) == pytest.approx(s, rel=0.0301)
+    assert _slant_skin(0.0, 15.0, 2.0) == 0.0
+    assert _slant_skin(45.0, 50.0, 1.0) < _slant_skin(45.0, 10.0, 1.0) < _slant_skin(30.0, 10.0, 1.0) < 0
+    assert _slant_skin(45.0, 10.0, 3.0) > _slant_skin(45.0, 10.0 * 3, 1.0)  # The pay's thickness in h_D, not the angle
+    t, h_D = math.degrees(math.atan(math.tan(math.radians(60.0)) / 2.0)), 10.0 * 2.0 / _R_W
+    assert _slant_skin(60.0, 10.0, 2.0) == pytest.approx(
+        -((t / 41) ** 2.06) - (t / 56) ** 1.865 * math.log10(h_D / 100)
+    )
 
 
 def test_liner_friction():
@@ -142,14 +146,14 @@ def test_liner_friction():
     D, rho, mu, B, eps, q = 0.1243, 780.0, 1.2e-3, 1.25, 3e-5, 2500.0
     v = q * B / 86400 / (math.pi * D**2 / 4)  # m/s
     f_D = 1.5 * float(chen_friction_factor(rho * v * D / mu, eps / D))
-    c = liner_liquid(D, rho, mu, B, eps)
+    c = _liner_liquid(D, rho, mu, B, eps)
     assert float(c(q, 1e12)) * q**2 * 1e5 == pytest.approx(f_D * rho * v**2 / (2 * D), rel=1e-6)  # Pa/m
     assert float(c(q, 500.0) - c(q, 1e12)) * q**2 * 1e5 * 500 / 4 == pytest.approx(2 / 3 * rho * v**2, rel=1e-6)
     sg, Z, T, mu_g, q_g = 0.65, 0.9, 380.0, 2e-5, 5e5
     M = sg * 0.02897
     G = q_g / 86400 * P_REF * M / (8.314 * T_REF) / (math.pi * D**2 / 4)  # kg/(m2 s)
     f_D = 1.5 * float(chen_friction_factor(G * D / mu_g, eps / D))
-    c_g = liner_gas(D, sg, Z, T, mu_g, eps)
+    c_g = _liner_gas(D, sg, Z, T, mu_g, eps)
     assert float(c_g(q_g)) * q_g**2 * 1e10 == pytest.approx(f_D * G**2 * Z * 8.314 * T / (D * M), rel=1e-6)  # Pa2/m
 
 
@@ -161,15 +165,15 @@ def test_drain_index():
     def const(c):
         return lambda q, L: c
 
-    assert drain_index(J_H, L_d, const(0.0), u, 1e9) == pytest.approx(J_H, rel=1e-14)
+    assert _drain_index(J_H, L_d, const(0.0), u, 1e9) == pytest.approx(J_H, rel=1e-14)
     for c in (1e-12, 1e-9, 1e-7, 1e-5):
         Pi = c * J_H**2 * u * L_d
-        assert drain_index(J_H, L_d, const(c), u, 1e9) == pytest.approx(J_H * (1 + Pi / 1.5) ** (-1 / 3), rel=1e-12)
+        assert _drain_index(J_H, L_d, const(c), u, 1e9) == pytest.approx(J_H * (1 + Pi / 1.5) ** (-1 / 3), rel=1e-12)
     Pi = 1e-12 * J_H**2 * u * L_d
-    assert drain_index(J_H, L_d, const(1e-12), u, 1e9) == pytest.approx(J_H * (1 - Pi / 4.5), rel=1e-8)
+    assert _drain_index(J_H, L_d, const(1e-12), u, 1e9) == pytest.approx(J_H * (1 - Pi / 4.5), rel=1e-8)
     c = 1e-7
-    free = drain_index(J_H, L_d, const(c), u, 1e9) * u  # The heel's rate at the drawdown u
-    capped = drain_index(J_H, L_d, const(c), u, free / 2)
+    free = _drain_index(J_H, L_d, const(c), u, 1e9) * u  # The heel's rate at the drawdown u
+    capped = _drain_index(J_H, L_d, const(c), u, free / 2)
     u_cap = free / 2 / capped  # The drawdown at the capped rate
     assert u_cap < u and capped == pytest.approx(J_H * (1 + c * J_H**2 * L_d / 1.5 * u_cap) ** (-1 / 3), rel=1e-9)
     assert free / u < capped < J_H  # Less drawdown, less friction
@@ -180,12 +184,12 @@ def test_radial_forchheimer_in_field_units():
     D q) q, with q in Mscf/d, pressures in psi, T in R, k in md, h in ft and mu in cp. Its standard conditions are
     60 F and 14.7 psia, a third of a percent from the model's."""
     k, h, mu, Z, T, ln_term, s, D = 5.0, 20.0, 2.2e-5, 0.92, 390.0, 7.4, 2.0, 4e-4
-    a, b = forchheimer(k, h, mu, Z, T, ln_term, s, D)
+    a, b = _forchheimer(k, h, mu, Z, T, ln_term, s, D)
     a_field = 1424 * (mu * 1e3) * Z * (T * 1.8) * (ln_term + s) / (k * h / FT)  # psi2 per Mscf/d
     assert a == pytest.approx(a_field * PSI**2 / MSCF, rel=5e-3)
     assert b == pytest.approx(a * D / MSCF / (ln_term + s), rel=1e-12)  # The non-Darcy flow as a skin D q
     assert 86400 / MSCF == pytest.approx(3051, rel=1e-4)  # 1 d/Mscf in s/Sm3
-    q = gas_rate(a, b, 150.0**2 - 90.0**2)
+    q = _gas_rate(a, b, 150.0**2 - 90.0**2)
     assert q > 0 and a * q + b * q**2 == pytest.approx(150.0**2 - 90.0**2, rel=1e-12)
 
 
@@ -193,28 +197,28 @@ def test_nondarcy_estimate_in_field_units():
     """Economides et al. (1994), Eq. 4-34, from SI inputs: D = 6e-5 gamma_g k^-0.1 h / (mu r_w h_perf^2) d/Mscf with
     k in md, the lengths in ft and mu in cp."""
     sg, k, h, mu, h_perf = 0.65, 10.0, 30 * FT, 2e-5, 12 * FT
-    assert nondarcy(sg, k, h, mu, h_perf) == pytest.approx(6e-5 * sg * k**-0.1 * 30 / (0.02 * (R_W / FT) * 12**2))
-    assert nondarcy(sg, k, h, mu, h) == pytest.approx(nondarcy(sg, k, h, mu, h_perf) * (12 / 30) ** 2)
+    assert _nondarcy(sg, k, h, mu, h_perf) == pytest.approx(6e-5 * sg * k**-0.1 * 30 / (0.02 * (_R_W / FT) * 12**2))
+    assert _nondarcy(sg, k, h, mu, h) == pytest.approx(_nondarcy(sg, k, h, mu, h_perf) * (12 / 30) ** 2)
 
 
 # --- The Forchheimer fit (SMP-117) -----------------------------------------------------------------------------------
 def test_fit_reproduces_a_pressure_squared_law():
     p_r, a, b = 240.0, 3e-3, 2e-9
-    a_fit, b_fit = fit_pressure_squared(lambda p_wf: gas_rate(a, b, p_r**2 - p_wf**2), p_r)
+    a_fit, b_fit = _fit_pressure_squared(lambda p_wf: _gas_rate(a, b, p_r**2 - p_wf**2), p_r)
     assert (a_fit, b_fit) == pytest.approx((a, b), rel=1e-9)
-    a_fit, b_fit = fit_pressure_squared(lambda p_wf: (p_r**2 - p_wf**2) / a, p_r)  # Darcy flow alone
-    assert a_fit == pytest.approx(a, rel=1e-9) and abs(b_fit) < 1e-9 * a / gas_rate(a, b, p_r**2)
+    a_fit, b_fit = _fit_pressure_squared(lambda p_wf: (p_r**2 - p_wf**2) / a, p_r)  # Darcy flow alone
+    assert a_fit == pytest.approx(a, rel=1e-9) and abs(b_fit) < 1e-9 * a / _gas_rate(a, b, p_r**2)
 
 
 def test_fit_is_least_squares_with_a_floor_on_b():
     """Least squares of (p_r^2 - p_wf^2)/q against q at the seven points; and where that line's slope is negative,
     b = 0 and a is the mean of (p_r^2 - p_wf^2)/q."""
     p_r = 300.0
-    points = [f * p_r for f in (0.95, 0.9, 0.8, 0.6, 0.4, 0.2)] + [P_ATM]
+    points = [f * p_r for f in (0.95, 0.9, 0.8, 0.6, 0.4, 0.2)] + [_P_ATM]
     dp2 = np.array([p_r**2 - p**2 for p in points])
     for n, steeper in ((0.8, True), (1.25, False)):  # q ~ (p_r^2 - p_wf^2)^n: a curve that no a and b follow
         q = 1e3 * (dp2 / 1e4) ** n
-        a, b = fit_pressure_squared(lambda p_wf: 1e3 * ((p_r**2 - p_wf**2) / 1e4) ** n, p_r)
+        a, b = _fit_pressure_squared(lambda p_wf: 1e3 * ((p_r**2 - p_wf**2) / 1e4) ** n, p_r)
         y = dp2 / q
         if steeper:  # The free fit: its residuals are orthogonal to 1 and q
             residual = y - a - b * q
@@ -234,7 +238,7 @@ def radial_coefficients(w, gas, p_r):
     """SMP-73's a and b at a state, with the well's geometry factors."""
     T_r = w['T_r']
     Z, mu_g = float(gas.z_factor(p_r, T_r)), float(gas.gas_viscosity(p_r, T_r, gas.gas_density(p_r, T_r)))
-    a, b = forchheimer(w['perm'], w['h_net'], mu_g, Z, T_r, w['ln_re_rw'] - 0.75, w['skin'], w['D_nondarcy'])
+    a, b = _forchheimer(w['perm'], w['h_net'], mu_g, Z, T_r, w['ln_re_rw'] - 0.75, w['skin'], w['D_nondarcy'])
     return a * w['a_ratio'], b * w['b_ratio']
 
 
@@ -251,8 +255,8 @@ def test_gas_inflow_at_low_pressure_is_the_pressure_squared_law(gas_wells):
     pressure squared, so the fitted model gives its rates."""
     p_r = 15.0
     for w in gas_wells[:15]:
-        pvt = black_oil(w)
-        fit = Forchheimer(**{k[12:]: v for k, v in gas_inflow(w, pvt, p_r, w['R_go']).items()})
+        pvt = _black_oil(w)
+        fit = Forchheimer(**{k[12:]: v for k, v in _gas_inflow(w, pvt, p_r, w['R_go']).items()})
         gas, c = reservoir_gas(w, w['R_go'])
         a, b = radial_coefficients(w, gas, p_r)
         law = Forchheimer.from_gas_rate(c * a, c * c * b, w['rho_g'])  # For the separator gas, in the model's units
@@ -266,8 +270,8 @@ def test_gas_inflow_follows_the_pseudo_pressure(gas_wells):
     flow: close where the fit keeps b, and within the known limit of the form where b = 0 (validity.md, note 12)."""
     kept, floored = [], []
     for w in gas_wells[:30]:
-        p_r, T_r, R_go, pvt = w['p_r'], w['T_r'], w['R_go'], black_oil(w)
-        coef = gas_inflow(w, pvt, p_r, R_go)
+        p_r, T_r, R_go, pvt = w['p_r'], w['T_r'], w['R_go'], _black_oil(w)
+        coef = _gas_inflow(w, pvt, p_r, R_go)
         assert math.isfinite(coef['forchheimer_a']) and coef['forchheimer_a'] > 0 and coef['forchheimer_b'] >= 0
         fit = Forchheimer(a=coef['forchheimer_a'], b=coef['forchheimer_b'])
         gas, c = reservoir_gas(w, R_go)
@@ -275,8 +279,8 @@ def test_gas_inflow_follows_the_pseudo_pressure(gas_wells):
         p, m, muz_r = _pseudo_pressure(gas, p_r, T_r)
         assert len(p) == 200 and p[0] == 1.0 and p[-1] == p_r and m[0] == 0.0
         errors = []
-        for p_wf in [f * p_r for f in (0.8, 0.6, 0.4, 0.2)] + [P_ATM]:
-            q_ws = gas_rate(a, b, muz_r * (m[-1] - np.interp(p_wf, p, m)))  # The wellstream, Sm3/d
+        for p_wf in [f * p_r for f in (0.8, 0.6, 0.4, 0.2)] + [_P_ATM]:
+            q_ws = _gas_rate(a, b, muz_r * (m[-1] - np.interp(p_wf, p, m)))  # The wellstream, Sm3/d
             q_sep = float(fit.gas_mass_flow_rate(p_wf, p_r)) * 86400 / w['rho_g']  # The model's separator gas
             errors.append(abs(c * q_sep / q_ws - 1))
         (floored if coef['forchheimer_b'] == 0 else kept).append(max(errors))
@@ -291,8 +295,8 @@ def test_gas_inflow_scales_with_the_radial_coefficients(gas_wells):
     w = dict(next(w for w in gas_wells if w['fluid_class'] == 'gas_condensate'), T_r=360.0)
     weaker = dict(w, perm=w['perm'] / 2, D_nondarcy=2 * w['D_nondarcy'])
     table = PVTTable.read_csv(TABLE_SET)
-    for pvt, p_r, R_go in ((black_oil(w), 0.5 * w['p_r'], w['R_go']), (table, 150.0, 120.0)):
-        base, half = gas_inflow(w, pvt, p_r, R_go), gas_inflow(weaker, pvt, p_r, R_go)
+    for pvt, p_r, R_go in ((_black_oil(w), 0.5 * w['p_r'], w['R_go']), (table, 150.0, 120.0)):
+        base, half = _gas_inflow(w, pvt, p_r, R_go), _gas_inflow(weaker, pvt, p_r, R_go)
         assert half['forchheimer_a'] == pytest.approx(2 * base['forchheimer_a'], rel=1e-9)
         assert half['forchheimer_b'] == pytest.approx(4 * base['forchheimer_b'], rel=1e-9, abs=1e-300)
         assert base['forchheimer_a'] > 0
@@ -303,15 +307,15 @@ def test_inflow_at_the_drawn_state(wells):
     a gas well's are the fit's; the others are NaN."""
     seen = set()
     for w, _ in wells[:40]:
-        coef = inflow_at(w, black_oil(w), w['p_r'], w['R_go'], w['wlr'])
-        assert tuple(coef) == COEF_KEYS
+        coef = _inflow_at(w, _black_oil(w), w['p_r'], w['R_go'], w['wlr'])
+        assert tuple(coef) == _COEF_KEYS
         used = {'vogel': ['w_l_max'], 'productivity_index': ['k_l'], 'forchheimer': ['forchheimer_a', 'forchheimer_b']}
-        assert [key for key in COEF_KEYS if not math.isnan(coef[key])] == used[w['inflow']]
+        assert [key for key in _COEF_KEYS if not math.isnan(coef[key])] == used[w['inflow']]
         if is_oil(w):
             key = used[w['inflow']][0]
             assert coef[key] == pytest.approx(w[key], rel=1e-9)
         else:
-            fit = gas_inflow(w, black_oil(w), w['p_r'], w['R_go'])
+            fit = _gas_inflow(w, _black_oil(w), w['p_r'], w['R_go'])
             assert {key: coef[key] for key in fit} == fit and set(fit) == {'forchheimer_a', 'forchheimer_b'}
         seen.add(w['inflow'])
     assert seen == {'vogel', 'productivity_index', 'forchheimer'}
@@ -324,10 +328,12 @@ def test_inflow_at_with_a_table(wells):
     p_r, R_go, wlr = 180.0, 110.0, 0.2
     at = table.at_gor(R_go)
     mu_o, B_o = float(at.oil_viscosity(p_r, 360.0)), float(at.bo(p_r, 360.0))
-    J = j_radial(w['perm'], w['h_net'], mu_o, B_o, w['ln_re_rw'] - 0.75, w['skin'])
+    J = _j_radial(w['perm'], w['h_net'], mu_o, B_o, w['ln_re_rw'] - 0.75, w['skin'])
     k_l = J * w['f_geo'] * ((1 - wlr) * table.rho_o + wlr * w['rho_w']) / 86400
-    assert inflow_at(w, table, p_r, R_go, wlr)['w_l_max'] == pytest.approx(k_l * p_r / 1.8, rel=1e-9)
-    assert inflow_at(dict(w, inflow='productivity_index'), table, p_r, R_go, wlr)['k_l'] == pytest.approx(k_l, rel=1e-9)
+    assert _inflow_at(w, table, p_r, R_go, wlr)['w_l_max'] == pytest.approx(k_l * p_r / 1.8, rel=1e-9)
+    assert _inflow_at(dict(w, inflow='productivity_index'), table, p_r, R_go, wlr)['k_l'] == pytest.approx(
+        k_l, rel=1e-9
+    )
 
 
 # --- The mapping (SMP-111) -------------------------------------------------------------------------------------------
@@ -340,7 +346,7 @@ def test_every_drawn_well_maps_to_a_v2_well(wells):
         check(wp, V2)
         assert differences(wp, V2) == []
         geometry, fluid = wp.geometry, wp.fluid
-        assert geometry.n_cells == N_CELLS == 100 and geometry.D == w['D']
+        assert geometry.n_cells == _N_CELLS == 100 and geometry.D == w['D']
         assert geometry.md[0] == pytest.approx(md[-1]) and geometry.tvd[0] == pytest.approx(w['L'])
         assert min(geometry.cos_incl) >= math.cos(math.radians(75)) - 1e-9
         black = BlackOil(rho_o=w['rho_o'], rho_g=w['rho_g'], gas_law='dak', p_sep=w['p_sep'], T_sep=w['T_sep'])

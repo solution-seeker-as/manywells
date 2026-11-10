@@ -19,12 +19,12 @@ import numpy as np
 
 from manywells.sampling.v2 import draws
 from manywells.sampling.v2._distributions import logu
-from manywells.sampling.v2.draws import P_S_MAX, P_S_MIN, black_oil, draw_well
-from manywells.sampling.v2.inflow import COEF_KEYS, inflow_at
-from manywells.sampling.v2.reservoir import OILS, producing_gor
+from manywells.sampling.v2.draws import _P_S_MAX, _P_S_MIN, _black_oil, draw_well
+from manywells.sampling.v2.inflow import _COEF_KEYS, _inflow_at
+from manywells.sampling.v2.reservoir import _OILS, _producing_gor
 from manywells.sampling.wells import rng_for
 
-WLR_MAX = 0.98  # An oil's largest water-liquid ratio  # spec: SMP-83, SMP-96, SMP-100
+_WLR_MAX = 0.98  # An oil's largest water-liquid ratio  # spec: SMP-83, SMP-96, SMP-100
 _T_LIFE = (3.0, 30.0)  # years  # spec: SMP-84
 _Q_END = (0.03, 0.3)  # The decline's rate at the end of the life over the plateau's  # spec: SMP-84
 _GAMMA = (0.7, 2.3)  # The pressure path's exponent  # spec: SMP-85
@@ -57,7 +57,7 @@ def _expit(x):
     return 1 / (1 + math.exp(-x))
 
 
-def lift_on(t, lift_start) -> bool:  # spec: SMP-90
+def _lift_on(t, lift_start) -> bool:  # spec: SMP-90
     """Whether gas lift is installed at the date t (years) of a life whose lift starts at lift_start (years; None for
     a well that stays natural)."""
     return lift_start is not None and t >= lift_start - 1e-12
@@ -90,15 +90,15 @@ class Life:
       `from_start`, or the earliest of the static check's first failure (`static_check`) and the drawn date
       (`drawn_time`); None for a well that these leave natural. The life scan may start lift earlier in nsol-2
       (SMP-101), and the producibility filter may lift a sol-2 well (SMP-103): both are the generation's, which
-      passes the start to lift_on and samples.nsol2_plan, or asks sol2_well for the lifted well.
+      passes the start to _lift_on and samples._nsol2_plan, or asks sol2_well for the lifted well.
     """
 
     def __init__(self, seed: int, k: int, fluid: dict | None = None, pvt=None):
         self.seed, self.k = seed, k
         w0, self.stations = draw_well(seed, k, 'initial', fluid=fluid)  # Its stage's state, a core well's start
-        self.oil = w0['fluid_type'] in OILS
+        self.oil = w0['fluid_type'] in _OILS
         self._tail = w0['coverage_tail'] == 'tail'
-        self._bo = black_oil(w0)  # The black oil of the draws, a table fluid's too (v2: scope and conventions)
+        self._bo = _black_oil(w0)  # The black oil of the draws, a table fluid's too (v2: scope and conventions)
         self.pvt = self._bo if pvt is None else pvt
         self._coef = {}
         support = w0['drive'] == 'pressure_support'
@@ -146,7 +146,7 @@ class Life:
         if not self._tail and not support:
             self._r1 = min(_R_END + (_R_END_TOP[self.oil] - _R_END) * u_end, self._r0)
         elif not self._tail:
-            self._water1 = WLR_MAX if self.oil else _WGR_END
+            self._water1 = _WLR_MAX if self.oil else _WGR_END
         # spec: SMP-85. A gas well under depletion: p_r against F from p/Z linear in F, on a grid of pressures
         self._p_of_F = None
         if not self.oil and not support and self._r1 < self._r0:
@@ -241,8 +241,8 @@ class Life:
         """The nominal pressure downstream of the choke (bar) at t: SMP-66's with the separator's factor at t."""
         w0 = self.w0
         if self._tail:
-            return max((w0['p_s'] - w0['dp_fl']) * self.r_s(t) + w0['dp_fl'], P_S_MIN)
-        return min(max(self.r_s(t) * w0['p_sep'] + w0['dp_fl'], P_S_MIN), P_S_MAX[w0['well_type']])
+            return max((w0['p_s'] - w0['dp_fl']) * self.r_s(t) + w0['dp_fl'], _P_S_MIN)
+        return min(max(self.r_s(t) * w0['p_sep'] + w0['dp_fl'], _P_S_MIN), _P_S_MAX[w0['well_type']])
 
     def roughness(self, t) -> float:  # spec: SMP-88
         """The pipe's roughness (m) at t: log-linear in t from the initial draw's towards the late draw's."""
@@ -263,7 +263,7 @@ class Life:
     def _trends(self, t) -> tuple:  # spec: SMP-85, SMP-86, SMP-87
         """The trends' reservoir state at t: p_r (bar), the producing GOR at it (Sm3/Sm3) and the water."""
         p_r = self.p_r(t)
-        return p_r, producing_gor(self.w0, p_r), self.water(t)
+        return p_r, _producing_gor(self.w0, p_r), self.water(t)
 
     def _static_check_time(self):  # spec: SMP-90
         """The first of the 41 dates i T_life / 40 at which an oil well's static check (SMP-78) fails at the trends'
@@ -283,20 +283,20 @@ class Life:
         :param eps: The date's drift (SMP-100): the factors on the trend's GOR and on its water
         :return: A dict of `t`; `p_r` (bar), without drift; `gor` (Sm3/Sm3) and `wlr` with the drift, an oil's WLR
             capped at WLR_MAX, and `wgr` (Sm3 per 1e6 Sm3; NaN for an oil); `h` (W/(m2 K)), `roughness` (m),
-            `p_s_nom` (bar) and `life_stage`; and the inflow's coefficients (inflow.COEF_KEYS) at the trends' state
+            `p_s_nom` (bar) and `life_stage`; and the inflow's coefficients (inflow._COEF_KEYS) at the trends' state
             without the drift, made once per date
         """
         t = min(t, self.T_life)  # A date that rounding has put past the life's end
         p_r, R_trend, water_trend = self._trends(t)
         R_go, water = R_trend * eps[0], water_trend * eps[1]
         if self.oil:
-            wlr, wgr = min(WLR_MAX, water), math.nan
-            wlr_trend = min(WLR_MAX, water_trend)
+            wlr, wgr = min(_WLR_MAX, water), math.nan
+            wlr_trend = min(_WLR_MAX, water_trend)
         else:
             wlr, wgr = water / (water + 1e6 / R_go), water
             wlr_trend = water_trend / (water_trend + 1e6 / R_trend)
         if t not in self._coef:
-            self._coef[t] = inflow_at(self.w0, self.pvt, p_r, R_trend, wlr_trend)
+            self._coef[t] = _inflow_at(self.w0, self.pvt, p_r, R_trend, wlr_trend)
         return dict(
             t=t,
             p_r=p_r,
@@ -335,7 +335,7 @@ def sol2_well(life, no_natural_flow: bool = False) -> dict:  # spec: SMP-92
     :return: The initial-stage draws (draws.draw_well), with these keys at the date: `life_stage`, the drawn stage,
         and `date` (years); the nominal state `p_r`, `r_p`, `R_go`, `wlr`, [`wgr` and `ogr`], `saturation` and
         `below_hydrostatic`; `p_s`, the nominal pressure downstream of the choke, and `r_s`; `h` and `roughness`;
-        the inflow's coefficients (inflow.COEF_KEYS), NaN where the inflow model does not use one; `lift`, with the
+        the inflow's coefficients (inflow._COEF_KEYS), NaN where the inflow model does not use one; `lift`, with the
         design's lift keys where the well is lifted at the date, and `lift_start_rule` (None for a natural well).
         The other keys are the initial-stage draw's, the values derived at its state too (`J`, `q_l_ref`,
         `age_years`, `needs_lift` and the like).
@@ -351,8 +351,8 @@ def sol2_well(life, no_natural_flow: bool = False) -> dict:  # spec: SMP-92
         w.update(wgr=st['wgr'], ogr=1e6 / st['gor'])
     if w0['fluid_class'] not in ('wet_gas', 'dry_gas'):
         w['saturation'] = 'undersaturated' if p_r > w0['p_sat'] else 'saturated'
-    w.update({key: st[key] for key in COEF_KEYS})
-    lifted = lift_on(t, life.lift_start)  # spec: SMP-90
+    w.update({key: st[key] for key in _COEF_KEYS})
+    lifted = _lift_on(t, life.lift_start)  # spec: SMP-90
     rule = life.lift_start_rule if lifted else None
     if no_natural_flow:  # The producibility filter's lift (SMP-103)
         if lifted or not life.oil:

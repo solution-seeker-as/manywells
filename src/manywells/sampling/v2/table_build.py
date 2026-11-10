@@ -31,7 +31,7 @@ with the JVM sized to fit the memory cap of each process:
 
 The files. DIR/wells.json holds kind ('sol' or 'nsol'), seed and wells, one record per table well: well (its draw
 index), fluid_class, source ('synthetic' or an example's key), composition_seed, the drawn api, sg_gas, R_si and p_sat,
-p_i, T_r, the separator's p_sep and T_sep, and the grid's T_axis and p_top (well_grid). DIR/axes.json holds, by draw
+p_i, T_r, the separator's p_sep and T_sep, and the grid's T_axis and p_top (_well_grid). DIR/axes.json holds, by draw
 index, gors, or error where the axis could not be made. A fluid's record holds its labels, hook (the values that
 replace the fluid block's draws: p_sat, R_i, rho_o, rho_g, and api and sg_gas where they are not the drawn ones) and
 stream (the fractions, the composition and the separation, which the tables are made from); a manifest holds the
@@ -51,22 +51,22 @@ import numpy as np
 import pandas as pd
 
 NEQSIM_VERSION = '3.4.0'  # spec: SMP-112
-SOURCE = 'manywells.sampling.v2.table_build'  # The tables' maker, in their header
+_SOURCE = 'manywells.sampling.v2.table_build'  # The tables' maker, in their header
 
 # ManyWells' constants (manywells.units), copied because the build runs without ManyWells
-R_UNIVERSAL = 8314.46  # J/(kmol K)
-P_REF, T_REF = 101_325.0, 288.15
-CF_BAR = 1e5
-P_SC = P_REF / CF_BAR
-M_AIR = 28.97
-V_M_SC = R_UNIVERSAL * T_REF / P_REF  # m3/kmol of an ideal gas at standard conditions
-RHO_AIR = P_REF * M_AIR / (R_UNIVERSAL * T_REF)
+_R_UNIVERSAL = 8314.46  # J/(kmol K)
+_P_REF, _T_REF = 101_325.0, 288.15
+_CF_BAR = 1e5
+_P_SC = _P_REF / _CF_BAR
+_M_AIR = 28.97
+_V_M_SC = _R_UNIVERSAL * _T_REF / _P_REF  # m3/kmol of an ideal gas at standard conditions
+_RHO_AIR = _P_REF * _M_AIR / (_R_UNIVERSAL * _T_REF)
 
-DELTA = 1e-4  # The liquid mass fraction kept where the stream is all vapour (PVT-TAB-6)
-MAX_DROPPED = 0.05  # The largest share of a table's pressures that the repair may drop; beyond it the table fails
-P_EXAMPLE = 0.2  # A table well's probability of a published example fluid of its class
+_DELTA = 1e-4  # The liquid mass fraction kept where the stream is all vapour (PVT-TAB-6)
+_MAX_DROPPED = 0.05  # The largest share of a table's pressures that the repair may drop; beyond it the table fails
+_P_EXAMPLE = 0.2  # A table well's probability of a published example fluid of its class
 
-LIGHT = (
+_LIGHT = (
     'nitrogen',
     'CO2',
     'methane',
@@ -78,11 +78,11 @@ LIGHT = (
     'n-pentane',
     'n-hexane',
 )
-INTERMEDIATE = slice(3, 10)  # C2 to C6
+_INTERMEDIATE = slice(3, 10)  # C2 to C6
 
 # Published example fluids: light ends in mol% in LIGHT's order, and the heptanes-plus either lumped, c7 = (mol%,
 # molar mass g/mol, specific gravity), or as fractions, tbp = [(mol%, M, specific gravity), ...]
-EXAMPLES = {  # spec: SMP-114
+_EXAMPLES = {  # spec: SMP-114
     'wb2000_gas_condensate': dict(
         cls='gas_condensate',
         ref='Whitson and Brule (2000), Table 2.1, gas condensate',
@@ -168,7 +168,7 @@ EXAMPLES = {  # spec: SMP-114
 
 # The synthetic draw per class: the examples whose light ends are mixed, the heptanes-plus mole fraction before the
 # GOR is set, and its molar mass (g/mol)
-CLASSES = {  # spec: SMP-113
+_CLASSES = {  # spec: SMP-113
     'gas_condensate': dict(
         templates=('wb2000_gas_condensate', 'pedersen2015_t1_3', 'pedersen2015_t3_8'), z7=(0.04, 0.10), M7=(140, 200)
     ),
@@ -178,14 +178,14 @@ CLASSES = {  # spec: SMP-113
         M7=(190, 240),
     ),
 }
-GAMMA_BOUNDS = (135.0, 205.0, 275.0, 415.0)  # g/mol: about C9/C10, C14/C15, C19/C20 and C29/C30
+_GAMMA_BOUNDS = (135.0, 205.0, 275.0, 415.0)  # g/mol: about C9/C10, C14/C15, C19/C20 and C29/C30
 
 
-def fluid_source(fluid_class, u_source, u_key) -> str:  # spec: SMP-112
+def _fluid_source(fluid_class, u_source, u_key) -> str:  # spec: SMP-112
     """A table well's source from two uniform draws: with probability P_EXAMPLE one of its class's published examples,
     with equal shares, else 'synthetic'."""
-    keys = [name for name, ex in EXAMPLES.items() if ex['cls'] == fluid_class]
-    return keys[int(u_key * len(keys))] if u_source < P_EXAMPLE else 'synthetic'
+    keys = [name for name, ex in _EXAMPLES.items() if ex['cls'] == fluid_class]
+    return keys[int(u_key * len(keys))] if u_source < _P_EXAMPLE else 'synthetic'
 
 
 def _api_of(rho):
@@ -201,7 +201,7 @@ def _gamma_split(M7, alpha):  # spec: SMP-113
     beta = (M7 - eta) / alpha
     M = np.linspace(eta, eta + 60 * beta * max(alpha, 1.0), 40001)[1:]
     pdf = np.exp((alpha - 1) * np.log(M - eta) - (M - eta) / beta - alpha * math.log(beta) - math.lgamma(alpha))
-    edges = (eta, *GAMMA_BOUNDS, M[-1] + 1)
+    edges = (eta, *_GAMMA_BOUNDS, M[-1] + 1)
     z, Ms = [], []
     for lo, hi in zip(edges, edges[1:]):
         m = (M > lo) & (M <= hi)
@@ -227,8 +227,8 @@ class _Flash:  # spec: SMP-112
         from neqsim import jneqsim
 
         self.j, self.fractions = jneqsim, [(name, float(M), float(g)) for name, M, g in fractions]
-        s = jneqsim.thermo.system.SystemPrEos(T_REF, P_SC)
-        for name in LIGHT:
+        s = jneqsim.thermo.system.SystemPrEos(_T_REF, _P_SC)
+        for name in _LIGHT:
             s.addComponent(name, 1.0)
         for name, M, g in fractions:
             s.addTBPfraction(name, 1.0, float(M) / 1000, float(g))
@@ -281,11 +281,11 @@ class _Flash:  # spec: SMP-112
     def separation(self, z):  # spec: SMP-113
         """One stage at standard conditions: rho_o (kg/m3), rho_g (kg/Sm3, ideal), GOR (Sm3/Sm3), the gas's and the
         oil's compositions, and the oil's molar mass (g/mol)."""
-        phases, _ = self.flash(z, P_SC, T_REF, properties=False)
+        phases, _ = self.flash(z, _P_SC, _T_REF, properties=False)
         if len(phases) < 2:
             raise ValueError('no stock-tank oil: the stream is all gas at standard conditions')
         (X, _, M_V, _, _, y), (_, rho_L, M_L, _, _, x) = phases
-        rho_g = P_REF * M_V * 1000 / (R_UNIVERSAL * T_REF)
+        rho_g = _P_REF * M_V * 1000 / (_R_UNIVERSAL * _T_REF)
         return dict(rho_o=rho_L, rho_g=rho_g, gor=(X / rho_g) / ((1 - X) / rho_L), y=y, x=x, M_o=M_L * 1000)
 
     def field(self, z, p_sep, T_sep):  # spec: SMP-113
@@ -299,23 +299,23 @@ class _Flash:  # spec: SMP-112
             return None
         else:
             X1, M_V1, x1 = 0.0, math.nan, phases[0][5]
-        st, _ = self.flash(x1, P_SC, T_REF, properties=False)
+        st, _ = self.flash(x1, _P_SC, _T_REF, properties=False)
         if len(st) < 2:
             if st[0][1] < 200.0:
                 return None
             X2, M_V2, rho_L = 0.0, math.nan, st[0][1]
         else:
             (X2, _, M_V2, _, _, _), (_, rho_L, _, _, _, _) = st
-        gas = (X1 / (P_REF * M_V1 * 1000 / (R_UNIVERSAL * T_REF)) if X1 > 0 else 0.0) + (
-            (1 - X1) * X2 / (P_REF * M_V2 * 1000 / (R_UNIVERSAL * T_REF)) if X2 > 0 else 0.0
+        gas = (X1 / (_P_REF * M_V1 * 1000 / (_R_UNIVERSAL * _T_REF)) if X1 > 0 else 0.0) + (
+            (1 - X1) * X2 / (_P_REF * M_V2 * 1000 / (_R_UNIVERSAL * _T_REF)) if X2 > 0 else 0.0
         )
         M_g = M_V1 if X1 > 0 else M_V2
-        return dict(api=_api_of(rho_L), sg_gas=M_g * 1000 / M_AIR, gor=gas / ((1 - X1) * (1 - X2) / rho_L))
+        return dict(api=_api_of(rho_L), sg_gas=M_g * 1000 / _M_AIR, gor=gas / ((1 - X1) * (1 - X2) / rho_L))
 
     def recombine(self, sep, gor):  # spec: SMP-113
         """The stream of the separator gas and stock-tank oil of sep at the GOR gor: per Sm3 of oil, rho_o/M_o kmol of
         oil and gor/V_M_SC kmol of gas."""
-        n_o, n_g = sep['rho_o'] / sep['M_o'], gor / V_M_SC
+        n_o, n_g = sep['rho_o'] / sep['M_o'], gor / _V_M_SC
         z = n_g * np.array(sep['y']) + n_o * np.array(sep['x'])
         return z / z.sum()
 
@@ -346,7 +346,7 @@ def _example_stream(name, alpha=1.0):  # spec: SMP-114
     """An example fluid's heptanes-plus fractions [(name, M, specific gravity)] and its composition (mole fractions).
     A lumped heptanes-plus is split as a synthetic one's, with Soreide's Cf such that the fractions' volume-additive
     gravity is the measured one."""
-    ex = EXAMPLES[name]
+    ex = _EXAMPLES[name]
     if 'tbp' in ex:
         fr = [(f'F{i + 1}', M, g) for i, (_, M, g) in enumerate(ex['tbp'])]
         z7 = [x for x, _, _ in ex['tbp']]
@@ -371,10 +371,10 @@ def _draw_composition(cls, rng):  # spec: SMP-113
     gamma distribution's shape alpha, and the split's mole fractions and molar masses. The weights are
     Dirichlet(1, 1, 1) as exponential variates over their sum, each the inverse CDF of one uniform number, so that
     the draw takes the same count of the generator's numbers for every well (SMP-51); numpy's dirichlet does not."""
-    c = CLASSES[cls]
+    c = _CLASSES[cls]
     e = -np.log1p(-rng.random(len(c['templates'])))
     w = e / e.sum()
-    light = sum(wi * np.array(EXAMPLES[t]['light']) / sum(EXAMPLES[t]['light']) for wi, t in zip(w, c['templates']))
+    light = sum(wi * np.array(_EXAMPLES[t]['light']) / sum(_EXAMPLES[t]['light']) for wi, t in zip(w, c['templates']))
     z7 = rng.uniform(*c['z7'])
     M7 = rng.uniform(*c['M7'])
     alpha = rng.uniform(0.5, 2.5)
@@ -386,7 +386,7 @@ def _compose(draw, Cf, ln_f):  # spec: SMP-113
     """A drawn composition with its levers set: the heptanes-plus fractions [(name, M, specific gravity)] with
     Soreide's Cf, and the mole fractions with C2 to C6 scaled by exp(ln_f) and the light ends renormalised."""
     lt = draw['light'].copy()
-    lt[INTERMEDIATE] *= math.exp(ln_f)
+    lt[_INTERMEDIATE] *= math.exp(ln_f)
     z = np.concatenate([lt / lt.sum() * (1 - draw['z7']), draw['zf'] * draw['z7']])
     return [(f'F{i + 1}', M, g) for i, (M, g) in enumerate(zip(draw['Ms'], _soreide(draw['Ms'], Cf)))], z
 
@@ -397,7 +397,7 @@ def _synthetic(cls, rng, target, max_iter=8):  # spec: SMP-113
     0.005, by Newton's method on Soreide's Cf and the logarithm of the factor on C2 to C6, and recombined at its R_si
     (exactly). Returns the flash, the stream, the separation and a record of the draw and the match.
     """
-    c = CLASSES[cls]
+    c = _CLASSES[cls]
     draw = _draw_composition(cls, rng)
     rec = dict(template_weights=dict(zip(c['templates'], draw['w'].round(4).tolist())))
     rec |= dict(z7=draw['z7'], M7=draw['M7'], alpha=draw['alpha'])
@@ -406,7 +406,7 @@ def _synthetic(cls, rng, target, max_iter=8):  # spec: SMP-113
         fractions, z = _compose(draw, *u)
         fl = _Flash(fractions)
         sep = fl.separation(z)
-        return fl, z, sep, np.array([_api_of(sep['rho_o']) - target['api'], sep['rho_g'] / RHO_AIR - target['sg_gas']])
+        return fl, z, sep, np.array([_api_of(sep['rho_o']) - target['api'], sep['rho_g'] / _RHO_AIR - target['sg_gas']])
 
     u = np.array([0.29, 0.0])
     lo_b, hi_b = np.array([0.22, math.log(0.25)]), np.array([0.40, math.log(4.0)])
@@ -448,7 +448,7 @@ def _field_matched(w, passes=2):  # spec: SMP-113
         if f is None:
             rec |= dict(field=None, offsets=None, passes=k)
             break
-        single = dict(api=_api_of(sep['rho_o']), sg_gas=sep['rho_g'] / RHO_AIR, R_si=target['R_si'])
+        single = dict(api=_api_of(sep['rho_o']), sg_gas=sep['rho_g'] / _RHO_AIR, R_si=target['R_si'])
         offsets = dict(
             api=f['api'] - single['api'], sg_gas=f['sg_gas'] - single['sg_gas'], gor=f['gor'] / single['R_si']
         )
@@ -482,7 +482,7 @@ def _example_matched(w, passes=2):  # spec: SMP-114
     fr, z0 = _example_stream(w['source'])
     fl = _Flash(fr)
     sep = fl.separation(z0)
-    rec = dict(example=w['source'], reference=EXAMPLES[w['source']]['ref'])
+    rec = dict(example=w['source'], reference=_EXAMPLES[w['source']]['ref'])
     target = w['R_si']
     for k in range(passes + 1):
         z = fl.recombine(sep, target)
@@ -491,7 +491,7 @@ def _example_matched(w, passes=2):  # spec: SMP-114
         if f is None:
             rec |= dict(field=None, offsets=None, passes=k)
             break
-        single = dict(api=_api_of(sep['rho_o']), sg_gas=sep['rho_g'] / RHO_AIR, R_si=target)
+        single = dict(api=_api_of(sep['rho_o']), sg_gas=sep['rho_g'] / _RHO_AIR, R_si=target)
         offsets = dict(api=f['api'] - single['api'], sg_gas=f['sg_gas'] - single['sg_gas'], gor=f['gor'] / target)
         rec |= dict(field=f, offsets=offsets, single_stage=single, passes=k)
         if k == passes:
@@ -531,7 +531,7 @@ def _saturated_at(fl, sep, gor, T, p_i, cls):  # spec: SMP-115
     return None
 
 
-def build_fluid(w) -> dict:  # spec: SMP-115
+def _build_fluid(w) -> dict:  # spec: SMP-115
     """
     A table well's fluid, from its record w of wells.json: the example or the synthetic composition, matched; its
     saturation pressure at T_r; and, where that lies above p_i, the GOR moved along the tie line until
@@ -539,7 +539,7 @@ def build_fluid(w) -> dict:  # spec: SMP-115
     Returns the fluid's record: the labels,
     hook, the values that replace the fluid block's draws (the table's p_sat and initial GOR, its single-stage rho_o
     and rho_g, and the fluid's field-reported API and gas gravity where they are not the drawn ones), and stream, which
-    build_tables reads (its fractions, its composition and its separation).
+    _build_tables reads (its fractions, its composition and its separation).
     """
     t0 = time.time()
     fl, z, sep, rec = _field_matched(w) if w['source'] == 'synthetic' else _example_matched(w)
@@ -581,8 +581,8 @@ def build_fluid(w) -> dict:  # spec: SMP-115
         p_sat=p_sat,
         R_i=gor,
         field=field,
-        single_stage=dict(api=_api_of(sep['rho_o']), sg_gas=sep['rho_g'] / RHO_AIR, gor=gor),
-        c7_mol=float(np.sum(z[len(LIGHT) :])),
+        single_stage=dict(api=_api_of(sep['rho_o']), sg_gas=sep['rho_g'] / _RHO_AIR, gor=gor),
+        c7_mol=float(np.sum(z[len(_LIGHT) :])),
         c1_mol=float(z[2]),
         hook=hook,
         drawn={k: w[k] for k in ('api', 'sg_gas', 'R_si', 'p_sat')},
@@ -603,7 +603,7 @@ def build_fluid(w) -> dict:  # spec: SMP-115
 
 
 # --- The table ----------------------------------------------------------------------------------------------------------
-def well_grid(T_s, T_r, p_i) -> tuple:  # spec: SMP-116
+def _well_grid(T_s, T_r, p_i) -> tuple:  # spec: SMP-116
     """The well's grid: the temperatures (K), every 10 K from below T_s - 15 K to above T_r, and the top of the
     pressures (bar), 1.05 p_i rounded up to 10 bar, plus a step."""
     T_lo = 10 * math.floor((T_s - 15) / 10)
@@ -628,7 +628,7 @@ def _tabulate(fl, z, sep_gor, T_axis, p_top):  # spec: SMP-116
     """
     rho_o, rho_g, gor = sep_gor
     m = rho_o + gor * rho_g
-    R_s = P_REF / (rho_g * T_REF)
+    R_s = _P_REF / (rho_g * _T_REF)
     sat = {T: fl.saturation(z, T, p_top) for T in T_axis}
     p_axis = _pressure_axis(p_top, [s['p'] for s in sat.values() if s and s['kind'] != 'above_grid'])
     rows = []
@@ -657,14 +657,14 @@ def _tabulate(fl, z, sep_gor, T_axis, p_top):  # spec: SMP-116
                         sigma = flashes[near][2]
                     else:
                         rho_L, mu_o, sigma = math.nan, math.nan, math.nan
-            X = min(X, 1 - DELTA)
+            X = min(X, 1 - _DELTA)
             rows.append(dict(p=p, T=T, X=X, rho_L=rho_L, rho_V=rho_V, mu_o=mu_o, mu_g=mu_g, sigma=sigma))
     df = pd.DataFrame(rows)
     for col in ('rho_L', 'mu_o', 'sigma'):  # A temperature with no two-phase node takes its neighbour's
         df[col] = df.groupby('p')[col].transform(lambda c: c.ffill().bfill())
     df['R_so'] = gor - df.X * m / rho_g
     df['B_o'] = (1 - df.X) * m / df.rho_L
-    df['Z'] = CF_BAR * df.p / (df.rho_V * R_s * df['T'])
+    df['Z'] = _CF_BAR * df.p / (df.rho_V * R_s * df['T'])
     return df, sat
 
 
@@ -694,7 +694,7 @@ def _repair(df, gor) -> tuple:  # spec: SMP-116
     """A table of one GOR without the pressures at which p/Z does not rise (_falling_pz_pressures), and those
     pressures. A table that would lose more than MAX_DROPPED of its pressures fails, with a ValueError."""
     bad = _falling_pz_pressures(df)
-    if len(bad) > MAX_DROPPED * df.p.nunique():
+    if len(bad) > _MAX_DROPPED * df.p.nunique():
         raise ValueError(f'p/Z falls at {len(bad)} of {df.p.nunique()} pressures at GOR {gor:.6g}')
     return (df[~df.p.isin(bad)] if bad else df), bad
 
@@ -709,7 +709,7 @@ def _write_tables(path, w, fluid, frames):  # spec: SMP-116
     header = [
         '# ManyWells PVT table (specs/model/pvt/table.md)',
         f'# name: k{w["well"]:06d}_{w["fluid_class"]}',
-        f'# source: {SOURCE}; NeqSim {NEQSIM_VERSION}, Peng-Robinson with Peneloux; {src}',
+        f'# source: {_SOURCE}; NeqSim {NEQSIM_VERSION}, Peng-Robinson with Peneloux; {src}',
         '# separation: single stage at 1.01325 bar and 288.15 K',
         f'# rho_o: {sep["rho_o"]!r}',
         f'# rho_g: {sep["rho_g"]!r}',
@@ -720,7 +720,7 @@ def _write_tables(path, w, fluid, frames):  # spec: SMP-116
     return len(df)
 
 
-def build_tables(w, fluid, axis, path) -> tuple:  # spec: SMP-116
+def _build_tables(w, fluid, axis, path) -> tuple:  # spec: SMP-116
     """The well's table set at the GORs of its axis, each on the well's own grid with its saturation pressures as
     nodes (_tabulate) and repaired (_repair), written to path (_write_tables). Returns the nodes written and the
     pressures dropped, by GOR."""
@@ -744,7 +744,7 @@ def _write_json(path, obj):
     tmp.rename(path)
 
 
-def build_task(task) -> tuple:  # spec: SMP-116
+def _build_task(task) -> tuple:  # spec: SMP-116
     """One well's next step of the build: its fluid, or, once its axis exists, its table set and manifest. task is
     (DIR, the well's record with the dataset's kind and seed, its axis or None). A step that fails is written with the
     status 'failed', its step and its error. Returns the draw index, the step ('fluid', 'tables' or 'skip'), the
@@ -755,7 +755,7 @@ def build_task(task) -> tuple:  # spec: SMP-116
     t0 = time.time()
     if not fpath.exists():
         try:
-            rec = build_fluid(w)
+            rec = _build_fluid(w)
         except MemoryError:
             raise  # The process's, not the fluid's: nothing is recorded, and a rerun builds it
         except Exception:  # noqa: BLE001 - a failed fluid is recorded, and its well is not solved
@@ -771,7 +771,7 @@ def build_task(task) -> tuple:  # spec: SMP-116
         man |= dict(status='failed', step='axis', error=axis['error'])
     elif fluid['status'] == 'ok':
         try:
-            nodes, dropped = build_tables(w, fluid, axis, outdir / f'k{k:06d}.csv')
+            nodes, dropped = _build_tables(w, fluid, axis, outdir / f'k{k:06d}.csv')
             man |= dict(csv=f'k{k:06d}.csv', gors=axis['gors'], nodes=nodes, n_T=len(w['T_axis']), p_top=w['p_top'])
             man['dropped_pressures'] = dropped
         except MemoryError:
@@ -801,7 +801,7 @@ def build(outdir, processes=4):  # spec: SMP-116
     ]
     t0, done = time.time(), {}
     with multiprocessing.get_context('forkserver').Pool(processes) as pool:
-        for k, step, status, sec in pool.imap_unordered(build_task, tasks):
+        for k, step, status, sec in pool.imap_unordered(_build_task, tasks):
             done[k] = (step, status)
             if step != 'skip':
                 print(f'well {k}: {step} {status} in {sec:.1f} s', flush=True)
@@ -809,7 +809,7 @@ def build(outdir, processes=4):  # spec: SMP-116
     print(f'{len(tasks)} wells in {time.time() - t0:.0f} s on {processes} processes: {steps}')
 
 
-def main():
+def _main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('outdir', help='the folder with wells.json, and axes.json once the fluids are built')
     ap.add_argument('--processes', type=int, default=4, help='each holds a JVM, about 1 GB')
@@ -818,4 +818,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    _main()

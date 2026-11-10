@@ -28,19 +28,19 @@ from manywells.sampling.v2 import run as runner
 from manywells.sampling.v2 import table_wells as tw
 from manywells.sampling.v2.generate import (
     FEATURES,
-    FLOOR,
-    FLOOR_MARGIN,
-    REDRAW_LIMIT,
-    SLOT_LIMIT,
-    SOLVER_FAILURE_LIMIT,
+    _FLOOR,
+    _FLOOR_MARGIN,
+    _REDRAW_LIMIT,
+    _SLOT_LIMIT,
+    _SOLVER_FAILURE_LIMIT,
     generate_nsol2_well,
     generate_sol2_well,
 )
-from manywells.sampling.v2.inflow import COEF_KEYS
-from manywells.sampling.v2.life import lift_on, sol2_well
+from manywells.sampling.v2.inflow import _COEF_KEYS
+from manywells.sampling.v2.life import _lift_on, sol2_well
 from manywells.sampling.v2.mapping import WellBuilder
-from manywells.sampling.v2.samples import N_SLOTS, nsol2_plan, sol2_attempt
-from manywells.sampling.v2.tables import TABLE_CLASSES, TableMismatch
+from manywells.sampling.v2.samples import _N_SLOTS, _nsol2_plan, _sol2_attempt
+from manywells.sampling.v2.tables import _TABLE_CLASSES, TableMismatch
 from manywells.solution import Root, RootSet
 
 from .sampling_v2_wells import SEED, drawn_lives, drawn_sol2_wells
@@ -64,7 +64,7 @@ def a_sol2_well(*, oil=None, lifted=None, table=False):
             continue
         if lifted is not None and (w['lift'] == 'gas_lift') != lifted:
             continue
-        if (w['fluid_class'] in TABLE_CLASSES) != table:
+        if (w['fluid_class'] in _TABLE_CLASSES) != table:
             continue
         return lf, w
     raise LookupError('no such well among the drawn lives')
@@ -247,7 +247,7 @@ def test_an_attempts_record(monkeypatch):
     equivalent; and an input that the model refuses is a solver failure."""
     lf, w = a_sol2_well(oil=True)
     builder = WellBuilder(lf.w0, lf.stations, design=lf.design)
-    inp = sol2_attempt(SEED, w, 3)
+    inp = _sol2_attempt(SEED, w, 3)
     monkeypatch.setattr(generate, 'RustRootFinder', StandInFinder([a_root()]))
     rec = generate._attempt(builder, inp)
     assert list(rec) == [*inp, *RECORD, *FEATURES, 'q_oe']
@@ -268,7 +268,7 @@ def test_features_are_the_samples_operating_point():
 
 # --- SMP-102, SMP-103: the best rate ----------------------------------------------------------------------------------
 def test_the_floor():
-    assert FLOOR == {'platform': 1.6, 'onshore': 1.6, 'subsea': 20.0} and FLOOR_MARGIN == 0.5
+    assert _FLOOR == {'platform': 1.6, 'onshore': 1.6, 'subsea': 20.0} and _FLOOR_MARGIN == 0.5
 
 
 def best_rate(monkeypatch, outcomes, lifted=True, fluid_type='black_oil', wlr=0.3, floor=1.6, w_lg_max=2.0):
@@ -355,7 +355,7 @@ def solve_slots(monkeypatch, fails, outcome='slot_limit'):
 
 def test_every_slot_at_its_first_attempt(monkeypatch):
     accepted, result, order = solve_slots(monkeypatch, lambda j, a: None)
-    assert (result, sorted(accepted), order) == ('accepted', list(range(N_SLOTS)), [(j, 0) for j in range(N_SLOTS)])
+    assert (result, sorted(accepted), order) == ('accepted', list(range(_N_SLOTS)), [(j, 0) for j in range(_N_SLOTS)])
 
 
 def test_the_passes(monkeypatch):
@@ -364,8 +364,8 @@ def test_the_passes(monkeypatch):
     accepted, result, order = solve_slots(
         monkeypatch, lambda j, a: 'no_operating_point' if a < needs.get(j, 0) else None
     )
-    assert result == 'accepted' and sorted(accepted) == list(range(N_SLOTS))
-    assert order == [(j, 0) for j in range(N_SLOTS)] + [(2, 1), (5, 1), (17, 1), (2, 2), (17, 2), (17, 3)]
+    assert result == 'accepted' and sorted(accepted) == list(range(_N_SLOTS))
+    assert order == [(j, 0) for j in range(_N_SLOTS)] + [(2, 1), (5, 1), (17, 1), (2, 2), (17, 2), (17, 3)]
     assert {j: accepted[j]['attempt'] for j in needs} == {5: 1, 17: 3, 2: 2}
 
 
@@ -374,23 +374,23 @@ def test_the_slot_limit(monkeypatch):
     `dead_date` in nsol-2; every other slot keeps its operating point."""
     for name in ('slot_limit', 'dead_date'):
         accepted, result, order = solve_slots(monkeypatch, lambda j, a: 'no_operating_point' if j == 7 else None, name)
-        assert result == name and SLOT_LIMIT == 50 and 7 not in accepted and len(accepted) == N_SLOTS - 1
-        assert order[N_SLOTS:] == [(7, a) for a in range(1, SLOT_LIMIT)]
+        assert result == name and _SLOT_LIMIT == 50 and 7 not in accepted and len(accepted) == _N_SLOTS - 1
+        assert order[_N_SLOTS:] == [(7, a) for a in range(1, _SLOT_LIMIT)]
 
 
 def test_the_redraw_limit(monkeypatch):
     """SMP-106: a well may redraw 400 times over its slots; a 401st redraw drops it."""
-    assert REDRAW_LIMIT == 400
+    assert _REDRAW_LIMIT == 400
     accepted, result, order = solve_slots(monkeypatch, lambda j, a: 'no_operating_point' if a < 2 else None)
-    assert result == 'accepted' and len(order) == N_SLOTS + REDRAW_LIMIT  # 2 redraws for each of 200 slots
+    assert result == 'accepted' and len(order) == _N_SLOTS + _REDRAW_LIMIT  # 2 redraws for each of 200 slots
     accepted, result, order = solve_slots(monkeypatch, lambda j, a: 'no_operating_point' if a < 2 or j == 0 else None)
-    assert result == 'redraw_limit' and len(order) == N_SLOTS + REDRAW_LIMIT and order[-1] == (N_SLOTS - 1, 2)
-    assert 0 not in accepted and len(accepted) == N_SLOTS - 1
+    assert result == 'redraw_limit' and len(order) == _N_SLOTS + _REDRAW_LIMIT and order[-1] == (_N_SLOTS - 1, 2)
+    assert 0 not in accepted and len(accepted) == _N_SLOTS - 1
 
 
 def test_the_solver_failure_limit(monkeypatch):
     """SMP-106: 10 solver failures are allowed, the 11th drops the well; a missing operating point does not count."""
-    assert SOLVER_FAILURE_LIMIT == 10
+    assert _SOLVER_FAILURE_LIMIT == 10
     failing = set(range(0, 200, 20))  # 10 slots
 
     def fails(j, a):
@@ -401,7 +401,7 @@ def test_the_solver_failure_limit(monkeypatch):
     accepted, result, order = solve_slots(monkeypatch, fails)
     assert result == 'accepted'
     accepted, result, order = solve_slots(monkeypatch, lambda j, a: 'solver_failure' if j in failing | {199} else None)
-    assert result == 'solver_failure_limit' and order[-1] == (199, 0) and len(order) == N_SLOTS
+    assert result == 'solver_failure_limit' and order[-1] == (199, 0) and len(order) == _N_SLOTS
     accepted, result, order = solve_slots(monkeypatch, lambda j, a: 'solver_failure' if j == 11 and a < 11 else None)
     assert result == 'solver_failure_limit' and order[-1] == (11, 10)
 
@@ -508,7 +508,7 @@ def by_lift(natural, lifted):
 
 
 def test_a_sol2_wells_best_rate_and_slots(monkeypatch):
-    """The best rate at the nominal state, then the slots' attempts, as samples.sol2_attempt draws them."""
+    """The best rate at the nominal state, then the slots' attempts, as samples._sol2_attempt draws them."""
     lf, w = a_sol2_well(oil=True, lifted=True)
     attempt, calls = stand_in_attempt(by_lift(None, ('operating_point', 50.0)))
     monkeypatch.setattr(generate, '_attempt', attempt)
@@ -522,11 +522,11 @@ def test_a_sol2_wells_best_rate_and_slots(monkeypatch):
     nominal = dict(p_r=w['p_r'], gor=w['R_go'], wlr=w['wlr'], p_s=w['p_s'], h=w['h'], roughness=w['roughness'])
     for c in calls[:3]:
         assert {key: c[key] for key in nominal} == nominal and (c['u'], c['lift_on']) == (1.0, True)
-        assert all(nan_or(c[key], w[key]) for key in COEF_KEYS)
+        assert all(nan_or(c[key], w[key]) for key in _COEF_KEYS)
     assert [c['w_lg'] for c in calls[:3]] == [f * w['w_lg_max'] for f in (0.0, 0.5, 1.0)]
     for j, c in enumerate(calls[3:]):
-        assert all(nan_or(c[key], v) for key, v in sol2_attempt(SEED, w, j).items())
-    assert [r['slot'] for r in res['samples']] == list(range(N_SLOTS)) and len(res['log']) == 3 + N_SLOTS
+        assert all(nan_or(c[key], v) for key, v in _sol2_attempt(SEED, w, j).items())
+    assert [r['slot'] for r in res['samples']] == list(range(_N_SLOTS)) and len(res['log']) == 3 + _N_SLOTS
 
 
 def test_the_producibility_filter_lifts_a_natural_oil_well(monkeypatch):
@@ -541,9 +541,9 @@ def test_the_producibility_filter_lifts_a_natural_oil_well(monkeypatch):
     assert (res['well']['lift'], res['well']['lift_start_rule']) == ('gas_lift', 'no_natural_flow')
     assert all(nan_or(res['well'][key], v) for key, v in lifted.items()) and set(res['well']) == set(lifted)
     kinds = [r['kind'] for r in res['log']]
-    assert kinds == ['best_rate'] + ['best_rate_lifted'] * 3 + ['slot'] * N_SLOTS
+    assert kinds == ['best_rate'] + ['best_rate_lifted'] * 3 + ['slot'] * _N_SLOTS
     assert res['info']['best_rate_outcomes'] == ['operating_point'] * 3  # the lifted well's
-    assert all(c['lift_on'] for c in calls[1:]) and calls[4]['w_lg'] == sol2_attempt(SEED, lifted, 0)['w_lg']
+    assert all(c['lift_on'] for c in calls[1:]) and calls[4]['w_lg'] == _sol2_attempt(SEED, lifted, 0)['w_lg']
 
 
 @pytest.mark.parametrize(
@@ -616,12 +616,12 @@ def test_an_nsol2_wells_scan_lift_and_slots(monkeypatch):
     for c in scan_calls:
         want = dict(lf.state(c['t']), u=1.0, lift_on=c['lift_on'], p_s=c['p_s_nom'])
         assert set(c) == {*want, 'w_lg'} and all(nan_or(c[key], v) for key, v in want.items())
-    plan, p_c = nsol2_plan(lf, T, nsol['lift_start'])
-    assert info['p_change'] == p_c and len(res['samples']) == N_SLOTS
+    plan, p_c = _nsol2_plan(lf, T, nsol['lift_start'])
+    assert info['p_change'] == p_c and len(res['samples']) == _N_SLOTS
     for slot, rec in zip(plan, res['samples']):
         assert (rec['t'], rec['lift_on'], rec['u'], rec['p_s']) == (
             slot['t'],
-            lift_on(slot['t'], nsol['lift_start']),
+            _lift_on(slot['t'], nsol['lift_start']),
             slot['u'],
             slot['p_s'],
         )
@@ -636,7 +636,7 @@ def test_an_nsol2_well_whose_life_ends_before_its_lift_starts_is_natural(monkeyp
         for lf in drawn_lives()
         if lf.lift_start_rule in ('drawn_time', 'static_check')
         and (lf.lift_start * 20 / T(lf)) % 1 > 0.1
-        and lf.w0['fluid_class'] not in TABLE_CLASSES
+        and lf.w0['fluid_class'] not in _TABLE_CLASSES
     )
     attempt, _ = stand_in_attempt(
         lambda inp: ('no_operating_point', None) if inp['lift_on'] else ('operating_point', 50.0)
@@ -648,8 +648,8 @@ def test_an_nsol2_well_whose_life_ends_before_its_lift_starts_is_natural(monkeyp
     assert info['T_end'] == dates[dates < lf.lift_start][-1] and info['outcome'] == 'accepted'
     assert info['scan'][-1]['lift_on'] and info['scan'][-1]['status'] == 'no_operating_point'
     assert (nsol['lift_start'], nsol['lift_start_rule']) == (None, None)
-    assert not any(rec['lift_on'] for rec in res['samples']) and len(res['samples']) == N_SLOTS
-    plan, p_c = nsol2_plan(lf, info['T_end'], None)  # The plan of a natural well: the same draws
+    assert not any(rec['lift_on'] for rec in res['samples']) and len(res['samples']) == _N_SLOTS
+    plan, p_c = _nsol2_plan(lf, info['T_end'], None)  # The plan of a natural well: the same draws
     assert info['p_change'] == p_c and [rec['u'] for rec in res['samples']] == [slot['u'] for slot in plan]
 
 
@@ -670,7 +670,7 @@ def test_an_nsol2_wells_short_life_and_dead_date(monkeypatch):
     )
     monkeypatch.setattr(generate, '_attempt', attempt)
     res = generate_nsol2_well(SEED, lf.k)
-    assert res['info']['outcome'] == 'dead_date' and len(res['samples']) == N_SLOTS - 5
+    assert res['info']['outcome'] == 'dead_date' and len(res['samples']) == _N_SLOTS - 5
 
 
 # --- Wells dropped before a solve -------------------------------------------------------------------------------------
@@ -682,7 +682,7 @@ def no_solve(monkeypatch):
 
 
 def a_table_well() -> int:
-    return next(lf.k for lf in drawn_lives() if lf.w0['fluid_class'] in TABLE_CLASSES)
+    return next(lf.k for lf in drawn_lives() if lf.w0['fluid_class'] in _TABLE_CLASSES)
 
 
 @pytest.mark.parametrize('kind', ['sol', 'nsol'])
@@ -710,7 +710,7 @@ def test_a_table_well_without_a_usable_table(monkeypatch, tmp_path, kind):
         'p/Z falls',
         'tables',
     )
-    assert 'pvt' not in res['table'] and res['well']['fluid_class'] in TABLE_CLASSES
+    assert 'pvt' not in res['table'] and res['well']['fluid_class'] in _TABLE_CLASSES
     if kind == 'sol':
         drawn = sol2_well(drawn_lives()[k])
         assert set(res['well']) == set(drawn) and all(nan_or(res['well'][key], v) for key, v in drawn.items())
@@ -730,22 +730,22 @@ def test_a_folder_of_tables_built_from_other_draws_stops_the_run(monkeypatch, tm
     well. A draw index beyond the folder's range has no table."""
     no_solve(monkeypatch)
     k = a_table_well()
-    other = next(lf.k for lf in drawn_lives() if lf.k > k and lf.w0['fluid_class'] not in TABLE_CLASSES)
+    other = next(lf.k for lf in drawn_lives() if lf.k > k and lf.w0['fluid_class'] not in _TABLE_CLASSES)
     run = generate_sol2_well if kind == 'sol' else generate_nsol2_well
     spec = tw.write_table_wells(tmp_path, kind, SEED, other + 1)
     path = tmp_path / 'wells.json'
     rec = next(w for w in spec['wells'] if w['well'] == k)
     for key, value in (('p_i', rec['p_i'] + 1.0), ('T_axis', rec['T_axis'][:-1]), ('composition_seed', 7)):
-        tw.write_json(path, dict(spec, wells=[dict(w, **{key: value}) if w is rec else w for w in spec['wells']]))
+        tw._write_json(path, dict(spec, wells=[dict(w, **{key: value}) if w is rec else w for w in spec['wells']]))
         with pytest.raises(TableMismatch, match=f'were not built from the draws of draw index {k}'):
             run(SEED, k, tmp_path)
         with pytest.raises(TableMismatch):
-            runner.run_well(kind, SEED, k, tmp_path)  # Not a crash
+            runner._run_well(kind, SEED, k, tmp_path)  # Not a crash
     stray = dict(rec, well=other)  # A well that the draws give another class
-    tw.write_json(path, dict(spec, wells=spec['wells'] + [stray]))
+    tw._write_json(path, dict(spec, wells=spec['wells'] + [stray]))
     with pytest.raises(TableMismatch, match=f'draw index {other}'):
         run(SEED, other, tmp_path)
-    tw.write_json(path, dict(spec, wells_range=[0, k]))  # The folder covers draw indices below k only
+    tw._write_json(path, dict(spec, wells_range=[0, k]))  # The folder covers draw indices below k only
     assert run(SEED, k, tmp_path)['table']['step'] == 'missing'
 
 
@@ -766,7 +766,7 @@ def test_a_gor_off_the_tables_axis_at_the_nominal_state_is_invalid_input(monkeyp
     assert res['info']['outcome'] == 'invalid_input' and "outside the PVT table's GOR axis" in res['info']['error']
     assert res['log'] == [] and res['well']['well'] == lf.k
     if kind == 'sol':
-        assert all(math.isnan(res['well'][key]) for key in COEF_KEYS) and 'date' in res['well']
+        assert all(math.isnan(res['well'][key]) for key in _COEF_KEYS) and 'date' in res['well']
 
 
 def test_a_well_of_another_class_takes_no_table(monkeypatch):
@@ -825,7 +825,7 @@ def check_records(res):
 
 
 def first_accepted(run, ks, monkeypatch):
-    monkeypatch.setattr(generate, 'N_SLOTS', N_REAL_SLOTS)
+    monkeypatch.setattr(generate, '_N_SLOTS', N_REAL_SLOTS)
     for k in ks:
         res = run(SEED, k)
         if res['info']['outcome'] == 'accepted':
@@ -863,5 +863,5 @@ def test_a_real_nsol2_well(monkeypatch):
     assert {r['slot'] for r in scan_recs} == {-1 - i for i in range(len(info['scan']))}
     assert 0 < info['T_end'] <= nsol['T_life'] and len(res['samples']) == N_REAL_SLOTS
     assert all(
-        rec['t'] <= info['T_end'] and rec['lift_on'] == lift_on(rec['t'], nsol['lift_start']) for rec in res['samples']
+        rec['t'] <= info['T_end'] and rec['lift_on'] == _lift_on(rec['t'], nsol['lift_start']) for rec in res['samples']
     )

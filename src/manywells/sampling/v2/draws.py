@@ -28,27 +28,27 @@ from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.water import water_viscosity
 from manywells.sampling.v2._distributions import logistic, logu, pick, tlognorm, tnorm, tnorm_at, unused
 from manywells.sampling.v2.reservoir import (
-    OILS,
-    drain_index,
-    forchheimer,
-    gas_rate,
-    j_radial,
-    joshi_ratio,
-    liner_gas,
-    liner_liquid,
-    nondarcy,
-    producing_gor,
-    slant_skin,
+    _OILS,
+    _drain_index,
+    _forchheimer,
+    _gas_rate,
+    _j_radial,
+    _joshi_ratio,
+    _liner_gas,
+    _liner_liquid,
+    _nondarcy,
+    _producing_gor,
+    _slant_skin,
 )
-from manywells.sampling.v2.survey import N_NUMBERS, survey
+from manywells.sampling.v2.survey import _N_NUMBERS, _survey
 from manywells.sampling.wells import rng_for
 from manywells.units import P_REF, STD_GRAVITY
 
-STAGES = ('initial', 'mid_life', 'late')  # spec: SMP-56
-P_ATM = P_REF / 1e5  # bar
-P_S_MIN = 1.5  # bar, the floor of the nominal pressure downstream of the choke  # spec: SMP-66
-P_S_MAX = {'platform': 120.0, 'subsea': 250.0, 'onshore': 120.0}  # bar, its cap  # spec: SMP-66
-TUBING = {  # Inner diameter (m) by nominal size (in)  # spec: SMP-75
+_STAGES = ('initial', 'mid_life', 'late')  # spec: SMP-56
+_P_ATM = P_REF / 1e5  # bar
+_P_S_MIN = 1.5  # bar, the floor of the nominal pressure downstream of the choke  # spec: SMP-66
+_P_S_MAX = {'platform': 120.0, 'subsea': 250.0, 'onshore': 120.0}  # bar, its cap  # spec: SMP-66
+_TUBING = {  # Inner diameter (m) by nominal size (in)  # spec: SMP-75
     '2-7/8': 0.0620,
     '3-1/2': 0.0760,
     '4-1/2': 0.1005,
@@ -132,12 +132,12 @@ _CH4_CP_P, _CH4_CP_T = (1.0, 101.0, 201.0, 401.0), (300.0, 380.0)  # bar, K  # s
 _CH4_CP = ((2236.0, 3011.0, 3549.0, 3336.0), (2466.0, 2801.0, 3079.0, 3234.0))  # Methane's c_p, J/(kg K), [T][p]
 
 
-def black_oil(w) -> BlackOil:
+def _black_oil(w) -> BlackOil:
     """The black oil of a well's draws, as the draws and a black-oil well's mapping use it (SMP-111)."""
     return BlackOil(rho_o=w['rho_o'], rho_g=w['rho_g'], gas_law='dak', p_sep=w['p_sep'], T_sep=w['T_sep'])
 
 
-def stream(bo, gor, wlr, rho_w, p, T) -> tuple:
+def _stream(bo, gor, wlr, rho_w, p, T) -> tuple:
     """
     The no-slip stream at (p, T): its in-situ volume (m3) and mass (kg) per Sm3 of stock-tank liquid.
 
@@ -182,7 +182,7 @@ def draw_well(
     - labels: `coverage_tail`, `well_type`, `fluid_type`, `fluid_class`, `class_rule`, `drive`, `life_stage`.
     - depth: `z`, `d_w`, `L`.
     - geometry: `geometry_class`, `geometry_family`, `md` (the bottom's), `md_tvd`, `theta_max`, `theta_end` (the
-      survey's largest and last inclination, degrees) and the family's parameters `geo_*` (survey.survey).
+      survey's largest and last inclination, degrees) and the family's parameters `geo_*` (survey._survey).
     - water: `salinity`, `rho_w`. pressure: `p_h`, `p_lith`, `lam`, `p_i`, `pressure_class`, `grad_i`.
     - temperature: `T_s`, `G`, `T_r`, `G_eff` (K/km over L). separator: `p_sep`, `T_sep`, `r_s`, `dp_fl`, `p_s` (the
       nominal pressure downstream of the choke).
@@ -199,8 +199,8 @@ def draw_well(
       `packer_offset`, `T_lg`, `psi_lg` (its share of the way from the ambient to T_r), `glr_cap`, `w_lg_max`.
     - heat: `h`, `age_years`, `U_t`, `k_e`, `cp_o`, `cp_w`, `cp_g`.
     """
-    if stage is not None and stage not in STAGES:
-        raise ValueError(f'stage must be one of {STAGES} or None, got {stage!r}')
+    if stage is not None and stage not in _STAGES:
+        raise ValueError(f'stage must be one of {_STAGES} or None, got {stage!r}')
     w = {'well': k}
     x = SimpleNamespace(flags=[], start=start)  # Working values that the well's draws do not record
 
@@ -237,9 +237,9 @@ def _labels(r, w, stage):  # spec: SMP-52
     ft = pick(r, _FLUID_TYPES, (1, 1, 1, 1) if tail else _P_FLUID)  # spec: SMP-55
     u_dry = r.random()  # spec: SMP-51. Drawn for every well, whatever its fluid type
     fc = ft if ft != 'gas' else ('dry_gas' if u_dry < (0.25 if tail else _P_DRY_GAS) else 'wet_gas')
-    p_support = 0.5 if tail else (0.7 if ft in OILS else 0.4)  # spec: SMP-56
+    p_support = 0.5 if tail else (0.7 if ft in _OILS else 0.4)  # spec: SMP-56
     drive = 'pressure_support' if r.random() < p_support else 'depletion'
-    drawn = pick(r, STAGES, (1, 1, 1) if tail else _P_STAGE)
+    drawn = pick(r, _STAGES, (1, 1, 1) if tail else _P_STAGE)
     w.update(coverage_tail='tail' if tail else 'core', well_type=wt, fluid_type=ft, fluid_class=fc)
     w.update(class_rule='mccain_1990', drive=drive, life_stage=drawn if stage is None else stage)
 
@@ -274,7 +274,7 @@ def _geometry(r, w, x):
     }[gcl]
     fallback = False
     for attempt in range(_GEOMETRY_SURVEYS):  # spec: SMP-60
-        res = survey(r, family, L, _THETA_CLASS.get(gcl), d_mud)
+        res = _survey(r, family, L, _THETA_CLASS.get(gcl), d_mud)
         if res is not None and res[0][-1] <= _MD_MAX:
             md, tvd, prm = res
             break
@@ -284,7 +284,7 @@ def _geometry(r, w, x):
         x.flags.append(f'geometry_redrawn:{attempt}')  # One flag with the count of the redraws made
     if fallback:
         x.flags.append('geometry_to_vertical')
-    unused(r, (_GEOMETRY_SURVEYS - 1 - attempt) * N_NUMBERS)  # spec: SMP-51. The numbers of the surveys not made
+    unused(r, (_GEOMETRY_SURVEYS - 1 - attempt) * _N_NUMBERS)  # spec: SMP-51. The numbers of the surveys not made
     incl = [  # spec: SMP-61
         math.degrees(math.acos(min(1.0, (tvd[i] - tvd[i - 1]) / (md[i] - md[i - 1])))) for i in range(1, len(md))
     ]
@@ -301,8 +301,8 @@ def _water(r, w):  # spec: SMP-62
 
 def _pressure(r, w, x):  # spec: SMP-63
     tail, z, d_w, rho_w = _is_tail(w), w['z'], w['d_w'], w['rho_w']
-    p_h = P_ATM + (_RHO_SEA * d_w + rho_w * z) * STD_GRAVITY / 1e5
-    p_lith = P_ATM + _RHO_SEA * d_w * STD_GRAVITY / 1e5 + _LITHO * z
+    p_h = _P_ATM + (_RHO_SEA * d_w + rho_w * z) * STD_GRAVITY / 1e5
+    p_lith = _P_ATM + _RHO_SEA * d_w * STD_GRAVITY / 1e5 + _LITHO * z
     lam_cap = max(1e-3, min(0.85, (_P_MAX - p_h) / (p_lith - p_h)))
     mu = -math.log(1 / (0.02 + 0.45 * logistic((z / 1000 - 3.8) / 0.9)) - 1)  # The logit of the median
     if r.random() < (0.10 if tail else 0.04):
@@ -318,7 +318,7 @@ def _pressure(r, w, x):  # spec: SMP-63
         p_i, lam, pclass = _P_MAX, 0.0, 'under'
     if lam_cap < logistic(mu + 1.645 * 0.9):
         x.flags.append('p_i_cap_binds')
-    w.update(p_h=p_h, p_lith=p_lith, lam=lam, p_i=p_i, pressure_class=pclass, grad_i=(p_i - P_ATM) / (z + d_w))
+    w.update(p_h=p_h, p_lith=p_lith, lam=lam, p_i=p_i, pressure_class=pclass, grad_i=(p_i - _P_ATM) / (z + d_w))
 
 
 def _temperature(r, w, x):
@@ -355,12 +355,12 @@ def _separator(r, w):  # spec: SMP-66
     # spec: SMP-51. The flowline's two numbers and the tail's pressure are drawn for every well
     dp_subsea = r.uniform(5, 30) + r.uniform(*_RISER) * w['d_w']  # Flowline and riser
     dp_fl = dp_subsea if wt == 'subsea' else 0.0
-    p_cap = P_S_MAX[wt]
-    p_s_tail = logu(r, P_S_MIN, 120)
+    p_cap = _P_S_MAX[wt]
+    p_s_tail = logu(r, _P_S_MIN, 120)
     if _is_tail(w):
         p_s = min(p_s_tail + dp_fl, p_cap)
     else:
-        p_s = min(max(r_s * p_sep + dp_fl, P_S_MIN), p_cap)
+        p_s = min(max(r_s * p_sep + dp_fl, _P_S_MIN), p_cap)
     w.update(p_sep=p_sep, T_sep=T_sep, p_s=p_s, r_s=r_s, dp_fl=dp_fl)
 
 
@@ -383,7 +383,7 @@ def _fluid(r, w, x, fluid):
     mean, sd, lo, hi = _GAS_GRAVITY[fc]
     sg = r.uniform(lo, hi) if tail else tnorm(r, mean, sd, lo, hi)
     w.update(rho_o=density_from_api(api), rho_g=gas_density_from_sg(sg))
-    bo = black_oil(w)
+    bo = _black_oil(w)
     # spec: SMP-68
     p_sat = None
     # spec: SMP-51. Whether the fluid is saturated, and its undersaturation, are drawn for every well
@@ -411,14 +411,14 @@ def _fluid(r, w, x, fluid):
         p_sat, R_i = fluid['p_sat'], fluid['R_i']
         api, sg = fluid.get('api', api), fluid.get('sg_gas', sg)
         w.update(rho_o=fluid['rho_o'], rho_g=fluid['rho_g'])
-        bo = black_oil(w)
+        bo = _black_oil(w)
     w.update(api=api, sg_gas=sg, R_i=R_i, p_sat=p_sat)
     x.bo = bo
 
 
 def _stage(r, w):
     tail, fc, drive, stage = _is_tail(w), w['fluid_class'], w['drive'], w['life_stage']
-    oil = w['fluid_type'] in OILS
+    oil = w['fluid_type'] in _OILS
     # spec: SMP-69
     # spec: SMP-51. Every number below is drawn for every well: the tail's forms, an oil's and a gas class's
     r_p = r.uniform(*_R_P[stage, drive]) if (stage, drive) in _R_P else r.uniform(*_R_P_DEPLETED[oil])
@@ -449,7 +449,7 @@ def _stage(r, w):
             c_k = u_ck  # spec: SMP-70
         w['wgr'] = wgr
     w['c_k'] = c_k
-    R_go = producing_gor(w, p_r)
+    R_go = _producing_gor(w, p_r)
     if not oil:
         ogr = 1e6 / R_go
         wlr = wgr / (wgr + ogr)
@@ -474,7 +474,7 @@ def _inflow(gen, w, x):
     state before a drain's friction, which needs the tubing."""
     r = gen('inflow')
     tail, family, bo = _is_tail(w), w['geometry_family'], x.bo
-    oil = w['fluid_type'] in OILS
+    oil = w['fluid_type'] in _OILS
     p_r, T_r = w['p_r'], w['T_r']
     # spec: SMP-71
     k_med, k_s, k_lo, k_hi = _PERM[w['well_type']]
@@ -488,10 +488,10 @@ def _inflow(gen, w, x):
     L_d, I_ani = r.uniform(*_DRAIN_LENGTH), logu(r, 1, 3)  # A drain's length and anisotropy, drawn for every well
     # spec: SMP-72. The geometry's factor on the radial index
     if family == 'high_angle':
-        x.f_geo = joshi_ratio(L_d, h_net, I_ani, skin, ln_re)
+        x.f_geo = _joshi_ratio(L_d, h_net, I_ani, skin, ln_re)
         w.update(drain_length=L_d, I_ani=I_ani, J_H_over_J_V=x.f_geo)
     elif family in ('build_and_hold', 's_shaped'):  # Cinco-Ley's slant skin in the radial index, with a floor
-        s_theta = slant_skin(w['theta_end'], h_net, I_ani)
+        s_theta = _slant_skin(w['theta_end'], h_net, I_ani)
         x.f_geo = (ln_re - 0.75 + skin) / max(ln_re - 0.75 + skin + s_theta, _SLANT_FLOOR)
         w.update(I_ani=I_ani, s_theta=s_theta)
     else:
@@ -500,7 +500,7 @@ def _inflow(gen, w, x):
     if oil:
         b_now = bo.at_gor(w['R_go'])
         x.mu_o, x.B_o = b_now.oil_viscosity(p_r, T_r), b_now.bo(p_r, T_r)
-        x.J_V = j_radial(perm, h_net, x.mu_o, x.B_o, ln_re - 0.75, skin)
+        x.J_V = _j_radial(perm, h_net, x.mu_o, x.B_o, ln_re - 0.75, skin)
         x.J = x.J_V * x.f_geo
     else:
         x.Z = bo.z_factor(p_r, T_r)
@@ -516,18 +516,18 @@ def _inflow(gen, w, x):
         v_nd = r_nd.random()  # The error factor's number: tlognorm's draw, at any gas viscosity
 
         def D_at(mu):  # The coefficient (d/Mscf) with the gas viscosity mu (Pa s)
-            estimate = nondarcy(w['sg_gas'], perm, h_net, mu, f_perf * h_net * along)
+            estimate = _nondarcy(w['sg_gas'], perm, h_net, mu, f_perf * h_net * along)
             return math.exp(tnorm_at(v_nd, math.log(estimate), _D_ERROR, *(math.log(b) for b in _D_BOUNDS)))
 
         x.D_nd, x.D_at = D_at(mu_0), D_at
-        w.update(perf_share=f_perf, D_eq434=nondarcy(w['sg_gas'], perm, h_net, mu_0, h_net))
-        x.a_v, x.b_v = forchheimer(perm, h_net, x.mu_g, x.Z, T_r, ln_re - 0.75, skin, x.D_nd)  # spec: SMP-73
+        w.update(perf_share=f_perf, D_eq434=_nondarcy(w['sg_gas'], perm, h_net, mu_0, h_net))
+        x.a_v, x.b_v = _forchheimer(perm, h_net, x.mu_g, x.Z, T_r, ln_re - 0.75, skin, x.D_nd)  # spec: SMP-73
         x.a, x.b = _on_geometry(w, x, x.a_v, x.b_v)
 
 
 def _completion(r, w, x):
     tail, stage, bo = _is_tail(w), w['life_stage'], x.bo
-    oil = w['fluid_type'] in OILS
+    oil = w['fluid_type'] in _OILS
     p_i, T_r, R_i, delta_d = w['p_i'], w['T_r'], w['R_i'], w['delta_d']
     ln_term, skin = w['ln_re_rw'] - 0.75, w['skin']
     # spec: SMP-75. The tubing from the design rate at completion, the initial state
@@ -537,18 +537,18 @@ def _completion(r, w, x):
     if oil:
         wlr_d = 0.0
         b_i = bo.at_gor(R_i)
-        J_i = j_radial(w['perm'], w['h_net'], b_i.oil_viscosity(p_i, T_r), b_i.bo(p_i, T_r), ln_term, skin) * x.f_geo
+        J_i = _j_radial(w['perm'], w['h_net'], b_i.oil_viscosity(p_i, T_r), b_i.bo(p_i, T_r), ln_term, skin) * x.f_geo
         q_d = J_i * delta_d * p_i
     else:  # The coefficients at p_i, the non-Darcy coefficient's gas viscosity too, whatever the stage
         wlr_d = 10 / (10 + 1e6 / R_i)
         mu_i = bo.gas_viscosity(p_i, T_r, bo.gas_density(p_i, T_r))
-        coef = forchheimer(w['perm'], w['h_net'], mu_i, bo.z_factor(p_i, T_r), T_r, ln_term, skin, x.D_at(mu_i))
+        coef = _forchheimer(w['perm'], w['h_net'], mu_i, bo.z_factor(p_i, T_r), T_r, ln_term, skin, x.D_at(mu_i))
         a_i, b_i = _on_geometry(w, x, *coef)
-        q_d = gas_rate(a_i, b_i, p_i**2 - ((1 - delta_d) * p_i) ** 2) * (1e6 / R_i + 10) / 1e6
-    vol, mass = stream(bo, R_i, wlr_d, w['rho_w'], p_wh, T_wh)
+        q_d = _gas_rate(a_i, b_i, p_i**2 - ((1 - delta_d) * p_i) ** 2) * (1e6 / R_i + 10) / 1e6
+    vol, mass = _stream(bo, R_i, wlr_d, w['rho_w'], p_wh, T_wh)
     v_e = 1.22 * c_e / math.sqrt(mass / vol)  # Erosional velocity (m/s)
-    names = list(TUBING) if not oil else list(TUBING)[:-1]
-    sizes = [TUBING[name] for name in names]
+    names = list(_TUBING) if not oil else list(_TUBING)[:-1]
+    sizes = [_TUBING[name] for name in names]
     fits = [D for D in sizes if q_d * vol / 86400 / (math.pi * D * D / 4) <= v_e]
     u_up = r.random()  # Drawn for every well, so that the flag moves no later draw
     if fits:
@@ -570,14 +570,14 @@ def _inflow_at_stage(w, x):
     p_r, T_r, wlr, delta_d = w['p_r'], w['T_r'], w['wlr'], w['delta_d']
     D, eps, q_cap = w['D'], w['roughness'], w['q_cap']
     drain = w['geometry_family'] == 'high_angle'
-    if w['fluid_type'] in OILS:
+    if w['fluid_type'] in _OILS:
         J = x.J
         if drain:  # spec: SMP-72. Dikken's model in closed form, the water at the model's viscosity (PVT-WAT-3)
             B_l = (1 - wlr) * x.B_o + wlr
             rho_l = ((1 - wlr) * (w['rho_o'] + w['R_go'] * w['rho_g']) + wlr * w['rho_w']) / B_l
             mu_l = (1 - wlr) * x.mu_o + wlr * float(water_viscosity(T_r))
-            c_lin = liner_liquid(D, min(max(rho_l, 400.0), 1100.0), mu_l, B_l, eps)
-            J_eff = drain_index(J, w['drain_length'], c_lin, delta_d * p_r, q_cap)
+            c_lin = _liner_liquid(D, min(max(rho_l, 400.0), 1100.0), mu_l, B_l, eps)
+            J_eff = _drain_index(J, w['drain_length'], c_lin, delta_d * p_r, q_cap)
             w['eta_drain'] = J_eff / J
             J = J_eff
         rho_lsc = (1 - wlr) * w['rho_o'] + wlr * w['rho_w']
@@ -590,17 +590,17 @@ def _inflow_at_stage(w, x):
         a, b = x.a, x.b
         u_d = p_r**2 - ((1 - delta_d) * p_r) ** 2
         if drain:  # spec: SMP-73. The friction's first-order term c L_d / 4 in b, c at the heel's rate
-            c_lin = liner_gas(min(D, _LINER_MAX), w['sg_gas'], x.Z, T_r, x.mu_g, eps)
+            c_lin = _liner_gas(min(D, _LINER_MAX), w['sg_gas'], x.Z, T_r, x.mu_g, eps)
             q_cap_g = q_cap * 1e6 / (1e6 / w['R_i'] + 10)
             b_f = 0.0
             for _ in range(4):
-                q = min(gas_rate(a, b + b_f, u_d), q_cap_g)
+                q = min(_gas_rate(a, b + b_f, u_d), q_cap_g)
                 b_f = float(c_lin(q)) * w['drain_length'] / 4
             w['b_friction_share'] = b_f / (b + b_f)
             b += b_f
-        q_g_ref = gas_rate(a, b, u_d)
+        q_g_ref = _gas_rate(a, b, u_d)
         w.update(a_gas=a, b_gas=b, a_ratio=a / x.a_v, b_ratio=b / x.b_v, D_nondarcy=x.D_nd)
-        w.update(AOF=gas_rate(a, b, p_r**2 - P_ATM**2), q_g_ref=q_g_ref, f_geo=x.f_geo)
+        w.update(AOF=_gas_rate(a, b, p_r**2 - _P_ATM**2), q_g_ref=q_g_ref, f_geo=x.f_geo)
         w.update(inflow='forchheimer', q_l_ref=q_g_ref * (w['ogr'] + w['wgr']) / 1e6)  # spec: SMP-74
 
 
@@ -621,18 +621,18 @@ def _needs_lift(w, bo, p_r, p_s, R_go, wlr) -> bool:  # spec: SMP-78
     T_r, T_s = w['T_r'], w['T_s']
     T_wh = T_s + 0.6 * (T_r - T_s)
     p_m, T_m = 0.5 * (p_r + p_s), 0.5 * (T_r + T_wh)
-    vol_m, mass_m = stream(bo, R_go, wlr, w['rho_w'], p_m, T_m)
+    vol_m, mass_m = _stream(bo, R_go, wlr, w['rho_w'], p_m, T_m)
     return p_r < p_s + mass_m / vol_m * STD_GRAVITY * w['L'] / 1e5
 
 
 def _lift(r, w, x, force_lift):
     tail, wt, bo = _is_tail(w), w['well_type'], x.bo
-    oil = w['fluid_type'] in OILS
+    oil = w['fluid_type'] in _OILS
     L, p_r, p_s, T_r, T_s = w['L'], w['p_r'], w['p_s'], w['T_r'], w['T_s']
     R_go, wlr, rho_w = w['R_go'], w['wlr'], w['rho_w']
     md, tvd = x.stations
     # spec: SMP-78
-    i_st = STAGES.index(w['life_stage'])
+    i_st = _STAGES.index(w['life_stage'])
     need = False
     if oil:
         need = _needs_lift(w, bo, p_r, p_s, R_go, wlr)
@@ -649,7 +649,7 @@ def _lift(r, w, x, force_lift):
     q_l_now = min(w['q_l_ref'], w['q_cap'])
     if lift:  # spec: SMP-79
         p_wf_d = (1 - delta_lift) * p_r
-        vol_b, mass_b = stream(bo, R_go, wlr, rho_w, p_wf_d, T_r)  # The flowing column below the valve, no slip
+        vol_b, mass_b = _stream(bo, R_go, wlr, rho_w, p_wf_d, T_r)  # The flowing column below the valve, no slip
         G_l = mass_b / vol_b * STD_GRAVITY / 1e5
         den = G_l - p_inj / _GILBERT_H  # The tubing's gradient less the casing's
         # H_bal: where the casing less dp_v crosses the tubing; L where the casing's gradient is the larger, as where

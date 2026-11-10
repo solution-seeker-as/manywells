@@ -62,18 +62,18 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 from manywells.configurations import V2
-from manywells.datasets.v2 import DATASETS, code_record, lock_hash
+from manywells.datasets.v2 import _DATASETS, code_record, _lock_hash
 from manywells.sampling.v2 import generate
-from manywells.sampling.v2.life import WLR_MAX
-from manywells.sampling.v2.mapping import N_CELLS
+from manywells.sampling.v2.life import _WLR_MAX
+from manywells.sampling.v2.mapping import _N_CELLS
 from manywells.sampling.v2.tables import TableMismatch
 
 CHUNK = 100  # Draw indices per chunk  # spec: SMP-110
-GENERATE = {'sol': generate.generate_sol2_well, 'nsol': generate.generate_nsol2_well}
+_GENERATE = {'sol': generate.generate_sol2_well, 'nsol': generate.generate_nsol2_well}
 _FIRST_RATE = 1.0  # The share of wells accepted that a run assumes before its first chunk: it does not overshoot
 _LEAST_RATE = 0.05  # The least share it plans with
 _TASKS_PER_PROCESS = 100  # A pool's process is renewed after this many wells, so that no leak grows over a run
-MEMORY_RETRIES = 2  # The fresh processes in which a well that ran out of memory is solved again
+_MEMORY_RETRIES = 2  # The fresh processes in which a well that ran out of memory is solved again
 
 
 class SettingsMismatch(ValueError):
@@ -85,7 +85,7 @@ class OutOfMemory(RuntimeError):
 
 
 # --- One well ---------------------------------------------------------------------------------------------------------
-def run_well(kind: str, seed: int, k: int, tables=None) -> dict:  # spec: SMP-110
+def _run_well(kind: str, seed: int, k: int, tables=None) -> dict:  # spec: SMP-110
     """
     Well k's result (generate's module docstring), with `seconds` its wall time and `cpu_seconds` its CPU time. A
     crash of the generation, an exception or a panic of the Rust core, is the well's outcome, `crash`, with the
@@ -98,7 +98,7 @@ def run_well(kind: str, seed: int, k: int, tables=None) -> dict:  # spec: SMP-11
     """
     t0, cpu0 = time.perf_counter(), time.process_time()
     try:
-        res = GENERATE[kind](seed, k, tables)
+        res = _GENERATE[kind](seed, k, tables)
     except (MemoryError, TableMismatch):
         raise  # The process's, or the folder of tables': not the well's
     except BaseException as e:  # noqa: BLE001 - a crash is logged as the well's outcome, and the run carries on
@@ -153,7 +153,7 @@ def _task(task) -> tuple:
         return k, res['info']['outcome'], res['seconds'], True
     t0 = time.perf_counter()
     try:
-        res = run_well(kind, seed, k, tables)
+        res = _run_well(kind, seed, k, tables)
     except MemoryError:
         return k, None, time.perf_counter() - t0, False
     _dump(dict(res, settings_sha256=settings_hash), path)
@@ -171,42 +171,42 @@ def _retry(task, memory_cap, log) -> tuple:
     """A well that ran out of memory, solved again in fresh processes (_fresh), up to MEMORY_RETRIES times. Returns
     _task's result; raises OutOfMemory if the well runs out of memory every time."""
     k = task[2]
-    for i in range(MEMORY_RETRIES):
-        log(f'well {k}: out of memory; solved again in a fresh process ({i + 1} of {MEMORY_RETRIES})')
+    for i in range(_MEMORY_RETRIES):
+        log(f'well {k}: out of memory; solved again in a fresh process ({i + 1} of {_MEMORY_RETRIES})')
         out = _fresh(task, memory_cap)
         if out[1] is not None:
             return out
     cap = 'no cap' if memory_cap is None else f'a cap of {memory_cap / 1e9:.2f} GB'
     raise OutOfMemory(
-        f'well {k} ran out of memory, with {cap}, in the pool and in {MEMORY_RETRIES} fresh processes: it is not '
+        f'well {k} ran out of memory, with {cap}, in the pool and in {_MEMORY_RETRIES} fresh processes: it is not '
         f'kept. Raise the cap, or free memory, and run again: the run resumes from it.'
     )
 
 
 # --- Settings and chunks ----------------------------------------------------------------------------------------------
-def run_settings(kind: str, seed: int, tables=None, chunk_size: int = CHUNK) -> dict:  # spec: SMP-110
+def _run_settings(kind: str, seed: int, tables=None, chunk_size: int = CHUNK) -> dict:  # spec: SMP-110
     """The settings that a run's chunks share (the module's docstring), as they read back from JSON."""
-    if kind not in GENERATE:
+    if kind not in _GENERATE:
         raise ValueError(f"kind must be 'sol' or 'nsol', got {kind!r}")
     settings = dict(
-        dataset=DATASETS[kind],
+        dataset=_DATASETS[kind],
         kind=kind,
         seed=seed,
         configuration=V2,
-        n_cells=N_CELLS,
+        n_cells=_N_CELLS,
         backend='rust',
-        n_slots=generate.N_SLOTS,
+        n_slots=generate._N_SLOTS,
         limits=dict(
-            slot=generate.SLOT_LIMIT, redraws=generate.REDRAW_LIMIT, solver_failures=generate.SOLVER_FAILURE_LIMIT
+            slot=generate._SLOT_LIMIT, redraws=generate._REDRAW_LIMIT, solver_failures=generate._SOLVER_FAILURE_LIMIT
         ),
-        floor=generate.FLOOR,
-        floor_margin=generate.FLOOR_MARGIN,
+        floor=generate._FLOOR,
+        floor_margin=generate._FLOOR_MARGIN,
         lift_fractions=list(generate._BEST_RATE_LIFT),
         scan_points=generate._N_SCAN if kind == 'nsol' else None,
-        wlr_max=WLR_MAX,
+        wlr_max=_WLR_MAX,
         chunk_size=chunk_size,
         tables=None if tables is None else str(Path(tables).resolve()),
-        lock_sha256=lock_hash(),
+        lock_sha256=_lock_hash(),
         code=code_record(),
     )
     return json.loads(json.dumps(settings))
@@ -243,7 +243,7 @@ def _pack(run_dir, settings, c):
     return header
 
 
-def chunk_headers(run_dir) -> dict:
+def _chunk_headers(run_dir) -> dict:
     """The headers of a run's chunks, {chunk: header}, each checked against the run's settings."""
     run_dir = Path(run_dir)
     settings = json.loads((run_dir / 'settings.json').read_text())
@@ -256,9 +256,9 @@ def chunk_headers(run_dir) -> dict:
     return out
 
 
-def read_results(run_dir):
+def _read_results(run_dir):
     """The results of a run's wells in draw order, chunk by chunk from chunk 0 up to the first chunk not yet made."""
-    headers = chunk_headers(run_dir)
+    headers = _chunk_headers(run_dir)
     c = 0
     while c in headers:
         with open(_chunk_path(run_dir, c), 'rb') as f:
@@ -365,12 +365,12 @@ def run(
     run_dir = Path(out)
     (run_dir / 'wells').mkdir(parents=True, exist_ok=True)
     (run_dir / 'chunks').mkdir(exist_ok=True)
-    settings = run_settings(kind, seed, tables, chunk_size)
+    settings = _run_settings(kind, seed, tables, chunk_size)
     limit = _tables_limit(tables, kind, seed)
     if tables is None:
         log('no tables: every volatile oil and gas condensate is table_failed')
     _check_settings(run_dir, settings)
-    headers = chunk_headers(run_dir)
+    headers = _chunk_headers(run_dir)
     t0 = time.perf_counter()
     while True:
         state = _summary(headers, n_wells)
@@ -420,14 +420,14 @@ def _ks(c, chunk_size):
     return range(c * chunk_size, (c + 1) * chunk_size)
 
 
-def run_wells(kind: str, seed: int, ks, out, processes: int = 6, tables=None, memory_cap=None, log=print) -> None:
+def _run_wells(kind: str, seed: int, ks, out, processes: int = 6, tables=None, memory_cap=None, log=print) -> None:
     """
     The given draw indices' wells only, each result kept in OUT/wells/kK.pkl as run keeps them, without chunks: a
-    check of a few wells, or of the port against the prototype. load_wells reads them.
+    check of a few wells, or of the port against the prototype. _load_wells reads them.
     """
     (Path(out) / 'wells').mkdir(parents=True, exist_ok=True)
     tables = None if tables is None else str(Path(tables).resolve())
-    settings_hash = _settings_hash(run_settings(kind, seed, tables))
+    settings_hash = _settings_hash(_run_settings(kind, seed, tables))
     tasks = {k: (kind, seed, k, str(out), tables, settings_hash) for k in ks}
     out_of_memory = []
     for k, outcome, sec, read in _imap(_task, list(tasks.values()), processes, memory_cap):
@@ -440,6 +440,6 @@ def run_wells(kind: str, seed: int, ks, out, processes: int = 6, tables=None, me
         log(f'well {k}: {outcome} in {sec:.1f} s')
 
 
-def load_wells(out, ks) -> list:
-    """The results that run_wells kept for the draw indices ks, in their order."""
+def _load_wells(out, ks) -> list:
+    """The results that _run_wells kept for the draw indices ks, in their order."""
     return [_load(_well_path(out, k)) for k in ks]

@@ -244,6 +244,19 @@ class PVTTable(PVTModel):
             **text,
         )
 
+    @classmethod
+    def from_frame(cls, df, origin='rows', **fields) -> 'PVTTable':
+        """
+        The table of one row per node of a rectangular (p, T) grid, as a file's rows are (read_csv): the columns p,
+        T, R_so, B_o and Z, and any of mu_o, mu_g and sigma, in the files' units.
+
+        :param df: The rows, a pandas DataFrame, in any order
+        :param origin: Where the rows come from, which an error names
+        :param fields: The table's other fields: rho_o and rho_g, and gor, name, source and separation where known
+        :raises ValueError: where the rows are not one per node of a rectangular grid
+        """
+        return _from_frame(df, origin, **fields)
+
     @staticmethod
     def read_csv(path) -> 'PVTTable | PVTTableSet':
         """

@@ -364,6 +364,16 @@ class TestFiles:
         one.write_csv(tmp_path / 'one.csv')
         assert PVTTable.read_csv(tmp_path / 'one.csv') == one
 
+    def test_a_table_from_its_rows(self):
+        """from_frame: the table of one row per node, in any order, with its other fields; read_csv's rows."""
+        t = small(gor=120.0)
+        rows = t.frame().sample(frac=1.0, random_state=3)  # Any order
+        fields = dict(rho_o=t.rho_o, rho_g=t.rho_g, gor=t.gor, name=t.name)
+        assert PVTTable.from_frame(rows, **fields) == t
+        assert PVTTable.from_frame(rows.drop(columns=['mu_o', 'mu_g', 'sigma']), **fields).mu_o is None
+        with pytest.raises(ValueError, match='my rows: not one row per node'):
+            PVTTable.from_frame(rows.iloc[1:], 'my rows', **fields)
+
     def test_csv_round_trip_of_a_gor_axis(self, tmp_path):
         axis = PVTTableSet(tables=(small(gor=120.0), small(gor=80.0, p=(1.0, 50.0, 150.0, 400.0))))
         axis.write_csv(tmp_path / 'axis.csv')

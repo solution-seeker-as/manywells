@@ -20,16 +20,16 @@ import pytest
 
 from manywells.configurations import V2, check
 from manywells.sampling.v2 import samples
-from manywells.sampling.v2.inflow import COEF_KEYS
-from manywells.sampling.v2.life import lift_on
+from manywells.sampling.v2.inflow import _COEF_KEYS
+from manywells.sampling.v2.life import _lift_on
 from manywells.sampling.v2.mapping import WellBuilder
-from manywells.sampling.v2.reservoir import producing_gor
-from manywells.sampling.v2.samples import N_SLOTS, nsol2_attempt, nsol2_plan, sol2_attempt
+from manywells.sampling.v2.reservoir import _producing_gor
+from manywells.sampling.v2.samples import _N_SLOTS, _nsol2_attempt, _nsol2_plan, _sol2_attempt
 from manywells.sampling.wells import rng_for
 
 from .sampling_v2_wells import N_MANY_LIVES, SEED, drawn_lives, drawn_sol2_wells, is_oil
 
-STATE_KEYS = ['t', 'p_r', 'gor', 'wlr', 'wgr', 'h', 'roughness', 'p_s_nom', 'life_stage', *COEF_KEYS]
+STATE_KEYS = ['t', 'p_r', 'gor', 'wlr', 'wgr', 'h', 'roughness', 'p_s_nom', 'life_stage', *_COEF_KEYS]
 
 
 @pytest.fixture(scope='session')
@@ -45,13 +45,13 @@ def sol2_wells():
 @pytest.fixture(scope='session')
 def sol2_attempts(sol2_wells):
     """Every slot's first attempt of every sol-2 well."""
-    return [[sol2_attempt(SEED, w, j) for j in range(N_SLOTS)] for w in sol2_wells]
+    return [[_sol2_attempt(SEED, w, j) for j in range(_N_SLOTS)] for w in sol2_wells]
 
 
 @pytest.fixture(scope='session')
 def plans(lives):
     """Each life's plan to the end of its life span, with the lift's start as the draws give it."""
-    return [nsol2_plan(lf, lf.T_life, lf.lift_start) for lf in lives]
+    return [_nsol2_plan(lf, lf.T_life, lf.lift_start) for lf in lives]
 
 
 def between(x, lo, hi, tol=1e-9):
@@ -87,10 +87,10 @@ def reflect(x, lo, hi):
 def check_sol2_attempt(w, inp) -> dict:
     """SMP-93 to SMP-96: the bounds that no attempt of a sol-2 slot breaks. Returns each draw's place in its range."""
     lifted, oil = w['lift'] == 'gas_lift', is_oil(w)
-    assert list(inp) == ['h', 'roughness', *COEF_KEYS, 'lift_on', 'u', 'w_lg', 'p_s', 'p_r', 'gor', 'wlr', 'wgr']
+    assert list(inp) == ['h', 'roughness', *_COEF_KEYS, 'lift_on', 'u', 'w_lg', 'p_s', 'p_r', 'gor', 'wlr', 'wgr']
     # The well's own: nothing of it drifts (SMP-96)
     assert (inp['h'], inp['roughness'], inp['lift_on']) == (w['h'], w['roughness'], lifted)
-    assert all(inp[key] == w[key] or (math.isnan(inp[key]) and math.isnan(w[key])) for key in COEF_KEYS)
+    assert all(inp[key] == w[key] or (math.isnan(inp[key]) and math.isnan(w[key])) for key in _COEF_KEYS)
     place = dict(u=inp['u'], p_s=separator_place(inp['p_s'], w['p_s'], w['dp_fl']))
     assert between(inp['u'], 0.05, 1)  # SMP-93
     if lifted:  # SMP-94
@@ -100,7 +100,7 @@ def check_sol2_attempt(w, inp) -> dict:
         assert inp['w_lg'] == 0
     # SMP-96: the pressure, the GOR at the drifted pressure, and the water
     place['p_r'] = (inp['p_r'] / w['p_r'] - 0.98) / 0.04
-    place['gor'] = (inp['gor'] / producing_gor(w, inp['p_r']) - 0.95) / 0.1
+    place['gor'] = (inp['gor'] / _producing_gor(w, inp['p_r']) - 0.95) / 0.1
     assert between(place['p_r'], 0, 1) and between(place['gor'], 0, 1)
     if oil:
         assert math.isnan(inp['wgr']) and inp['wlr'] <= 0.98
@@ -116,7 +116,7 @@ def sol2_failures(wells, attempts) -> list:
     rule's than their sampling error allows."""
     places = {key: [] for key in ('u', 'w_lg', 'p_s', 'p_r', 'gor', 'wgr')}
     for w, slots in zip(wells, attempts):
-        assert len(slots) == N_SLOTS == 200
+        assert len(slots) == _N_SLOTS == 200
         for inp in slots:
             for key, x in check_sol2_attempt(w, inp).items():
                 places[key].append(x)
@@ -146,8 +146,8 @@ def test_a_sol2_slot_depends_on_no_other(sol2_wells, sol2_attempts):
     """SMP-105, SMP-109: a slot's draw is its own, whatever was drawn before it; another seed gives another."""
     w = sol2_wells[3]
     for j in (150, 0, 77):
-        assert sol2_attempt(SEED, w, j) == sol2_attempts[3][j]
-    assert sol2_attempt(SEED + 1, w, 77)['u'] != sol2_attempts[3][77]['u']
+        assert _sol2_attempt(SEED, w, j) == sol2_attempts[3][j]
+    assert _sol2_attempt(SEED + 1, w, 77)['u'] != sol2_attempts[3][77]['u']
     us = [inp['u'] for inp in sol2_attempts[3] if inp['u'] < 1]
     assert len(set(us)) == len(us)
 
@@ -156,14 +156,14 @@ def test_a_sol2_redraw_draws_the_slot_again(sol2_wells, sol2_attempts):
     """SMP-105: a redraw is the slot's whole draw again from the redraw's own generator, so it keeps the bounds and
     the distribution, and repeats neither the first attempt nor another redraw."""
     wells = sol2_wells[:25]
-    redraws = [[sol2_attempt(SEED, w, j, 1 + j % 3) for j in range(N_SLOTS)] for w in wells]
+    redraws = [[_sol2_attempt(SEED, w, j, 1 + j % 3) for j in range(_N_SLOTS)] for w in wells]
     assert sol2_failures(wells, redraws) == []
     w, first = wells[0], sol2_attempts[0]
     for j in (0, 61, 199):
-        tries = [first[j]] + [sol2_attempt(SEED, w, j, a) for a in (1, 2, 49)]
+        tries = [first[j]] + [_sol2_attempt(SEED, w, j, a) for a in (1, 2, 49)]
         assert all(len({inp[key] for inp in tries}) == 4 for key in ('p_s', 'p_r', 'gor'))
         us = [inp['u'] for inp in tries if inp['u'] < 1]
-        assert len(set(us)) == len(us) >= 2 and sol2_attempt(SEED, w, j, 2) == tries[2]
+        assert len(set(us)) == len(us) >= 2 and _sol2_attempt(SEED, w, j, 2) == tries[2]
 
 
 def test_sol2_attempts_map_to_the_model(lives, sol2_wells, sol2_attempts):
@@ -184,7 +184,7 @@ def check_plan(lf, plan, p_c, T_end, lift_start) -> dict:
     in their ranges, for the shares."""
     w0 = lf.w0
     w_max = lf.design['w_lg_max'] if lf.design is not None else None
-    assert len(plan) == N_SLOTS == 200 and between(p_c, 0.2, 0.95)
+    assert len(plan) == _N_SLOTS == 200 and between(p_c, 0.2, 0.95)
 
     # Dates and slots (SMP-97): 160 operating samples and 8 tests of 5, in the order of their dates
     op = [s for s in plan if s['kind'] == 'operating']
@@ -197,7 +197,7 @@ def check_plan(lf, plan, p_c, T_end, lift_start) -> dict:
     places = dict(p_s=[], eps=[])
     for s in plan:
         assert list(s) == ['t', 'kind', 'test', 'sweep', 'lift_on', 'u', 'w_lg', 'p_s', 'eps']
-        assert s['lift_on'] == lift_on(s['t'], lift_start) and between(s['u'], 0.05, 1)
+        assert s['lift_on'] == _lift_on(s['t'], lift_start) and between(s['u'], 0.05, 1)
         if not s['lift_on']:
             assert s['w_lg'] == 0  # No lift gas before lift starts (SMP-90)
         elif s['sweep'] == 'lift':
@@ -278,7 +278,7 @@ def other_controls(lf, n) -> list:
     for i in range(n):
         other = copy.copy(lf)
         other.k = 100_000 + i
-        plans.append(nsol2_plan(other, lf.T_life, lf.lift_start))
+        plans.append(_nsol2_plan(other, lf.T_life, lf.lift_start))
     return plans
 
 
@@ -315,7 +315,7 @@ def test_a_plan_spans_the_life_to_its_end(lives, plans):
     natural = next(i for i, lf in enumerate(lives) if lf.lift_start is None)
     lf, (plan, p_c) = lives[natural], plans[natural]
     T_end = float(np.linspace(0.0, lf.T_life, 21)[7])  # A scan point (SMP-101)
-    short, p_c_short = nsol2_plan(lf, T_end, None)
+    short, p_c_short = _nsol2_plan(lf, T_end, None)
     check_plan(lf, short, p_c_short, T_end, None)
     assert p_c_short == p_c and short[-1]['t'] == T_end and plan[-1]['t'] == lf.T_life
     for a, b in zip(short, plan):
@@ -329,7 +329,7 @@ def test_a_plan_takes_the_lift_start_of_the_scan(lives, plans):
     i = next(i for i, lf in enumerate(lives) if lf.design is not None and lf.lift_start is None)
     lf, (plan, p_c) = lives[i], plans[i]
     start = float(np.linspace(0.0, lf.T_life, 21)[6])
-    lifted, p_c_lifted = nsol2_plan(lf, lf.T_life, start)
+    lifted, p_c_lifted = _nsol2_plan(lf, lf.T_life, start)
     check_plan(lf, lifted, p_c_lifted, lf.T_life, start)
     assert p_c_lifted == p_c
     for a, b in zip(lifted, plan):
@@ -339,7 +339,7 @@ def test_a_plan_takes_the_lift_start_of_the_scan(lives, plans):
     assert {s['sweep'] for s in lifted} == {None, 'choke', 'lift'} and {s['sweep'] for s in plan} == {None, 'choke'}
     gas = next(lf for lf in lives if lf.design is None)
     with pytest.raises(ValueError, match='lift design'):
-        nsol2_plan(gas, gas.T_life, 0.5 * gas.T_life)
+        _nsol2_plan(gas, gas.T_life, 0.5 * gas.T_life)
 
 
 # --- nsol-2: attempts and redraws ------------------------------------------------------------------------------------
@@ -361,12 +361,12 @@ def test_a_planned_attempt(lives, plans):
     reservoir pressure without noise, and the planned controls and separator pressure."""
     for lf, plan in some_lives(lives, plans):
         builder = WellBuilder(lf.w0, lf.stations, design=lf.design)
-        for j in range(0, N_SLOTS, 11 if lf.oil else 40):
-            slot, inp = plan[j], nsol2_attempt(lf, plan, j)
+        for j in range(0, _N_SLOTS, 11 if lf.oil else 40):
+            slot, inp = plan[j], _nsol2_attempt(lf, plan, j)
             assert list(inp) == STATE_KEYS + ['u', 'w_lg', 'p_s', 'lift_on', 'test', 'sweep']
             st = lf.state(slot['t'], slot['eps'])
             assert all(inp[key] == st[key] or (math.isnan(inp[key]) and math.isnan(st[key])) for key in STATE_KEYS)
-            assert inp['p_r'] == lf.p_r(slot['t']) and inp['gor'] == producing_gor(lf.w0, inp['p_r']) * slot['eps'][0]
+            assert inp['p_r'] == lf.p_r(slot['t']) and inp['gor'] == _producing_gor(lf.w0, inp['p_r']) * slot['eps'][0]
             assert all(inp[key] == slot[key] for key in ('u', 'w_lg', 'p_s', 'lift_on', 'test', 'sweep'))
             wp, bc = builder.case(inp)  # A well and its boundary conditions in the v2.0.0 configuration (SMP-111)
             check(wp, V2)
@@ -383,10 +383,10 @@ def test_a_redraw_keeps_the_date_and_changes_the_controls(lives, plans):
     for lf, plan in some_lives(lives, plans):
         w_max = lf.design['w_lg_max'] if lf.design is not None else None
         before = copy.deepcopy(plan)
-        for j in range(0, N_SLOTS, 3 if lf.oil else 40):
-            slot, first = plan[j], nsol2_attempt(lf, plan, j)
+        for j in range(0, _N_SLOTS, 3 if lf.oil else 40):
+            slot, first = plan[j], _nsol2_attempt(lf, plan, j)
             for a in (1, 2, 17):
-                inp = nsol2_attempt(lf, plan, j, a)
+                inp = _nsol2_attempt(lf, plan, j, a)
                 kept = [key for key in inp if key not in ('u', 'w_lg', 'p_s')]
                 assert all(inp[key] == first[key] or inp[key] != inp[key] for key in kept) and len(kept) == 16
                 assert between(inp['u'], 0.05, 1)
@@ -409,7 +409,7 @@ def test_a_redraw_keeps_the_date_and_changes_the_controls(lives, plans):
                 assert inp['p_s'] == samples._separator_pressure(r, inp['p_s_nom'], lf.w0['dp_fl'])
                 du.append(abs(inp['u'] - slot['u']))
                 n_lifted += slot['lift_on']
-                assert nsol2_attempt(lf, plan, j, a) == inp
+                assert _nsol2_attempt(lf, plan, j, a) == inp
         assert plan == before  # A redraw changes its own slot's attempt only
     du = np.array(du)
     assert len(du) > 1000 and 0.6 < np.mean(du <= 0.2 + 1e-12) < 0.8 and du.max() > 0.5
@@ -428,11 +428,11 @@ def test_the_samples_generators(lives, plans, sol2_wells, monkeypatch):
 
     monkeypatch.setattr(samples, 'rng_for', recorded)
     lf, (plan, _) = lives[5], plans[5]
-    sol2_attempt(SEED, sol2_wells[5], 12)
-    sol2_attempt(SEED, sol2_wells[5], 12, 3)
-    nsol2_plan(lf, lf.T_life, lf.lift_start)
-    nsol2_attempt(lf, plan, 30)
-    nsol2_attempt(lf, plan, 30, 2)
+    _sol2_attempt(SEED, sol2_wells[5], 12)
+    _sol2_attempt(SEED, sol2_wells[5], 12, 3)
+    _nsol2_plan(lf, lf.T_life, lf.lift_start)
+    _nsol2_attempt(lf, plan, 30)
+    _nsol2_attempt(lf, plan, 30, 2)
     assert asked == [
         (SEED, 5, 12, 'v2', 'sample'),
         (SEED, 5, 12, 3, 'v2', 'redraw'),
@@ -445,7 +445,7 @@ def test_a_rerun_gives_the_same_plan(lives, plans):
     """SMP-109: a plan depends on the seed and the well only."""
     for i in (31, 2):
         lf = lives[i]
-        again = nsol2_plan(lf, lf.T_life, lf.lift_start)
+        again = _nsol2_plan(lf, lf.T_life, lf.lift_start)
         assert again == plans[i] and again[0] is not plans[i][0]
 
 
@@ -454,10 +454,10 @@ def test_samples_of_many_wells():
     """The same checks on 300 wells, whose sampling errors are half as wide: every sol-2 slot's first attempt, and
     every well's plan."""
     many, wells = drawn_lives(N_MANY_LIVES), drawn_sol2_wells(N_MANY_LIVES)
-    attempts = [[sol2_attempt(SEED, w, j) for j in range(N_SLOTS)] for w in wells]
+    attempts = [[_sol2_attempt(SEED, w, j) for j in range(_N_SLOTS)] for w in wells]
     assert sol2_failures(wells, attempts) == []
     stats = []
     for lf in many:
-        plan, p_c = nsol2_plan(lf, lf.T_life, lf.lift_start)
+        plan, p_c = _nsol2_plan(lf, lf.T_life, lf.lift_start)
         stats.append(check_plan(lf, plan, p_c, lf.T_life, lf.lift_start))
     assert plan_failures(stats) == []

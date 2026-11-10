@@ -33,27 +33,27 @@ import pandas as pd
 
 from manywells.configurations import V2
 from manywells.datasets.v2 import (
-    DATASETS,
+    _DATASETS,
     FEATURES,
-    LOGS,
-    NSOL_INPUTS,
-    NSOL_TIME,
-    REASONS,
-    SAMPLE_INPUTS,
-    TABLES,
-    WEEKS_PER_YEAR,
+    _LOGS,
+    _NSOL_INPUTS,
+    _NSOL_TIME,
+    _REASONS,
+    _SAMPLE_INPUTS,
+    _TABLES,
+    _WEEKS_PER_YEAR,
     code_record,
-    platform_record,
-    sha256,
-    typed,
-    write_tables,
+    _platform_record,
+    _sha256,
+    _typed,
+    _write_tables,
 )
 from manywells.geometry import WellGeometry
 from manywells.sampling.v2 import generate, table_build
-from manywells.sampling.v2.mapping import N_CELLS
-from manywells.sampling.v2.reservoir import OILS
-from manywells.sampling.v2.run import SettingsMismatch, read_results, run_settings, _strip_home
-from manywells.sampling.v2.tables import TABLE_CLASSES
+from manywells.sampling.v2.mapping import _N_CELLS
+from manywells.sampling.v2.reservoir import _OILS
+from manywells.sampling.v2.run import SettingsMismatch, _read_results, _run_settings, _strip_home
+from manywells.sampling.v2.tables import _TABLE_CLASSES
 from manywells.sampling.wells import rng_for
 
 _MSCF = 28.3168  # Sm3 per Mscf
@@ -88,10 +88,10 @@ _LIFE = (  # An nsol-2 well's life (life.Life.parameters), the end that the scan
     'T_life T_end t_plateau decline_D decline_b gamma_p r_p_start r_p_end F_bt wlr_bt water_start water_end t_sep_1 '
     't_sep_2 r_s_mid r_s_late p_change lift_start'
 ).split()
-_GENERATION = ('n_redraws', 'n_redraws_no_op', 'n_redraws_solver') + tuple(f'n_redraws_{r}' for r in REASONS)
+_GENERATION = ('n_redraws', 'n_redraws_no_op', 'n_redraws_solver') + tuple(f'n_redraws_{r}' for r in _REASONS)
 
 
-def well_columns(kind: str) -> list:  # spec: SMP-110
+def _well_columns(kind: str) -> list:  # spec: SMP-110
     """The columns of a dataset's `wells` table, in their order."""
     sol = kind == 'sol'
     cols = ['ID', 'draw_index', 'split', 'configuration', 'n_cells']
@@ -114,34 +114,34 @@ def well_columns(kind: str) -> list:  # spec: SMP-110
     return cols
 
 
-def drawn_well_columns(kind: str) -> list:  # spec: SMP-108
+def _drawn_well_columns(kind: str) -> list:  # spec: SMP-108
     """The columns of a dataset's `drawn_wells` log: every column of `wells`, then its outcome and counts."""
     more = 'outcome not_producible_reason error n_attempts n_several_stable best_rate_outcomes'.split()
     more += ['scan_best_rate', 'scan_outcome'] if kind == 'nsol' else []
-    return well_columns(kind) + more + ['seconds', 'cpu_seconds', 'table_seconds']
+    return _well_columns(kind) + more + ['seconds', 'cpu_seconds', 'table_seconds']
 
 
-def sample_columns(kind: str) -> list:  # spec: SMP-110
+def _sample_columns(kind: str) -> list:  # spec: SMP-110
     """The columns of a dataset's `samples` table, in their order."""
-    time = ['WEEKS', *NSOL_TIME.values()] if kind == 'nsol' else []
-    inputs = list(SAMPLE_INPUTS.values()) + (list(NSOL_INPUTS.values()) if kind == 'nsol' else [])
+    time = ['WEEKS', *_NSOL_TIME.values()] if kind == 'nsol' else []
+    inputs = list(_SAMPLE_INPUTS.values()) + (list(_NSOL_INPUTS.values()) if kind == 'nsol' else [])
     return ['ID', 'slot', 'attempt', *time, *inputs, *FEATURES]
 
 
-def redraw_columns(kind: str) -> list:  # spec: SMP-108
+def _redraw_columns(kind: str) -> list:  # spec: SMP-108
     """The columns of a dataset's `redraws` log: the attempt, its inputs, its outcome and the sizes of its root set."""
-    inputs = sample_columns(kind)[3 : len(sample_columns(kind)) - len(FEATURES)]
+    inputs = _sample_columns(kind)[3 : len(_sample_columns(kind)) - len(FEATURES)]
     return ['draw_index', 'ID', 'slot', 'attempt', *inputs, 'outcome', 'reason', 'n_roots', 'n_stable']
 
 
 # --- A well's rows ----------------------------------------------------------------------------------------------------
-def max_inclination(stations, D) -> float:
+def _max_inclination(stations, D) -> float:
     """The largest cell inclination from vertical on the model's grid (degrees)."""
-    geo = WellGeometry.from_survey(stations[0], stations[1], N_CELLS, D=D)
+    geo = WellGeometry.from_survey(stations[0], stations[1], _N_CELLS, D=D)
     return math.degrees(math.acos(min(1.0, float(np.min(np.asarray(geo.cos_incl))))))
 
 
-def well_row(res: dict, kind: str) -> dict:  # spec: SMP-108, SMP-110
+def _well_row(res: dict, kind: str) -> dict:  # spec: SMP-108, SMP-110
     """
     A drawn well's row of `drawn_wells` from its result (generate's module docstring): its draws, labels and table,
     its outcome and the counts of its attempts, without `ID` and `split`, which the assembly gives the accepted wells.
@@ -150,7 +150,7 @@ def well_row(res: dict, kind: str) -> dict:  # spec: SMP-108, SMP-110
     w, info, tab = res['well'], res['info'], res['table'] or {}
     times = dict(seconds=res['seconds'], cpu_seconds=res.get('cpu_seconds', math.nan))
     if w is None:
-        row = dict(draw_index=info['draw_index'], configuration=V2, n_cells=N_CELLS, **_counts(res))
+        row = dict(draw_index=info['draw_index'], configuration=V2, n_cells=_N_CELLS, **_counts(res))
         row.update(outcome=info['outcome'], error=_strip_home(info.get('error')), best_rate_outcomes=[], **times)
         return row | (dict(scan_best_rate=[], scan_outcome=[]) if kind == 'nsol' else {})
 
@@ -158,16 +158,16 @@ def well_row(res: dict, kind: str) -> dict:  # spec: SMP-108, SMP-110
         v = w.get(key, math.nan)
         return math.nan if v is None else v
 
-    oil, k, stations = w['fluid_type'] in OILS, w['well'], res['stations']
+    oil, k, stations = w['fluid_type'] in _OILS, w['well'], res['stations']
     has_table = tab.get('status') == 'ok'
-    row = dict(draw_index=k, configuration=V2, n_cells=N_CELLS)
+    row = dict(draw_index=k, configuration=V2, n_cells=_N_CELLS)
     row.update({key: w[key] for key in ('coverage_tail', 'well_type', 'fluid_type', 'fluid_class', 'class_rule')})
     row.update({key: w[key] for key in ('drive', 'pressure_class', 'saturation', 'geometry_class', 'geometry_family')})
-    row.update(pvt_model='table' if w['fluid_class'] in TABLE_CLASSES else 'black_oil')
+    row.update(pvt_model='table' if w['fluid_class'] in _TABLE_CLASSES else 'black_oil')
     row.update({key: tab.get(key) for key in ('saturation_kind', 'saturation_rule')}, fluid_source=tab.get('source'))
     row.update({key: w[key] for key in ('inflow', 'tubing', 'choke_model', 'chk_profile')})
     row.update(z=w['z'], water_depth=w['d_w'], L=w['L'], md_bottom=stations[0][-1])
-    row.update(max_inclination=max_inclination(stations, w['D']), **{col: g(key) for col, key in _GEOMETRY.items()})
+    row.update(max_inclination=_max_inclination(stations, w['D']), **{col: g(key) for col, key in _GEOMETRY.items()})
     row.update({key: w[key] for key in ('salinity', 'rho_w', 'p_h')})
     row.update(overpressure_ratio=(w['p_i'] - w['p_h']) / (w['p_lith'] - w['p_h']), p_i=w['p_i'], T_s=w['T_s'])
     row.update(geothermal_gradient=w['G'], T_r=w['T_r'], p_sep=w['p_sep'], T_sep=w['T_sep'], dp_flowline=w['dp_fl'])
@@ -178,7 +178,7 @@ def well_row(res: dict, kind: str) -> dict:  # spec: SMP-108, SMP-110
     row.update(permeability=w['perm'], net_pay=w['h_net'], skin=w['skin'], ln_re_rw=w['ln_re_rw'])
     row.update(drawdown_design=w['delta_d'], anisotropy=g('I_ani'), productivity_factor=w['f_geo'])
     row.update(J=g('J') if oil else math.nan, non_darcy_D=math.nan if oil else w['D_nondarcy'] / _MSCF)
-    row.update(design_rate=w['q_design'], floor=generate.FLOOR[w['well_type']])  # The tubing's (SMP-75)
+    row.update(design_rate=w['q_design'], floor=generate._FLOOR[w['well_type']])  # The tubing's (SMP-75)
     row.update(best_rate=info['best_rate'], best_rate_w_lg=info['best_rate_w_lg'])
     row.update(D=w['D'], bean_ratio=w['beta'], C_D=w['c_d'], K_c=w['K_c'])
     design = res['nsol']['design'] if kind == 'nsol' else (w if w['lift'] == 'gas_lift' else None)
@@ -228,7 +228,7 @@ def _counts(res) -> dict:  # spec: SMP-108
     out = dict(n_attempts=len(slots), n_redraws=sum(r['attempt'] > 0 for r in slots))
     out.update(n_redraws_no_op=sum(r['outcome'] == 'no_operating_point' for r in failed))
     out.update(n_redraws_solver=sum(r['outcome'] == 'solver_failure' for r in failed))
-    out.update({f'n_redraws_{reason}': sum(r['reason'] == reason for r in failed) for reason in REASONS})
+    out.update({f'n_redraws_{reason}': sum(r['reason'] == reason for r in failed) for reason in _REASONS})
     out['n_several_stable'] = sum(bool(r['several_stable']) for r in res['samples'])
     return out
 
@@ -237,13 +237,13 @@ def _attempt_rows(recs, kind) -> pd.DataFrame:
     """Attempts' records as rows, their inputs under the samples' names."""
     df = pd.DataFrame(recs)
     if kind == 'nsol' and len(df):
-        df['WEEKS'] = df['t'] * WEEKS_PER_YEAR
-    return df.rename(columns=SAMPLE_INPUTS | (NSOL_INPUTS | NSOL_TIME if kind == 'nsol' else {}))
+        df['WEEKS'] = df['t'] * _WEEKS_PER_YEAR
+    return df.rename(columns=_SAMPLE_INPUTS | (_NSOL_INPUTS | _NSOL_TIME if kind == 'nsol' else {}))
 
 
-def pvt_rows(table: dict, table_id: str) -> pd.DataFrame:  # spec: SMP-110
+def _pvt_rows(table: dict, table_id: str) -> pd.DataFrame:  # spec: SMP-110
     """
-    A table well's table set as rows of `pvt`: the nodes of its CSV file (tables.read_table's manifest names it), with
+    A table well's table set as rows of `pvt`: the nodes of its CSV file (tables._read_table's manifest names it), with
     the header's densities and text in every row, so that datasets.v2.pvt_from_rows rebuilds PVTTable.read_csv's tables
     from them, to the bit. A single table's GOR, from its header, is in every row's `gor`.
     """
@@ -265,7 +265,7 @@ def pvt_rows(table: dict, table_id: str) -> pd.DataFrame:  # spec: SMP-110
     return df
 
 
-def split(wells: pd.DataFrame, seed: int) -> np.ndarray:  # spec: SMP-110
+def _split(wells: pd.DataFrame, seed: int) -> np.ndarray:  # spec: SMP-110
     """
     The wells' split: 20% `test` and 80% `train`, stratified by fluid type, well type, geometry class and the tail.
     Each well, in the order of the rows (by ID), draws one number from rng_for(seed, 'v2', 'split'); within each
@@ -279,12 +279,12 @@ def split(wells: pd.DataFrame, seed: int) -> np.ndarray:  # spec: SMP-110
 
 
 # --- The dataset ------------------------------------------------------------------------------------------------------
-def assemble(results, kind: str, seed: int, n_wells: int, attempts=None) -> dict:  # spec: SMP-108, SMP-110
+def _assemble(results, kind: str, seed: int, n_wells: int, attempts=None) -> dict:  # spec: SMP-108, SMP-110
     """
     A dataset's tables and logs from its run's results, in draw order: the wells up to the n-th accepted are drawn,
     the first n accepted are the dataset's, numbered by `ID` from 0 in draw order.
 
-    :param results: The wells' results in draw order (run.read_results), from draw index 0
+    :param results: The wells' results in draw order (run._read_results), from draw index 0
     :param kind: 'sol' or 'nsol'
     :param seed: The dataset's seed
     :param n_wells: The accepted wells of the dataset
@@ -299,7 +299,7 @@ def assemble(results, kind: str, seed: int, n_wells: int, attempts=None) -> dict
     for res in results:
         if n_id >= n_wells:
             break
-        row = well_row(res, kind)
+        row = _well_row(res, kind)
         accepted = row['outcome'] == 'accepted'
         ID = n_id if accepted else None
         n_id += accepted
@@ -316,7 +316,7 @@ def assemble(results, kind: str, seed: int, n_wells: int, attempts=None) -> dict
             md, tvd = res['stations']
             geometry.append(pd.DataFrame(dict(ID=ID, station=np.arange(len(md)), md=md, tvd=tvd)))
             if row['pvt_table_id'] is not None:
-                pvt.append(pvt_rows(res['table'], row['pvt_table_id']))
+                pvt.append(_pvt_rows(res['table'], row['pvt_table_id']))
         if attempts is not None:
             chunk.append(_attempt_rows(res['log'], kind).assign(ID=ID, well_outcome=row['outcome']))
             if len(drawn) % 100 == 0:
@@ -326,22 +326,22 @@ def assemble(results, kind: str, seed: int, n_wells: int, attempts=None) -> dict
         raise ValueError(f'the results hold {n_id} accepted wells, not {n_wells}')
     if attempts is not None and chunk:
         attempts(pd.concat(chunk, ignore_index=True))
-    drawn = pd.DataFrame(drawn).reindex(columns=drawn_well_columns(kind))
+    drawn = pd.DataFrame(drawn).reindex(columns=_drawn_well_columns(kind))
     is_well = drawn['ID'].notna()
     splits = np.full(len(drawn), None, dtype=object)
-    splits[is_well.to_numpy()] = split(drawn[is_well], seed)
+    splits[is_well.to_numpy()] = _split(drawn[is_well], seed)
     drawn['split'] = splits
-    wells = drawn.loc[is_well, well_columns(kind)].astype({'ID': 'int32'}).reset_index(drop=True)
+    wells = drawn.loc[is_well, _well_columns(kind)].astype({'ID': 'int32'}).reset_index(drop=True)
     pvt_cols = 'pvt_table_id gor p T R_so B_o Z mu_o mu_g sigma rho_o rho_g name source separation'.split()
     out = dict(
         wells=wells,
-        samples=_frame(samples, sample_columns(kind)).sort_values(['ID', 'slot'], ignore_index=True),
+        samples=_frame(samples, _sample_columns(kind)).sort_values(['ID', 'slot'], ignore_index=True),
         geometry=_frame(geometry, ['ID', 'station', 'md', 'tvd']),
         pvt=_frame(pvt, pvt_cols),
         drawn_wells=drawn,
-        redraws=_frame(redraws, redraw_columns(kind)),
+        redraws=_frame(redraws, _redraw_columns(kind)),
     )
-    out = {name: typed(df, name) for name, df in out.items()}
+    out = {name: _typed(df, name) for name, df in out.items()}
     outcomes = drawn['outcome'].value_counts().to_dict()
     out['counts'] = dict(
         wells_drawn=len(drawn),
@@ -368,27 +368,27 @@ def _table_build_record(tables) -> dict | None:  # spec: SMP-110, SMP-116
     spec = json.loads((folder / 'wells.json').read_text())
     axes = folder / 'axes.json'
     return dict(
-        wells_sha256=sha256(folder / 'wells.json'),
-        axes_sha256=sha256(axes) if axes.exists() else None,
+        wells_sha256=_sha256(folder / 'wells.json'),
+        axes_sha256=_sha256(axes) if axes.exists() else None,
         wells_range=spec['wells_range'],
         table_wells=len(spec['wells']),
         neqsim=table_build.NEQSIM_VERSION,
     )
 
 
-def records(kind: str, seed: int, n_wells: int, settings: dict, run_dir) -> dict:  # spec: SMP-110
-    """The records of a dataset (SMP-110), from its run's settings (run.run_settings): its seed, the configuration,
+def _records(kind: str, seed: int, n_wells: int, settings: dict, run_dir) -> dict:  # spec: SMP-110
+    """The records of a dataset (SMP-110), from its run's settings (run._run_settings): its seed, the configuration,
     the grid, the backend, the limits, the floor and the best rate's constants, the folder of tables, relative to the
     run's folder, and its build, the code that ran and assembled it, the lock file's hash and the platform."""
     tables = settings['tables']
     return dict(
-        dataset=DATASETS[kind],
+        dataset=_DATASETS[kind],
         kind=kind,
         seed=seed,
         n_wells=n_wells,
         n_slots=settings['n_slots'],
         configuration=V2,
-        n_cells=N_CELLS,
+        n_cells=_N_CELLS,
         backend='rust',
         retry_backend=None,
         limits=settings['limits'],
@@ -407,7 +407,7 @@ def records(kind: str, seed: int, n_wells: int, settings: dict, run_dir) -> dict
         assembled_by=code_record(),
         lock_sha256=settings['lock_sha256'],
         created=datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds'),
-        **platform_record(),
+        **_platform_record(),
     )
 
 
@@ -428,11 +428,11 @@ def write_dataset(run_dir, out, n_wells: int, allow_dirty: bool = False, attempt
     run_dir, out = Path(run_dir), Path(out)
     settings = json.loads((run_dir / 'settings.json').read_text())
     kind, seed = settings['kind'], settings['seed']
-    now = run_settings(kind, seed, settings['tables'], settings['chunk_size'])  # The assembling code's
+    now = _run_settings(kind, seed, settings['tables'], settings['chunk_size'])  # The assembling code's
     diff = sorted(key for key in set(now) | set(settings) if key != 'code' and now.get(key) != settings.get(key))
     if diff:
         raise SettingsMismatch(f'{run_dir} was run with other settings than the assembling code has: {", ".join(diff)}')
-    meta = records(kind, seed, n_wells, settings, run_dir)
+    meta = _records(kind, seed, n_wells, settings, run_dir)
     for code in (meta['code'], meta['assembled_by']):
         if (code['dirty'] is not False or code['commit'] is None) and not allow_dirty:
             raise ValueError(
@@ -448,9 +448,9 @@ def write_dataset(run_dir, out, n_wells: int, allow_dirty: bool = False, attempt
         def writer(df):
             df.to_parquet(run_dir / 'attempts' / f'part-{next(part):06d}.parquet', index=False)
 
-    tables = assemble(read_results(run_dir), kind, seed, n_wells, attempts=writer)
+    tables = _assemble(_read_results(run_dir), kind, seed, n_wells, attempts=writer)
     meta['counts'] = tables.pop('counts')
-    name = DATASETS[kind]
-    data = write_tables(out / name, {key: tables[key] for key in TABLES}, meta)
-    write_tables(out / f'{name}-logs', {key: tables[key] for key in LOGS}, dict(meta, companion_of=name))
+    name = _DATASETS[kind]
+    data = _write_tables(out / name, {key: tables[key] for key in _TABLES}, meta)
+    _write_tables(out / f'{name}-logs', {key: tables[key] for key in _LOGS}, dict(meta, companion_of=name))
     return data

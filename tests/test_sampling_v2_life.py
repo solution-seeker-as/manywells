@@ -20,11 +20,11 @@ import pytest
 from manywells.configurations import V2, check
 from manywells.pvt.black_oil import BlackOil
 from manywells.sampling.v2 import life as life_module
-from manywells.sampling.v2.draws import P_S_MAX, STAGES, black_oil, draw_well, stream
-from manywells.sampling.v2.inflow import COEF_KEYS, inflow_at
-from manywells.sampling.v2.life import WLR_MAX, Life, _cumulative, lift_on, sol2_well
+from manywells.sampling.v2.draws import _P_S_MAX, _STAGES, _black_oil, draw_well, _stream
+from manywells.sampling.v2.inflow import _COEF_KEYS, _inflow_at
+from manywells.sampling.v2.life import _WLR_MAX, Life, _cumulative, _lift_on, sol2_well
 from manywells.sampling.v2.mapping import WellBuilder
-from manywells.sampling.v2.reservoir import nondarcy, producing_gor
+from manywells.sampling.v2.reservoir import _nondarcy, _producing_gor
 from manywells.sampling.wells import rng_for
 
 from .sampling_v2_wells import N_MANY_LIVES, SEED, drawn_lives, drawn_sol2_wells, drawn_wells, is_oil
@@ -70,7 +70,7 @@ def needs_lift(lf, t) -> bool:
     p_r, p_s = lf.p_r(t), lf.p_s_nom(t)
     T_wh = w0['T_s'] + 0.6 * (w0['T_r'] - w0['T_s'])
     T_m = 0.5 * (w0['T_r'] + T_wh)
-    vol, mass = stream(black_oil(w0), producing_gor(w0, p_r), lf.water(t), w0['rho_w'], 0.5 * (p_r + p_s), T_m)
+    vol, mass = _stream(_black_oil(w0), _producing_gor(w0, p_r), lf.water(t), w0['rho_w'], 0.5 * (p_r + p_s), T_m)
     return p_r < p_s + mass / vol * 9.80665 * w0['L'] / 1e5
 
 
@@ -122,11 +122,11 @@ def check_life(lf):
     wat = [lf.water(t) for t in ts]
     assert wat[0] == a and wat[-1] == pytest.approx(max(a, z), rel=1e-9) and np.all(np.diff(wat) >= -1e-12 * z)
     assert all(v == a for v, f in zip(wat, F) if f < F_bt)
-    assert not oil or max(wat) <= WLR_MAX
+    assert not oil or max(wat) <= _WLR_MAX
 
     # The GOR (SMP-87): the start's above the saturation pressure, and SMP-70's below it
     R_i, p_sat = w0['R_i'], w0['p_sat']
-    gor = [producing_gor(w0, p) for p in p_r]
+    gor = [_producing_gor(w0, p) for p in p_r]
     if p_sat is None:
         assert all(R == R_i for R in gor)
     else:
@@ -143,7 +143,7 @@ def check_life(lf):
         if tail:
             assert lf.p_s_nom(t) == max((w0['p_s'] - w0['dp_fl']) * r_s + w0['dp_fl'], 1.5)
         else:
-            assert lf.p_s_nom(t) == min(max(r_s * w0['p_sep'] + w0['dp_fl'], 1.5), P_S_MAX[w0['well_type']])
+            assert lf.p_s_nom(t) == min(max(r_s * w0['p_sep'] + w0['dp_fl'], 1.5), _P_S_MAX[w0['well_type']])
     p_s = [lf.p_s_nom(t) for t in ts]
     assert p_s[0] == pytest.approx(w0['p_s'], rel=1e-12) and np.all(np.diff(p_s) <= 0) and min(p_s) >= 1.5
 
@@ -192,8 +192,8 @@ def check_state(lf, t, eps=(1.0, 1.0)):
     inflow's coefficients at the trends' state."""
     w0, st = lf.w0, lf.state(t, eps)
     p_r, water = lf.p_r(t), lf.water(t)
-    R_go = producing_gor(w0, p_r)
-    assert list(st) == ['t', 'p_r', 'gor', 'wlr', 'wgr', 'h', 'roughness', 'p_s_nom', 'life_stage', *COEF_KEYS]
+    R_go = _producing_gor(w0, p_r)
+    assert list(st) == ['t', 'p_r', 'gor', 'wlr', 'wgr', 'h', 'roughness', 'p_s_nom', 'life_stage', *_COEF_KEYS]
     assert (st['t'], st['p_r'], st['gor']) == (t, p_r, R_go * eps[0])
     assert (st['h'], st['roughness'], st['p_s_nom'], st['life_stage']) == (
         lf.h(t),
@@ -202,14 +202,14 @@ def check_state(lf, t, eps=(1.0, 1.0)):
         lf.stage(t),
     )
     if lf.oil:
-        assert st['wlr'] == min(WLR_MAX, water * eps[1]) and math.isnan(st['wgr'])
-        wlr_trend = min(WLR_MAX, water)
+        assert st['wlr'] == min(_WLR_MAX, water * eps[1]) and math.isnan(st['wgr'])
+        wlr_trend = min(_WLR_MAX, water)
     else:
         assert st['wgr'] == water * eps[1] and st['wlr'] == st['wgr'] / (st['wgr'] + 1e6 / st['gor'])
         wlr_trend = water / (water + 1e6 / R_go)
     assert 0 <= st['wlr'] < 1
-    coef = inflow_at(w0, black_oil(w0), p_r, R_go, wlr_trend)  # Without the drift
-    assert [key for key in COEF_KEYS if not math.isnan(st[key])] == USED[w0['inflow']]
+    coef = _inflow_at(w0, _black_oil(w0), p_r, R_go, wlr_trend)  # Without the drift
+    assert [key for key in _COEF_KEYS if not math.isnan(st[key])] == USED[w0['inflow']]
     assert all(st[key] == coef[key] and st[key] >= 0 for key in USED[w0['inflow']])
     return st
 
@@ -227,7 +227,7 @@ def check_sol2_well(lf, w, drawn_stage):
     st = lf.state(t)
     assert (w['p_r'], w['R_go'], w['wlr'], w['p_s']) == (st['p_r'], st['gor'], st['wlr'], st['p_s_nom'])
     assert (w['h'], w['roughness'], w['r_s'], w['r_p']) == (st['h'], st['roughness'], lf.r_s(t), w['p_r'] / w0['p_i'])
-    assert all(w[key] == st[key] or (math.isnan(w[key]) and math.isnan(st[key])) for key in COEF_KEYS)
+    assert all(w[key] == st[key] or (math.isnan(w[key]) and math.isnan(st[key])) for key in _COEF_KEYS)
     assert w['below_hydrostatic'] == (w['p_r'] < w0['p_h'])
     if lf.oil:
         assert 'wgr' not in w and w['ogr'] is None
@@ -237,14 +237,14 @@ def check_sol2_well(lf, w, drawn_stage):
         assert w['saturation'] == 'single_phase_gas'
     else:
         assert w['saturation'] == ('undersaturated' if w['p_r'] > w0['p_sat'] else 'saturated')
-    lifted = lift_on(t, lf.lift_start)  # The lift at the date (SMP-90)
+    lifted = _lift_on(t, lf.lift_start)  # The lift at the date (SMP-90)
     assert w['lift'] == ('gas_lift' if lifted else 'natural')
     assert w['lift_start_rule'] == (lf.lift_start_rule if lifted else None)
     for key in LIFT_KEYS:
         assert w[key] == lf.design[key] if lifted else key not in w
-    fixed = [key for key in w0 if key not in AT_THE_DATE + LIFT_KEYS + list(COEF_KEYS)]  # Fixed for the life (SMP-88)
+    fixed = [key for key in w0 if key not in AT_THE_DATE + LIFT_KEYS + list(_COEF_KEYS)]  # Fixed for the life (SMP-88)
     assert all(w[key] == w0[key] for key in fixed) and len(fixed) > 60
-    assert set(w) == set(w0) | {'date', 'lift_start_rule', *COEF_KEYS} | set(LIFT_KEYS if lifted else [])
+    assert set(w) == set(w0) | {'date', 'lift_start_rule', *_COEF_KEYS} | set(LIFT_KEYS if lifted else [])
     # v2: checks, Bounds: the well at its nominal state is a well of the v2.0.0 configuration
     inp = dict(st, u=1.0, w_lg=0.0, lift_on=lifted, p_s=w['p_s'])
     wp, bc = WellBuilder(w0, lf.stations, design=lf.design).case(inp)
@@ -268,9 +268,9 @@ def test_the_inflow_model_the_non_darcy_coefficient_and_nsol2s_label_are_the_sta
             assert w0['inflow'] == ('vogel' if vogel else 'productivity_index')
         else:
             assert w0['inflow'] == 'forchheimer' and {d['D_nondarcy'] for d in draws_} == {w0['D_nondarcy']}
-            bo = black_oil(w0)
+            bo = _black_oil(w0)
             mu = bo.gas_viscosity(p_0, w0['T_r'], bo.gas_density(p_0, w0['T_r']))
-            assert w0['D_eq434'] == pytest.approx(nondarcy(w0['sg_gas'], w0['perm'], w0['h_net'], mu, w0['h_net']))
+            assert w0['D_eq434'] == pytest.approx(_nondarcy(w0['sg_gas'], w0['perm'], w0['h_net'], mu, w0['h_net']))
         if w0['p_sat'] is not None:
             assert w0['saturation'] == ('undersaturated' if p_0 > w0['p_sat'] else 'saturated')
         if is_tail(lf):
@@ -379,7 +379,7 @@ def test_a_gas_wells_depletion_follows_p_over_z(lives):
     gas = [lf for lf in lives if not lf.oil and not has_support(lf)]
     assert len(gas) >= 5
     for lf in gas:
-        w0, prm, bo = lf.w0, lf.parameters(), black_oil(lf.w0)
+        w0, prm, bo = lf.w0, lf.parameters(), _black_oil(lf.w0)
 
         def p_over_z(p):
             return p / float(bo.z_factor(p, w0['T_r']))
@@ -442,14 +442,14 @@ def test_the_coefficients_take_the_pvt_model(lives):
     fluid = dict(p_sat=0.9 * w0['p_sat'], R_i=1.1 * w0['R_i'], rho_o=w0['rho_o'] + 5, rho_g=1.04 * w0['rho_g'])
     pvt = BlackOil(rho_o=fluid['rho_o'] + 10, rho_g=fluid['rho_g'], gas_law='dak', p_sep=w0['p_sep'], T_sep=310.0)
     table = Life(SEED, lf.k, fluid=fluid, pvt=pvt)
-    assert table.pvt is pvt and lf.pvt == black_oil(w0)
+    assert table.pvt is pvt and lf.pvt == _black_oil(w0)
     assert all(table.w0[key] == value for key, value in fluid.items())
     assert table.T_life == lf.T_life and table.stations == lf.stations  # No draw moves
     st = table.state(0.4 * table.T_life)
-    assert st['gor'] == producing_gor(table.w0, st['p_r'])
-    coef = inflow_at(table.w0, pvt, st['p_r'], st['gor'], st['wlr'])
+    assert st['gor'] == _producing_gor(table.w0, st['p_r'])
+    coef = _inflow_at(table.w0, pvt, st['p_r'], st['gor'], st['wlr'])
     key = USED[table.w0['inflow']][0]
-    assert st[key] == coef[key] != inflow_at(table.w0, black_oil(table.w0), st['p_r'], st['gor'], st['wlr'])[key]
+    assert st[key] == coef[key] != _inflow_at(table.w0, _black_oil(table.w0), st['p_r'], st['gor'], st['wlr'])[key]
 
 
 def test_lift_design_is_the_late_draws(lives):
@@ -471,9 +471,9 @@ def test_lift_design_is_the_late_draws(lives):
 
 def test_lift_on():
     """SMP-90: lift is installed from its start, a date at the start that rounding has put below it included."""
-    assert not lift_on(5.0, None) and not lift_on(0.0, None)
-    assert lift_on(0.0, 0.0) and lift_on(3.0, 3.0) and lift_on(3.1, 3.0) and not lift_on(2.9, 3.0)
-    assert lift_on(0.3 - 1e-16, 0.1 + 0.2)
+    assert not _lift_on(5.0, None) and not _lift_on(0.0, None)
+    assert _lift_on(0.0, 0.0) and _lift_on(3.0, 3.0) and _lift_on(3.1, 3.0) and not _lift_on(2.9, 3.0)
+    assert _lift_on(0.3 - 1e-16, 0.1 + 0.2)
 
 
 # --- sol-2 -----------------------------------------------------------------------------------------------------------
@@ -483,7 +483,7 @@ def test_a_sol2_well_is_its_life_at_a_date(lives, sol2_wells):
     for lf, w in zip(lives, sol2_wells):
         check_sol2_well(lf, w, drawn[lf.k][0]['life_stage'])
     core = [w for w in sol2_wells if w['coverage_tail'] == 'core']
-    assert {w['life_stage'] for w in core} == set(STAGES)
+    assert {w['life_stage'] for w in core} == set(_STAGES)
     assert {w['lift_start_rule'] for w in sol2_wells} == {'from_start', 'static_check', 'drawn_time', None}
 
 
@@ -579,6 +579,6 @@ def test_bounds_on_many_lives():
         check_sol2_well(lf, w, drawn[lf.k][0]['life_stage'])
         if not is_tail(lf):
             stages.append(w['life_stage'])
-    for stage, p in zip(STAGES, (0.25, 0.40, 0.35)):
+    for stage, p in zip(_STAGES, (0.25, 0.40, 0.35)):
         n, hits = len(stages), stages.count(stage)
         assert abs(hits - n * p) <= 4 * math.sqrt(n * p * (1 - p)) + 0.5, stage

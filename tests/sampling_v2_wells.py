@@ -17,10 +17,10 @@ import functools
 
 import numpy as np
 
-from manywells.sampling.v2.draws import black_oil, draw_well
-from manywells.sampling.v2.inflow import inflow_at
+from manywells.sampling.v2.draws import _black_oil, draw_well
+from manywells.sampling.v2.inflow import _inflow_at
 from manywells.sampling.v2.life import Life, sol2_well
-from manywells.sampling.v2.reservoir import OILS
+from manywells.sampling.v2.reservoir import _OILS
 from manywells.sampling.wells import rng_for
 
 SEED = 11
@@ -49,7 +49,7 @@ def drawn_sol2_wells(n=N_LIVES) -> tuple:
 
 
 def is_oil(w) -> bool:
-    return w['fluid_type'] in OILS
+    return w['fluid_type'] in _OILS
 
 
 class Counting:
@@ -88,7 +88,7 @@ def counting(monkeypatch, module) -> list:
 def nominal_inputs(w) -> dict:
     """An attempt's inputs (mapping.WellBuilder.case) at a drawn well's nominal state: its reservoir state and
     nominal downstream pressure, with the choke fully open and no lift gas."""
-    coef = inflow_at(w, black_oil(w), w['p_r'], w['R_go'], w['wlr'])
+    coef = _inflow_at(w, _black_oil(w), w['p_r'], w['R_go'], w['wlr'])
     return dict(
         coef,
         p_r=w['p_r'],

@@ -18,11 +18,11 @@ from manywells.friction import RoughnessFriction
 from manywells.geometry import WellGeometry
 from manywells.inflow import Forchheimer, ProductivityIndex, Vogel
 from manywells.pvt.fluid import FluidModel
-from manywells.sampling.v2.draws import black_oil
+from manywells.sampling.v2.draws import _black_oil
 from manywells.simulator import BoundaryConditions, WellProperties
 from manywells.thermal import ThermalModel
 
-N_CELLS = 100  # spec: SMP-111
+_N_CELLS = 100  # spec: SMP-111
 
 
 class WellBuilder:  # spec: SMP-111
@@ -39,8 +39,8 @@ class WellBuilder:  # spec: SMP-111
 
     def __init__(self, w, stations, design=None, pvt=None):
         self.w, self.design = w, design
-        self.geometry = WellGeometry.from_survey(stations[0], stations[1], N_CELLS, D=w['D'])
-        self.pvt = black_oil(w) if pvt is None else pvt
+        self.geometry = WellGeometry.from_survey(stations[0], stations[1], _N_CELLS, D=w['D'])
+        self.pvt = _black_oil(w) if pvt is None else pvt
         self.choke = SimpsonChokeModel(K_c=w['K_c'], chk_profile=w['chk_profile'])
 
     def fluid(self, gor, wlr) -> FluidModel:
@@ -55,7 +55,7 @@ class WellBuilder:  # spec: SMP-111
         The WellProperties and BoundaryConditions of an attempt.
 
         :param inp: The attempt's inputs: `p_r` and `p_s` (bar), `u`, `w_lg` (kg/s), `lift_on`, `gor` (Sm3/Sm3),
-            `wlr`, `h` (W/(m2 K)), `roughness` (m), and the inflow's coefficients (inflow.inflow_at): `forchheimer_a`
+            `wlr`, `h` (W/(m2 K)), `roughness` (m), and the inflow's coefficients (inflow._inflow_at): `forchheimer_a`
             and `forchheimer_b`, or `w_l_max`, or `k_l`, the others NaN or absent
         """
         w, lift = self.w, bool(inp['lift_on'])

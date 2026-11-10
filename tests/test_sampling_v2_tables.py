@@ -27,7 +27,7 @@ from manywells import units
 from manywells.pvt.fluid import FluidModel
 from manywells.pvt.table import PVTTable, PVTTableSet
 from manywells.sampling.v2 import table_build as tb
-from manywells.sampling.v2.tables import read_table
+from manywells.sampling.v2.tables import _read_table
 
 COLUMNS = ['p', 'T', 'R_so', 'B_o', 'Z', 'mu_o', 'mu_g', 'sigma']
 
@@ -55,9 +55,9 @@ def test_the_module_imports_no_manywells_and_neqsim_only_where_it_flashes():
 
 
 def test_the_constants_are_manywells():
-    assert (tb.R_UNIVERSAL, tb.M_AIR, tb.CF_BAR) == (units.R_UNIVERSAL, units.M_AIR, units.CF_BAR)
-    assert (tb.P_REF, tb.T_REF) == (units.P_REF, units.T_REF)
-    assert tb.P_SC == 1.01325
+    assert (tb._R_UNIVERSAL, tb._M_AIR, tb._CF_BAR) == (units.R_UNIVERSAL, units.M_AIR, units.CF_BAR)
+    assert (tb._P_REF, tb._T_REF) == (units.P_REF, units.T_REF)
+    assert tb._P_SC == 1.01325
 
 
 # ---------------------------------------------------------------------------
@@ -67,11 +67,11 @@ def test_the_constants_are_manywells():
 
 @pytest.mark.parametrize('cls', ['gas_condensate', 'volatile_oil'])
 def test_the_source_is_an_example_of_the_class_with_probability_p_example(cls):
-    keys = [name for name, ex in tb.EXAMPLES.items() if ex['cls'] == cls]
-    assert len(keys) == 3 and tuple(keys) == tb.CLASSES[cls]['templates']
-    assert tb.P_EXAMPLE == 0.2
-    assert tb.fluid_source(cls, 0.2, 0.5) == 'synthetic' and tb.fluid_source(cls, 0.999, 0.0) == 'synthetic'
-    assert [tb.fluid_source(cls, 0.1999, u) for u in (0.0, 0.3333, 0.3334, 0.6666, 0.6667, 0.9999)] == [
+    keys = [name for name, ex in tb._EXAMPLES.items() if ex['cls'] == cls]
+    assert len(keys) == 3 and tuple(keys) == tb._CLASSES[cls]['templates']
+    assert tb._P_EXAMPLE == 0.2
+    assert tb._fluid_source(cls, 0.2, 0.5) == 'synthetic' and tb._fluid_source(cls, 0.999, 0.0) == 'synthetic'
+    assert [tb._fluid_source(cls, 0.1999, u) for u in (0.0, 0.3333, 0.3334, 0.6666, 0.6667, 0.9999)] == [
         keys[0],
         keys[0],
         keys[1],
@@ -80,18 +80,18 @@ def test_the_source_is_an_example_of_the_class_with_probability_p_example(cls):
         keys[2],
     ]
     u = np.random.default_rng(112).random((20000, 2))
-    sources = pd.Series([tb.fluid_source(cls, a, b) for a, b in u]).value_counts(normalize=True)
+    sources = pd.Series([tb._fluid_source(cls, a, b) for a, b in u]).value_counts(normalize=True)
     assert sources['synthetic'] == pytest.approx(0.8, abs=0.01)
     assert all(sources[k] == pytest.approx(0.2 / 3, abs=0.006) for k in keys)
 
 
-@pytest.mark.parametrize('name', list(tb.EXAMPLES))
+@pytest.mark.parametrize('name', list(tb._EXAMPLES))
 def test_an_examples_composition(name):
     """The published mole percents add to 100, and the stream keeps them; a lumped heptanes-plus is split in five
     with its molar mass and, by Soreide's Cf, its gravity."""
-    ex = tb.EXAMPLES[name]
+    ex = tb._EXAMPLES[name]
     heavy = [ex['c7'][0]] if 'c7' in ex else [x for x, _, _ in ex['tbp']]
-    assert len(ex['light']) == len(tb.LIGHT) == 10
+    assert len(ex['light']) == len(tb._LIGHT) == 10
     assert sum(ex['light']) + sum(heavy) == pytest.approx(100.0, abs=0.011)
     fractions, z = tb._example_stream(name)
     assert z.sum() == pytest.approx(1.0, abs=1e-14) and len(z) == 10 + len(fractions)
@@ -121,7 +121,7 @@ def test_the_gamma_split_keeps_the_moles_and_the_molar_mass(M7, alpha):
     assert z.sum() == pytest.approx(1.0, abs=1e-14)
     assert np.dot(z, M) == pytest.approx(M7, rel=1e-13)
     # Each fraction's molar mass lies between its bounds, but for the rescaling to M7's mean, below 1%
-    edges = np.array([110.0 * (1 - 1 / (1 + 4 / alpha**0.7)), *tb.GAMMA_BOUNDS, np.inf])
+    edges = np.array([110.0 * (1 - 1 / (1 + 4 / alpha**0.7)), *tb._GAMMA_BOUNDS, np.inf])
     assert np.all(M > 0.99 * edges[:-1]) and np.all(M < 1.01 * edges[1:])
 
 
@@ -130,7 +130,7 @@ def test_the_gamma_split_at_alpha_one_is_the_exponential_distribution():
     M7 = 200.0
     z, M = tb._gamma_split(M7, 1.0)
     eta, beta = 88.0, M7 - 88.0
-    edges = np.array([eta, *tb.GAMMA_BOUNDS, np.inf])
+    edges = np.array([eta, *tb._GAMMA_BOUNDS, np.inf])
     cdf = 1 - np.exp(-(edges - eta) / beta)
     assert z == pytest.approx(np.diff(cdf), rel=5e-3)
     lo, hi = edges[:-1], np.minimum(edges[1:], eta + 60 * beta)
@@ -150,7 +150,7 @@ def test_soreides_gravities():
 def test_a_compositions_draws(cls):
     """The weights, then z7, M7 and alpha, from the generator in this order; within the class's ranges. SMP-51: the
     draw takes six numbers of the generator for every well, the weights one each."""
-    c = tb.CLASSES[cls]
+    c = tb._CLASSES[cls]
     for seed in range(20):
         d = tb._draw_composition(cls, np.random.default_rng(seed))
         u = np.random.default_rng(seed).random(6)
@@ -160,7 +160,7 @@ def test_a_compositions_draws(cls):
         assert [d['z7'], d['M7'], d['alpha']] == pytest.approx(lo + (hi - lo) * u[3:], rel=1e-14)
         assert c['z7'][0] <= d['z7'] < c['z7'][1] and c['M7'][0] <= d['M7'] < c['M7'][1] and 0.5 <= d['alpha'] < 2.5
         assert d['light'].shape == (10,) and d['light'].sum() == pytest.approx(1.0, abs=1e-14)
-        lights = [np.array(tb.EXAMPLES[t]['light']) / sum(tb.EXAMPLES[t]['light']) for t in c['templates']]
+        lights = [np.array(tb._EXAMPLES[t]['light']) / sum(tb._EXAMPLES[t]['light']) for t in c['templates']]
         assert np.all(d['light'] >= np.min(lights, axis=0) - 1e-15) and np.all(
             d['light'] <= np.max(lights, axis=0) + 1e-15
         )
@@ -191,14 +191,14 @@ def test_a_composition_with_its_levers():
 
 
 def test_the_wells_grid():
-    T, p_top = tb.well_grid(T_s=288.0, T_r=390.4, p_i=300.0)
+    T, p_top = tb._well_grid(T_s=288.0, T_r=390.4, p_i=300.0)
     assert T.tolist() == [float(t) for t in range(270, 401, 10)] and p_top == 330
-    T, p_top = tb.well_grid(T_s=279.67, T_r=315.99, p_i=286.73)
+    T, p_top = tb._well_grid(T_s=279.67, T_r=315.99, p_i=286.73)
     assert T.tolist() == [260.0, 270.0, 280.0, 290.0, 300.0, 310.0, 320.0] and p_top == 320
     # Below T_s - 15 K and above T_r + 1 K, and above 1.05 p_i by at least a step
     rng = np.random.default_rng(116)
     for T_s, dT, p_i in zip(rng.uniform(275, 300, 200), rng.uniform(5, 150, 200), rng.uniform(30, 950, 200)):
-        T, p_top = tb.well_grid(T_s, T_s + dT, p_i)
+        T, p_top = tb._well_grid(T_s, T_s + dT, p_i)
         assert T[0] <= T_s - 15 < T[0] + 10 and T[-1] - 10 < T_s + dT + 1 <= T[-1]
         assert np.allclose(np.diff(T), 10.0) and np.all(T % 10 == 0)
         assert 1.05 * p_i + 10 <= p_top < 1.05 * p_i + 20 and p_top % 10 == 0
@@ -277,7 +277,7 @@ def test_of_the_longest_runs_the_one_that_ends_highest_is_kept():
 
 def test_a_table_that_loses_more_than_five_percent_of_its_pressures_fails():
     """2 of 40 pressures is 5%, which the repair may drop; 3 of 40 is more, as is 3 of the 50 of the pilot's well."""
-    assert tb.MAX_DROPPED == 0.05
+    assert tb._MAX_DROPPED == 0.05
     out, dropped = tb._repair(frame(changed(RISING40, i10=500.0, i25=1.0), p=P40, T=(300.0,)), 123.456789)
     assert dropped == [55.0, 130.0] and out.p.nunique() == 38
     three = changed(RISING40, i10=500.0, i25=1.0, i30=2.0)
@@ -365,7 +365,7 @@ class PassFlash:
         self.fractions = list(fractions)
 
     def recombine(self, sep, gor):
-        return np.full(len(tb.LIGHT) + 5, float(gor))
+        return np.full(len(tb._LIGHT) + 5, float(gor))
 
     def separation(self, z):
         return dict(SEP, gor=float(z[0]))
@@ -383,13 +383,13 @@ def test_a_fluid_whose_field_flash_finds_no_liquid_keeps_its_streams_gor(monkeyp
     recombined at that pass's target, and its initial GOR is that stream's, so that it and the saturation pressure
     belong to one stream."""
     monkeypatch.setattr(tb, '_Flash', PassFlash)
-    monkeypatch.setattr(tb, '_example_stream', lambda name: ([], np.zeros(len(tb.LIGHT) + 5)))
+    monkeypatch.setattr(tb, '_example_stream', lambda name: ([], np.zeros(len(tb._LIGHT) + 5)))
 
     def synthetic(cls, rng, target):
         return PassFlash(), PassFlash().recombine(SEP, target['R_si']), dict(SEP), dict(z7=0.1)
 
     monkeypatch.setattr(tb, '_synthetic', synthetic)
-    fluid = tb.build_fluid(WELL | dict(source=source, R_si=PassFlash.DRAWN))
+    fluid = tb._build_fluid(WELL | dict(source=source, R_si=PassFlash.DRAWN))
     target = PassFlash.DRAWN / 1.1  # The second pass's, shifted by the first pass's offset
     assert fluid['composition']['passes'] == 1 and fluid['composition']['field'] is None
     assert fluid['R_i'] == fluid['hook']['R_i'] == fluid['composition']['recombined_gor'] == pytest.approx(target)
@@ -456,7 +456,7 @@ def fake_tabulate(pz_of_gor, p=None):
 
 @pytest.fixture
 def no_flash(monkeypatch):
-    monkeypatch.setattr(tb, 'build_fluid', fake_fluid)
+    monkeypatch.setattr(tb, '_build_fluid', fake_fluid)
     monkeypatch.setattr(tb, '_Flash', FakeFlash)
     monkeypatch.setattr(tb, '_tabulate', fake_tabulate(lambda gor: RISING))
 
@@ -494,34 +494,34 @@ def test_a_wells_steps_and_files(tmp_path, no_flash):
     """The fluid, then nothing until the well has an axis, then the table set and the manifest, then nothing."""
     (tmp_path / 'fluids').mkdir()
     task = (str(tmp_path), dict(WELL), None)
-    k, step, status, seconds = tb.build_task(task)
+    k, step, status, seconds = tb._build_task(task)
     assert (k, step, status) == (7, 'fluid', 'ok') and seconds >= 0
     fluid = json.loads((tmp_path / 'fluids' / 'k000007.json').read_text())
     assert {k: v for k, v in fluid.items() if k != 'seconds'} == {
         k: v for k, v in fake_fluid(WELL).items() if k != 'seconds'
     }
     assert list(fluid['seconds']) == ['match', 'saturation', 'fluid']
-    assert tb.build_task(task) == (7, 'skip', 'ok', 0.0)
+    assert tb._build_task(task) == (7, 'skip', 'ok', 0.0)
     assert not (tmp_path / 'k000007.json').exists() and not list(tmp_path.glob('*.tmp'))
-    assert read_table(tmp_path, 7, 'sol', 2026)['step'] == 'missing'
+    assert _read_table(tmp_path, 7, 'sol', 2026)['step'] == 'missing'
 
     with_axis = (str(tmp_path), dict(WELL), dict(gors=GORS, R_i=507.8))
-    assert tb.build_task(with_axis)[:3] == (7, 'tables', 'ok')
+    assert tb._build_task(with_axis)[:3] == (7, 'tables', 'ok')
     man = json.loads((tmp_path / 'k000007.json').read_text())
     assert 'stream' not in man and man['hook'] == fluid['hook'] and man['composition'] == fluid['composition']
     assert (man['kind'], man['seed'], man['csv'], man['gors']) == ('sol', 2026, 'k000007.csv', GORS)
     assert (man['nodes'], man['n_T'], man['p_top'], man['dropped_pressures']) == (24, 2, 60.0, {})
     assert list(man['seconds']) == ['match', 'saturation', 'fluid', 'tables']
-    assert tb.build_task(with_axis) == (7, 'skip', 'ok', 0.0)
+    assert tb._build_task(with_axis) == (7, 'skip', 'ok', 0.0)
 
-    table = read_table(tmp_path, 7, 'sol', 2026)
+    table = _read_table(tmp_path, 7, 'sol', 2026)
     assert table['status'] == 'ok' and table['tables_dir'] == str(tmp_path)
     assert isinstance(table['pvt'], PVTTableSet) and table['pvt'].gors == tuple(float(f'{g:.10g}') for g in GORS)
     assert {k: v for k, v in table.items() if k not in ('pvt', 'tables_dir')} == man
     for kind, seed in (('nsol', 2026), ('sol', 2027)):
-        other = read_table(tmp_path, 7, kind, seed)
+        other = _read_table(tmp_path, 7, kind, seed)
         assert (other['status'], other['step']) == ('failed', 'missing') and 'pvt' not in other
-    assert read_table(tmp_path, 8, 'sol', 2026) == dict(
+    assert _read_table(tmp_path, 8, 'sol', 2026) == dict(
         status='failed', step='missing', error='no table built for draw index 8'
     )
 
@@ -530,11 +530,11 @@ def test_dropped_pressures_are_recorded_by_gor(tmp_path, no_flash, monkeypatch):
     dip = changed(RISING40, i25=1.0)  # at 130 bar
     monkeypatch.setattr(tb, '_tabulate', fake_tabulate(lambda gor: dip if gor == GORS[1] else RISING40, p=P40))
     (tmp_path / 'fluids').mkdir()
-    tb.build_task((str(tmp_path), dict(WELL), None))
-    assert tb.build_task((str(tmp_path), dict(WELL), dict(gors=GORS)))[:3] == (7, 'tables', 'ok')
+    tb._build_task((str(tmp_path), dict(WELL), None))
+    assert tb._build_task((str(tmp_path), dict(WELL), dict(gors=GORS)))[:3] == (7, 'tables', 'ok')
     man = json.loads((tmp_path / 'k000007.json').read_text())
     assert man['dropped_pressures'] == {'562.654': [130.0]} and man['nodes'] == 80 + 78
-    low, high = read_table(tmp_path, 7, 'sol', 2026)['pvt'].tables
+    low, high = _read_table(tmp_path, 7, 'sol', 2026)['pvt'].tables
     assert low.p == tuple(P40) and high.p == tuple(x for x in P40 if x != 130.0)  # each GOR keeps its own grid
 
 
@@ -546,30 +546,30 @@ def test_a_failed_step_is_recorded(tmp_path, no_flash, monkeypatch):
         raise ValueError('no stock-tank oil: the stream is all gas at standard conditions')
 
     # The fluid: the record says so, and the next run writes the manifest without an axis
-    monkeypatch.setattr(tb, 'build_fluid', fails)
+    monkeypatch.setattr(tb, '_build_fluid', fails)
     w = WELL | dict(well=1)
-    assert tb.build_task((str(tmp_path), w, None))[:3] == (1, 'fluid', 'failed')
+    assert tb._build_task((str(tmp_path), w, None))[:3] == (1, 'fluid', 'failed')
     rec = json.loads((tmp_path / 'fluids' / 'k000001.json').read_text())
     assert (rec['status'], rec['step']) == ('failed', 'fluid') and rec['error'].strip().endswith('standard conditions')
-    assert tb.build_task((str(tmp_path), w, None))[:3] == (1, 'tables', 'failed')
-    table = read_table(tmp_path, 1, 'sol', 2026)
+    assert tb._build_task((str(tmp_path), w, None))[:3] == (1, 'tables', 'failed')
+    table = _read_table(tmp_path, 1, 'sol', 2026)
     assert (table['status'], table['step']) == ('failed', 'fluid') and 'pvt' not in table
 
     # The axis: its error goes into the manifest
-    monkeypatch.setattr(tb, 'build_fluid', fake_fluid)
+    monkeypatch.setattr(tb, '_build_fluid', fake_fluid)
     w = WELL | dict(well=2)
-    tb.build_task((str(tmp_path), w, None))
-    assert tb.build_task((str(tmp_path), w, dict(error='no life')))[:3] == (2, 'tables', 'failed')
-    table = read_table(tmp_path, 2, 'sol', 2026)
+    tb._build_task((str(tmp_path), w, None))
+    assert tb._build_task((str(tmp_path), w, dict(error='no life')))[:3] == (2, 'tables', 'failed')
+    table = _read_table(tmp_path, 2, 'sol', 2026)
     assert (table['status'], table['step'], table['error']) == ('failed', 'axis', 'no life')
 
     # The tables: one GOR over the repair's limit fails the set, and no CSV is written
     bad = [12.0, 25.0, 9.0, 54.0, 5.0, 87.0]
     monkeypatch.setattr(tb, '_tabulate', fake_tabulate(lambda gor: bad if gor == GORS[1] else RISING))
     w = WELL | dict(well=3)
-    tb.build_task((str(tmp_path), w, None))
-    assert tb.build_task((str(tmp_path), w, dict(gors=GORS)))[:3] == (3, 'tables', 'failed')
-    table = read_table(tmp_path, 3, 'sol', 2026)
+    tb._build_task((str(tmp_path), w, None))
+    assert tb._build_task((str(tmp_path), w, dict(gors=GORS)))[:3] == (3, 'tables', 'failed')
+    table = _read_table(tmp_path, 3, 'sol', 2026)
     assert (table['status'], table['step']) == ('failed', 'tables')
     assert table['error'].strip().endswith('ValueError: p/Z falls at 2 of 6 pressures at GOR 562.654')
     assert not (tmp_path / 'k000003.csv').exists() and 'csv' not in table and 'dropped_pressures' not in table
@@ -585,9 +585,9 @@ def test_a_table_that_pvt_tab_1_refuses_fails_when_it_is_read(tmp_path, no_flash
 
     monkeypatch.setattr(tb, '_tabulate', tabulate)
     (tmp_path / 'fluids').mkdir()
-    tb.build_task((str(tmp_path), dict(WELL), None))
-    assert tb.build_task((str(tmp_path), dict(WELL), dict(gors=GORS)))[:3] == (7, 'tables', 'ok')
-    table = read_table(tmp_path, 7, 'sol', 2026)
+    tb._build_task((str(tmp_path), dict(WELL), None))
+    assert tb._build_task((str(tmp_path), dict(WELL), dict(gors=GORS)))[:3] == (7, 'tables', 'ok')
+    table = _read_table(tmp_path, 7, 'sol', 2026)
     assert (table['status'], table['step']) == ('failed', 'check') and 'pvt' not in table
     assert table['error'] == 'PVT-TAB-1: B_o must be positive at every node'
 
@@ -611,7 +611,7 @@ def test_a_well_built_with_neqsim(tmp_path):
         pytest.skip(f'the tables are made with NeqSim {tb.NEQSIM_VERSION}')
     w = WELL | dict(well=83, T_axis=[280.0, 300.0, 320.0], p_top=320.0)
     (tmp_path / 'fluids').mkdir()
-    assert tb.build_task((str(tmp_path), w, None))[:3] == (83, 'fluid', 'ok')
+    assert tb._build_task((str(tmp_path), w, None))[:3] == (83, 'fluid', 'ok')
     fluid = json.loads((tmp_path / 'fluids' / 'k000083.json').read_text())
     assert (fluid['saturation_kind'], fluid['saturation_rule']) == ('bubble', 'matched')
     assert fluid['p_sat'] == pytest.approx(270.560, abs=0.01) and fluid['p_sat'] <= w['p_i']
@@ -622,8 +622,8 @@ def test_a_well_built_with_neqsim(tmp_path):
     assert 0.125 < fluid['c7_mol'] < 0.30  # McCain's limits for a volatile oil
 
     gors = [fluid['R_i'], 1.2 * fluid['R_i']]
-    assert tb.build_task((str(tmp_path), w, dict(gors=gors)))[:3] == (83, 'tables', 'ok')
-    table = read_table(tmp_path, 83, 'sol', 2026)
+    assert tb._build_task((str(tmp_path), w, dict(gors=gors)))[:3] == (83, 'tables', 'ok')
+    table = _read_table(tmp_path, 83, 'sol', 2026)
     assert table['status'] == 'ok' and table['n_T'] == 3
     low = table['pvt'].tables[0]
     assert low.T == (280.0, 300.0, 320.0) and low.p[0] == 1.0 and low.p[-1] == 320.0 and len(low.p) > 36

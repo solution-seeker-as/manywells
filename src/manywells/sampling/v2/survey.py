@@ -17,8 +17,8 @@ import numpy as np
 
 from manywells.sampling.v2._distributions import unused
 
-N_NUMBERS = 6  # A survey's numbers: five of the shape and the kickoff's, whatever the family  # spec: SMP-51
-FAMILIES = ('vertical', 'build_and_hold', 's_shaped', 'high_angle')  # spec: SMP-59
+_N_NUMBERS = 6  # A survey's numbers: five of the shape and the kickoff's, whatever the family  # spec: SMP-51
+_FAMILIES = ('vertical', 'build_and_hold', 's_shaped', 'high_angle')  # spec: SMP-59
 _KICKOFF = (0.05, 0.75)  # The kickoff's share of the TVD below the mudline
 _BUILD = (0.3, 3.6)  # Build rate (degrees per 30 m)
 _DROP, _S_BOTTOM = (0.2, 2.2), (0.0, 35.0)  # An S well's drop rate (degrees per 30 m) and bottom inclination (degrees)
@@ -59,7 +59,7 @@ def _raise_rate(rate, top, need, room):
     return rate
 
 
-def survey(rng, family, L, theta=None, d_mud=0.0):  # spec: SMP-60
+def _survey(rng, family, L, theta=None, d_mud=0.0):  # spec: SMP-60
     """
     One draw of a well's survey: (md, tvd, parameters), or None where the shape does not fit the well's depth, and
     the caller redraws it.
@@ -78,7 +78,7 @@ def survey(rng, family, L, theta=None, d_mud=0.0):  # spec: SMP-60
     """
     prm = {}
     if family == 'vertical':
-        unused(rng, N_NUMBERS)
+        unused(rng, _N_NUMBERS)
         return [0.0, L], [0.0, L], prm
     z = L - d_mud
     room = L - d_mud - _KICKOFF[0] * z  # The TVD below the shallowest kickoff

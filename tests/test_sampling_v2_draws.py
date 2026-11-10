@@ -28,9 +28,9 @@ from manywells.pvt import density_from_api, gas_density_from_sg
 from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.water import water_viscosity
 from manywells.sampling.v2 import draws
-from manywells.sampling.v2.draws import P_S_MAX, STAGES, TUBING, black_oil, draw_well, stream
-from manywells.sampling.v2.reservoir import nondarcy, slant_skin
-from manywells.sampling.v2.survey import FAMILIES, survey
+from manywells.sampling.v2.draws import _P_S_MAX, _STAGES, _TUBING, _black_oil, draw_well, _stream
+from manywells.sampling.v2.reservoir import _nondarcy, _slant_skin
+from manywells.sampling.v2.survey import _FAMILIES, _survey
 from manywells.sampling.wells import rng_for, sample_well
 
 from .sampling_v2_wells import N_MANY, SEED, counting, drawn_wells, is_oil
@@ -181,9 +181,9 @@ def check_well(w, md, tvd):
     dp_fl = w['dp_fl']
     assert between(dp_fl, 5 + 0.03 * d_w, 30 + 0.07 * d_w) if wt == 'subsea' else dp_fl == 0
     assert between(w['r_s'], *{'initial': (1, 1), 'mid_life': (0.5, 1), 'late': (0.1, 0.6)}[stage])
-    assert between(w['p_s'], 1.5, P_S_MAX[wt]) and P_S_MAX[wt] == (250 if wt == 'subsea' else 120)
+    assert between(w['p_s'], 1.5, _P_S_MAX[wt]) and _P_S_MAX[wt] == (250 if wt == 'subsea' else 120)
     if not tail:
-        assert w['p_s'] == min(max(w['r_s'] * w['p_sep'] + dp_fl, 1.5), P_S_MAX[wt])
+        assert w['p_s'] == min(max(w['r_s'] * w['p_sep'] + dp_fl, 1.5), _P_S_MAX[wt])
 
     # Fluid (SMP-67, SMP-68): API from 16 to 58, gas gravity at least 0.571, p_sat at most p_i, a black oil's
     # R_si at most 356 Sm3/Sm3
@@ -196,7 +196,7 @@ def check_well(w, md, tvd):
         assert 0 < w['p_sat'] <= p_i + 1e-9
         assert w['saturation'] == ('undersaturated' if w['p_r'] > w['p_sat'] else 'saturated')
     if fc == 'black_oil':
-        assert w['R_i'] == pytest.approx(black_oil(w).rs(w['p_sat'], T_r), rel=1e-9)
+        assert w['R_i'] == pytest.approx(_black_oil(w).rs(w['p_sat'], T_r), rel=1e-9)
 
     # Reservoir state (SMP-69, SMP-70): an oil's WLR at most 0.98
     r_p_range = (0.15, 1.0) if tail else R_P.get((stage, drive), (0.3, 0.6) if oil else (0.2, 0.55))
@@ -226,7 +226,7 @@ def check_well(w, md, tvd):
         assert 'drain_length' not in w and 's_theta' not in w and w['f_geo'] == 1
     else:  # Cinco-Ley's slant skin in the radial index, with its floor (SMP-72)
         assert 'drain_length' not in w and 'eta_drain' not in w and 'b_friction_share' not in w
-        s_theta = slant_skin(w['theta_end'], w['h_net'], w['I_ani'])
+        s_theta = _slant_skin(w['theta_end'], w['h_net'], w['I_ani'])
         assert w['s_theta'] == s_theta and between(w['I_ani'], 1, 3) and s_theta < 1e-6
         A_s = w['ln_re_rw'] - 0.75 + w['skin']
         assert w['f_geo'] == pytest.approx(A_s / max(A_s + s_theta, 2.0), rel=1e-12) and w['f_geo'] > 1 - 1e-6
@@ -251,7 +251,7 @@ def check_well(w, md, tvd):
         assert w['q_l_ref'] == pytest.approx(w['q_g_ref'] * (w['ogr'] + w['wgr']) / 1e6, rel=1e-12)
 
     # Tubing and roughness (SMP-75, SMP-76)
-    assert w['D'] == TUBING[w['tubing']] and (not oil or w['tubing'] != '9-5/8')
+    assert w['D'] == _TUBING[w['tubing']] and (not oil or w['tubing'] != '9-5/8')
     assert between(w['c_e'], 100, 150) and w['q_design'] > 0 and w['q_cap'] > 0
     assert between(w['roughness'], *((1.5e-6, 1.5e-4) if tail else ROUGHNESS[stage]))
 
@@ -581,7 +581,7 @@ def test_every_block_takes_the_same_numbers_for_every_well(wells, monkeypatch):
     redrawn or not, saturated or not, lifted or natural. Only gas wells have the `nondarcy` block."""
     made = counting(monkeypatch, draws)
     cases = [(w0['well'], None, False) for w0, _ in wells]
-    cases += [(k, stage, force) for k in range(30) for stage in STAGES for force in (False, True)]
+    cases += [(k, stage, force) for k in range(30) for stage in _STAGES for force in (False, True)]
     calls, seen = {}, set()
     for k, stage, force in cases:
         del made[:]
@@ -663,7 +663,7 @@ def test_a_stage_override_changes_only_what_depends_on_the_stage(wells):
     for w0, st0 in wells[:60]:
         k, tail = w0['well'], w0['coverage_tail'] == 'tail'
         assert draw_well(SEED, k, w0['life_stage']) == (w0, st0)  # Its drawn stage, set again
-        for stage in STAGES:
+        for stage in _STAGES:
             w, st = draw_well(SEED, k, stage)
             assert w['life_stage'] == stage and st == st0
             check_well(w, *st)
@@ -708,9 +708,9 @@ def test_the_lifes_start_sets_the_inflow_model_and_the_non_darcy_coefficient(wel
             assert (w['inflow'], late['inflow']) == ('vogel', 'productivity_index')
             assert draw_well(SEED, w0['well'], start=dict(start, wlr=0.7))[0]['inflow'] == 'productivity_index'
         else:
-            bo = black_oil(w)
+            bo = _black_oil(w)
             mu = bo.gas_viscosity(start['p_r'], w['T_r'], bo.gas_density(start['p_r'], w['T_r']))
-            assert w['D_eq434'] == nondarcy(w['sg_gas'], w['perm'], w['h_net'], mu, w['h_net'])
+            assert w['D_eq434'] == _nondarcy(w['sg_gas'], w['perm'], w['h_net'], mu, w['h_net'])
             assert w['D_nondarcy'] > late['D_nondarcy']  # D goes as 1/mu_g, less at the lower pressure
     own = dict(p_r=oil['p_r'], wlr=oil['wlr'])  # A core well's initial draw: its own state is the start
     assert draw_well(SEED, oil['well'], start=own)[0] == oil
@@ -721,7 +721,7 @@ def test_a_surveys_redraws_are_one_flag_with_their_count(monkeypatch, fails):
     """SMP-60 (D-132): at most 20 surveys, the first and 19 redraws, then a vertical well; one flag counts the
     redraws, and the block takes the numbers of all 20 surveys whatever their count (SMP-51)."""
     w0 = next(w for w, _ in drawn_wells() if w['geometry_family'] == 'build_and_hold' and not w['flags'])
-    real, calls = draws.survey, []
+    real, calls = draws._survey, []
 
     def survey_(rng, *args):
         calls.append(1)
@@ -729,7 +729,7 @@ def test_a_surveys_redraws_are_one_flag_with_their_count(monkeypatch, fails):
         return None if len(calls) <= fails else res
 
     made = counting(monkeypatch, draws)
-    monkeypatch.setattr(draws, 'survey', survey_)
+    monkeypatch.setattr(draws, '_survey', survey_)
     w, (md, tvd) = draw_well(SEED, w0['well'])
     redraws = min(fails, 19)
     flags = ([f'geometry_redrawn:{redraws}'] if redraws else []) + (['geometry_to_vertical'] if fails == 20 else [])
@@ -776,11 +776,11 @@ def test_a_drains_liner_takes_the_models_water_viscosity(wells, monkeypatch):
 # --- The survey and the stream ---------------------------------------------------------------------------------------
 def test_survey_vertical_and_refusals():
     rng = np.random.default_rng(1)
-    assert survey(rng, 'vertical', 1234.0) == ([0.0, 1234.0], [0.0, 1234.0], {})
-    assert survey(rng, 'build_and_hold', 300.0, (60.0, 75.0)) is None  # No room for the build above 300 m
+    assert _survey(rng, 'vertical', 1234.0) == ([0.0, 1234.0], [0.0, 1234.0], {})
+    assert _survey(rng, 'build_and_hold', 300.0, (60.0, 75.0)) is None  # No room for the build above 300 m
     with pytest.raises(ValueError, match='family'):
-        survey(rng, 'l_shaped', 2000.0)
-    assert set(FAMILIES) == LABELS['geometry_family']
+        _survey(rng, 'l_shaped', 2000.0)
+    assert set(_FAMILIES) == LABELS['geometry_family']
 
 
 @pytest.mark.parametrize('family', ['build_and_hold', 's_shaped', 'high_angle'])
@@ -791,7 +791,7 @@ def test_survey_shapes(family):
     fitted = 0
     for _ in range(150):
         L, d_mud = rng.uniform(1200, 6000), float(rng.choice([0.0, 400.0]))
-        res = survey(rng, family, L, theta, d_mud)
+        res = _survey(rng, family, L, theta, d_mud)
         if res is None:
             continue
         fitted += 1
@@ -826,9 +826,9 @@ def test_no_slip_stream():
     bo = BlackOil(rho_o=850.0, rho_g=1.0, gas_law='dak', p_sep=20.0, T_sep=310.0)
     gor, wlr, rho_w, T = 100.0, 0.25, 1050.0, 350.0
     oil = bo.at_gor(gor)
-    vol, mass = stream(bo, gor, wlr, rho_w, 400.0, T)  # All the gas in solution
+    vol, mass = _stream(bo, gor, wlr, rho_w, 400.0, T)  # All the gas in solution
     assert mass == 0.75 * (850.0 + 100.0 * 1.0) + 0.25 * 1050.0
     assert oil.rs(400.0, T) == pytest.approx(gor) and vol == pytest.approx(0.75 * oil.bo(400.0, T) + 0.25)
-    vol_low, mass_low = stream(bo, gor, wlr, rho_w, 10.0, T)
+    vol_low, mass_low = _stream(bo, gor, wlr, rho_w, 10.0, T)
     free = 0.75 * (gor - oil.rs(10.0, T)) * 1.0 / oil.gas_density(10.0, T)
     assert mass_low == mass and vol_low == pytest.approx(0.75 * oil.bo(10.0, T) + 0.25 + free) and vol_low > 2 * vol

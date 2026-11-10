@@ -40,25 +40,25 @@ from manywells.geometry import WellGeometry
 from manywells.inflow import Forchheimer, ProductivityIndex, Vogel
 from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.fluid import FluidModel
-from manywells.pvt.table import OPTIONAL_COLUMNS, TEXT_KEYS, PVTTableSet, _from_frame
+from manywells.pvt.table import OPTIONAL_COLUMNS, TEXT_KEYS, PVTTable, PVTTableSet
 from manywells.simulator import BoundaryConditions, SSDFSimulator, WellProperties
 from manywells.slip import HASAN_REGIMES
 from manywells.thermal import ThermalModel
 
-DATASETS = {'sol': 'manywells-sol-2', 'nsol': 'manywells-nsol-2'}
-TABLES = ('wells', 'samples', 'geometry', 'pvt')  # A dataset's tables  # spec: SMP-110
-LOGS = ('drawn_wells', 'redraws')  # Its logs, in the companion folder  # spec: SMP-108
+_DATASETS = {'sol': 'manywells-sol-2', 'nsol': 'manywells-nsol-2'}
+_TABLES = ('wells', 'samples', 'geometry', 'pvt')  # A dataset's tables  # spec: SMP-110
+_LOGS = ('drawn_wells', 'redraws')  # Its logs, in the companion folder  # spec: SMP-108
 # The operating point's columns of a sample: SMP-30's features but the inputs
 FEATURES = tuple(key for key in schema.FEATURES if key not in ('CHK', 'PDC', 'WGL'))
 # A sample's inputs that vary, by the attempt's key: both datasets, and nsol-2's besides
-SAMPLE_INPUTS = {'u': 'CHK', 'p_s': 'PDC', 'w_lg': 'WGL', 'p_r': 'PRES', 'gor': 'GOR', 'wlr': 'WLR'}
-NSOL_INPUTS = {'lift_on': 'LIFT', 'h': 'HTC', 'roughness': 'ROUGH', 'k_l': 'KL', 'w_l_max': 'WLMAX'}
-NSOL_INPUTS |= {'forchheimer_a': 'FORCHA', 'forchheimer_b': 'FORCHB'}
-NSOL_TIME = {'life_stage': 'STAGE', 'test': 'TEST', 'sweep': 'SWEEP'}  # With WEEKS, the date in weeks
-WEEKS_PER_YEAR = 52.1775
+_SAMPLE_INPUTS = {'u': 'CHK', 'p_s': 'PDC', 'w_lg': 'WGL', 'p_r': 'PRES', 'gor': 'GOR', 'wlr': 'WLR'}
+_NSOL_INPUTS = {'lift_on': 'LIFT', 'h': 'HTC', 'roughness': 'ROUGH', 'k_l': 'KL', 'w_l_max': 'WLMAX'}
+_NSOL_INPUTS |= {'forchheimer_a': 'FORCHA', 'forchheimer_b': 'FORCHB'}
+_NSOL_TIME = {'life_stage': 'STAGE', 'test': 'TEST', 'sweep': 'SWEEP'}  # With WEEKS, the date in weeks
+_WEEKS_PER_YEAR = 52.1775
 _STAGES = ('initial', 'mid_life', 'late')
-REASONS = ('p_r_le_p_s', 'no_root', 'exception', 'invalid_row', 'incomplete_scan', 'unstable_only')  # spec: SMP-104
-WELL_OUTCOMES = (  # spec: SMP-106; a crash of the generator is logged as a well's outcome too
+_REASONS = ('p_r_le_p_s', 'no_root', 'exception', 'invalid_row', 'incomplete_scan', 'unstable_only')  # spec: SMP-104
+_WELL_OUTCOMES = (  # spec: SMP-106; a crash of the generator is logged as a well's outcome too
     'accepted',
     'not_producible',
     'best_rate_solver_failure',
@@ -72,7 +72,7 @@ WELL_OUTCOMES = (  # spec: SMP-106; a crash of the generator is logged as a well
     'crash',
 )
 # Each label's values, in the order of their codes (datasets-draft.md, Section 4, with SMP-52's values)
-CODES = {
+_CODES = {
     'coverage_tail': ('core', 'tail'),
     'well_type': ('platform', 'subsea', 'onshore'),
     'fluid_type': ('black_oil', 'volatile_oil', 'gas_condensate', 'gas'),
@@ -109,11 +109,11 @@ CODES = {
     'FRBH': ('bubbly', 'dispersed-bubbly', 'slug', 'churn', 'annular'),
     'FRWH': ('bubbly', 'dispersed-bubbly', 'slug', 'churn', 'annular'),
     'not_producible_reason': ('water_cut', 'below_floor', 'no_operating_point', 'solver_failure'),
-    'reason': REASONS,
+    'reason': _REASONS,
 }
-OUTCOMES = {  # The outcome's codes: an attempt's in `redraws`, a well's in `drawn_wells`
+_OUTCOMES = {  # The outcome's codes: an attempt's in `redraws`, a well's in `drawn_wells`
     'redraws': ('operating_point', 'no_operating_point', 'solver_failure'),
-    'drawn_wells': WELL_OUTCOMES,
+    'drawn_wells': _WELL_OUTCOMES,
 }
 _INTEGERS = {  # Integer columns: nullable where a row may hold none
     'ID': 'int32',
@@ -126,15 +126,15 @@ _INTEGERS = {  # Integer columns: nullable where a row may hold none
     'n_roots': 'int8',
     'n_stable': 'int8',
 }
-COUNTS = ('n_attempts', 'n_redraws', 'n_redraws_no_op', 'n_redraws_solver')  # A well's counts of its slots' attempts
-COUNTS += tuple(f'n_redraws_{reason}' for reason in REASONS) + ('n_several_stable',)
-_INTEGERS |= dict.fromkeys(COUNTS, 'int32')
+_COUNTS = ('n_attempts', 'n_redraws', 'n_redraws_no_op', 'n_redraws_solver')  # A well's counts of its slots' attempts
+_COUNTS += tuple(f'n_redraws_{reason}' for reason in _REASONS) + ('n_several_stable',)
+_INTEGERS |= dict.fromkeys(_COUNTS, 'int32')
 _BOOLEANS = ('CHOKED', 'LIFT')
-assert set(CODES['FRBH']) == set(HASAN_REGIMES)  # SLIP-16's five regimes
+assert set(_CODES['FRBH']) == set(HASAN_REGIMES)  # SLIP-16's five regimes
 
 
 # --- Types ------------------------------------------------------------------------------------------------------------
-def typed(df: pd.DataFrame, table: str) -> pd.DataFrame:
+def _typed(df: pd.DataFrame, table: str) -> pd.DataFrame:
     """
     A table's columns in their types (datasets-draft.md, Section 2): labels as categories with the codes of CODES (and
     OUTCOMES for an `outcome`), IDs, slots and counts as integers, `ID` nullable in the logs, flags as booleans; the
@@ -144,7 +144,7 @@ def typed(df: pd.DataFrame, table: str) -> pd.DataFrame:
     """
     df = df.copy()
     for col in df.columns:
-        codes = OUTCOMES[table] if col == 'outcome' else CODES.get(col)
+        codes = _OUTCOMES[table] if col == 'outcome' else _CODES.get(col)
         if codes is not None:
             unknown = set(df[col].dropna()) - set(codes)
             if unknown:
@@ -152,7 +152,7 @@ def typed(df: pd.DataFrame, table: str) -> pd.DataFrame:
             df[col] = pd.Categorical(df[col], categories=list(codes))
         elif col in _INTEGERS:
             dtype = _INTEGERS[col]
-            if col == 'ID' and table in LOGS:
+            if col == 'ID' and table in _LOGS:
                 dtype = 'Int32'
             if col in ('n_roots', 'n_stable') and len(df) and df[col].max() > 127:
                 raise ValueError(f'{table}.{col} above 127')
@@ -182,17 +182,17 @@ def code_record() -> dict:
     return out
 
 
-def lock_hash() -> str | None:
+def _lock_hash() -> str | None:
     """The SHA-256 of the lock file, uv.lock, that fixes the environment; None where there is none."""
     path = _root() / 'uv.lock'
-    return sha256(path) if path.exists() else None
+    return _sha256(path) if path.exists() else None
 
 
-def platform_record() -> dict:
+def _platform_record() -> dict:
     return dict(python=sys.version, platform=platform.platform(), machine=platform.machine())
 
 
-def sha256(path) -> str:
+def _sha256(path) -> str:
     h = hashlib.sha256()
     with open(path, 'rb') as f:
         for block in iter(lambda: f.read(1 << 20), b''):
@@ -201,13 +201,13 @@ def sha256(path) -> str:
 
 
 # --- Files ------------------------------------------------------------------------------------------------------------
-def write_tables(folder, tables: dict, metadata: dict) -> dict:  # spec: SMP-110
+def _write_tables(folder, tables: dict, metadata: dict) -> dict:  # spec: SMP-110
     """
     A folder of tables: one parquet file per table, then metadata.json, which holds metadata and each file's row count
     and SHA-256 under `files`. A folder without metadata.json is incomplete.
 
     :param folder: The folder, made if missing; an older metadata.json in it is removed first
-    :param tables: {name: DataFrame}, each typed (typed)
+    :param tables: {name: DataFrame}, each typed (_typed)
     :param metadata: The records to write
     :return: The metadata written
     """
@@ -219,7 +219,7 @@ def write_tables(folder, tables: dict, metadata: dict) -> dict:  # spec: SMP-110
     for name, df in tables.items():
         path = folder / f'{name}.parquet'
         df.to_parquet(path, index=False)
-        files[path.name] = dict(rows=len(df), sha256=sha256(path))
+        files[path.name] = dict(rows=len(df), sha256=_sha256(path))
     text = json.dumps(dict(metadata, files=files), indent=1, default=_json_default)
     tmp = folder / 'metadata.json.tmp'
     tmp.write_text(text)
@@ -261,11 +261,12 @@ def pvt_from_rows(rows: pd.DataFrame):  # spec: SMP-110
     gors = rows['gor'] if 'gor' in rows else pd.Series(math.nan, index=rows.index)
     if gors.nunique() > 1:
         tables = tuple(
-            _from_frame(d[columns], 'pvt rows', gor=float(g), **common) for g, d in rows.groupby('gor', sort=True)
+            PVTTable.from_frame(d[columns], 'pvt rows', gor=float(g), **common)
+            for g, d in rows.groupby('gor', sort=True)
         )
         return PVTTableSet(tables=tables)
     gor = float(gors.iloc[0]) if gors.notna().all() else None
-    return _from_frame(rows[columns], 'pvt rows', gor=gor, **common)
+    return PVTTable.from_frame(rows[columns], 'pvt rows', gor=gor, **common)
 
 
 def _value(row, key):
@@ -294,7 +295,7 @@ def sample_case(well, sample, survey, pvt=None) -> tuple:  # spec: SMP-110, SMP-
     else:
         hc = BlackOil(rho_o=well['rho_o'], rho_g=well['rho_g'], gas_law='dak', p_sep=well['p_sep'], T_sep=well['T_sep'])
     inputs = sample if nsol else well
-    keys = NSOL_INPUTS if nsol else {key: key for key in NSOL_INPUTS}
+    keys = _NSOL_INPUTS if nsol else {key: key for key in _NSOL_INPUTS}
     coef = {key: inputs[keys[key]] for key in ('k_l', 'w_l_max', 'forchheimer_a', 'forchheimer_b')}
     if well['inflow'] == 'forchheimer':
         inflow = Forchheimer(a=coef['forchheimer_a'], b=coef['forchheimer_b'])
@@ -336,7 +337,7 @@ def sample_case(well, sample, survey, pvt=None) -> tuple:  # spec: SMP-110, SMP-
     return wp, bc
 
 
-def sample_features(root, bc, fluid) -> dict:  # spec: SMP-30
+def _sample_features(root, bc, fluid) -> dict:  # spec: SMP-30
     """The operating point's features of a sample (FEATURES): the root's, and the stream's mass fractions."""
     x_w = 1 - fluid.f_o_in_liquid
     row = root_features(root, bc, fluid.rho_o, fluid.rho_w, fluid.rho_g, x_w)
@@ -347,7 +348,7 @@ def sample_features(root, bc, fluid) -> dict:  # spec: SMP-30
 
 def resolve_sample(well, sample, survey, pvt=None, backend='rust') -> dict | None:  # spec: SMP-110
     """
-    A sample solved again from its rows (sample_case): its features (sample_features) at the operating point, or None
+    A sample solved again from its rows (sample_case): its features (_sample_features) at the operating point, or None
     where the solve finds none. With the dataset's code version and backend on the generator's platform, they are the
     sample's to the bit (SMP-110).
     """
@@ -355,7 +356,7 @@ def resolve_sample(well, sample, survey, pvt=None, backend='rust') -> dict | Non
     rs = SSDFSimulator(wp, backend=backend).root_set(bc)
     if rs.operating_point is None:
         return None
-    return sample_features(rs.operating_point, bc, wp.fluid)
+    return _sample_features(rs.operating_point, bc, wp.fluid)
 
 
 def sample_rows(tables: dict, ID: int, slot: int) -> tuple:

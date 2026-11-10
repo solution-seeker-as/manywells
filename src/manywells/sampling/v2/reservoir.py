@@ -26,8 +26,8 @@ import numpy as np
 from manywells.pvt.black_oil import BlackOil
 from manywells.units import P_REF, T_REF
 
-OILS = ('black_oil', 'volatile_oil')  # The fluid types with an oil's inflow and material balance
-R_W = 0.108  # Wellbore radius (m), an 8.5 in hole  # spec: SMP-71
+_OILS = ('black_oil', 'volatile_oil')  # The fluid types with an oil's inflow and material balance
+_R_W = 0.108  # Wellbore radius (m), an 8.5 in hole  # spec: SMP-71
 _MD = 9.869233e-16  # m2 per mD
 _DAY = 86400.0  # s
 _MSCF = 28.3168  # Sm3 per Mscf
@@ -58,8 +58,8 @@ _TABLE_10_2 = np.array(
 _S_W_FIG, _S_W_TABLE = 0.20, 0.37
 _FIG_X, _FIG_Y = _FIG_9_16[:, 0], np.log10(_FIG_9_16[:, 1])
 _X = np.linspace(1.0, 0.05, 2 * 380 + 1)  # p/p_sat from the saturation pressure down, with RK4's midpoints
-GOR_NODES = _X[::2][::-1].copy()  # p_r/p_sat at the nodes of an oil's GOR curve, ascending: linear between them
-GOR_NODES.setflags(write=False)
+_GOR_NODES = _X[::2][::-1].copy()  # p_r/p_sat at the nodes of an oil's GOR curve, ascending: linear between them
+_GOR_NODES.setflags(write=False)
 
 
 def _kgko_fig_9_16(sg):
@@ -131,10 +131,10 @@ def _gor_curve(rho_o, rho_g, p_sep, T_sep, T_r, p_sat, w_kgko):  # spec: SMP-70
         out[k + 1] = s[0]
     e = slice(0, None, 2)
     R = Rs[e] + _kgko(1 - out, w_kgko) * mu_r[e] * Bo[e] / Bg[e]  # Eq. 9.33
-    return GOR_NODES, R[::-1] / Rs[0]
+    return _GOR_NODES, R[::-1] / Rs[0]
 
 
-def producing_gor(w, p_r) -> float:  # spec: SMP-70
+def _producing_gor(w, p_r) -> float:  # spec: SMP-70
     """
     The producing gas-oil ratio (Sm3/Sm3) of a drawn well at reservoir pressure p_r (bar).
 
@@ -143,7 +143,7 @@ def producing_gor(w, p_r) -> float:  # spec: SMP-70
 
     :param w: The well's draws (draws.draw_well): its fluid, separator, T_r, p_sat, R_i, and w_kgko or c_k
     """
-    if w['fluid_type'] in OILS:
+    if w['fluid_type'] in _OILS:
         if p_r >= w['p_sat']:
             return w['R_i'] * 1.0
         keys = ('rho_o', 'rho_g', 'p_sep', 'T_sep', 'T_r', 'p_sat', 'w_kgko')
@@ -155,7 +155,7 @@ def producing_gor(w, p_r) -> float:  # spec: SMP-70
 
 
 # --- Oil wells' productivity -----------------------------------------------------------------------------------------
-def j_radial(k_md, h, mu, B, ln_term, s) -> float:  # spec: SMP-72
+def _j_radial(k_md, h, mu, B, ln_term, s) -> float:  # spec: SMP-72
     """
     Pseudo-steady radial productivity index, Sm3/(d bar) of stock-tank liquid.
 
@@ -169,7 +169,7 @@ def j_radial(k_md, h, mu, B, ln_term, s) -> float:  # spec: SMP-72
     return 2 * math.pi * k_md * _MD * h / (mu * B * (ln_term + s)) * _DAY * 1e5
 
 
-def slant_skin(theta, h, I_ani) -> float:  # spec: SMP-72
+def _slant_skin(theta, h, I_ani) -> float:  # spec: SMP-72
     """
     Cinco-Ley, Ramey and Miller's (1975) skin of a fully completed slanted well, by the fit to their tables
     (Economides et al. 1994, Section 5-4, Tables 5-1 and 5-2): -(t/41)^2.06 - (t/56)^1.865 log10(h_D/100), with
@@ -180,10 +180,10 @@ def slant_skin(theta, h, I_ani) -> float:  # spec: SMP-72
     :param I_ani: Anisotropy, sqrt(k_h/k_v)
     """
     t = math.degrees(math.atan(math.tan(math.radians(theta)) / I_ani))
-    return -((t / 41) ** 2.06) - (t / 56) ** 1.865 * math.log10(h * I_ani / R_W / 100)
+    return -((t / 41) ** 2.06) - (t / 56) ** 1.865 * math.log10(h * I_ani / _R_W / 100)
 
 
-def joshi_ratio(L_d, h, I_ani, s, ln_re) -> float:  # spec: SMP-72
+def _joshi_ratio(L_d, h, I_ani, s, ln_re) -> float:  # spec: SMP-72
     """
     J_H/J_V of a horizontal drain without friction: Joshi's index (Economides et al. 1994, Eqs. 2-46 to 2-48, with
     the skin as (I_ani h / L_d) s) on the drainage length r_eH = max(r_e, L_d / 1.6), over the pseudo-steady radial
@@ -195,10 +195,10 @@ def joshi_ratio(L_d, h, I_ani, s, ln_re) -> float:  # spec: SMP-72
     :param s: Skin
     :param ln_re: ln(r_e/r_w)
     """
-    r_eh = np.maximum(R_W * np.exp(ln_re), L_d / 1.6)
+    r_eh = np.maximum(_R_W * np.exp(ln_re), L_d / 1.6)
     a = L_d / 2 * np.sqrt(0.5 + np.sqrt(0.25 + (2 * r_eh / L_d) ** 4))
     t1 = np.log((a + np.sqrt(a * a - (L_d / 2) ** 2)) / (L_d / 2))
-    return float((ln_re - 0.75 + s) / (t1 + I_ani * h / L_d * (np.log(I_ani * h / (R_W * (I_ani + 1))) + s)))
+    return float((ln_re - 0.75 + s) / (t1 + I_ani * h / L_d * (np.log(I_ani * h / (_R_W * (I_ani + 1))) + s)))
 
 
 def _chen(re, eps_d):
@@ -211,7 +211,7 @@ def _chen(re, eps_d):
     return np.where(re < 2300.0, 64 / re, (1 - w) * 64 / re + w * f_t)
 
 
-def liner_liquid(D, rho, mu, B, eps):  # spec: SMP-72
+def _liner_liquid(D, rho, mu, B, eps):  # spec: SMP-72
     """
     A liquid's friction and acceleration along a drain's perforated liner: the function c(q, L_d), in bar per
     (Sm3/d)2 per metre, with which the drawdown grows along the liner as c q2, at the heel's rate q (Sm3/d).
@@ -231,7 +231,7 @@ def liner_liquid(D, rho, mu, B, eps):  # spec: SMP-72
     return c
 
 
-def liner_gas(D, sg, Z, T, mu, eps):  # spec: SMP-73
+def _liner_gas(D, sg, Z, T, mu, eps):  # spec: SMP-73
     """
     A gas's friction along a drain's perforated liner: the function c(q), in bar2 per (Sm3/d)2 per metre, with which
     p2 falls along the liner as c q2, at the heel's rate q (Sm3/d).
@@ -270,7 +270,7 @@ def _drawdown(J_H, L_d, c, q):
     return np.exp(0.5 * (lo + hi))
 
 
-def drain_index(J_H, L_d, c, u, q_cap) -> float:  # spec: SMP-72
+def _drain_index(J_H, L_d, c, u, q_cap) -> float:  # spec: SMP-72
     """
     A drain's productivity index at the heel with the friction along its liner, Sm3/(d bar): J_H times Dikken's
     efficiency in closed form, eta = (1 + Pi / 1.5)^(-1/3) with Pi = c J_H^2 u L_d and c at the heel's rate, at the
@@ -278,7 +278,7 @@ def drain_index(J_H, L_d, c, u, q_cap) -> float:  # spec: SMP-72
 
     :param J_H: The drain's index without friction, Sm3/(d bar)
     :param L_d: Drain length (m)
-    :param c: The liner's coefficient (liner_liquid)
+    :param c: The liner's coefficient (_liner_liquid)
     :param u: Heel drawdown (bar)
     :param q_cap: Cap on the heel's rate (Sm3/d)
     """
@@ -290,7 +290,7 @@ def drain_index(J_H, L_d, c, u, q_cap) -> float:  # spec: SMP-72
 
 
 # --- Gas wells' radial coefficients ----------------------------------------------------------------------------------
-def forchheimer(k_md, h, mu, Z, T, ln_term, s, D_nd) -> tuple:  # spec: SMP-73
+def _forchheimer(k_md, h, mu, Z, T, ln_term, s, D_nd) -> tuple:  # spec: SMP-73
     """
     a (bar2 per Sm3/d) and b (bar2 per (Sm3/d)2) of a vertical gas well's p_r^2 - p_wf^2 = a q + b q^2, with q the
     standard gas rate (Economides et al. 1994, Eqs. 4-32 and 4-33): the radial gas-flow equation in SI units, the
@@ -310,7 +310,7 @@ def forchheimer(k_md, h, mu, Z, T, ln_term, s, D_nd) -> tuple:  # spec: SMP-73
     return a_si / 1e10 / _DAY, b_si / 1e10 / _DAY**2
 
 
-def nondarcy(sg, k_md, h, mu, h_perf) -> float:  # spec: SMP-71
+def _nondarcy(sg, k_md, h, mu, h_perf) -> float:  # spec: SMP-71
     """
     Economides et al.'s estimate of the non-Darcy coefficient (1994, Eq. 4-34), d/Mscf:
     D = 6e-5 gamma_g k^-0.1 h / (mu_g r_w h_perf^2) in field units.
@@ -322,9 +322,9 @@ def nondarcy(sg, k_md, h, mu, h_perf) -> float:  # spec: SMP-71
     :param h_perf: Perforated interval (m)
     """
     ft = 0.3048
-    return 6e-5 * sg * k_md**-0.1 * (h / ft) / (mu * 1e3 * (R_W / ft) * (h_perf / ft) ** 2)
+    return 6e-5 * sg * k_md**-0.1 * (h / ft) / (mu * 1e3 * (_R_W / ft) * (h_perf / ft) ** 2)
 
 
-def gas_rate(a, b, dp2) -> float:
+def _gas_rate(a, b, dp2) -> float:
     """The gas rate q (Sm3/d) of a q + b q^2 = dp2 (bar2), with b > 0."""
     return (-a + math.sqrt(a * a + 4 * b * dp2)) / (2 * b)
