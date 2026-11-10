@@ -19,6 +19,7 @@ of its classes, such as a user's subclass of a component ABC, runs on the CasADi
 """
 
 import time
+from itertools import chain
 
 import numpy as np
 
@@ -130,10 +131,10 @@ def _pvt(fluid) -> dict:
     bubble point (the dead oil's are not used); or its table at the fluid's GOR (PVT-TAB-7), which replaces them."""
     pvt = fluid._hc  # The PVT model at the fluid's GOR, which FluidModel reads once
     if type(pvt) is PVTTable:
-        table = {
+        table = {  # Each column with the pressure varying fastest, as the core and CasADi's interpolant take it
             'p': list(pvt.p),
             'T': list(pvt.T),
-            **{c: np.array(getattr(pvt, c)).ravel(order='F').tolist() for c in pvt.columns},
+            **{c: list(chain.from_iterable(zip(*getattr(pvt, c)))) for c in pvt.columns},
         }
         return dict(
             oil_model='table',
