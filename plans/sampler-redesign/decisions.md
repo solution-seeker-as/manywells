@@ -1258,3 +1258,15 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Needs sign-off:** yes (sampling).
 - **Used by:** `specs/sampling.md`, SMP-60; `sampling/v2/draws.py` (`_GEOMETRY_SURVEYS`, `_geometry`); `tests/test_sampling_v2_draws.py`.
 - **Ruling:**
+
+### D-133 · The records come from the run's settings, and `design_rate` is the tubing's
+
+- **Step:** R10, 2026-11-10 (the review of R10). Implements D-125 and SMP-110 as written.
+- **Choice made:** `wells.design_rate` is the liquid rate at which the tubing was sized (`q_design`, SMP-75), as D-125 defines it, where the port wrote the start's reference rate, $J\delta_d p_r$ for an oil and the gas rate at the design drawdown for a gas well; the schema has no column for the reference rate, so it is not kept. The run records in its settings, when it starts, the best rate's lift-gas rates, its scan points and its water cut, and the lock file's hash, besides the limits and the floor; the dataset's records take them from there, and the assembly refuses code whose settings differ from the run's (all but the code's record, which the metadata keeps for both). A well's own file in the run's folder holds the hash of the settings, so that a run with other settings refuses it. The metadata names the folder of tables relative to the run's folder, and a crash's traceback in the well log writes the home directory as `~`.
+- **Alternatives:** the port's: the assembling code's constants and lock in the records, which a change between the run and the assembly makes wrong; absolute local paths in the published metadata and logs.
+- **Basis:** a design choice of the generation, for reproducibility (SMP-110) and for the rule that no local path is published.
+- **Realism:** `design_rate` changes for every well: for an oil, from $J\delta_d p_r$ at the start to $J\delta_d p_i$ at $p_i$ with no water; for a gas well, from a gas rate to the liquid rate at the design point.
+- **Implemented** (R10, 2026-11-10): `sampling/v2/run.py` (`run_settings`, the wells' files, the tracebacks), `sampling/v2/assemble.py` (`records`, `write_dataset`, `well_row`); SMP-110's text. Tests.
+- **Needs sign-off:** yes (the dataset schema and its records).
+- **Used by:** `specs/sampling.md`, SMP-110; `datasets-draft.md`, Section 2 (`design_rate`, the metadata); `sampling/v2/run.py`, `sampling/v2/assemble.py`; `tests/test_sampling_v2_run.py`.
+- **Ruling:**

@@ -16,6 +16,7 @@ a small real pilot and re-solves its samples.
 
 import json
 import math
+import pathlib
 
 import numpy as np
 import pandas as pd
@@ -183,6 +184,21 @@ def test_a_stopped_run_resumes(monkeypatch, tmp_path):
     runner.run('nsol', 12, tmp_path / 'b', SEED, processes=1, chunk_size=10, log=lambda line: None)
     a, b = list(runner.read_results(tmp_path / 'a')), list(runner.read_results(tmp_path / 'b'))
     assert [r['info'] for r in a] == [r['info'] for r in b]
+
+
+def test_a_wells_file_kept_from_other_settings_is_refused(monkeypatch, tmp_path):
+    """A well's own file holds its run's settings' hash: with settings.json and the chunks removed, a run with other
+    settings stops at it rather than take it."""
+    stand_in_run(monkeypatch, raise_at=15)
+    with pytest.raises(Stop):
+        runner.run('sol', 12, tmp_path, SEED, processes=1, chunk_size=10, log=lambda line: None)
+    (tmp_path / 'settings.json').unlink()
+    for path in (tmp_path / 'chunks').iterdir():
+        path.unlink()
+    calls = stand_in_run(monkeypatch)
+    with pytest.raises(runner.SettingsMismatch, match='k000010.pkl was made with other settings'):
+        runner.run('sol', 12, tmp_path, SEED + 1, processes=1, chunk_size=10, log=lambda line: None)
+    assert calls == list(range(10))
 
 
 def test_a_crash_is_logged_and_counted(monkeypatch, tmp_path):
@@ -373,6 +389,7 @@ def test_a_wells_row(results, kind):
     assert (row['z'], row['water_depth'], row['K_c'], row['R_si']) == (w['z'], w['d_w'], w['K_c'], w['R_i'])
     assert row['md_bottom'] == res['stations'][0][-1] and 0 <= row['max_inclination'] <= 75 + 1e-9
     assert row['floor'] == generate.FLOOR[w['well_type']] and row['best_rate'] == res['info']['best_rate']
+    assert row['design_rate'] == w['q_design']  # The rate the tubing was sized for (SMP-75, D-125)
     assert row['pvt_model'] == 'black_oil' and pd.isna(row['pvt_table_id']) and pd.isna(row['comp_w1'])
     if kind == 'sol':
         assert (row['p_r_nom'], row['gor_nom'], row['life_date']) == (w['p_r'], w['R_go'], w['date'])
@@ -391,6 +408,9 @@ def test_a_wells_row(results, kind):
         assert same(row['injection_md'], design['injection_md'] if design is not None else math.nan)
     crash = asm.well_row(results[kind][CRASHED], kind)
     assert (crash['outcome'], crash['n_attempts']) == ('crash', 0) and 'ValueError' in crash['error']
+    assert str(pathlib.Path.home()) not in crash['error']  # No local path
+    if pathlib.Path(runner.__file__).resolve().is_relative_to(pathlib.Path.home()):
+        assert 'File "~/' in crash['error']
     with pytest.raises(ValueError, match='accepted wells'):
         asm.assemble(results[kind], kind, SEED, 100)
 
@@ -471,10 +491,30 @@ def test_a_dataset_written_from_a_run(monkeypatch, tmp_path):
     assert sum(len(pd.read_parquet(p)) for p in parts) == sum(
         len(r['log']) for r in list(runner.read_results(tmp_path / 'run'))[: meta['counts']['wells_drawn']]
     )
+    settings = json.loads((tmp_path / 'run' / 'settings.json').read_text())
+    for key in ('lift_fractions', 'scan_points', 'wlr_max', 'lock_sha256', 'floor'):  # From the run's settings
+        assert settings[key] == (meta['producibility'] | meta)[dict(floor='floor').get(key, key)], key
+    assert settings['scan_points'] is None and settings['lift_fractions'] == [0.0, 0.5, 1.0]
     dirty = dict(version='2.0.0.dev0 (abc-dirty)', commit='0' * 40, dirty=True)
     monkeypatch.setattr(asm, 'code_record', lambda: dirty)
     with pytest.raises(ValueError, match='has changes'):
         asm.write_dataset(tmp_path / 'run', tmp_path / 'out2', 3)
+    monkeypatch.undo()
+    monkeypatch.setattr(generate, '_BEST_RATE_LIFT', (0.0, 1.0))  # Code that differs from the run's settings
+    with pytest.raises(runner.SettingsMismatch, match='other settings than the assembling code has: lift_fractions'):
+        asm.write_dataset(tmp_path / 'run', tmp_path / 'out3', 3, allow_dirty=True)
+
+
+def test_a_datasets_folder_of_tables_is_relative_to_its_run(tmp_path):
+    """No local path is published: the metadata names the folder of tables relative to the run's folder."""
+    tables = tmp_path / 'tables'
+    tables.mkdir()
+    tw.write_json(tables / 'wells.json', dict(kind='sol', seed=SEED, wells_range=[0, 100], wells=[]))
+    settings = runner.run_settings('sol', SEED, tables)
+    assert settings['tables'] == str(tables.resolve())
+    meta = asm.records('sol', SEED, 3, settings, tmp_path / 'run')
+    assert meta['tables'] == '../tables' and meta['table_build']['wells_range'] == [0, 100]
+    assert str(pathlib.Path.home()) not in json.dumps(meta)
 
 
 def test_the_table_builds_record(tmp_path):

@@ -25,6 +25,7 @@ import datetime
 import itertools
 import json
 import math
+import os
 from pathlib import Path
 
 import numpy as np
@@ -42,7 +43,6 @@ from manywells.datasets.v2 import (
     TABLES,
     WEEKS_PER_YEAR,
     code_record,
-    lock_hash,
     platform_record,
     sha256,
     typed,
@@ -50,10 +50,9 @@ from manywells.datasets.v2 import (
 )
 from manywells.geometry import WellGeometry
 from manywells.sampling.v2 import generate, table_build
-from manywells.sampling.v2.life import WLR_MAX
 from manywells.sampling.v2.mapping import N_CELLS
 from manywells.sampling.v2.reservoir import OILS
-from manywells.sampling.v2.run import read_results
+from manywells.sampling.v2.run import SettingsMismatch, read_results, run_settings, _strip_home
 from manywells.sampling.v2.tables import TABLE_CLASSES
 from manywells.sampling.wells import rng_for
 
@@ -152,7 +151,7 @@ def well_row(res: dict, kind: str) -> dict:  # spec: SMP-108, SMP-110
     times = dict(seconds=res['seconds'], cpu_seconds=res.get('cpu_seconds', math.nan))
     if w is None:
         row = dict(draw_index=info['draw_index'], configuration=V2, n_cells=N_CELLS, **_counts(res))
-        row.update(outcome=info['outcome'], error=info.get('error'), best_rate_outcomes=[], **times)
+        row.update(outcome=info['outcome'], error=_strip_home(info.get('error')), best_rate_outcomes=[], **times)
         return row | (dict(scan_best_rate=[], scan_outcome=[]) if kind == 'nsol' else {})
 
     def g(key):
@@ -179,7 +178,7 @@ def well_row(res: dict, kind: str) -> dict:  # spec: SMP-108, SMP-110
     row.update(permeability=w['perm'], net_pay=w['h_net'], skin=w['skin'], ln_re_rw=w['ln_re_rw'])
     row.update(drawdown_design=w['delta_d'], anisotropy=g('I_ani'), productivity_factor=w['f_geo'])
     row.update(J=g('J') if oil else math.nan, non_darcy_D=math.nan if oil else w['D_nondarcy'] / _MSCF)
-    row.update(design_rate=w['q_l_ref'] if oil else w['q_g_ref'], floor=generate.FLOOR[w['well_type']])
+    row.update(design_rate=w['q_design'], floor=generate.FLOOR[w['well_type']])  # The tubing's (SMP-75)
     row.update(best_rate=info['best_rate'], best_rate_w_lg=info['best_rate_w_lg'])
     row.update(D=w['D'], bean_ratio=w['beta'], C_D=w['c_d'], K_c=w['K_c'])
     design = res['nsol']['design'] if kind == 'nsol' else (w if w['lift'] == 'gas_lift' else None)
@@ -214,7 +213,7 @@ def well_row(res: dict, kind: str) -> dict:  # spec: SMP-108, SMP-110
         row.update({f'field_{key}': field.get(key, math.nan) for key in ('api', 'sg_gas', 'gor')})
         row.update(n_gors=len(tab.get('gors', [])), table_nodes=tab.get('nodes', math.nan))
     row.update(_counts(res), outcome=info['outcome'], not_producible_reason=info['not_producible_reason'])
-    row.update(error=info['error'], best_rate_outcomes=list(info['best_rate_outcomes']), **times)
+    row.update(error=_strip_home(info['error']), best_rate_outcomes=list(info['best_rate_outcomes']), **times)
     row['table_seconds'] = sum(tab.get('seconds', {}).get(key, 0.0) for key in ('fluid', 'tables')) if tab else math.nan
     if kind == 'nsol':
         row.update(scan_best_rate=[s['best'] for s in info['scan']], scan_outcome=[s['status'] for s in info['scan']])
@@ -377,10 +376,11 @@ def _table_build_record(tables) -> dict | None:  # spec: SMP-110, SMP-116
     )
 
 
-def records(kind: str, seed: int, n_wells: int, settings: dict) -> dict:  # spec: SMP-110
-    """The records of a dataset (SMP-110): its seed, the configuration, the grid, the backend, the limits and the
-    floor, the folder of tables and its build, the code that ran and assembled it, the lock file's hash and the
-    platform."""
+def records(kind: str, seed: int, n_wells: int, settings: dict, run_dir) -> dict:  # spec: SMP-110
+    """The records of a dataset (SMP-110), from its run's settings (run.run_settings): its seed, the configuration,
+    the grid, the backend, the limits, the floor and the best rate's constants, the folder of tables, relative to the
+    run's folder, and its build, the code that ran and assembled it, the lock file's hash and the platform."""
+    tables = settings['tables']
     return dict(
         dataset=DATASETS[kind],
         kind=kind,
@@ -395,17 +395,17 @@ def records(kind: str, seed: int, n_wells: int, settings: dict) -> dict:  # spec
         producibility=dict(
             floor=settings['floor'],
             margin=settings['floor_margin'],
-            lift_fractions=generate._BEST_RATE_LIFT,
-            scan_points=generate._N_SCAN if kind == 'nsol' else None,
-            wlr_max=WLR_MAX,
+            lift_fractions=settings['lift_fractions'],
+            scan_points=settings['scan_points'],
+            wlr_max=settings['wlr_max'],
         ),
         split=dict(test_share=0.2, strata=['fluid_type', 'well_type', 'geometry_class', 'coverage_tail']),
         chunk_size=settings['chunk_size'],
-        tables=settings['tables'],
-        table_build=_table_build_record(settings['tables']),
+        tables=None if tables is None else os.path.relpath(tables, Path(run_dir).resolve()),
+        table_build=_table_build_record(tables),
         code=settings['code'],
         assembled_by=code_record(),
-        lock_sha256=lock_hash(),
+        lock_sha256=settings['lock_sha256'],
         created=datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds'),
         **platform_record(),
     )
@@ -428,7 +428,11 @@ def write_dataset(run_dir, out, n_wells: int, allow_dirty: bool = False, attempt
     run_dir, out = Path(run_dir), Path(out)
     settings = json.loads((run_dir / 'settings.json').read_text())
     kind, seed = settings['kind'], settings['seed']
-    meta = records(kind, seed, n_wells, settings)
+    now = run_settings(kind, seed, settings['tables'], settings['chunk_size'])  # The assembling code's
+    diff = sorted(key for key in set(now) | set(settings) if key != 'code' and now.get(key) != settings.get(key))
+    if diff:
+        raise SettingsMismatch(f'{run_dir} was run with other settings than the assembling code has: {", ".join(diff)}')
+    meta = records(kind, seed, n_wells, settings, run_dir)
     for code in (meta['code'], meta['assembled_by']):
         if (code['dirty'] is not False or code['commit'] is None) and not allow_dirty:
             raise ValueError(

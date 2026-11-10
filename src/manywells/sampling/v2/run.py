@@ -15,9 +15,11 @@ that a stopped run loses only the wells in progress; once every well of a chunk 
 one file, RUN/chunks/chunk-C.pkl, written to a temporary name and renamed, and the wells' files are removed. A chunk
 file holds two pickles: its header (the run's settings, the chunk, its first draw index and size, each well's outcome
 and the CPU time), then the list of its wells' results in draw order. RUN/settings.json holds the run's settings: the
-dataset and seed, the configuration, the grid, the backend, the limits and the floor, the slots per well, the chunk
-size, the folder of tables and the code's record (datasets.v2.code_record). A restart checks them, and stops on any
-difference, so that every chunk of a run is made by the same code with the same settings.
+dataset and seed, the configuration, the grid, the backend, the limits, the floor and the best rate's lift-gas rates,
+scan points and water cut, the slots per well, the chunk size, the folder of tables, the lock file's hash and the
+code's record (datasets.v2.code_record). A restart checks them, and stops on any difference, so that every chunk of a
+run is made by the same code with the same settings; a well's own file holds their hash, so that a file kept from
+another run's settings is refused too. The assembly takes the dataset's records from them (assemble.write_dataset).
 
 A crash of a well's generation, an exception or a panic of the Rust core that the generation does not catch, is
 logged as the well's outcome, `crash`, with its traceback, and the run carries on. Each result records its wall time
@@ -48,6 +50,7 @@ scripts/data_generation/v2/generate_dataset.py runs the whole pipeline: the tabl
 """
 
 import collections
+import hashlib
 import json
 import math
 import multiprocessing
@@ -59,8 +62,9 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 from manywells.configurations import V2
-from manywells.datasets.v2 import DATASETS, code_record
+from manywells.datasets.v2 import DATASETS, code_record, lock_hash
 from manywells.sampling.v2 import generate
+from manywells.sampling.v2.life import WLR_MAX
 from manywells.sampling.v2.mapping import N_CELLS
 from manywells.sampling.v2.tables import TableMismatch
 
@@ -100,12 +104,17 @@ def run_well(kind: str, seed: int, k: int, tables=None) -> dict:  # spec: SMP-11
     except BaseException as e:  # noqa: BLE001 - a crash is logged as the well's outcome, and the run carries on
         if not (isinstance(e, Exception) or generate._is_panic(e)):
             raise  # An interrupt or an exit stops the run
-        info = generate._info(k, outcome='crash', error=traceback.format_exc()[-2000:])
+        info = generate._info(k, outcome='crash', error=_strip_home(traceback.format_exc())[-2000:])
         if kind == 'nsol':
             info.update(scan=[], T_end=math.nan, p_change=math.nan)
         res = dict(well=None, stations=None, table=None, nsol=None, info=info, samples=[], log=[])
     res['seconds'], res['cpu_seconds'] = time.perf_counter() - t0, time.process_time() - cpu0
     return res
+
+
+def _strip_home(text):
+    """text, a traceback say, with the home directory's path written as ~, so that no local path is published."""
+    return text if text is None else text.replace(str(Path.home()), '~')
 
 
 def _dump(obj, path, *more):
@@ -126,21 +135,28 @@ def _well_path(run_dir, k) -> Path:
     return Path(run_dir) / 'wells' / f'k{k:06d}.pkl'
 
 
+def _settings_hash(settings) -> str:
+    """The SHA-256 of a run's settings, which each well's own file holds."""
+    return hashlib.sha256(json.dumps(settings, sort_keys=True).encode()).hexdigest()
+
+
 def _task(task) -> tuple:
-    """A pool's task: well k's result, solved, or read from its file where a stopped run left it. Returns (k, its
-    outcome, its wall time (s), whether it was read); the outcome is None, and nothing is kept, where the well ran out
-    of memory."""
-    kind, seed, k, run_dir, tables = task
+    """A pool's task: well k's result, solved, or read from its file where a stopped run with the same settings left
+    it. Returns (k, its outcome, its wall time (s), whether it was read); the outcome is None, and nothing is kept,
+    where the well ran out of memory."""
+    kind, seed, k, run_dir, tables, settings_hash = task
     path = _well_path(run_dir, k)
     if path.exists():
         res = _load(path)
+        if res.get('settings_sha256') != settings_hash:
+            raise SettingsMismatch(f"{path} was made with other settings than the run's: remove it, or run with them")
         return k, res['info']['outcome'], res['seconds'], True
     t0 = time.perf_counter()
     try:
         res = run_well(kind, seed, k, tables)
     except MemoryError:
         return k, None, time.perf_counter() - t0, False
-    _dump(res, path)
+    _dump(dict(res, settings_sha256=settings_hash), path)
     return k, res['info']['outcome'], res['seconds'], False
 
 
@@ -185,8 +201,12 @@ def run_settings(kind: str, seed: int, tables=None, chunk_size: int = CHUNK) -> 
         ),
         floor=generate.FLOOR,
         floor_margin=generate.FLOOR_MARGIN,
+        lift_fractions=list(generate._BEST_RATE_LIFT),
+        scan_points=generate._N_SCAN if kind == 'nsol' else None,
+        wlr_max=WLR_MAX,
         chunk_size=chunk_size,
         tables=None if tables is None else str(Path(tables).resolve()),
+        lock_sha256=lock_hash(),
         code=code_record(),
     )
     return json.loads(json.dumps(settings))
@@ -213,6 +233,8 @@ def _pack(run_dir, settings, c):
     size = settings['chunk_size']
     ks = range(c * size, (c + 1) * size)
     results = [_load(_well_path(run_dir, k)) for k in ks]
+    for res in results:  # Each was checked against the settings when it was solved or kept
+        res.pop('settings_sha256', None)
     header = dict(settings=settings, chunk=c, first=ks[0], size=size)
     header.update(outcomes=[r['info']['outcome'] for r in results], cpu_seconds=sum(r['cpu_seconds'] for r in results))
     _dump(header, _chunk_path(run_dir, c), results)
@@ -368,7 +390,8 @@ def run(
             log(f'the tables cover draw indices below {limit}: chunk {state["next_chunk"]} needs more')
             break
         log(f'chunks {batch[0]} to {batch[-1]}: {len(batch) * chunk_size} wells')
-        tasks = {k: (kind, seed, k, str(run_dir), settings['tables']) for c in batch for k in _ks(c, chunk_size)}
+        task = (kind, seed, str(run_dir), settings['tables'], _settings_hash(settings))
+        tasks = {k: (*task[:2], k, *task[2:]) for c in batch for k in _ks(c, chunk_size)}
         pending = {c: set(_ks(c, chunk_size)) for c in batch}
 
         def done(k, outcome, sec, read):
@@ -404,7 +427,8 @@ def run_wells(kind: str, seed: int, ks, out, processes: int = 6, tables=None, me
     """
     (Path(out) / 'wells').mkdir(parents=True, exist_ok=True)
     tables = None if tables is None else str(Path(tables).resolve())
-    tasks = {k: (kind, seed, k, str(out), tables) for k in ks}
+    settings_hash = _settings_hash(run_settings(kind, seed, tables))
+    tasks = {k: (kind, seed, k, str(out), tables, settings_hash) for k in ks}
     out_of_memory = []
     for k, outcome, sec, read in _imap(_task, list(tasks.values()), processes, memory_cap):
         if outcome is None:
