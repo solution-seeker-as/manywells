@@ -336,7 +336,7 @@ def _separator(r, w):  # spec: SMP-66
     if wt == 'onshore':
         p_sep, T_sep = tlognorm(r, 15, 0.6, 2, 70), r.uniform(285, 320)
     else:
-        p_sep, T_sep = tlognorm(r, 35, 0.45, 5, 85), r.uniform(300, 340) if wt == 'platform' else r.uniform(290, 320)
+        p_sep, T_sep = tlognorm(r, 35, 0.45, 5, 85), r.uniform(300, 340) if wt == 'platform' else r.uniform(290, 340)
     r_mid, r_late = r.uniform(0.5, 1.0), r.uniform(0.1, 0.6)
     r_s = {'initial': 1.0, 'mid_life': r_mid, 'late': r_late}[w['life_stage']]
     # spec: SMP-51. The flowline's two numbers and the tail's pressure are drawn for every well

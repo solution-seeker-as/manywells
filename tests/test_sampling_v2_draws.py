@@ -172,7 +172,7 @@ def check_well(w, md, tvd):
     # Separator and the nominal downstream pressure (SMP-66)
     p_sep_range, T_sep_range = {
         'platform': ((5, 85), (300, 340)),
-        'subsea': ((5, 85), (290, 320)),
+        'subsea': ((5, 85), (290, 340)),
         'onshore': ((2, 70), (285, 320)),
     }[wt]
     assert between(w['p_sep'], *p_sep_range) and between(w['T_sep'], *T_sep_range)

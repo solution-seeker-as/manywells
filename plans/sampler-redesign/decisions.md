@@ -999,8 +999,9 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Alternatives:** keep 320 K.
 - **Basis:** data, thinly: subsea satellite wells of one operator arrive topside at temperatures whose median lies above the draft's top [own analysis of Petrobras' 3W Dataset]; a long tieback arrives colder, which the range's bottom keeps.
 - **Realism:** the temperature enters only the black oil's separator correction (PVT-OIL-5) and a table fluid's offsets, by a few per cent.
+- **Implemented** (R10, 2026-11-10). Over 30,000 wells of seed 2026, before and after (5th / 25th / 50th / 75th / 95th percentiles): the subsea wells' $T_\text{sep}$ 291 / 298 / 305 / 313 / 318 K becomes 292 / 303 / 315 / 328 / 337 K; their black oils' initial GOR rises by 0.0 / 0.3 / 1.3 / 2.5 / 4.1%, and those whose saturation pressure is lowered to the black oils' GOR limit rise from 17.5% to 18.4% of them. The platform and onshore ranges are classed as data, thinly, as the triage proposes.
 - **Needs sign-off:** yes (sampling).
-- **Used by:** `specs/sampling.md`, SMP-66; `sampling/v2/draws.py`.
+- **Used by:** `specs/sampling.md`, SMP-66; `sampling/v2/draws.py` (`_separator`).
 - **Ruling:**
 
 ### D-113 · A slanted well's productivity from Cinco-Ley's slant skin
