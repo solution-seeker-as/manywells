@@ -585,15 +585,15 @@ $$a_V = \frac{p_\text{sc} T_r\thinspace\mu_g Z\thinspace(\ln(r_e/r_w) - 0.75 + s
 
 in SI units, with $\mu_g$ and $Z$ of the reservoir gas at $(p_r, T_r)$, $(p_\text{sc}, T_\text{sc})$ the standard conditions (PVT-GAS-2) and $D$ of SMP-71 in s/Sm³ (1 d/Mscf = 3051 s/Sm³), so that the non-Darcy flow is a skin $D q$. The geometry's factors on them are set once, from the well's initial-stage draw:
 
-- `high_angle`: $a = a_V/(J_H/J_V)$, with SMP-72's ratio; $b = b_V\thinspace(I_\text{ani} h_n/L_d)^2 + c_\text{lin} L_d/4$: the non-Darcy loss goes with the square of the rate per completed length, and the liner adds its friction to first order, with $c_\text{lin}$ at the heel's rate at the design drawdown, capped at the tubing's erosional rate, for the state's gas in a liner of the tubing's diameter, at most 157.1 mm (7 in), with SMP-72's friction factor (`drain_friction.py`);
+- `high_angle`: $a = a_V/(J_H/J_V)$, with SMP-72's ratio; $b = b_V\thinspace(I_\text{ani} h_n/L_d)^2 + c_\text{lin} L_d/4$: the non-Darcy loss goes with the square of the rate per completed length, and the liner adds its friction to first order, with $c_\text{lin}$ at the heel's rate at the design drawdown, capped at the tubing's erosional rate, for the state's gas in a liner of the tubing's diameter, at most 157.1 mm (7 in): a gas well on 9-5/8 in tubing has a 7 in liner; with SMP-72's friction factor (`drain_friction.py`);
 - `build_and_hold`, `s_shaped`: $a = a_V/f$, with SMP-72's $f$, and $b = b_V$, whose $D$ is SMP-71's on the perforated length along the well;
 - `vertical`: $a = a_V$ and $b = b_V$.
 
 The model's inflow is fitted to these at every reservoir state (SMP-117); they also give a gas well's design rates (SMP-75, SMP-80).
 
-From D-23 (ruled 2026-11-06), D-62 (D2), D-21 and D-113. Sources: [WP §4]; Economides et al. (1994), §4-3 and §4-4 (Eqs. 4-32 to 4-34) and §5-4; Joshi (1991), Ch. 10.
+From D-23 (ruled 2026-11-06), D-62 (D2), D-21, D-113 and D-121. Sources: [WP §4]; Economides et al. (1994), §4-3 and §4-4 (Eqs. 4-32 to 4-34) and §5-4; Joshi (1991), Ch. 10.
 
-**Basis:** physics: Forchheimer's coefficients with the non-Darcy flow as a rate-dependent skin (Economides et al. 1994, Eqs. 4-32 and 4-33), and for a drain the same derivation as SMP-72's, $a$ over Joshi's ratio and $b$ with the square of the rate per completed length plus the liner's friction to first order (`plans/evidence/drain_friction.py`, D-21). A slanted well's $a$ takes SMP-72's slant skin, and its $b$ the non-Darcy coefficient of its perforated length along the well, by Eq. 4-34 (D-113), both physics. For the liner's cap at 7 in, the prototype's: basis not recorded.
+**Basis:** physics: Forchheimer's coefficients with the non-Darcy flow as a rate-dependent skin (Economides et al. 1994, Eqs. 4-32 and 4-33), and for a drain the same derivation as SMP-72's, $a$ over Joshi's ratio and $b$ with the square of the rate per completed length plus the liner's friction to first order (`plans/evidence/drain_friction.py`, D-21). A slanted well's $a$ takes SMP-72's slant skin, and its $b$ the non-Darcy coefficient of its perforated length along the well, by Eq. 4-34 (D-113), both physics. A gas drain's liner of at most 7 in is a design choice of the build: 7 in is the largest of the oil wells' tubing sizes (SMP-75), nothing was found on liner sizes over wells, and completion records would replace it (D-121).
 
 ### SMP-74 · Inflow model
 
@@ -1200,6 +1200,7 @@ From D-61 (ruled 2026-11-06; $b = 0$ kept, L3 of 2026-11-09) and D-60. Sources: 
 | SMP-72 | A drainage length that grows with the drain, and the liner taken as the tubing | Simplicity, among options that the evidence left open |
 | SMP-72 | The liner's liquid density kept within 400 to 1100 kg/m³ | The build: it spans live oils and brines and guards the closed form |
 | SMP-72 | A floor of 2 on $A + s + s_\theta$ of a slanted well | The build: the correlation's gain grows without bound where a stimulated well is at a high angle (D-113) |
+| SMP-73 | A gas drain's liner at most 7 in, the tubing's diameter below it | The build: the largest of the oil wells' tubing sizes (D-121) |
 | SMP-74 | The inflow model kept over the life | No step in the rate without a change in the reservoir |
 | SMP-75 | A well too strong for the largest tubing is flagged, not redrawn | Simplicity |
 | SMP-77 | The lower end of $\beta$ at 0.15 | Coverage of the textbook beans |
@@ -1248,7 +1249,7 @@ From D-61 (ruled 2026-11-06; $b = 0$ kept, L3 of 2026-11-09) and D-60. Sources: 
 | SMP-116 | The table's grid, GOR axis, liquid trace and repair | The build: tables that the model accepts, at a measured interpolation error |
 | SMP-117 | The fit's points and equal weights, and $b = 0$ where the slope is negative | The build: the model's inflow form, with its known limit |
 
-**Basis not recorded.** The parts for which the plans give no basis: the dry gases' yield limit of 2.8 Sm³ per 10⁶ Sm³ (SMP-55); the gradient's bounds of 12 and 55 K/km (SMP-65); the floor of 1.5 bar and the cap of 120 bar on the nominal pressure downstream of the choke (SMP-66); the volatile oils' log-uniform GOR, the dry gases' yield from 0.5 and the bounds of $x$ (SMP-68); the cap on a gas drain's liner (SMP-73); and $\alpha = 1$ for a lumped heptanes-plus (SMP-114).
+**Basis not recorded.** The parts for which the plans give no basis: the dry gases' yield limit of 2.8 Sm³ per 10⁶ Sm³ (SMP-55); the gradient's bounds of 12 and 55 K/km (SMP-65); the floor of 1.5 bar and the cap of 120 bar on the nominal pressure downstream of the choke (SMP-66); the volatile oils' log-uniform GOR, the dry gases' yield from 0.5 and the bounds of $x$ (SMP-68); and $\alpha = 1$ for a lumped heptanes-plus (SMP-114).
 
 ## v2: checks
 

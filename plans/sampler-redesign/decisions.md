@@ -1107,6 +1107,7 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Alternatives:** the liner as the tubing in every case, a 9-5/8 in liner.
 - **Basis:** a design choice of the build: 7 in is the largest of the oil wells' tubing sizes (SMP-75). Nothing was found on liner sizes over wells; completion records would replace it.
 - **Realism:** 72 of 4000 drawn wells, gas drains on 9-5/8 in tubing.
+- **Implemented** (R10, 2026-11-10): no change to the code; SMP-73's rule names the 7 in liner of a gas well on 9-5/8 in tubing, and its Basis line and the design choices' table class the cap as a design choice of the build.
 - **Needs sign-off:** yes (sampling).
-- **Used by:** `specs/sampling.md`, SMP-73; `sampling/v2/reservoir.py`.
+- **Used by:** `specs/sampling.md`, SMP-73; `sampling/v2/draws.py` (`_LINER_MAX`, `_inflow_at_stage`), not `reservoir.py`.
 - **Ruling:**
