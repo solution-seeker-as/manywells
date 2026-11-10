@@ -1246,3 +1246,15 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Needs sign-off:** yes (the labels).
 - **Used by:** `specs/sampling.md`, SMP-101; `sampling/v2/generate.py`; `tests/test_sampling_v2_generate.py`.
 - **Ruling:**
+
+### D-132 · At most 20 surveys, and one flag that counts the redraws
+
+- **Step:** R10, 2026-11-10 (the review of R10). Corrects SMP-60's text to the code.
+- **Choice made:** a well draws at most 20 surveys in all, the first and 19 redraws, and is vertical where none fits, as the port's code does and as SMP-51's "all 20 surveys' numbers" says; SMP-60 said "redrawn … at most 20 times". A well's redraws are one flag with their count, `geometry_redrawn:n`, where the port wrote `geometry_redrawn` once per failed survey, 20 times for a well that falls back to vertical.
+- **Alternatives:** 20 redraws, 21 surveys, which changes the block's count of numbers and so every later draw of the block (D-108); the flag repeated per redraw.
+- **Basis:** a design choice of the generation (SMP-60's fit rule); the count is the prototype's.
+- **Realism:** no draw changes; only the `flags` of a well with two or more redraws read differently. No well of 3000 at seed 2026 falls back to vertical (`tests/test_sampling_v2_draws.py`).
+- **Implemented** (R10, 2026-11-10): `draws._geometry`; SMP-60's text and its row in the design choices. Test: a survey that fails 0, 1, 7, 19 or 20 times gives one flag with the count, the fallback after 20, and the block's 122 numbers.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-60; `sampling/v2/draws.py` (`_GEOMETRY_SURVEYS`, `_geometry`); `tests/test_sampling_v2_draws.py`.
+- **Ruling:**

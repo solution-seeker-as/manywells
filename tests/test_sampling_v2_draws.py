@@ -131,7 +131,7 @@ def check_well(w, md, tvd):
     for label, values in LABELS.items():
         assert w[label] in values, label
     assert fc == w['fluid_type'] or (w['fluid_type'] == 'gas' and fc in ('wet_gas', 'dry_gas'))
-    assert set(filter(None, w['flags'].split(';'))) <= FLAGS
+    assert {flag.split(':')[0] for flag in filter(None, w['flags'].split(';'))} <= FLAGS
 
     # Depth and survey (SMP-57 to SMP-61): every cell within 75 degrees of vertical, MD at most 9342 m
     assert between(z, 600, 7000 if tail else 6500)
@@ -592,7 +592,8 @@ def test_every_block_takes_the_same_numbers_for_every_well(wells, monkeypatch):
         for (_, _, block), counts in made:
             assert calls.setdefault(block, counts) == counts, (k, block)
         seen |= {w['coverage_tail'], w['well_type'], w['fluid_class'], w['drive'], w['life_stage'], w['lift']}
-        seen |= {w['geometry_family'], w['pressure_class'], w['saturation'], *filter(None, w['flags'].split(';'))}
+        seen |= {w['geometry_family'], w['pressure_class'], w['saturation']}
+        seen |= {flag.split(':')[0] for flag in filter(None, w['flags'].split(';'))}
     assert {block: sum(counts) for block, counts in calls.items()} == BLOCK_NUMBERS
     assert all(count == 1 for counts in calls.values() for count in counts)  # A call takes one number
     branches = set().union(*(LABELS[key] for key in ('coverage_tail', 'well_type', 'fluid_class', 'drive')))
@@ -713,6 +714,29 @@ def test_the_lifes_start_sets_the_inflow_model_and_the_non_darcy_coefficient(wel
             assert w['D_nondarcy'] > late['D_nondarcy']  # D goes as 1/mu_g, less at the lower pressure
     own = dict(p_r=oil['p_r'], wlr=oil['wlr'])  # A core well's initial draw: its own state is the start
     assert draw_well(SEED, oil['well'], start=own)[0] == oil
+
+
+@pytest.mark.parametrize('fails', [0, 1, 7, 19, 20])
+def test_a_surveys_redraws_are_one_flag_with_their_count(monkeypatch, fails):
+    """SMP-60 (D-132): at most 20 surveys, the first and 19 redraws, then a vertical well; one flag counts the
+    redraws, and the block takes the numbers of all 20 surveys whatever their count (SMP-51)."""
+    w0 = next(w for w, _ in drawn_wells() if w['geometry_family'] == 'build_and_hold' and not w['flags'])
+    real, calls = draws.survey, []
+
+    def survey_(rng, *args):
+        calls.append(1)
+        res = real(rng, *args)
+        return None if len(calls) <= fails else res
+
+    made = counting(monkeypatch, draws)
+    monkeypatch.setattr(draws, 'survey', survey_)
+    w, (md, tvd) = draw_well(SEED, w0['well'])
+    redraws = min(fails, 19)
+    flags = ([f'geometry_redrawn:{redraws}'] if redraws else []) + (['geometry_to_vertical'] if fails == 20 else [])
+    assert w['flags'].split(';') == (flags or [''])
+    assert len(calls) == min(fails + 1, 20)
+    assert w['geometry_family'] == ('vertical' if fails == 20 else 'build_and_hold')
+    assert sum(next(counts for parts, counts in made if parts[2] == 'geometry')) == BLOCK_NUMBERS['geometry']
 
 
 def test_a_table_fluid_replaces_the_fluid_blocks_values(wells):

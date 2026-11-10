@@ -76,7 +76,7 @@ _THETA_CLASS = {'slightly_deviated': (5.0, 20.0), 'deviated': (20.0, 60.0), 'hig
 _P_S_SHAPED = 1 / 3  # Share of the deviated class drawn as S-shaped wells
 _P_DRAIN = 0.5  # Share of the highly deviated class drawn as drains to the heel
 _MD_MAX = 9342.0  # m  # spec: SMP-60
-_GEOMETRY_REDRAWS = 20  # spec: SMP-60
+_GEOMETRY_SURVEYS = 20  # The most surveys a well draws: the first and 19 redraws  # spec: SMP-60
 _RHO_SEA = 1025.0  # kg/m3  # spec: SMP-63
 _LITHO = 0.226  # bar/m, the lithostatic gradient below the mudline  # spec: SMP-63
 _P_MAX, _T_MAX = 950.0, 450.0  # bar, K  # spec: SMP-63, SMP-65
@@ -272,16 +272,19 @@ def _geometry(r, w, x):
         'deviated': 's_shaped' if sub < _P_S_SHAPED else 'build_and_hold',
         'highly_deviated': 'high_angle' if sub < _P_DRAIN else 'build_and_hold',
     }[gcl]
-    for attempt in range(_GEOMETRY_REDRAWS):  # spec: SMP-60
+    fallback = False
+    for attempt in range(_GEOMETRY_SURVEYS):  # spec: SMP-60
         res = survey(r, family, L, _THETA_CLASS.get(gcl), d_mud)
         if res is not None and res[0][-1] <= _MD_MAX:
             md, tvd, prm = res
             break
-        x.flags.append('geometry_redrawn')
     else:
-        gcl, family, (md, tvd, prm) = 'vertical', 'vertical', ([0.0, L], [0.0, L], {})
+        fallback, gcl, family, (md, tvd, prm) = True, 'vertical', 'vertical', ([0.0, L], [0.0, L], {})
+    if attempt > 0:
+        x.flags.append(f'geometry_redrawn:{attempt}')  # One flag with the count of the redraws made
+    if fallback:
         x.flags.append('geometry_to_vertical')
-    unused(r, (_GEOMETRY_REDRAWS - 1 - attempt) * N_NUMBERS)  # spec: SMP-51. The numbers of the redraws not made
+    unused(r, (_GEOMETRY_SURVEYS - 1 - attempt) * N_NUMBERS)  # spec: SMP-51. The numbers of the surveys not made
     incl = [  # spec: SMP-61
         math.degrees(math.acos(min(1.0, (tvd[i] - tvd[i - 1]) / (md[i] - md[i - 1])))) for i in range(1, len(md))
     ]
