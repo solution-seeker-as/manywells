@@ -1222,3 +1222,15 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Needs sign-off:** yes (sampling).
 - **Used by:** `specs/sampling.md`, SMP-79; `sampling/v2/draws.py` (`_lift`).
 - **Ruling:**
+
+### D-130 · A gas well's tubing is sized at $p_i$ in every stage's draw
+
+- **Step:** R10, 2026-11-10 (the review of R10). Implements SMP-75 as written: "the tubing is the well's for its life".
+- **Choice made:** a gas or condensate well's design rate takes $\mu_g$ and $Z$ at $p_i$ and SMP-71's non-Darcy coefficient with $\mu_g$ at $p_i$, from the same number of its error factor, so that the design point is the initial state in every stage's draw and each sizes the same tubing; the lift design of a well lifted later, from its late-stage draw, sits on the well's own tubing, its capacity capped at that tubing's erosional rate. The error factor's number is now drawn as one uniform number and taken through the truncated inverse CDF at each viscosity (`_distributions.tnorm_at`), which gives the coefficient to the bit and takes the same count of numbers (D-108). SMP-75's note that the port took $\mu_g$ and $D$ at the draw's reservoir state is removed.
+- **Alternatives:** the port's, $\mu_g$ and $D$ at each draw's reservoir state, under which a later draw could size another tubing; the well's own coefficient (at the life's start, D-128) in the design rate, which sizes the same tubing within a life but not in a stage's draw made alone.
+- **Basis:** the rule as written (SMP-75): the tubing is run at the initial state and kept for the life.
+- **Realism:** over `sol-2`'s draw indices 0 to 3999 at seed 2026 (1500 gas and condensate wells), the port's draws, after D-128, put a mid-life or late draw or the lift design on another tubing than the start's in 180 wells (12%), 19 of them the lift design; now none. Every gas well's design rate changes, as $\mu_g$ is now at $p_i$; 75 wells (5.0%) take another tubing, and 5 lift designs change their capacity. No oil changes: an oil's design rate was already the initial state's.
+- **Implemented** (R10, 2026-11-10): `draws._inflow` keeps the coefficient as a function of $\mu_g$, `draws._completion` sizes a gas well at $p_i$; SMP-75's text. Tests: every stage's draw and the lift design have the well's design rate, tubing and erosional rate; a stage override keeps them, gas wells included.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-75; `sampling/v2/draws.py` (`_inflow`, `_completion`), `sampling/v2/_distributions.py` (`tnorm_at`); `tests/test_sampling_v2_draws.py`, `tests/test_sampling_v2_life.py`.
+- **Ruling:**

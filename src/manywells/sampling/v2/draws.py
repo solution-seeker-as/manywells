@@ -26,7 +26,7 @@ from manywells.choke import CHOKE_PROFILES
 from manywells.pvt import density_from_api, gas_density_from_sg
 from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.water import water_viscosity
-from manywells.sampling.v2._distributions import logistic, logu, pick, tlognorm, tnorm, unused
+from manywells.sampling.v2._distributions import logistic, logu, pick, tlognorm, tnorm, tnorm_at, unused
 from manywells.sampling.v2.reservoir import (
     OILS,
     drain_index,
@@ -510,8 +510,13 @@ def _inflow(gen, w, x):
         r_nd = gen('nondarcy')
         f_perf = r_nd.uniform(*_PERF_SHARE)
         along = 1.0 if family == 'high_angle' else 1 / math.cos(math.radians(w['theta_end']))
-        estimate = nondarcy(w['sg_gas'], perm, h_net, mu_0, f_perf * h_net * along)
-        x.D_nd = tlognorm(r_nd, estimate, _D_ERROR, *_D_BOUNDS)
+        v_nd = r_nd.random()  # The error factor's number: tlognorm's draw, at any gas viscosity
+
+        def D_at(mu):  # The coefficient (d/Mscf) with the gas viscosity mu (Pa s)
+            estimate = nondarcy(w['sg_gas'], perm, h_net, mu, f_perf * h_net * along)
+            return math.exp(tnorm_at(v_nd, math.log(estimate), _D_ERROR, *(math.log(b) for b in _D_BOUNDS)))
+
+        x.D_nd, x.D_at = D_at(mu_0), D_at
         w.update(perf_share=f_perf, D_eq434=nondarcy(w['sg_gas'], perm, h_net, mu_0, h_net))
         x.a_v, x.b_v = forchheimer(perm, h_net, x.mu_g, x.Z, T_r, ln_re - 0.75, skin, x.D_nd)  # spec: SMP-73
         x.a, x.b = _on_geometry(w, x, x.a_v, x.b_v)
@@ -531,11 +536,11 @@ def _completion(r, w, x):
         b_i = bo.at_gor(R_i)
         J_i = j_radial(w['perm'], w['h_net'], b_i.oil_viscosity(p_i, T_r), b_i.bo(p_i, T_r), ln_term, skin) * x.f_geo
         q_d = J_i * delta_d * p_i
-    else:
+    else:  # The coefficients at p_i, the non-Darcy coefficient's gas viscosity too, whatever the stage
         wlr_d = 10 / (10 + 1e6 / R_i)
-        a_i, b_i = _on_geometry(
-            w, x, *forchheimer(w['perm'], w['h_net'], x.mu_g, bo.z_factor(p_i, T_r), T_r, ln_term, skin, x.D_nd)
-        )
+        mu_i = bo.gas_viscosity(p_i, T_r, bo.gas_density(p_i, T_r))
+        coef = forchheimer(w['perm'], w['h_net'], mu_i, bo.z_factor(p_i, T_r), T_r, ln_term, skin, x.D_at(mu_i))
+        a_i, b_i = _on_geometry(w, x, *coef)
         q_d = gas_rate(a_i, b_i, p_i**2 - ((1 - delta_d) * p_i) ** 2) * (1e6 / R_i + 10) / 1e6
     vol, mass = stream(bo, R_i, wlr_d, w['rho_w'], p_wh, T_wh)
     v_e = 1.22 * c_e / math.sqrt(mass / vol)  # Erosional velocity (m/s)

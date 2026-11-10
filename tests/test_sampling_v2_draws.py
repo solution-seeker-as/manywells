@@ -652,7 +652,7 @@ STAGE_FREE = (  # The draws that do not depend on the life stage
     'sg_gas rho_o rho_g R_i p_sat w_kgko c_k perm h_net skin ln_re_rw delta_d drain_length I_ani J_H_over_J_V '
     'perf_share c_e c_d choke_model chk_profile U_t k_e cp_o cp_w'
 ).split()
-STAGE_FREE_OIL = 'q_design D tubing q_cap beta d_bean K_c'.split()  # An oil's design point is its initial state
+STAGE_FREE_DESIGN = 'q_design D tubing q_cap beta d_bean K_c'.split()  # The design point is the initial state, p_i
 
 
 def test_a_stage_override_changes_only_what_depends_on_the_stage(wells):
@@ -666,7 +666,7 @@ def test_a_stage_override_changes_only_what_depends_on_the_stage(wells):
             w, st = draw_well(SEED, k, stage)
             assert w['life_stage'] == stage and st == st0
             check_well(w, *st)
-            keys = [key for key in w0 if key.startswith('geo_')] + STAGE_FREE + (STAGE_FREE_OIL if is_oil(w0) else [])
+            keys = [key for key in w0 if key.startswith('geo_')] + STAGE_FREE + STAGE_FREE_DESIGN  # D-130
             if tail:
                 keys = [key for key in w0 if key not in ('life_stage', 'r_s', 'age_years')]
                 assert set(w) == set(w0)

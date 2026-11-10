@@ -24,6 +24,14 @@ def tnorm(rng, mu, sd, lo, hi) -> float:
     return float(min(max(mu + sd * ndtri(u), lo), hi))
 
 
+def tnorm_at(v, mu, sd, lo, hi) -> float:
+    """tnorm's value at the uniform number v of its draw: tnorm(rng, mu, sd, lo, hi) is tnorm_at(rng.random(), mu,
+    sd, lo, hi) to the bit, so that one number gives the draw at several medians."""
+    a, b = ndtr((lo - mu) / sd), ndtr((hi - mu) / sd)
+    u = min(max(a + (b - a) * v, 1e-15), 1 - 1e-15)
+    return float(min(max(mu + sd * ndtri(u), lo), hi))
+
+
 def tlognorm(rng, median, s, lo, hi) -> float:
     """Log-normal with the median and the log standard deviation s, truncated to [lo, hi]."""
     return math.exp(tnorm(rng, math.log(median), s, math.log(lo), math.log(hi)))

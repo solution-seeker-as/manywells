@@ -280,6 +280,15 @@ def test_the_inflow_model_the_non_darcy_coefficient_and_nsol2s_label_are_the_sta
     assert tails >= 10
 
 
+def test_the_tubing_is_the_wells_for_its_life(lives):
+    """SMP-75 (D-130): the design rate is the initial state's, at p_i, whatever the stage, so that every stage's
+    draw sizes the same tubing, and the lift design sits on the well's own tubing, with its erosional rate."""
+    for lf in lives:
+        draws_ = (lf._wm, lf._wL) + ((lf.design,) if lf.design is not None else ())
+        for key in ('q_design', 'D', 'tubing', 'q_cap'):
+            assert {d[key] for d in draws_} == {lf.w0[key]}, (lf.k, key)
+
+
 @pytest.mark.parametrize('part', ['core', 'tail'])
 def test_no_life_breaks_a_bound(lives, part):
     """SMP-83 to SMP-91, on core and tail wells apart."""
