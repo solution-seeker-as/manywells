@@ -22,9 +22,10 @@ FAMILIES = ('vertical', 'build_and_hold', 's_shaped', 'high_angle')  # spec: SMP
 _KICKOFF = (0.05, 0.75)  # The kickoff's share of the TVD below the mudline
 _BUILD = (0.3, 3.6)  # Build rate (degrees per 30 m)
 _DROP, _S_BOTTOM = (0.2, 2.2), (0.0, 35.0)  # An S well's drop rate (degrees per 30 m) and bottom inclination (degrees)
-_S_HOLD, _S_END = (15.0, 45.0), (100.0, 400.0)  # An S well's hold inclination (degrees) and end section (m of TVD)
+_S_HOLD, _S_END = (20.0, 60.0), (100.0, 1200.0)  # An S well's hold inclination (degrees) and end section (m of TVD)
+_S_END_SHARE = 1 / 3  # An S well's end section at most this share of L  # spec: SMP-60
 _TANGENT, _LANDING = (10.0, 65.0), (1.5, 7.0)  # A drain well's tangent before landing (degrees) and landing build
-_HEEL_TANGENT = (50.0, 300.0)  # A drain well's tangent at the heel's inclination (m of MD)
+_HEEL_TANGENT = (0.0, 300.0)  # A drain well's tangent at the heel's inclination (m of MD)
 
 
 def _arc(st, th1, rate):
@@ -104,7 +105,7 @@ def survey(rng, family, L, theta=None, d_mud=0.0):  # spec: SMP-60
         prm.update(kickoff=K, theta_hold=th, build_rate=b)
     elif family == 's_shaped':
         th, b, d = rng.uniform(*_S_HOLD), rng.uniform(*_BUILD), rng.uniform(*_DROP)
-        th_e, end_tvd = min(rng.uniform(*_S_BOTTOM), th), min(rng.uniform(*_S_END), 0.25 * L)
+        th_e, end_tvd = min(rng.uniform(*_S_BOTTOM), th), min(rng.uniform(*_S_END), _S_END_SHARE * L)
         left = room - 100 - end_tvd
         b = _raise_rate(b, _BUILD[1], lambda x: _arc_tvd(0, th, x) + _arc_tvd(th, th_e, d), left)
         d = _raise_rate(d, _DROP[1], lambda x: _arc_tvd(0, th, b) + _arc_tvd(th, th_e, x), left)

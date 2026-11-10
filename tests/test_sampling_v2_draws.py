@@ -145,7 +145,7 @@ def check_well(w, md, tvd):
     if family == 'vertical':
         assert w['theta_max'] == 0 and md == tvd
     elif family == 's_shaped':
-        assert between(w['theta_max'], 15, 45, 1e-6) and w['theta_end'] <= 35 + 1e-6
+        assert between(w['theta_max'], 20, 60, 1e-6) and w['theta_end'] <= 35 + 1e-6
     else:  # The hold's inclination (build_and_hold) or the heel's (high_angle) is the class's
         assert between(w['theta_max'], *THETA[gcl], 1e-6) and w['theta_end'] == pytest.approx(w['theta_max'], abs=1e-9)
 
@@ -737,14 +737,16 @@ def test_survey_shapes(family):
             assert len(md) == 3 + int(th)  # The wellhead, the kickoff, a station per degree of the build, the bottom
             assert tvd[-1] - tvd[-2] >= 50 - 1e-6
         elif family == 's_shaped':
-            assert between(th, 15, 45) and incl.max() == pytest.approx(th, abs=1e-6)
+            assert between(th, 20, 60) and incl.max() == pytest.approx(th, abs=1e-6)
             assert prm['theta_end'] <= min(35, th) and incl[-1] == pytest.approx(prm['theta_end'], abs=1e-6)
-            assert between(prm['drop_rate'], 0.2, 2.2) and prm['end_section_tvd'] <= min(400, L / 4)
+            assert between(prm['drop_rate'], 0.2, 2.2) and between(prm['end_section_tvd'], 0, min(1200, L / 3))
             assert tvd[-1] - tvd[-2] == pytest.approx(prm['end_section_tvd'], abs=1e-6)
+            hold = [i for i in range(len(incl)) if incl[i] == pytest.approx(th, abs=1e-6)]
+            assert tvd[hold[-1] + 1] - tvd[hold[0]] >= 100 - 1e-6  # The hold's least TVD
         else:
             assert between(prm['theta_heel'], *theta) and th <= prm['theta_heel'] and between(th, 10, 65)
             assert incl.max() == incl[-1] == pytest.approx(prm['theta_heel'], abs=1e-6)
-            assert between(prm['build_rate_2'], 1.5, 7) and between(prm['tangent_md'], 50, 300)
+            assert between(prm['build_rate_2'], 1.5, 7) and between(prm['tangent_md'], 0, 300)
             assert md[-1] - md[-2] == pytest.approx(prm['tangent_md'], abs=1e-6)
     assert fitted > 100
 

@@ -987,8 +987,9 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Alternatives:** keep R3's values, set before the surveys were read; fitted shapes.
 - **Basis:** data, by D-104's rule of a uniform draw over the pooled range: the S wells of two regions hold up to well above the draft's 45°, and one region's run on below their drop for longer than the draft allowed; most of one region's drains land without a tangent [own analysis of BOEM's directional surveys and NLOG's deviation surveys]. The lower end of 20° is the deviated class's own (SMP-59).
 - **Realism:** S wells are a twelfth of the wells. The end section rests on one region.
+- **Implemented** (R10, 2026-11-10). Over 100,000 wells of seed 2026, before and after (5th / 25th / 50th / 75th / 95th percentiles): the S wells' hold 16.5 / 22.2 / 29.5 / 37.3 / 43.5° becomes 21.7 / 28.7 / 38.3 / 49.1 / 57.9°, their end section 115 / 171 / 246 / 320 / 384 m becomes 151 / 328 / 562 / 792 / 1060 m, their MD over TVD 1.016 / 1.060 / 1.165 (5th / 50th / 95th) becomes 1.028 / 1.098 / 1.273, and the drains' tangent 63 / 176 / 288 m becomes 15 / 151 / 285 m. The S wells redrawn at least once rise from 2.4% to 6.6% (redraws per S well from 0.05 to 0.22), and 20 S wells fall back to vertical after 20 redraws, 0.24% of the S wells, where none did before: most are shallow, about 650 m below the mudline, where even a hold of 20° with the least end section no longer fits, and a few very deep ones pass the MD limit. The drains' redraws do not change (0.4%). On 40,000 of the surveys drawn after the change, none passes 75° or 9342 m of MD, and no hold is shorter than its least TVD.
 - **Needs sign-off:** yes (sampling).
-- **Used by:** `specs/sampling.md`, SMP-60; `sampling/v2/survey.py`.
+- **Used by:** `specs/sampling.md`, SMP-60; `sampling/v2/survey.py` (`_S_HOLD`, `_S_END`, `_S_END_SHARE`, `_HEEL_TANGENT`).
 - **Ruling:**
 
 ### D-112 · Subsea separator temperatures up to 340 K
