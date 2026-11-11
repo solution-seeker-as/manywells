@@ -899,7 +899,7 @@ Before its slots are drawn, the well's best rate (SMP-103) is solved at the 21 d
 - The life ends at $T_\text{end}$, the last point that passes before the first that fails, or at $T_\text{life}$ if none fails. Where it ends before its lift starts, as where a drawn or static-check start falls between two points and the lifted well fails at the later one, no date of the life is lifted: the well is natural, with no `lift_start_rule` (SMP-52).
 - A well whose first point does not pass is dropped as `not_producible`, or as `best_rate_solver_failure` (SMP-103); one whose life ends at $T_\text{end} = 0$ is dropped as `short_life`.
 
-From D-50 and D-84 (ruled 2026-11-06), D-49 and D-131. Sources: D-34's floor; [WP §11]. The scan's step of 5% of the life is the ruled one; a finer scan is the named fix if dead dates (SMP-106) stay above their target.
+From D-50 and D-84 (ruled 2026-11-06), D-49 and D-131. Sources: D-34's floor; [WP §11]. The scan's step of 5% of the life is the ruled one; a finer scan was the named fix if dead dates (SMP-106) stayed above their target, but R10's two dead dates lay at a passing scan point, the life's end, where the well flowed only near its best controls (D-137).
 
 **Basis:** a design choice of the generation: the scan's 21 points are the ruled resolution, and ending the life at the last point that passes gives every date an operating point (D-84); the floor it applies is SMP-102's.
 
@@ -954,7 +954,7 @@ From D-52 (ruled 2026-11-02), D-80 and D-83 (ruled 2026-11-06, with R4's step ke
 
 ### SMP-106 · Limits and dropped wells
 
-A well is dropped, and the next drawn well takes its place (SMP-110), when it passes a limit: a kept well has at most 50 attempts in a slot, 400 redraws, and 10 solver failures among its slots' attempts. Its outcome is one of:
+A well is dropped, and the next drawn well takes its place (SMP-110), when it passes a limit: a kept well has at most 100 attempts in a slot, 1000 redraws, and 10 solver failures among its slots' attempts. Its outcome is one of:
 
 | Outcome | When |
 |---|---|
@@ -962,9 +962,9 @@ A well is dropped, and the next drawn well takes its place (SMP-110), when it pa
 | `invalid_input` | the well fails `configurations.check(wp, 'v2.0.0')` at its nominal state (`nsol-2`: its start), or the model refuses its inputs there, as for a GOR off its table's axis; a $p_r$ or $T_r$ off its table is an attempt's `exception` (SMP-104) |
 | `table_failed` | its table could not be built, or is refused (SMP-116) |
 | `not_producible`, `best_rate_solver_failure` | SMP-101, SMP-103 |
-| `slot_limit` | a `sol-2` slot without an operating point after 50 attempts |
-| `dead_date` | an `nsol-2` slot without an operating point after 50 attempts: a date at which the well flowed at none of its redrawn controls |
-| `redraw_limit` | a 401st redraw would be needed |
+| `slot_limit` | a `sol-2` slot without an operating point after 100 attempts |
+| `dead_date` | an `nsol-2` slot without an operating point after 100 attempts: a date at which the well flowed at none of its redrawn controls |
+| `redraw_limit` | a 1001st redraw would be needed |
 | `solver_failure_limit` | an 11th solver failure among its slots' attempts |
 | `short_life` | `nsol-2` only, SMP-101 |
 
@@ -972,9 +972,9 @@ A well is dropped, and the next drawn well takes its place (SMP-110), when it pa
 
 Nothing else drops a well or a sample: SMP-28's three filters (the choke's spread, the share of choked samples and the variation of `QTOT`), v1's floors on a sample's rate and its counts of failures do not apply to v2, and a small rate stays a sample.
 
-From D-51 (ruled 2026-11-06), D-81, D-82 and D-83 (ruled 2026-11-06, checkpoint H3: kept, judged on R11's pilot), D-55, and D-106 (ruled 2026-11-09, L1: `table_failed` wells count with the drops). Sources: `sampling-draft.md`, Slots and outcomes, and How the rules meet acceptance criterion 4.
+From D-51 (ruled 2026-11-06), D-81, D-82 and D-83 (ruled 2026-11-06, checkpoint H3: kept, judged on R11's pilot), D-55, and D-106 (ruled 2026-11-09, L1: `table_failed` wells count with the drops), and D-137. Sources: `sampling-draft.md`, Slots and outcomes, and How the rules meet acceptance criterion 4.
 
-**Basis:** the limits (400 redraws let a kept well flow in a third of its draws) and the targets are a design choice, tolerances of the generation, kept and to be judged on R11's pilot (checkpoint H3); dropping v1's filters is a design choice against distributions shaped by filters (acceptance criterion 4, D-51).
+**Basis:** the limits (1000 redraws let a kept well flow in a sixth of its draws, as the lifted wells of R10's pilots that flow only near their lift capacity do, D-137) and the targets are a design choice, tolerances of the generation, kept and to be judged on R11's pilot (checkpoint H3); dropping v1's filters is a design choice against distributions shaped by filters (acceptance criterion 4, D-51).
 
 ### SMP-107 · Starts
 
@@ -1226,7 +1226,7 @@ From D-61 (ruled 2026-11-06; $b = 0$ kept, L3 of 2026-11-09) and D-60. Sources: 
 | SMP-103 | The best rate from a fully open choke and three lift-gas rates; lift before a well is dropped | The generation, and acceptance criterion 2 |
 | SMP-104 | A scan with non-finite points, no root and no rejected sign change counts as no operating point; no retry on the other backend | Acceptance criterion 4, and the constitution's principle 7 |
 | SMP-105 | 200 operating points per well, with redraws from each slot's own generator in passes | The Goals (D-52) and reproducibility |
-| SMP-106 | The limits of 50 attempts, 400 redraws and 10 solver failures, and the targets | Tolerances of the generation, judged on R11's pilot |
+| SMP-106 | The limits of 100 attempts, 1000 redraws and 10 solver failures, and the targets | Tolerances of the generation, judged on R11's pilot |
 | SMP-106 | None of v1's filters | Acceptance criterion 4: no distributions shaped by filters |
 | SMP-107 | The extra start of a comparison run | The generation |
 | SMP-108 | Two published logs, in a companion file | Acceptance criterion 4: a user can measure the redraws' conditioning |

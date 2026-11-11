@@ -292,7 +292,7 @@ def test_another_runs_settings_stop_the_run(monkeypatch, tmp_path):
         100,
         'rust',
     )
-    assert settings['limits'] == dict(slot=50, redraws=400, solver_failures=10) and settings['n_slots'] == 200
+    assert settings['limits'] == dict(slot=100, redraws=1000, solver_failures=10) and settings['n_slots'] == 200
     assert set(settings['code']) == {'version', 'commit', 'dirty'}
     with pytest.raises(ValueError, match='kind'):
         runner._run_settings('closed', SEED)
@@ -481,7 +481,7 @@ def test_a_dataset_written_from_a_run(monkeypatch, tmp_path):
     assert set(data) == {'wells', 'samples', 'geometry', 'pvt', 'metadata'} and data['metadata'] == meta
     assert set(logs) == {'drawn_wells', 'redraws', 'metadata'} and logs['metadata']['companion_of'] == 'manywells-sol-2'
     assert (meta['seed'], meta['n_wells'], meta['configuration'], meta['backend']) == (SEED, 3, 'v2.0.0', 'rust')
-    assert meta['limits'] == dict(slot=50, redraws=400, solver_failures=10) and meta['n_slots'] == N_TEST_SLOTS
+    assert meta['limits'] == dict(slot=100, redraws=1000, solver_failures=10) and meta['n_slots'] == N_TEST_SLOTS
     assert meta['producibility']['floor'] == generate._FLOOR and meta['counts']['wells_accepted'] == 3
     assert meta['files']['samples.parquet']['rows'] == 3 * N_TEST_SLOTS == len(data['samples'])
     assert {'code', 'assembled_by', 'lock_sha256', 'python', 'platform', 'created'} <= set(meta)

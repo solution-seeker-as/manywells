@@ -70,7 +70,7 @@ from manywells.solvers.rust import RustRootFinder
 
 _FLOOR = {'platform': 1.6, 'onshore': 1.6, 'subsea': 20.0}  # Sm3/d of oil equivalent, by well type  # spec: SMP-102
 _FLOOR_MARGIN = 0.5  # A well is not produced below this share of its floor  # spec: SMP-102
-_SLOT_LIMIT, _REDRAW_LIMIT, _SOLVER_FAILURE_LIMIT = 50, 400, 10  # spec: SMP-106
+_SLOT_LIMIT, _REDRAW_LIMIT, _SOLVER_FAILURE_LIMIT = 100, 1000, 10  # spec: SMP-106 (D-137)
 _BEST_RATE_LIFT = (0.0, 0.5, 1.0)  # The best rate's lift-gas rates, shares of the capacity  # spec: SMP-103
 _N_SCAN = 21  # Dates of the life scan  # spec: SMP-101
 _NO_SEARCH = dict(n_roots=0, n_stable=0, several_stable=False, marches=math.nan, non_finite=math.nan)

@@ -370,21 +370,21 @@ def test_the_passes(monkeypatch):
 
 
 def test_the_slot_limit(monkeypatch):
-    """SMP-106: a slot without an operating point after 50 attempts drops the well, as `slot_limit` in sol-2 and as
-    `dead_date` in nsol-2; every other slot keeps its operating point."""
+    """SMP-106: a slot without an operating point after 100 attempts (D-137) drops the well, as `slot_limit` in sol-2
+    and as `dead_date` in nsol-2; every other slot keeps its operating point."""
     for name in ('slot_limit', 'dead_date'):
         accepted, result, order = solve_slots(monkeypatch, lambda j, a: 'no_operating_point' if j == 7 else None, name)
-        assert result == name and _SLOT_LIMIT == 50 and 7 not in accepted and len(accepted) == _N_SLOTS - 1
+        assert result == name and _SLOT_LIMIT == 100 and 7 not in accepted and len(accepted) == _N_SLOTS - 1
         assert order[_N_SLOTS:] == [(7, a) for a in range(1, _SLOT_LIMIT)]
 
 
 def test_the_redraw_limit(monkeypatch):
-    """SMP-106: a well may redraw 400 times over its slots; a 401st redraw drops it."""
-    assert _REDRAW_LIMIT == 400
-    accepted, result, order = solve_slots(monkeypatch, lambda j, a: 'no_operating_point' if a < 2 else None)
-    assert result == 'accepted' and len(order) == _N_SLOTS + _REDRAW_LIMIT  # 2 redraws for each of 200 slots
-    accepted, result, order = solve_slots(monkeypatch, lambda j, a: 'no_operating_point' if a < 2 or j == 0 else None)
-    assert result == 'redraw_limit' and len(order) == _N_SLOTS + _REDRAW_LIMIT and order[-1] == (_N_SLOTS - 1, 2)
+    """SMP-106: a well may redraw 1000 times over its slots (D-137); a 1001st redraw drops it."""
+    assert _REDRAW_LIMIT == 1000
+    accepted, result, order = solve_slots(monkeypatch, lambda j, a: 'no_operating_point' if a < 5 else None)
+    assert result == 'accepted' and len(order) == _N_SLOTS + _REDRAW_LIMIT  # 5 redraws for each of 200 slots
+    accepted, result, order = solve_slots(monkeypatch, lambda j, a: 'no_operating_point' if a < 5 or j == 0 else None)
+    assert result == 'redraw_limit' and len(order) == _N_SLOTS + _REDRAW_LIMIT and order[-1] == (_N_SLOTS - 1, 5)
     assert 0 not in accepted and len(accepted) == _N_SLOTS - 1
 
 

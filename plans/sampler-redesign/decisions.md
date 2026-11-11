@@ -1306,3 +1306,15 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Needs sign-off:** yes (sampling).
 - **Used by:** `specs/sampling.md`, SMP-105; `sampling/v2/samples.py`.
 - **Ruling:**
+
+### D-137 · Limits of 100 attempts in a slot and 1000 redraws
+
+- **Step:** R11, 2026-11-11, from R10's pilots' drops (SMP-106's targets). Revises D-81's limits.
+- **Choice made:** a kept well has at most 100 attempts in a slot, in place of 50, and 1000 redraws over its slots, in place of 400; the 10 solver failures unchanged.
+- **Alternatives:** keep the limits and accept drops above the targets; a finer life scan, SMP-101's named fix for dead dates, which does not reach them (below); draws that know a well's lift need, which would need a solve before each draw.
+- **Basis:** a design choice of the generation, a tolerance, with a measured need. R10's pilots dropped 13 wells at the redraw limit, 7 of 500 drawn `sol-2` wells and 6 of 116 `nsol-2` wells, above the target of 1% of a class's drawn wells: every one a lifted well that flows only with its lift gas near its capacity: rarely below half of it, often above three quarters, whatever the choke. Their success rates of 0.06 to 0.33 per attempt would have needed about 400 to 2800 redraws for 200 points; 1000 keeps 10 of the 13. Both of R10's dead dates (2 of 116 `nsol-2` wells, above the target of 0.5%) were at the life's end, where the scan passes because the well flows at its best controls, but none of 50 attempts at its drawn controls did; a finer scan would not have ended the life sooner.
+- **Realism:** the kept wells include lifted wells that flow in a narrow band of lift gas, as capacity-limited lifted wells late in life do; the shift that their redraws cause is logged (SMP-108).
+- **Implemented** (R11, 2026-11-11): `sampling/v2/generate.py` (`_SLOT_LIMIT`, `_REDRAW_LIMIT`), SMP-106, SMP-101's note; `tests/test_sampling_v2_generate.py`, `tests/test_sampling_v2_run.py`.
+- **Needs sign-off:** yes (a tolerance of the generation).
+- **Used by:** `specs/sampling.md`, SMP-106; `sampling/v2/generate.py`.
+- **Ruling:**
