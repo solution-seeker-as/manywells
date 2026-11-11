@@ -119,6 +119,8 @@ class Life:
         else:
             self._F_bt = r.uniform(0.05, 0.4) if support else r.uniform(0.2, 0.7)
         self._wlr_bt = r.uniform(0.05, 0.3) if support else r.uniform(0.02, 0.1)
+        if self.oil and 'wet_start' in w0['flags'].split(';'):  # Water from the start, rising in F (D-140)
+            self._F_bt, self._wlr_bt = 0.0, w0['wlr']
         self._t_sep = tuple(float(t) for t in np.sort(r.uniform(*_T_SEP, 2)) * self.T_life)  # spec: SMP-89
         t_lift = r.uniform(*_T_LIFT) * self.T_life  # spec: SMP-90
         # spec: SMP-83. The start: the initial-stage draw's state, and for a tail well a core initial state. Its
@@ -224,7 +226,7 @@ class Life:
         water-gas ratio (Sm3 per 1e6 Sm3), log-linear in F after it."""
         F, a, z = self.F(t), self._water0, self._water1
         if self.oil:
-            if z <= a or F < self._F_bt:
+            if z <= a or F <= self._F_bt:  # At F_bt the start's, to the bit: a wet start's water at t = 0 (D-140)
                 return a
             bt = min(self._wlr_bt, z)
             return max(a, _expit(_logit(bt) + (_logit(z) - _logit(bt)) * (F - self._F_bt) / (1 - self._F_bt)))

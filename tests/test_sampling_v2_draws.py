@@ -68,6 +68,7 @@ FLAGS = {
     'injection_at_packer',
     'injection_raised_to_0.3L',
     'lift_capacity_at_bound',
+    'wet_start',
 }
 # The draws' ranges, as specs/sampling.md states them
 API = {'black_oil': (16, 45), 'volatile_oil': (40, 50), 'gas_condensate': (42, 58), 'wet_gas': (45, 58)}
@@ -205,7 +206,9 @@ def check_well(w, md, tvd):
     assert between(w['r_p'], *r_p_range) and w['p_r'] == w['r_p'] * p_i
     assert w['below_hydrostatic'] == (w['p_r'] < p_h)
     if oil:
-        assert between(w['wlr'], *((0, 0.98) if tail else WLR[stage, drive]))
+        wet = 'wet_start' in w['flags'].split(';')  # D-140: a third of the core oils' initial draws under support
+        assert not wet or (not tail and stage == 'initial' and drive == 'pressure_support')
+        assert between(w['wlr'], *((0, 0.98) if tail else (0.05, 0.9) if wet else WLR[stage, drive]))
         assert w['R_go'] > 0 and (w['R_go'] == w['R_i']) == (w['p_r'] >= w['p_sat'])
         assert w['ogr'] is None and 'wgr' not in w and between(w['w_kgko'], 0, 1 if tail else 0)
     else:
@@ -569,7 +572,7 @@ BLOCK_NUMBERS = dict(  # The numbers that each block takes of its generator, for
     temperature=3,
     separator=7,
     fluid=5,
-    stage=14,
+    stage=16,
     inflow=7,
     nondarcy=2,  # A gas well's block
     completion=3,
