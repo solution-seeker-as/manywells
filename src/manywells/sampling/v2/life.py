@@ -33,6 +33,7 @@ _T_LIFT = (0.05, 0.9)  # The lift's drawn start over the life span  # spec: SMP-
 _R_END = 0.15  # p_r / p_i of an exhausted reservoir under depletion  # spec: SMP-83
 _R_END_TOP = {True: 0.3, False: 0.2}  # The top of a core well's end under depletion: oils, gas classes  # spec: SMP-83
 _WGR_END = 10000.0  # Sm3 per 1e6 Sm3: a gas well with pressure support waters out  # spec: SMP-83
+_WLR_END = 0.85  # The bottom of a core oil's end WLR under pressure support, U(0.85, 0.98)  # spec: SMP-83
 _N_STATIC = 41  # Dates of the static check along the life  # spec: SMP-90
 _LIFT_KEYS = ('z_inj', 'injection_md', 'z_inj_frac', 'p_inj', 'dp_valve', 'packer_offset', 'T_lg', 'psi_lg')
 _LIFT_KEYS += ('glr_cap', 'w_lg_max')  # A lift design's keys (draws.draw_well)
@@ -149,8 +150,8 @@ class Life:
         self._r1, self._water1 = min(wL['r_p'], self._r0), wL[water]
         if not self._tail and not support:
             self._r1 = min(_R_END + (_R_END_TOP[self.oil] - _R_END) * u_end, self._r0)
-        elif not self._tail:
-            self._water1 = _WLR_MAX if self.oil else _WGR_END
+        elif not self._tail:  # Under pressure support an oil's end water takes the end's number (D-141)
+            self._water1 = _WLR_END + (_WLR_MAX - _WLR_END) * u_end if self.oil else _WGR_END
         # spec: SMP-85. A gas well under depletion: p_r against F from p/Z linear in F, on a grid of pressures
         self._p_of_F = None
         if not self.oil and not support and self._r1 < self._r0:

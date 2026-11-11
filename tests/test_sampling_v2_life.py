@@ -101,8 +101,8 @@ def check_life(lf):
         assert (a == 0 or between(a, 0, 0.1)) if oil else between(a, 2, 20)
     else:
         assert r0 == w0['r_p'] and a == w0[water]
-        if support:  # The late draw's pressure, and the water at its cap
-            assert between(r1, 0.70, 1) and r1 <= r0 and z == (0.98 if oil else 10000)
+        if support:  # The late draw's pressure, and the water watered out (D-141)
+            assert between(r1, 0.70, 1) and r1 <= r0 and (between(z, 0.85, 0.98) if oil else z == 10000)
         else:  # The reservoir exhausted, with the late draw's water
             assert between(r1, 0.15, 0.3 if oil else 0.2) and between(z, *((0.05, 0.4) if oil else (5, 80)))
 
@@ -315,7 +315,8 @@ def test_the_evolution_generators_numbers(lives):
     """SMP-83 to SMP-90, SMP-109: the numbers of a well's `evolution` generator in their order, each drawn for
     every well: the life span, the plateau, the decline's end rate and exponent, gamma, the breakthrough's recovery
     and WLR, the separator's two steps, the lift's drawn date, a tail well's start (the pressure, whether it is dry,
-    its WLR and its WGR) and a core well's end pressure under depletion."""
+    its WLR and its WGR) and a core well's end: its pressure under depletion, an oil's water under pressure
+    support (D-141)."""
     seen = set()
     for lf in lives:
         prm, T = lf.parameters(), lf.T_life
@@ -351,6 +352,8 @@ def test_the_evolution_generators_numbers(lives):
                 assert prm['water_start'] == log_uniform(13, 2, 20)
         elif not support:
             assert prm['r_p_end'] == uniform(14, 0.15, 0.3 if oil else 0.2)
+        elif oil:
+            assert prm['water_end'] == uniform(14, 0.85, 0.98)
         seen.add((tail, oil, support, lf.lift_start_rule == 'drawn_time', tail and oil and u[11] < 0.5))
     assert len(seen) >= 12 and {dry for *_, dry in seen} == {True, False}
 

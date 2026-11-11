@@ -6,8 +6,8 @@ terms of the CC BY-NC 4.0 International Public License.
 Created 11 November 2026
 Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
-The oils' water along a life under variants of SMP-86's breakthrough and SMP-69's start (G30 of
-plans/sampler-redesign/guesses.md; D-135 and D-140): the water cut of each well-year by years on production, the share
+The oils' water along a life under variants of SMP-86's breakthrough, SMP-69's start and SMP-83's end (G30 of
+plans/sampler-redesign/guesses.md; D-135, D-140 and D-141): the water cut of each well-year by years on production, the share
 of lives that start dry, the recovery at breakthrough of those that do, and a proxy of the decline of the oils under
 pressure support, whose liquid rate holds while their reservoir pressure does: the oil rate's 1 - WLR by fifth of the
 life over its first year's. The lives are the package's (manywells.sampling.v2.life.Life), core oil wells of the
@@ -16,8 +16,11 @@ solved. Each variant replays the well's own numbers, those of its `evolution` an
 
     r10      R10's rules: F_bt ~ U(0.05, 0.4) under pressure support and U(0.2, 0.7) under depletion, every start dry
     late_bt  D-135 alone: F_bt ~ U(0.1, 0.9) for both drives, every start dry
-    current  the package: D-135, and D-140's wet starts, a third of the oils under pressure support
+    d140     D-135 and D-140's wet starts, a third of the oils under pressure support
+    current  the package: D-140, and D-141's end under pressure support, U(0.85, 0.98)
     wet50    the package's rules with wet starts at half of those oils
+
+The variants before D-141 end a life under pressure support at a WLR of 0.98.
 
     (ulimit -v 8000000; OMP_NUM_THREADS=1 .venv/bin/python plans/evidence/water_breakthrough.py [N_OILS] [SEED]
         [--reference DIR])
@@ -35,12 +38,12 @@ import numpy as np
 import pandas as pd
 
 from manywells.sampling.v2.draws import _P_WET_START, _WLR_WET, draw_well
-from manywells.sampling.v2.life import Life
+from manywells.sampling.v2.life import _WLR_MAX, Life
 from manywells.sampling.wells import rng_for
 
 BINS = ((0, 2), (2, 5), (5, 10), (10, 20), (20, 30))
 R10_RANGES = {'pressure_support': (0.05, 0.4), 'depletion': (0.2, 0.7)}  # SMP-86's F_bt before D-135
-VARIANTS = ('r10', 'late_bt', 'current', 'wet50')
+VARIANTS = ('r10', 'late_bt', 'd140', 'current', 'wet50')
 
 
 def logit(x):
@@ -66,19 +69,27 @@ def variants(seed, k, life, drive):
     st = rng_for(seed, k, 'v2', 'stage').random(16)
     support = drive == 'pressure_support'
     z = life.parameters()['water_end']
+    z98 = _WLR_MAX if support else z  # The end before D-141
     dry0 = (0.0 if st[2] < 0.5 else 0.1 * st[3]) if support else (0.0 if st[4] < 0.5 else 0.1 * st[5])
     bt = 0.05 + 0.25 * ev[6] if support else 0.02 + 0.08 * ev[6]
     lo, hi = R10_RANGES[drive]
     wet0 = _WLR_WET[0] + (_WLR_WET[1] - _WLR_WET[0]) * st[15]
-    out = {
-        'r10': lambda F: water(F, dry0, z, lo + (hi - lo) * ev[5], bt),
-        'late_bt': lambda F: water(F, dry0, z, 0.1 + 0.8 * ev[5], bt),
+
+    def late(end):
+        return lambda F: water(F, dry0, end, 0.1 + 0.8 * ev[5], bt)
+
+    def wet(end):
+        return lambda F: water(F, wet0, end, 0.0, wet0)
+
+    wet30, wet50 = support and st[14] < _P_WET_START, support and st[14] < 0.5
+    assert ('wet_start' in life.w0['flags'].split(';')) == wet30
+    return {
+        'r10': lambda F: water(F, dry0, z98, lo + (hi - lo) * ev[5], bt),
+        'late_bt': late(z98),
+        'd140': wet(z98) if wet30 else late(z98),
         'current': None,  # Life.water
+        'wet50': wet(z) if wet50 else late(z),
     }
-    wet50 = support and st[14] < 0.5
-    out['wet50'] = (lambda F: water(F, wet0, z, 0.0, wet0)) if wet50 else out['late_bt']
-    assert ('wet_start' in life.w0['flags'].split(';')) == (support and st[14] < _P_WET_START)
-    return out
 
 
 def lives(n_oils, seed):
