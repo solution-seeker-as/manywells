@@ -692,9 +692,10 @@ def _falling_pz_pressures(df) -> list:  # spec: SMP-116
 
 def _repair(df, gor) -> tuple:  # spec: SMP-116
     """A table of one GOR without the pressures at which p/Z does not rise (_falling_pz_pressures), and those
-    pressures. A table that would lose more than MAX_DROPPED of its pressures fails, with a ValueError."""
+    pressures. A table that would lose more than MAX_DROPPED of its pressures, or one pressure where that is more (D-139),
+    fails, with a ValueError."""
     bad = _falling_pz_pressures(df)
-    if len(bad) > _MAX_DROPPED * df.p.nunique():
+    if len(bad) > max(1.0, _MAX_DROPPED * df.p.nunique()):
         raise ValueError(f'p/Z falls at {len(bad)} of {df.p.nunique()} pressures at GOR {gor:.6g}')
     return (df[~df.p.isin(bad)] if bad else df), bad
 

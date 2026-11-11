@@ -1330,3 +1330,16 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Needs sign-off:** yes (the outcome of an attempt; a count added to the core's search, no change to its roots).
 - **Used by:** `specs/sampling.md`, SMP-104; `sampling/v2/generate.py`; `rust/src/shoot.rs`.
 - **Ruling:**
+
+### D-139 · A table's repair may always drop one pressure
+
+- **Step:** R11, 2026-11-11, from R10's pilots' table failures (SMP-106's targets). Amends D-106's limit (L1).
+- **Choice made:** a table fails where the repair would drop more than 5% of its pressures, or more than one where one is more than 5%: a table of fewer than 20 pressures may lose one.
+- **Alternatives:** keep 5%, under which a table of fewer than 20 pressures can have no repair at all; a wider limit for every table; a finer grid, which would not shrink the share, since the artefacts span a band of pressure, not a number of nodes.
+- **Basis:** a design choice of the build, keeping L1's intent. R10's pilots failed 5 tables, 3 of 78 `sol-2` volatile oils and 2 of 19 `nsol-2` ones, above the target: every one a volatile oil of the tail, failing at the top of its GOR axis, late in a life whose producing GOR rises to several times $R_{si}$, where the flash leaves $p/Z$ artefacts near the near-critical bubble point. Two of them lost 1 of 18 pressures. The other three lost 2 of 23, 2 of 34 and 5 of 84, and still fail: an open finding (below).
+- **Realism:** none: a repaired table holds the flash's values at every node it keeps.
+- **Open:** tail volatile oils whose high-GOR tables lose more pressures. A wider repair, a cap on the tail's rise of GOR, or a closer look at NeqSim's phase split near the critical point are the options; R11's pilot measures the share again.
+- **Implemented** (R11, 2026-11-11): `sampling/v2/table_build.py` (`_repair`), SMP-116; `tests/test_sampling_v2_tables.py`.
+- **Needs sign-off:** yes (amends a ruled limit).
+- **Used by:** `specs/sampling.md`, SMP-116; `sampling/v2/table_build.py`.
+- **Ruling:**
