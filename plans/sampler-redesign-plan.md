@@ -48,6 +48,7 @@
   - Working assumptions D-134 to D-140: G7 and G30 taken (the offshore gas wells' line, D-134; the oils' later breakthrough, D-135, and wet starts, D-140), and R10's drops against SMP-106's targets fixed (D-136 to D-139: the lift gas kept on in an `nsol-2` redraw, the limits raised, a sign change next to a failed march counted as no operating point, a small table allowed to lose one pressure).
   - The datasheets of `sol-2` and `nsol-2`, the v2 schema in `docs/datasets.md` and the CHANGELOG entry, drafted.
   - The pilot, 400 `sol-2` and 100 `nsol-2` wells, run twice (`r11-measurements.md`): `sol-2` has no solver failure and drops 4 wells at the limits; the oils' decline lies within the regions' span in the second and third fifths of the life; a dataset of 10,000 wells costs about 110 to 130 CPU-hours. Open: the oils' late life, three tail volatile-oil tables, a near-critical condensate, and the reservoirs' heat and overpressure against Nadeau et al. (2023).
+  - Bjarne ruled the first open finding the same day: an oil's life under pressure support ends at a WLR of $U(0.85, 0.98)$ (D-141). The pilot's third run brings the oils' late decline within the regions' span; the second fifth now lies above it, and a dead date appears where a lifted well's natural flow ends before its lift starts.
   - Next: Bjarne's review of the pilot and the working assumptions; then the full generation, at his go-ahead.
 
 This plan replaces v1's sampling procedure for the v2 datasets (`specs/goals.md`, limitation 5: unrealistic sampled wells). It ends with:

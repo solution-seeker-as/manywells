@@ -1,6 +1,6 @@
 # Sampler redesign — R11's pilot (2026-11-11)
 
-*R11 took the two proposals of `guesses.md`'s triage that waited (G7, G30) and fixed the drops of R10's pilots against SMP-106's targets, as the working assumptions D-134 to D-140, and generated the pilot dataset that Bjarne reviews before the full generation (Step R11). The pilot ran twice: first with D-134 to D-139, then with D-140, which the first run's decline called for. Both runs are measured by `plans/evidence/r11_pilot.py`, which adds SMP-106's targets by class, the reservoirs against Nadeau, Sun and Ehrenberg (2023), the gas wells' separators and the decline by fifth to `r10_pilots.py`'s measurements. Every number here is ManyWells' own, from synthetic wells, unless it cites a publication.*
+*R11 took the two proposals of `guesses.md`'s triage that waited (G7, G30) and fixed the drops of R10's pilots against SMP-106's targets, as the working assumptions D-134 to D-140, and generated the pilot dataset that Bjarne reviews before the full generation (Step R11). The pilot ran three times: first with D-134 to D-139, then with D-140, which the first run's decline called for, and then with D-141, Bjarne's ruling on the second run's first open finding. The third run is the pilot for review; its section follows the runs, and the sections after it give the second run's numbers in full. Both runs are measured by `plans/evidence/r11_pilot.py`, which adds SMP-106's targets by class, the reservoirs against Nadeau, Sun and Ehrenberg (2023), the gas wells' separators and the decline by fifth to `r10_pilots.py`'s measurements. Every number here is ManyWells' own, from synthetic wells, unless it cites a publication.*
 
 ## The decisions
 
@@ -13,6 +13,7 @@
 | D-138 | A sign change next to a failed march is no operating point | R10's solver failures |
 | D-139 | A table's repair may always drop one pressure | R10's table failures |
 | D-140 | A third of the core oils under pressure support start wet | the first run's decline (G30) |
+| D-141 | An oil under pressure support ends its life at a WLR of $U(0.85, 0.98)$ (Bjarne's ruling) | the second run's late decline |
 
 ## The runs
 
@@ -22,8 +23,37 @@
 | `nsol-2`, first run | `7354277` | 2027 | 100 / 113 | 31 min |
 | `sol-2` | `ad39f58` | 2026 | 400 / 507 | 69 min |
 | `nsol-2` | `ad39f58` | 2027 | 100 / 113 | 35 min |
+| `sol-2`, third run | `b8d699d` | 2026 | 400 / 494 | 45 min |
+| `nsol-2`, third run | `b8d699d` | 2027 | 100 / 114 | 41 min |
 
-Each dataset ran on 5 processes, the two side by side; the second run shared the machine with the full test suite, which lengthened its wall times. The trees were clean, and both datasets' records name the commit. The datasets and their logs are kept outside the repo, with the maintainer's generated data; the second run is the pilot for review. The rest of this file gives the second run's numbers, with the first run's where they differ.
+Each dataset ran on 5 processes, the two side by side; the second and third runs shared the machine with the full test suite, which lengthened their wall times. The third run's `sol-2` was stopped and resumed from its kept wells on 7, 14 and then 19 processes, at Bjarne's ask to finish sooner. The trees were clean, and every dataset's record names its commit. The datasets and their logs are kept outside the repo, with the maintainer's generated data.
+
+## The third run, with D-141
+
+D-141 draws a core oil's end WLR under pressure support from $U(0.85, 0.98)$ in place of 0.98; nothing else changed, and no other draw moved. Against the second run:
+
+| | Third run (D-141) | Second run (D-140) |
+|---|---|---|
+| `sol-2` wells kept | 400 of 494 (81.0%; core 84.9%, tail 65.7%) | 400 of 507 (78.9%) |
+| `sol-2` not producible; dropped at the limits | 90; 3 redraw limit, 1 table failed | 103; the same 4 wells |
+| `nsol-2` wells kept | 100 of 114 (87.7%) | 100 of 113 (88.5%) |
+| `nsol-2` dropped at the limits | 3 dead dates, 2 table failed, 1 redraw limit, 1 solver-failure limit | 2 dead dates, otherwise the same |
+| Core `nsol-2` oils, oil rate by fifth of the life over the first year's, medians (47 wells) | 0.96 / 0.68 / 0.34 / 0.19 / 0.10 | 0.96 / 0.61 / 0.22 / 0.09 / 0.05 |
+| — 90% bootstrap, low / high | 0.91–0.99 / 0.52–0.79 / 0.26–0.42 / 0.14–0.22 / 0.08–0.15 | – / 0.50–0.78 / – / up to 0.11 / up to 0.06 |
+| — under pressure support (38 and 39 wells) | 0.96 / 0.71 / 0.35 / 0.19 / 0.09 | 0.96 / 0.61 / 0.22 / 0.06 / 0.03 |
+| All core wells' last fifth, oil equivalent (D-41's target) | 0.18 (90% bootstrap 0.16 to 0.23) | 0.16 (0.08 to 0.19) |
+| Late oils under pressure support, water cut, `nsol-2` / `sol-2` | 0.86 / 0.86 | 0.95 / 0.96 |
+| Offshore oil, Sm³/d oe, P10 / P50 / P90; above 1018 | 11 / 137 / 2230; 21.3% | 6 / 114 / 2160; 20.4% |
+| Platform; subsea oil wells, P50 (Sm³/d oe) | 112; 363 | 68; 273 |
+
+- **The decline.** The oils' third to fifth fifths now lie within the regions' span, the fifth at its bottom, where the second run's last two lay below it [own analysis of BOEM's OGOR-A production, ANP's production by well and NSTA's production by well]. The second fifth rose above the span, and the first lies just above it, as D-141's proxy foresaw (`decisions.md`, D-141): a lower end slows the water's rise along the whole life. A higher share of wet starts barely lowers it (D-141's Alternatives). Under pressure support the liquid rate holds, since the reservoir pressure moves little (SMP-85, a guess for these wells), so the oil rate follows the water alone. The all-wells last fifth, 0.18, lies above D-41's tenth: the oils now end at the bottom of the regions' span and the gas wells at 0.28, so the median of the mix lies between.
+- **The rates.** The oils' rates rose with their lower late water; the share above 1018 Sm³/d stays where it was. The gas classes, the reservoirs and the flow regimes are as in the second run, within a point.
+- **A new dead date.** `nsol-2`'s third is a gas-lifted core black oil that the second run kept. With less water it flows naturally for longer, so its lift, which starts where SMP-90's static check on 41 dates finds natural flow ended, starts later. Just before that, a third of the way through its life, four slots find no operating point in 100 attempts at their drawn chokes, though its best controls flow. Three of 114 wells is 2.6%, against the target of 0.5%: an open finding (below).
+- **The cost** is not comparable with the other runs: at 19 processes on 12 physical cores, each with two threads, the processes shared cores, and the CPU per accepted well rose to 50.1 s in `sol-2` and 51.2 s in `nsol-2`.
+
+The full test suite passes at `b8d699d` (1619 tests); D-141 changes no solver, so the verifier candidates stand.
+
+*The sections below give the second run's numbers (`ad39f58`), with the first run's where they differ.*
 
 ## Outcomes and SMP-106's targets
 
@@ -168,8 +198,10 @@ At `ad39f58` the full test suite passes (1619 tests), and both verifier candidat
 
 ## Open findings
 
-1. **The oils' late life.** Under pressure support their fourth and fifth fifths lie below the regions' oil wells, since a life ends at a water cut of 0.98 (D-105). A drawn end, such as $U(0.85, 0.98)$, the range D-41's ruling gave `nsol-2` before D-105, would raise them and keep the wettest wells in coverage; it revises D-105's end, so it waits for Bjarne.
-2. **The tail volatile oils' tables** (D-139, Open): three tables fail, as D-139 expected.
-3. **A near-critical gas condensate** (`nsol-2`): only an unstable root found where the densities meet; a model edge.
-4. **The reservoirs** are hotter and more often overpressured than Nadeau et al.'s (2023) largest fields, and none lies below 0.8 of fresh water's gradient (SMP-63, SMP-65).
-5. **The targets** that `nsol-2`'s pilot is too small to judge, and the oil classes' 1.2% in `sol-2`, are judged on the full dataset.
+1. **The oils' late life** (ruled: D-141). Under pressure support their fourth and fifth fifths lay below the regions' oil wells, since a life ended at a water cut of 0.98 (D-105). The drawn end $U(0.85, 0.98)$ brings them within the span (the third run).
+2. **The oils' second fifth** lies above the regions' span in the third run. Its levers are the breakthrough's range (D-135, data), the jump at breakthrough, and the reservoir pressure under support, whose path is a guess.
+3. **Dead dates at the lift's start.** 3 of 114 `nsol-2` wells, against 0.5%. The new one dies where natural flow ends between two of SMP-90's 41 check dates, before its lift starts. Options: start the lift at a date where no drawn choke flows naturally, or check natural flow at the samples' dates.
+4. **The tail volatile oils' tables** (D-139, Open): three tables fail, as D-139 expected.
+5. **A near-critical gas condensate** (`nsol-2`): only an unstable root found where the densities meet; a model edge.
+6. **The reservoirs** are hotter and more often overpressured than Nadeau et al.'s (2023) largest fields, and none lies below 0.8 of fresh water's gradient (SMP-63, SMP-65).
+7. **The targets** that `nsol-2`'s pilot is too small to judge, and the oil classes' 1.2% in `sol-2`, are judged on the full dataset.
