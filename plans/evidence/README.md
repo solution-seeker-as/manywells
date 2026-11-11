@@ -355,3 +355,7 @@ A Rust core finding of the sampler redesign's R9 pilots (`../../specs/features/0
 ## Sampler redesign: R10's pilots (2026-11-10)
 
 `r10_pilots.py SOL_OUT NSOL_OUT` measures a `sol-2` and an `nsol-2` dataset written by `scripts/data_generation/v2/generate_dataset.py` (its `--out` folders, with the companion logs and the run's attempt log) as R9's pilots were measured: the outcomes, the core wells' rates by class and well type, the flow regimes, the decline of an `nsol-2` life by drive, the two datasets by stage (D-105), and the cost. It reads the files only, in about a minute. Results in `../sampler-redesign/r10-measurements.md`; the pilots themselves are kept outside the repo, with the maintainer's generated data.
+
+## Sampler redesign: R11's working assumptions (2026-11-11)
+
+`water_breakthrough.py [N_OILS] [SEED] [--reference DIR]` measures the oils' water along the package's lives under variants of SMP-86's breakthrough (`guesses.md`, G30; D-135): the water cut of each well-year by years on production, the share of lives that start dry, and the recovery at breakthrough of those that do. It solves no well, since the water depends only on the depletion clock and the water's draws; 600 lives take about half a minute. With `--reference` it prints the span of the regions' well-year medians from the maintainer's per-well statistics, kept outside the repo, next to the variants'; that output is not committed. Results in `../sampler-redesign/decisions.md`, D-135.

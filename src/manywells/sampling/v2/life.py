@@ -112,11 +112,13 @@ class Life:
         self._D = (q_end**-self._b - 1) / (self._b * tau) if self._b > 1e-6 else -math.log(q_end) / tau
         self._N_T = _cumulative(self.T_life, self._t_pl, self._D, self._b)
         self._gamma = r.uniform(*_GAMMA)  # spec: SMP-85
-        # spec: SMP-86. Breakthrough: its recovery, and the water-liquid ratio that an oil jumps to
-        if support:
-            self._F_bt, self._wlr_bt = r.uniform(0.05, 0.4), r.uniform(0.05, 0.3)
+        # spec: SMP-86. Breakthrough: its recovery, an oil's for both drives (D-135), and the water-liquid ratio that
+        # an oil jumps to
+        if self.oil:
+            self._F_bt = r.uniform(0.1, 0.9)
         else:
-            self._F_bt, self._wlr_bt = r.uniform(0.2, 0.7), r.uniform(0.02, 0.1)
+            self._F_bt = r.uniform(0.05, 0.4) if support else r.uniform(0.2, 0.7)
+        self._wlr_bt = r.uniform(0.05, 0.3) if support else r.uniform(0.02, 0.1)
         self._t_sep = tuple(float(t) for t in np.sort(r.uniform(*_T_SEP, 2)) * self.T_life)  # spec: SMP-89
         t_lift = r.uniform(*_T_LIFT) * self.T_life  # spec: SMP-90
         # spec: SMP-83. The start: the initial-stage draw's state, and for a tail well a core initial state. Its

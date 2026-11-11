@@ -117,7 +117,7 @@ def check_life(lf):
 
     # The water (SMP-86)
     F_bt, wlr_bt = prm['F_bt'], prm['wlr_bt']
-    assert between(F_bt, *((0.05, 0.4) if support else (0.2, 0.7)))
+    assert between(F_bt, *((0.1, 0.9) if oil else (0.05, 0.4) if support else (0.2, 0.7)))  # D-135
     assert between(wlr_bt, *((0.05, 0.3) if support else (0.02, 0.1)))
     wat = [lf.water(t) for t in ts]
     assert wat[0] == a and wat[-1] == pytest.approx(max(a, z), rel=1e-9) and np.all(np.diff(wat) >= -1e-12 * z)
@@ -330,7 +330,8 @@ def test_the_evolution_generators_numbers(lives):
         assert b == (uniform(3, 0.3, 0.5) if support else uniform(3, 0, 0.4))
         assert b < 1e-6 or (1 + b * prm['decline_D'] * tau) ** (-1 / b) == log_uniform(2, 0.03, 0.3)
         assert prm['gamma_p'] == uniform(4, 0.7, 2.3)
-        assert prm['F_bt'] == (uniform(5, 0.05, 0.4) if support else uniform(5, 0.2, 0.7))
+        F_bt_range = (0.1, 0.9) if lf.oil else (0.05, 0.4) if support else (0.2, 0.7)  # D-135
+        assert prm['F_bt'] == uniform(5, *F_bt_range)
         assert prm['wlr_bt'] == (uniform(6, 0.05, 0.3) if support else uniform(6, 0.02, 0.1))
         steps = sorted(0.1 + 0.8 * x for x in u[7:9])
         assert [prm['t_sep_1'] / T, prm['t_sep_2'] / T] == pytest.approx(steps, rel=1e-12)
