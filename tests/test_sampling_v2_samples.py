@@ -394,7 +394,7 @@ def test_a_redraw_keeps_the_date_and_changes_the_controls(lives, plans):
                 # The redraw's numbers from its own generator, in their order
                 r = rng_for(SEED, lf.k, j, a, 'v2', 'redraw')
                 small_u, step_u, open_u, new_u = r.random(), r.uniform(-0.2, 0.2), r.random(), r.random()
-                small_w, step_w, off_w, new_w = r.random(), r.uniform(-0.2, 0.2), r.random(), r.random()
+                small_w, step_w, _off, new_w = r.random(), r.uniform(-0.2, 0.2), r.random(), r.random()
                 if small_u < 0.6:
                     assert inp['u'] == reflect(slot['u'] + step_u, 0.05, 1.0)
                 else:
@@ -405,7 +405,7 @@ def test_a_redraw_keeps_the_date_and_changes_the_controls(lives, plans):
                     assert inp['w_lg'] == reflect(slot['w_lg'] + step_w * w_max, 0.1 * w_max, w_max)
                     assert between(inp['w_lg'] / w_max, 0.1, 1)
                 else:
-                    assert inp['w_lg'] == (0.0 if off_w < 0.20 else w_max * (0.1 + 0.9 * new_w))
+                    assert inp['w_lg'] == w_max * (0.1 + 0.9 * new_w)  # Never off in a redraw (D-136)
                 assert inp['p_s'] == samples._separator_pressure(r, inp['p_s_nom'], lf.w0['dp_fl'])
                 du.append(abs(inp['u'] - slot['u']))
                 n_lifted += slot['lift_on']

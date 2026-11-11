@@ -1294,3 +1294,15 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Needs sign-off:** yes (sampling).
 - **Used by:** `specs/sampling.md`, SMP-86; `sampling/v2/life.py`.
 - **Ruling:**
+
+### D-136 · An `nsol-2` redraw keeps a lifted well's lift gas on
+
+- **Step:** R11, 2026-11-11, from R10's pilots' drops (SMP-106's targets). Revises D-83's redraw for the lift gas.
+- **Choice made:** where an `nsol-2` redraw draws the lift gas anew (probability 0.4), it draws it on $[0.1, 1]\thinspace w_{lg,\max}$, never off; the slot's planned control may still be off (SMP-94, SMP-98). The redraw draws the same numbers as before, so no other draw moves.
+- **Alternatives:** keep D-83's redraw, which turns the lift gas off with probability 0.08; the same in `sol-2`, where a redraw is the slot's whole draw again so that the samples follow the drawn distribution conditioned on an operating point (SMP-105), which leaving out a state would bias.
+- **Basis:** a design choice of the generation, with a measured need. A well that cannot flow without lift has no operating point with the lift gas off, so such a redraw cannot succeed: in R10's `nsol-2` pilot, attempts with the lift gas off were up to a third of the attempts of the wells dropped at the redraw limit, and half of the redraws of the accepted wells had the lift gas off.
+- **Realism:** none in the samples: a redraw that stays on succeeds where an off one could not, and a slot planned off keeps its off attempt.
+- **Implemented** (R11, 2026-11-11): `sampling/v2/samples.py` (`_nsol2_redraw`), SMP-105; `tests/test_sampling_v2_samples.py`.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-105; `sampling/v2/samples.py`.
+- **Ruling:**
