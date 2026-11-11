@@ -74,7 +74,7 @@ Churn flow stays thin (G1).
 
 ## The decline of a life
 
-Core `nsol-2` wells, the mean rate in each fifth of the life over the first year's, medians: 0.97, 0.54, 0.28, 0.19 and 0.10, the regions' tenth at the end [own analysis of BOEM's OGOR-A production, ANP's production by well and NSTA's production by well].
+Core `nsol-2` wells, the mean rate in each fifth of the life over the first year's, medians: 0.97, 0.54, 0.28, 0.19 and 0.10, the last agreeing with the regions' [own analysis of BOEM's OGOR-A production, ANP's production by well and NSTA's production by well].
 
 | Group | Wells | Last fifth (R10) | Last fifth (R9's rerun) |
 |---|---|---|---|
