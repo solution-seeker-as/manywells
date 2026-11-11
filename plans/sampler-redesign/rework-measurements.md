@@ -20,7 +20,7 @@ The last two are the rework's result; the others show the steps to it.
 
 ## What the rulings changed
 
-**The decline of a life (D-41, D-105).** The regions measure each well's mean rate in each fifth of its life over its first year's; the median of the stopped wells' last fifth lies near a tenth [own analysis of BOEM's OGOR-A production, ANP's production by well and NSTA's production by well]. Measured the same way on the core `nsol-2` wells, median by group:
+**The decline of a life (D-41, D-105).** The regions measure each well's mean rate in each fifth of its life over its first year's; D-41's target for the median of the last fifth, about a tenth, is set with the stopped wells [own analysis of BOEM's OGOR-A production, ANP's production by well and NSTA's production by well]. Measured the same way on the core `nsol-2` wells, median by group:
 
 | Run | Last fifth, all | Oil, support | Oil, depletion | Gas, support | Gas, depletion |
 |---|---|---|---|---|---|
@@ -29,7 +29,7 @@ The last two are the rework's result; the others show the steps to it.
 | Harsher end, `nsol-2` only | 0.20 | 0.06 | 0.33 | 0.76 | 0.20 |
 | One life, exhausted end, D2 (final) | 0.12 | 0.03 | 0.22 | 0.67 | 0.14 |
 
-The steeper Arps clock alone moved nothing: a life's last fifths sit at its end state, which R3's late draw left at about a third of the start's rate. Running each life towards an exhausted reservoir and stopping it at the economic floor gives the regions' tenth overall; 21% of the final lives end at the floor. Gas wells with pressure support still decline little: their reservoir pressure stays high, and water at a WGR of 1000 Sm³ per 10⁶ Sm³ at the end does not stop them. That is open.
+The steeper Arps clock alone moved nothing: a life's last fifths sit at its end state, which R3's late draw left at about a third of the start's rate. Running each life towards an exhausted reservoir and stopping it at the economic floor gives D-41's tenth overall; 21% of the final lives end at the floor. Gas wells with pressure support still decline little: their reservoir pressure stays high, and water at a WGR of 1000 Sm³ per 10⁶ Sm³ at the end does not stop them. That is open.
 
 **One life for both datasets (D-105).** `sol-2`'s wells and `nsol-2`'s samples agree by stage, by construction (core wells, medians):
 

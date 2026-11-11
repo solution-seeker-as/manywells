@@ -4,7 +4,9 @@
 
 Each section gives the spec file, the passage as it stands, the proposed text, and why.
 
-*Applied (2026-11-06): feature 022's sections (`specs/model/inflow.md`, `solution.md`, `README.md`, `nomenclature.md`, the 022 parts of `validity.md`, `specs/architecture.md` and `specs/features/README.md`) went into `develop` with the feature (#38), and the `specs/model/pvt/table.md` section with K1's option A′ (#39); the specs as merged are the record. The sections for `specs/goals.md` and `specs/constitution.md` are still proposals, for R10.*
+*Applied (2026-11-06): feature 022's sections (`specs/model/inflow.md`, `solution.md`, `README.md`, `nomenclature.md`, the 022 parts of `validity.md`, `specs/architecture.md` and `specs/features/README.md`) went into `develop` with the feature (#38), and the `specs/model/pvt/table.md` section with K1's option A′ (#39); the specs as merged are the record. The sections for `specs/goals.md` and `specs/constitution.md` are still proposals, for R10.
+
+*Applied (2026-11-10, R10): the sections for `specs/goals.md` (with I1's companion file for the logs), `specs/constitution.md` and the rest of `specs/model/validity.md` (the status line, decision 5, the inclination row, notes 9 and 10, items 1 and 3), with the second checkpoint's L3 in note 12 and feature 022, and D-107's water–gas ratio in INF-10's row. Decision 5's text leaves out the Gulf of Mexico's equivalent tangent, a value computed from real-well data, and points to `plans/evidence/stratified_flow_limit.py`. The specs as merged are the record.*
 
 ## `specs/goals.md`
 

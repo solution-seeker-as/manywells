@@ -184,6 +184,11 @@ median, 7.3 s a case against 3.7 s. Both backends interpolate a table to the sam
 in the same cases. In 258 of the 260 cases they agree on it to about $10^{-6}$ bar; in the other 2 they differ as
 much with the black oil itself. Making a table of a black oil on 10 bar by 10 K takes about 0.02 s.
 
+Reading a GOR axis at a fluid's GOR takes 0.1 to 0.5 ms for tables of 300 to 2000 nodes. The first read between two
+GORs puts their two tables on the union of their grids, in 2 to 8 ms, and the axis keeps them; every later read
+between the same two is a weighted sum. A table's CasADi interpolants are built when they are first read, so a fluid
+that only the Rust core solves builds none.
+
 ## Examples
 
 [`tests/data/pvt/`](../tests/data/pvt/README.md) has four example tables, none from a real fluid:

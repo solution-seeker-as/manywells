@@ -917,7 +917,7 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Step:** the rework, 2026-11-06. Revises D-18 (the states by stage), D-41 (the end of a life) and D-42 to D-44 (the trends' end); D-19's material balance and D-40's drift stay.
 - **Choice made:** every well has one life (R4's trends, `sampler_draft_samples.Life`), from R3's initial draw at its start towards its reservoir exhausted at its end: under depletion $p_r/p_i$ from 0.15, the coverage tail's floor, to the bottom of R3's late range ($U(0.15, 0.3)$ for oils, $U(0.15, 0.2)$ for gases); under pressure support the water at its cap, a water cut of 0.98 for oils and a WGR of 1000 Sm³ per 10⁶ Sm³ for gases (the tail's top). An `nsol-2` well lives it until its best rate falls below half the floor (D-50, D-84). A `sol-2` well is the same life at one date drawn uniformly in its drawn stage: the first year (initial), the rest of the first half of the life span (mid-life) or its second half (late); its producibility filter drops a well whose date falls after it stopped paying. A tail well keeps its tail state, its life's end. R3's per-stage tables remain as the life's anchors only: the start, the separator's steps, the roughness and the lift.
 - **Alternatives:** an `nsol-2` life that ends at the same well's `sol-2` late draw (R4's design), consistent but with the last fifth of a life at about 0.38 of the first year's rate; a harsher end for `nsol-2` alone, with the stages of the two datasets meaning different states.
-- **Realism:** real wells run down to abandonment, and the regions' stopped wells' last fifth falls to about a tenth of their first year's rate [own analysis of BOEM's OGOR-A production, ANP's production by well and NSTA's production by well]. A well stock at a date holds wells at every point of their lives that still pay, as `sol-2` now does. In the draws (300 wells, seed 2026) `nsol-2`'s samples and `sol-2`'s wells agree by stage, by construction: late depletion wells at 0.23 and 0.24 of $p_i$ at the median, late oil wells with pressure support at water cuts of 0.96 and 0.97.
+- **Realism:** real wells run down to abandonment, and D-41's target, a last fifth at about a tenth of the first year's rate, is set with the regions' stopped wells [own analysis of BOEM's OGOR-A production, ANP's production by well and NSTA's production by well]. A well stock at a date holds wells at every point of their lives that still pay, as `sol-2` now does. In the draws (300 wells, seed 2026) `nsol-2`'s samples and `sol-2`'s wells agree by stage, by construction: late depletion wells at 0.23 and 0.24 of $p_i$ at the median, late oil wells with pressure support at water cuts of 0.96 and 0.97.
 - **Needs sign-off:** yes (sampling).
 - **Used by:** `sampling-draft.md`, Reservoir state at the life stage and `nsol-2`: a well's life; `sampler_draft_samples.py` (`sol2_well_at`, `Life`); `sampler_prototype.py` (`sol2_well`).
 - **Ruling:** Bjarne, 2026-11-06: "One life for both", after asking for a simple and reasonable method and that `nsol-2`'s and `sol-2`'s late stages be the same.
@@ -941,3 +941,332 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Needs sign-off:** yes (sampling; the WGR bound and `validity.md`'s row).
 - **Used by:** `sampler_draft_samples.py` (`END_WGR`), `sampler_draft_draws.py` (the tail's WGR); `sampling-draft.md`, The reservoir state and `nsol-2`: a well's life.
 - **Ruling:** Bjarne, 2026-11-10 (second checkpoint, L4): approved as recommended. The rerun of 2026-11-09 took it as a working assumption (`r9-measurements.md`, The rerun after the second checkpoint).
+
+*Entries D-108 to D-121 are R10's (2026-11-10): working assumptions taken while the sampler was moved into the package, under Bjarne's rule of that day that an agent works until the step is finished and hands it over once, and that the design rests on data and physics. D-110 to D-120 replace guesses that the triage of `guesses.md` found data, a published source or physics for. Each is its own commit, so that a ruling can reverse it alone. Two of the triage's proposals are not taken and wait for Bjarne: a later water breakthrough with wet starts (G30), and a higher separator pressure for gas wells (G7).*
+
+### D-108 · Every number of a block is drawn, whatever the branch
+
+- **Step:** R10, 2026-11-10. Implements the checkpoint's note on D-7.
+- **Choice made:** where the prototype skipped a number that a well's branch did not use (six places in the well draws: the dry-gas number, the surface temperature's second number, the flowline's two numbers, the undersaturation, the stage block's second pressure number and initial water numbers, and the lift's Bernoulli), the block now draws it and leaves it unused, so that every block takes the same count of numbers in the same order for every well. The same holds for the samples' blocks. A core well does not draw a tail well's form of a number as well: the two forms take the same number.
+- **Alternatives:** leave the prototype's order, under which a change of one rule moves later draws of the same block; a fixed vector of uniforms per block with every draw an inverse transform, which is stricter and rewrites every draw.
+- **Basis:** a design choice for reproducibility (D-7): a change of one rule moves no other draw.
+- **Realism:** not applicable. The draws' values change against the prototype's for most wells, and their distributions do not; the port was proved bit for bit against the prototype before this change, and the pilots were rerun after it.
+- **Implemented** (R10, 2026-11-10). Besides the six places, the port found these: a platform well's deep-water number and an onshore well's water depth (`depth`); the survey, whose count of numbers varied by family, by whether the shape fitted and by the count of redraws, now six numbers per survey and all 20 surveys' numbers for every well (`geometry`); a core well's tail pressure downstream of the choke (`separator`); a gas class's saturation numbers and a black oil's initial-GOR number (`fluid`); the tail's $r_p$ and WLR, an oil's $k_g/k_o$ blend and a gas class's WGR and $c_k$ (`stage`); a natural well's lift design (`lift`); a core well's tail $h$ (`heat`); and one draw whose count varied with the seed, numpy's Dirichlet of a table fluid's composition weights, now three exponential draws over their sum, one number each. The life's blocks (`evolution`, `date`) and the samples' (`sample`, `controls`, `redraw`) were clean: their counts are fixed by the slots alone. Over 3000 wells, 1500 lives and 400 plans of seed 2026, every key's distribution before and after, core and tail apart, moves within sampling noise: the largest two-sample Kolmogorov statistic $\sqrt{nm/(n + m)}\thinspace D$ is 1.42 (the condensates' $c_k$, 358 core wells), 2 of 303 comparisons lie above the 5% level of 1.36 and none above the 0.1% level of 1.95, and the largest change of a share is 2.1 standard errors. The table fluid of the NeqSim test's well moves with its weights: its bubble point from 274.0 to 270.6 bar.
+- **Needs sign-off:** no; it carries out a ruled note.
+- **Used by:** `specs/sampling.md`, SMP-51; `sampling/v2/draws.py`, `survey.py`, `_distributions.py` (`unused`) and `table_build.py` (the composition's weights); `life.py` and `samples.py` needed no change; tests that every block takes the same numbers for every well and that a branch's constant moves no later draw.
+- **Ruling:**
+
+### D-109 · The initial pressure stops at 950 bar where the hydrostatic pressure alone passes it
+
+- **Step:** R10, 2026-11-10. A finding of the port on D-12 and D-35.
+- **Choice made:** where $p_h > 950$ bar, $p_i = 950$ bar and `pressure_class` is `under`; otherwise as SMP-63.
+- **Alternatives:** leave $p_i$ up to about 1080 bar in such wells, outside the bound that D-35 ruled; redraw the depth or the water depth, which moves other draws; a lower cap on the depth in deep water.
+- **Basis:** physics for the bound, the largest bottomhole pressure of Hasan et al.'s data (D-35, `validity.md`); the cap's form is a design choice, the simplest that keeps the bound.
+- **Realism:** $p_h$ passes 950 bar only in the deepest wells in the deepest water: 38 of 300,000 draws of the prototype (seed 2026), 34 of them tail subsea wells, so one or two wells of a dataset. Such wells exist, at pressures above the model's range; a capped well is under its hydrostatic pressure by at most an eighth, inside the underpressured class's range of 0.8 to 1.0.
+- **Implemented** (R10, 2026-11-10): in the package after D-108, 5 of 100,000 wells (seed 2026) have $p_h > 950$ bar, 4 tail subsea and 1 tail platform well; 4 of them had $p_i$ above 950 bar, up to 974.5 bar, and one had been drawn underpressured at 903 bar, which the rule raises to 950 bar. No other draw moves.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-63; `sampling/v2/draws.py` (`_pressure`); the bound's test, now a plain test.
+- **Ruling:**
+
+### D-110 · Water depths: subsea wells log-uniform, fewer deep-water dry trees, a lower shelf floor
+
+- **Step:** R10, 2026-11-10. Revises D-13 (`guesses.md`, G2).
+- **Choice made:** subsea $d_w \sim \text{LogU}(80, 3000)$ m in place of $\text{LogN}_ {[80, 3000]}(350, 0.8)$; deep-water dry trees 0.10 of platform wells in place of 0.15; the shelf platforms' floor 5 m in place of 15 m; the rest of SMP-58 as it is.
+- **Alternatives:** keep the log-normal, whose median is one region's; a fit to one region's subsea wells.
+- **Basis:** data. The subsea wells of three regions together span the whole range, one centred where the draft's median is and another mostly in deep water, where the draft put few wells; the shelf wells of one region stand in shallower water than the draft's floor; the deep-water share of platform wells lies between one region's present-day share and the others' none [own analysis of BOEM's directional surveys and borehole file, Sodir's FactMaps, NSTA's wellbore layer and NOAA's World Ocean Atlas 2023]. The log-uniform shape is a design choice, D-104's rule of a uniform draw over the pooled range.
+- **Realism:** subsea wells in 1000 m of water or more become three in ten of the subsea wells in place of a tenth. Deeper water gives a colder seabed, a larger flowline loss and a lower effective gradient, so the subsea wells' rates and kept share are measured again on the pilot.
+- **Implemented** (R10, 2026-11-10). The tail's platform draw starts at 5 m as well, $\text{LogU}(5, 2000)$ m in place of $\text{LogU}(15, 2000)$ m, so that the tail still spans the core (SMP-53). Over 100,000 wells of seed 2026, before and after (5th / 25th / 50th / 75th / 95th percentiles): the core subsea wells' $d_w$ 114 / 214 / 360 / 609 / 1297 m becomes 96 / 195 / 489 / 1214 / 2512 m, with 30.4% of them in 1000 m or more (9.5% before) and 11.2% in 2000 m or more (1.2%); their $T_s$ 274.6 / 279.6 / 287.6 K becomes 273.3 / 278.4 / 288.3 K (5th / 50th / 95th), $T_r$'s median 349 K becomes 346 K, the flowline's $\Delta p_\text{fl}$ 17 / 36 / 85 bar becomes 16 / 42 / 147 bar, and $p_{s,\text{nom}}$ 32 / 62 / 118 bar becomes 32 / 71 / 176 bar, at its cap of 250 bar in 0.14% of them (none before). The core platforms' deep-water share falls from 0.150 to 0.100, and 0.2% of them stand in less than 15 m; the tail platforms' median $d_w$ falls from 176 to 102 m. Wells whose hydrostatic pressure passes 950 bar (D-109) rise from 5 to 8 in 100,000.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-58; `sampling/v2/draws.py` (`_depth`, `_P_DEEP_TREE`).
+- **Ruling:**
+
+### D-111 · S wells hold at 20° to 60° and run on for longer; a drain's tangent may be absent
+
+- **Step:** R10, 2026-11-10. Revises D-104's shapes for the S family and the drains (`guesses.md`, G3).
+- **Choice made:** an S well's hold $\theta_h \sim U(20°, 60°)$ in place of $U(15°, 45°)$; its end section $\min(U(100, 1200)\ \text{m}, L/3)$ of TVD in place of $\min(U(100, 400)\ \text{m}, L/4)$; a drain's tangent before the heel $U(0, 300)$ m in place of $U(50, 300)$ m; the holds' least lengths as they are.
+- **Alternatives:** keep R3's values, set before the surveys were read; fitted shapes.
+- **Basis:** data, by D-104's rule of a uniform draw over the pooled range: the S wells of two regions hold up to well above the draft's 45°, and one region's run on below their drop for longer than the draft allowed; most of one region's drains land without a tangent [own analysis of BOEM's directional surveys and NLOG's deviation surveys]. The lower end of 20° is the deviated class's own (SMP-59).
+- **Realism:** S wells are a twelfth of the wells. The end section rests on one region.
+- **Implemented** (R10, 2026-11-10). Over 100,000 wells of seed 2026, before and after (5th / 25th / 50th / 75th / 95th percentiles): the S wells' hold 16.5 / 22.2 / 29.5 / 37.3 / 43.5° becomes 21.7 / 28.7 / 38.3 / 49.1 / 57.9°, their end section 115 / 171 / 246 / 320 / 384 m becomes 151 / 328 / 562 / 792 / 1060 m, their MD over TVD 1.016 / 1.060 / 1.165 (5th / 50th / 95th) becomes 1.028 / 1.098 / 1.273, and the drains' tangent 63 / 176 / 288 m becomes 15 / 151 / 285 m. The S wells redrawn at least once rise from 2.4% to 6.6% (redraws per S well from 0.05 to 0.22), and 20 S wells fall back to vertical after 20 redraws, 0.24% of the S wells, where none did before: most are shallow, about 650 m below the mudline, where even a hold of 20° with the least end section no longer fits, and a few very deep ones pass the MD limit. The drains' redraws do not change (0.4%). On 40,000 of the surveys drawn after the change, none passes 75° or 9342 m of MD, and no hold is shorter than its least TVD.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-60; `sampling/v2/survey.py` (`_S_HOLD`, `_S_END`, `_S_END_SHARE`, `_HEEL_TANGENT`).
+- **Ruling:**
+
+### D-112 · Subsea separator temperatures up to 340 K
+
+- **Step:** R10, 2026-11-10. Revises D-15's temperatures (`guesses.md`, G8).
+- **Choice made:** subsea $T_\text{sep} \sim U(290, 340)$ K in place of $U(290, 320)$ K.
+- **Alternatives:** keep 320 K.
+- **Basis:** data, thinly: subsea satellite wells of one operator arrive topside at temperatures whose median lies above the draft's top [own analysis of Petrobras' 3W Dataset]; a long tieback arrives colder, which the range's bottom keeps.
+- **Realism:** the temperature enters only the black oil's separator correction (PVT-OIL-5) and a table fluid's offsets, by a few per cent.
+- **Implemented** (R10, 2026-11-10). Over 30,000 wells of seed 2026, before and after (5th / 25th / 50th / 75th / 95th percentiles): the subsea wells' $T_\text{sep}$ 291 / 298 / 305 / 313 / 318 K becomes 292 / 303 / 315 / 328 / 337 K; their black oils' initial GOR rises by 0.0 / 0.3 / 1.3 / 2.5 / 4.1%, and those whose saturation pressure is lowered to the black oils' GOR limit rise from 17.5% to 18.4% of them. The platform and onshore ranges are classed as data, thinly, as the triage proposes.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-66; `sampling/v2/draws.py` (`_separator`).
+- **Ruling:**
+
+### D-113 · A slanted well's productivity from Cinco-Ley's slant skin
+
+- **Step:** R10, 2026-11-10. Replaces D-21's placeholder factor (`guesses.md`, G14 and G15).
+- **Choice made:** for build-and-hold and S wells, the skin of a slanted well, $s_\theta = -(\theta'/41)^{2.06} - (\theta'/56)^{1.865}\log_{10}(h_D/100)$ with $\theta' = \arctan(\tan\theta_\text{end}/I_\text{ani})$ in degrees and $h_D = h_n I_\text{ani}/r_w$, is added to the skin in $J$ and in a gas well's $a$, in place of the factor $(\cos\theta_\text{end})^{-1/2}$; a gas well's non-Darcy coefficient takes the perforated length along the well, $h_\text{perf}/\cos\theta_\text{end}$, in Eq. 4-34. The gain $(A + s)/(A + s + s_\theta)$, with $A = \ln(r_e/r_w) - 0.75$, is capped where a stimulated well at a high angle would pass it. The drains' form (D-21) is untouched.
+- **Alternatives:** keep the placeholder, which is unbiased at the median but blind to the skin, on which the gain depends; Besson's form.
+- **Basis:** physics, a published correlation: Cinco-Ley, Ramey and Miller's (1975) slant skin, as tabulated by Economides, Hill and Ehlig-Economides (1994, Table 5-1, p. 91: −0.128, −0.517, −1.178, −2.149 and −3.577 at 15° to 75° for $h_D$ = 100), which the fit reproduces within 3%; valid to 75°, the sampler's limit. The cap is a design choice of the build.
+- **Realism:** for a well of skin 2 and $\ln(r_e/r_w)$ = 8 the table gives gains of 1.06, 1.15, 1.30 and 1.63 at 30°, 45°, 60° and 75°, where the placeholder gave 1.07, 1.19, 1.41 and 1.97. Over the draws the placeholder over the slant skin's gain is 0.85 / 1.01 / 1.11 (5th, 50th and 95th percentiles) from 20° to 60° and 0.58 / 1.09 / 1.36 from 60° to 75°.
+- **Implemented** (R10, 2026-11-10). The fit gives −0.126, −0.526, −1.211, −2.191 and −3.470 at 15° to 75° for $h_D$ = 100, within 3.0% of Table 5-1 (a test). **The safeguard:** a floor of 2 on $A + s + s_\theta$, the simpler of the two at the same share: over 62,435 slanted wells of 100,000 (seed 2026) it binds in 201, 0.32%, of which 193 are at 60° to 75° (1.6% of that band) and 8 at 20° to 60°; the largest gain it leaves is 3.2. A cap of 2 on the gain would bind in 0.86%, cutting into the band's 95th percentile. Over 3000 drawn wells, the factor $f$ on a slanted well's index before and after (5th / 50th / 95th percentiles): below 20°, 1.00 / 1.01 / 1.03 becomes 1.00 / 1.00 / 1.02; from 20° to 60°, 1.04 / 1.12 / 1.37 becomes 1.01 / 1.04 / 1.20; from 60° to 75°, 1.43 / 1.60 / 1.91 becomes 1.11 / 1.28 / 1.88. An oil's $J$ after over before is 0.98 / 0.99 / 1.00, 0.82 / 0.94 / 0.99 and 0.68 / 0.79 / 1.07 in the three bands. A gas well's $D$ falls with the perforated length along the well, by 0.96, 0.71 and 0.19 at the median of the bands, so its open flow changes less: 0.98 / 1.00 / 1.01, 0.86 / 0.98 / 1.13 and 0.72 / 0.96 / 1.55. Vertical wells do not change.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-71, SMP-72, SMP-73; `sampling/v2/reservoir.py` (`slant_skin`), `draws.py` (`_inflow`, `_on_geometry`, `_SLANT_FLOOR`).
+- **Ruling:**
+
+### D-114 · The lift gas arrives at the valve between the ambient and the reservoir temperature
+
+- **Step:** R10, 2026-11-10. Revises D-30's temperature (`guesses.md`, G23).
+- **Choice made:** $T_{lg} = T_a(H) + \psi\thinspace(T_r - T_a(H))$ with $\psi \sim U(0, 0.75)$, in place of $T_a(H) - \phi\thinspace(T_a(H) - T_s)$ with $\phi \sim U(0, 0.3)$; one uniform draw, as before.
+- **Alternatives:** the draft's, which cools the gas below the ambient at the valve; THM-9's default, the ambient itself, with no draw.
+- **Basis:** physics, from published solutions: in Hasan and Kabir's (2018, §12.2.3, Figs. 12.16 to 12.22) examples the annulus gas warms within the first few hundred feet and then runs between the geotherm and the tubing's fluid, about two thirds to three quarters of the way from the formation's temperature to the reservoir's in a deep well at a high rate, and a little above the geotherm at a low rate; it is below the ambient only by a few kelvin, at a valve near the bottom. The uniform shape and the top of 0.75 are a guess read off three examples; a solution of the annulus' energy balance per well would replace them.
+- **Realism:** a few kelvin in a lifted well's stream above the valve. $T_{lg}$ stays at or below $T_r$, inside the solver's temperature bound.
+- **Implemented** (R10, 2026-11-10). The draw is stored as `psi_lg` in place of `phi_lg`, and `T_lg_below_ambient`, the amount below the ambient, is removed, since the gas is no longer below it; `datasets-draft.md`'s column follows. Over the 964 lifted wells of 3000 (seed 2026), before and after (5th / 25th / 50th / 75th / 95th percentiles): $T_{lg} - T_a(H)$ −20.2 / −11.3 / −6.7 / −3.0 / −0.6 K becomes 0.1 / 0.6 / 1.8 / 8.2 / 28.0 K, small at the median because most valves lie near the packer, where the ambient is near $T_r$; $T_{lg}$ 296 / 311 / 325 / 340 / 376 K becomes 303 / 323 / 339 / 359 / 399 K; and $T_r - T_{lg}$ is at least 0.19 K, so $T_{lg} \le T_r$ in every well.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-79; `sampling/v2/draws.py` (`_lift`, `_PSI_LG`), `life.py` (`_LIFT_KEYS`); `datasets-draft.md`, the lift design's columns.
+- **Ruling:**
+
+### D-115 · The pressure's exponent over a life: 0.7 to 2.3
+
+- **Step:** R10, 2026-11-10. Revises D-42 (`guesses.md`, G29).
+- **Choice made:** $\gamma \sim U(0.7, 2.3)$ for oils and wells with pressure support, in place of $U(1, 2)$: the 5th and 95th percentiles, rounded, of the exponent fitted to the drawn oils' material balance, which replaced the range of 0.7 to 1.5 logged first (below).
+- **Alternatives:** keep the draft's, fitted to one textbook well; the material balance's own $p_r(F)$ with a term for the oil above the bubble point, which adds a compressibility to the draws and stays the named replacement.
+- **Basis:** physics, the model's own result: Muskat's material balance on the model's black oil, from the bubble point down, gives exponents from about 0.7 to 1 (`plans/evidence/solution_gas_drive.py`), and the oil above its bubble point raises the exponent of the whole path, as in Golan and Whitson's (1991) Example 4.11, fitted at 1.4. For wells with pressure support the form stays a guess; their pressure moves little.
+- **Realism:** depletion oils hold a higher pressure in mid-life than the draft's.
+- **Implemented** (R10, 2026-11-10). `plans/evidence/pressure_exponent.py` fits $\gamma$ to each drawn core black oil under depletion, from its life's start $r_0 p_i$ to its end $r_1 p_i$: Muskat's equation with Fig. 9.16's $k_g/k_o$ below the bubble point, and above it the oil's expansion by Vazquez and Beggs's (1980) compressibility, the model's $B_o$ being constant there. Over 1281 such oils of 10,000 wells (seed 2026), $\gamma$ is 0.69 / 0.95 / 2.29 (5th / 50th / 95th percentiles): 0.64 / 0.83 / 0.98 for oils saturated at discovery, 0.70 / 1.02 / 2.72 for undersaturated ones, and 0.78 / 1.17 / 3.55 where the life starts above the bubble point; 400 oils of another seed give 0.69 / 0.94 / 2.20. The computed range differs from 0.7 to 1.5, so the rule takes 0.7 to 2.3. Two sensitivities: with the pore space's and connate water's expansion at typical values (own assumptions) the 95th percentile is 1.97; with the tail's $k_g/k_o$ blend at $w$ = 0.5 the path is 0.48 / 0.65 / 1.81. **Unsure:** a uniform draw over the 5th to 95th percentiles has its median at 1.5 where the material balance's is 0.95, so the realism above does not follow at the median: over 1500 lives, the core depletion oils' $\gamma$ 1.07 / 1.47 / 1.95 becomes 0.81 / 1.45 / 2.22, their $p_r/p_i$ at half the life 0.208 / 0.298 / 0.404 becomes 0.203 / 0.305 / 0.449, and the share of the pressure's fall still to come at half the life 0.032 / 0.103 / 0.244 becomes 0.020 / 0.111 / 0.306; the supported wells' paths spread the same way. A draw closer to the material balance, or its own $p_r(F)$ per well, would follow the oils better; that is for Bjarne's ruling.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-85; `sampling/v2/life.py` (`_GAMMA`); `plans/evidence/pressure_exponent.py`.
+- **Ruling:**
+
+### D-116 · The separator's steps may come from a tenth of the life
+
+- **Step:** R10, 2026-11-10. Revises D-46 (`guesses.md`, G32).
+- **Choice made:** the two step dates $U(0.1, 0.9)\thinspace T_\text{life}$ in place of $U(0.25, 0.9)$: the range widened downwards only.
+- **Alternatives:** the triage's $U(0.1, 0.8)$, which also follows one region's medians; keep the draft's.
+- **Basis:** data, thinly and by a proxy: one region's gas wells, with the choke open, lose wellhead pressure earlier in their lives than the draft's first step in most wells [own analysis of NSTA's production by well]. The upper end is kept, since one region's shape is weak evidence (the Goals, coverage first).
+- **Realism:** the separator steps down earlier in some lives.
+- **Implemented** (R10, 2026-11-10). Over 1500 lives of seed 2026, before and after (5th / 25th / 50th / 75th / 95th percentiles): the first step's date over the life span 0.27 / 0.33 / 0.44 / 0.56 / 0.74 becomes 0.12 / 0.20 / 0.33 / 0.49 / 0.70, the second's 0.38 / 0.56 / 0.71 / 0.81 / 0.88 becomes 0.27 / 0.49 / 0.66 / 0.79 / 0.88; the core wells' nominal pressure downstream of the choke at a quarter of the life 14 / 28 / 43 / 69 / 151 bar becomes 9 / 24 / 39 / 66 / 145 bar, and at half the life its median 34 bar becomes 31 bar.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-89; `sampling/v2/life.py` (`_T_SEP`).
+- **Ruling:**
+
+### D-117 · Lift's drawn start from a twentieth of the life
+
+- **Step:** R10, 2026-11-10. Revises D-49's drawn date (`guesses.md`, G33).
+- **Choice made:** $U(0.05, 0.9)\thinspace T_\text{life}$ in place of $U(0.2, 0.9)$.
+- **Alternatives:** keep the draft's.
+- **Basis:** data: of one region's oil wells that were ever on gas lift and not from their start, the first month on lift spans a range that starts well below the draft's 0.2 and ends near its 0.9, by two sources [own analysis of BOEM's OGOR-A production and BSEE's well tests]. The uniform shape is a design choice for simplicity.
+- **Realism:** the drawn date is one of three rules, and the earliest wins; some lifts start earlier.
+- **Implemented** (R10, 2026-11-10). Over 1500 lives of seed 2026, before and after: the lives whose lift starts at the drawn date rise from 244 to 275 and those by the static check fall from 305 to 274; the drawn starts over the life span, 0.22 / 0.33 / 0.48 / 0.69 / 0.86 (5th / 25th / 50th / 75th / 95th percentiles), become 0.07 / 0.20 / 0.37 / 0.60 / 0.85, and every later start, by either rule, 0.10 / 0.25 / 0.37 / 0.56 / 0.81 becomes 0.07 / 0.19 / 0.30 / 0.51 / 0.80. The lives lifted by a quarter of their span rise from 27.7% to 31.3%, and by half of it from 43.5% to 44.4%. The life scan's earlier start in `nsol-2` (SMP-101) is not measured here.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-90; `sampling/v2/life.py` (`_T_LIFT`).
+- **Ruling:**
+
+### D-118 · Set points that change less often: the change probability from 0.2
+
+- **Step:** R10, 2026-11-10. Revises D-47's probability (`guesses.md`, G36).
+- **Choice made:** $p_c \sim \text{LogU}(0.2, 0.95)$ per well in place of $\text{LogU}(0.5, 0.95)$; the step of ±0.1 and the share 0.1 of new draws as they are.
+- **Alternatives:** keep the draft's, set by one operator's subsea wells.
+- **Basis:** data from two regions: sampled at `nsol-2`'s spacings, one region's gas wells change their choke opening in fewer intervals than the draft's lowest 0.5, and the other's wells move theirs far more often [own analysis of NSTA's production by well and Petrobras' 3W Dataset]. The step and the share stay guesses: the one history in hand over whole lives is of swing producers.
+- **Realism:** `nsol-2` gains wells whose set points move less often.
+- **Implemented** (R10, 2026-11-10). Over the plans of 400 lives of seed 2026, before and after (5th / 25th / 50th / 75th / 95th percentiles): $p_c$ 0.52 / 0.59 / 0.69 / 0.80 / 0.91 becomes 0.22 / 0.30 / 0.43 / 0.63 / 0.86; the share of operating samples at which the choke's set point changes follows it, 0.50 / 0.69 / 0.93 becoming 0.21 / 0.43 / 0.87 (5th / 50th / 95th); the range its set point spans over the life, 0.76 / 0.93 / 0.95 of the choke's range, becomes 0.54 / 0.91 / 0.95, and its standard deviation's median 0.26 becomes 0.25.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-98; `sampling/v2/samples.py` (`_P_CHANGE`).
+- **Ruling:**
+
+### D-119 · The liner's water takes the model's viscosity
+
+- **Step:** R10, 2026-11-10 (`guesses.md`, N5).
+- **Choice made:** in a drain's friction, the water's viscosity is PVT-WAT-3's at $T_r$ in place of 0.5 mPa s.
+- **Alternatives:** keep the constant.
+- **Basis:** physics, the model's own correlation: 0.49 mPa s at 330 K and 0.15 at 450 K.
+- **Realism:** the viscosity enters Chen's friction factor weakly; a drain's friction changes slightly.
+- **Implemented** (R10, 2026-11-10). Over the 225 oil drains with water among 3000 wells of seed 2026, the model's water at $T_r$ is 0.19 / 0.27 / 0.36 / 0.45 / 0.72 mPa s (5th / 25th / 50th / 75th / 95th percentiles), and the drains' friction efficiency changes by at most 1.2%, at the median by less than 0.1%; no other draw changes. The density's clamp is classed as a design choice of the build, as the triage proposes.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-72; `sampling/v2/draws.py` (`_inflow_at_stage`), not `reservoir.py`.
+- **Ruling:**
+
+### D-120 · Lighter heptanes-plus for condensates
+
+- **Step:** R10, 2026-11-10. Revises D-63's range (`guesses.md`, G37).
+- **Choice made:** a synthetic condensate's $M_{7+} \sim U(120, 200)$ g/mol in place of $U(140, 200)$, if the composition's match to the drawn API gravity holds on the build; otherwise the range stays and the build's result is recorded here.
+- **Alternatives:** keep the draft's, which starts at the published average and so leaves out the lighter half of the published condensates.
+- **Basis:** data, published: 340 gas condensates' heptanes-plus have molar masses of 106 to 253 g/mol with an average of 142 (Elsharkawy 2002, Table 1, p. 151).
+- **Realism:** lighter condensates, with lower dew points.
+- **The build's test** (R10, 2026-11-10): **the change is not taken; the range stays $U(140, 200)$ g/mol.** Method: the synthetic gas condensates among the package's first 1235 drawn wells of seed 2026 (after D-108 to D-119), each with its composition generator's seed, built by NeqSim 3.4.0 from a copy of `table_build.py` with $M_{7+} \sim U(120, 200)$: 48 whose composition draws $M_{7+}$ from 120 to 140 g/mol (set A) and, as the baseline, 24 that draw it from 140 to 200 (set B, the present range's fluids). Results: the single-stage match within 0.5 °API and 0.005 holds as often in both sets, 44 of 48 and 22 of 24; every miss in both is on the gas gravity, with the factor on C₂ to C₆ at its floor of 0.25, and every API is matched. But $C_f$ rises: 0.276 / 0.313 / 0.367 (least / median / largest) in set A against 0.260 / 0.284 / 0.334 in set B, and 26 of set A's 48 lie outside 0.27 to 0.31 against 6 of set B's 24. The rise follows the drawn API, which is drawn independently of $M_{7+}$: in set A the condensates drawn at 42 to 48 °API match with $C_f$ of 0.326 at the median and up to 0.367, 15 of 20 above 0.31, where set B's never pass 0.31 there. So a lighter heptanes-plus reaches a heavy stock-tank oil only with fractions heavier than Søreide's correlation gives typical fluids, and the composition no longer reads as a light condensate. The range of 0.27 to 0.31 is taken as Søreide's typical range as quoted by Whitson and Brulé (2000, §5.6) and was not checked against the book here. A coupling of $M_{7+}$ with the drawn API, or an $M_{7+}$ from 120 g/mol only for the higher API gravities, would let the lighter half of Elsharkawy's span in; either is a new rule, for Bjarne's ruling. Field-reported API errors are alike in both sets (median 0.7 and 0.6 °API).
+- **Needs sign-off:** yes (sampling).
+- **Used by:** none: `specs/sampling.md`, SMP-113, and `sampling/v2/table_build.py` are unchanged.
+- **Ruling:**
+
+### D-121 · A gas drain's liner is at most 7 in
+
+- **Step:** R10, 2026-11-10. Records what the prototype did, where D-21 says "the liner taken as the tubing".
+- **Choice made:** a gas drain's liner is the tubing, at most 157.1 mm (7 in): a gas well on 9-5/8 in tubing has a 7 in liner.
+- **Alternatives:** the liner as the tubing in every case, a 9-5/8 in liner.
+- **Basis:** a design choice of the build: 7 in is the largest of the oil wells' tubing sizes (SMP-75). Nothing was found on liner sizes over wells; completion records would replace it.
+- **Realism:** 72 of 4000 drawn wells, gas drains on 9-5/8 in tubing.
+- **Implemented** (R10, 2026-11-10): no change to the code; SMP-73's rule names the 7 in liner of a gas well on 9-5/8 in tubing, and its Basis line and the design choices' table class the cap as a design choice of the build.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-73; `sampling/v2/draws.py` (`_LINER_MAX`, `_inflow_at_stage`), not `reservoir.py`.
+- **Ruling:**
+
+*Entries D-122 to D-126 are R10's too (2026-11-10): the working assumptions of the run over many wells and of the datasets' assembly, where `datasets-draft.md`'s Section 2, written before the checkpoint, and the port's results disagree. Each follows the spec where the spec decides, and the prototype's columns elsewhere; the assembly was proved against the prototype's on 44 wells of both datasets, column by column.*
+
+### D-122 · No columns of the CasADi retry
+
+- **Step:** R10, 2026-11-10. Follows the checkpoint's H1 (D-54 dropped).
+- **Choice made:** `redraws` has no `retried` or `start`, and its outcomes no `recovered`; `wells` and `drawn_wells` have no `n_recovered`; the metadata's `retry_backend` is null.
+- **Alternatives:** keep the columns, always false or null, which describe a mechanism the generator no longer has.
+- **Basis:** a design choice following H1's ruling: the retry was dropped for want of a measured gain (constitution, principle 7), so no attempt is retried or recovered.
+- **Realism:** not applicable.
+- **Needs sign-off:** yes (the dataset schema).
+- **Used by:** `datasets-draft.md`, Section 2 (`redraws`, the generation summary) and Section 4 (the outcomes' codes); `sampling/v2/assemble.py`, `datasets/v2.py`.
+- **Ruling:**
+
+### D-123 · `sol-2`'s lift label is `lift_start_rule`
+
+- **Step:** R10, 2026-11-10. Bjarne ruled on 2026-11-10 to follow the recommendations of the spec draft's points, which named this label (SMP-52).
+- **Choice made:** both datasets' `wells` have `lift_start_rule`: `from_start`, `static_check` and `drawn_time` from the life, `end_of_natural_flow` from `nsol-2`'s life scan and `no_natural_flow` from `sol-2`'s producibility filter, null for a natural well. The draft's `sol-2` column `lift_reason` (`drawn`, `needs_lift`, `no_natural_flow`), which the prototype derived from the lift block's draw at the date, is not written.
+- **Alternatives:** the draft's `lift_reason`, which names the lift block's draw at one stage, not the rule of the life that `sol-2` now shares with `nsol-2` (D-105).
+- **Basis:** a design choice of the labels (SMP-52), one label for both datasets.
+- **Realism:** not applicable. In the equivalence check every `sol-2` well that the filter lifted has `no_natural_flow` in both the prototype's column and the port's, and the natural wells have neither.
+- **Needs sign-off:** yes, as part of the schema; the label follows the ruling of 2026-11-10.
+- **Used by:** `datasets-draft.md`, Section 2 (Labels) and Section 4; `sampling/v2/assemble.py`.
+- **Ruling:**
+
+### D-124 · The well log counts attempts by reason, and the labels take the spec's values
+
+- **Step:** R10, 2026-11-10. Where the draft and the spec differ, the spec's.
+- **Choice made:** `drawn_wells` and `wells` count a well's slot attempts without an operating point by reason, `n_redraws_<reason>` for SMP-104's six reasons, besides the draft's counts by outcome (SMP-108: "the counts of its attempts by outcome and reason"). The labels' codes are Section 4's with the spec's values added at the end of each list: `saturation_kind` `none` (SMP-115), `lift_start_rule` `no_natural_flow` (SMP-52), `drawn_wells.outcome` `table_failed` (SMP-106) and `crash`, a well whose generation raised (logged and counted, as the prototype's run did); `redraws.outcome` loses `recovered` (D-122); `not_producible_reason` takes `water_cut`, `below_floor`, `no_operating_point` and `solver_failure` (SMP-103). A value without a code stops the assembly.
+- **Alternatives:** the draft's counts by outcome only, which leaves a user to count the reasons in the redraw log; free strings for the labels, which D-89 ruled out.
+- **Basis:** a design choice following SMP-108 and SMP-52 to SMP-115; the codes' order is D-89's rule that a later version adds categories at the end.
+- **Realism:** not applicable.
+- **Needs sign-off:** yes (the dataset schema).
+- **Used by:** `datasets-draft.md`, Sections 2 and 4; `datasets/v2.py` (`CODES`, `WELL_OUTCOMES`), `sampling/v2/assemble.py`.
+- **Ruling:**
+
+### D-125 · The wells table as the port gives it
+
+- **Step:** R10, 2026-11-10. Where the draft's columns and the port's results disagree otherwise.
+- **Choice made:**
+  - `kgko_weight`, the oils' blend of the $k_g/k_o$ curves (SMP-70), in place of the draft's `k_g`, R3's GOR factor, which the material balance replaced (D-19).
+  - `pvt_model` is `table` for every volatile oil and condensate (SMP-112), a `table_failed` one included; the prototype's `interim_pvt` and `interim_inflow` are not written, since no table well is solved on the black oil and every gas well takes Forchheimer's inflow (R9).
+  - In `nsol-2` the inflow's coefficients are in `samples` only (`KL`, `WLMAX`, `FORCHA`, `FORCHB`): the prototype also wrote `forchheimer_a` and `forchheimer_b` columns, always null, in `nsol-2`'s `wells`.
+  - `wells` holds the draft's generation summary (`n_redraws` and its splits); `n_attempts`, `n_several_stable`, the times and the life scan's lists are in `drawn_wells` only, as the draft has them. `n_several_stable` counts the samples whose root set had several stable roots, as the draft defines it, where the prototype counted every slot attempt; the two agree on every well of the equivalence check.
+  - `J` and `well_age` are the well's start's, its initial-stage draw's, in both datasets, as the port and the prototype give them; in `sol-2` the date's inflow is in `k_l`, `w_l_max` or `forchheimer_a` and `forchheimer_b`, and the date's heat transfer in `h`. The draft's "at the stage" is corrected.
+  - Beyond the draft, the prototype's records of the draws are kept: `life_date` (`sol-2`'s date, years), `design_rate` (the rate the tubing was sized for), `flags` (the draws' truncations), and a table fluid's build: `c7_mol`, `gor_moved`, the drawn `api_drawn`, `sg_gas_drawn`, `R_si_drawn` and `p_sat_drawn` (the prototype's `p_sat_r3`), the offsets `offset_*` and field values `field_*` (SMP-113), `n_gors` and `table_nodes`; and in `drawn_wells` the build's `table_seconds`.
+  - A dropped well's row in `drawn_wells` is the port's: an `nsol-2` well dropped before its scan (`table_failed`, `invalid_input`) has its life's parameters and lift, where the prototype left them null, and a `sol-2` `table_failed` well has its date's inflow coefficients, where the prototype had the initial draw's (the port's per-well generation, proved against the prototype with these two differences); a well without best-rate solves has an empty list of their outcomes, where the prototype had null. In the equivalence check these are the only differences: 31 values of one `nsol-2` `table_failed` well.
+- **Alternatives:** the draft's columns as written, which name a factor the sampler no longer draws and leave a user without the draws behind a table fluid; the prototype's columns as written, with two flags that are constant since R9.
+- **Basis:** a design choice of the schema, following SMP-70, SMP-112 and SMP-113 to SMP-115 where they decide.
+- **Realism:** not applicable.
+- **Needs sign-off:** yes (the dataset schema).
+- **Used by:** `datasets-draft.md`, Section 2 (`wells`, `drawn_wells`); `sampling/v2/assemble.py` (`well_columns`, `drawn_well_columns`, `well_row`).
+- **Ruling:**
+
+### D-126 · The files of a dataset and of its run
+
+- **Step:** R10, 2026-11-10. Implements D-85, D-87 and D-93 as ruled.
+- **Choice made:** a dataset is a folder `manywells-<kind>-2/` with `wells`, `samples`, `geometry` and `pvt` as one parquet file each and a `metadata.json` (the records of SMP-110 and each file's rows and SHA-256), and its logs a companion folder `manywells-<kind>-2-logs/` next to it with `drawn_wells`, `redraws` and its own `metadata.json` (I1). The split is the `wells` column `split`; the train and test files of `datasets-draft.md`'s Hugging Face layout are left to the release (D-86). A run keeps each well's result as a pickle until its chunk of 100 draw indices is complete, then one pickle per chunk with the run's settings; a restart with other settings or other code stops. The attempts' search counts and times stay in the chunks, and the assembly writes them as the run's attempt log, one parquet file per hundred wells. A dataset is written only from a clean working tree, unless a pilot asks otherwise.
+- **Alternatives:** the logs inside the dataset's folder, against I1; one file per well (D-93's rejected alternative), which the run keeps only while a chunk is open; the chunks as parquet, which would fix the attempts' columns before the assembly.
+- **Basis:** a design choice of the generation, following D-85, D-87 and D-93 as ruled.
+- **Realism:** not applicable.
+- **Needs sign-off:** yes (the dataset layout).
+- **Used by:** `sampling/v2/run.py`, `sampling/v2/assemble.py`, `datasets/v2.py`; `scripts/data_generation/v2/generate_dataset.py`.
+- **Ruling:**
+
+*Entries from D-127 on are R10's too (2026-11-10), from the review of R10's port: each fixes a rule that the port's code and the spec's text gave differently, or a draw that the physics contradicts.*
+
+### D-127 · A table fluid's GOR moves only in its class's direction
+
+- **Step:** R10, 2026-11-10 (the review of R10). Revises D-65's search.
+- **Choice made:** where a table fluid's saturation pressure at $T_r$ lies above $p_i$, its GOR moves along its tie line only in its class's direction: down for a volatile oil, trying the factors 0.8, 0.6, 0.4 and 0.25 in turn, and up for a gas condensate, 1.25, 1.6, 2.5 and 4, each then bisected on $\ln R$ (`gor_moved`); where that direction finds no GOR whose saturation pressure is $p_i$, the fluid is the class's phase in equilibrium at $(p_i, T_r)$ (`equilibrium_phase`), as before.
+- **Alternatives:** the port's search, 0.8 down to 0.25 and then 1.25 up to 4 for both classes, which tries a condensate richer first; for a condensate that does not cross, a third lever on the composition, which D-65 set aside.
+- **Basis:** physics: an oil's bubble point falls as its GOR falls, and a condensate's dew point falls as its GOR rises and it grows leaner. Made richer, a condensate passes the critical region to the bubble side, where its bubble point falls again with the GOR, so the port's richer steps could find a crossing there: a near-critical oil at a black oil's or volatile oil's GOR, still labelled a gas condensate.
+- **Realism:** the fluids of the 195 table wells among `sol-2`'s draw indices 0 to 646 at seed 2026, which hold the test build's wells (D-120) and more, built by NeqSim 3.4.0 with the port's search and with this one: 91 volatile oils (69 synthetic, 22 examples) and 104 condensates (92 synthetic, 12 examples).
+
+  | Class | Search | `matched` | `gor_moved` | `equilibrium_phase` | `bubble` | `dew` |
+  |---|---|---|---|---|---|---|
+  | volatile oil | port | 62 | 22 | 7 | 89 | 2 |
+  | volatile oil | class's direction | 62 | 22 | 7 | 89 | 2 |
+  | gas condensate | port | 73 | 9 (3 to the bubble side) | 22 | 12 | 92 |
+  | gas condensate | class's direction | 73 | 6 | 25 | 9 | 95 |
+
+  The volatile oils keep their rules and values: their search already went down first, and the fluids that no longer try the upward factors differ by at most $2\cdot10^{-13}$ relative, the flash's warm start. Three condensates of 104 (2.9%) change: the port moved them to 0.58, 0.27 and 0.51 of their GOR, to field GORs of 489, 396 and 426 Sm³/Sm³ on the bubble side; in the class's direction no GOR within a factor of 4 crosses, and they take the equilibrium vapour at 2.0 to 5.1 times their GOR, field GORs of 2144 to 4000 Sm³/Sm³ with a dew point. Two findings remain, which the rule does not touch: 9 condensates (8.7%) are `matched` with a bubble point below $p_i$, near-critical oils as drawn by their composition (D-63), and the equilibrium vapour can be far leaner than the drawn fluid, its field GOR at the median 2.2 times the drawn $R_{si}$ and at most 2179 times (a field GOR of 2.2 million Sm³/Sm³, one well), where the fluid at $(p_i, T_r)$ lies deep in its two-phase region.
+- **Implemented** (R10, 2026-11-10): `table_build._saturated_at` takes the class and searches its direction only (`_GOR_FACTORS`); SMP-115's rule and Basis line say so. Tests with a stand-in flash: a near-critical condensate moves to the dew side and an oil to the bubble side, and a class whose direction does not cross is the equilibrium phase, the other direction not tried.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-115; `sampling/v2/table_build.py` (`_GOR_FACTORS`, `_saturated_at`, `build_fluid`); `tests/test_sampling_v2_tables.py`.
+- **Ruling:**
+
+### D-128 · A tail well's inflow model, non-Darcy coefficient and label at its life's start
+
+- **Step:** R10, 2026-11-10 (the review of R10). Implements SMP-71, SMP-74, SMP-68 and SMP-83 as written.
+- **Choice made:** the inflow model (SMP-74), the gas viscosity of the non-Darcy coefficient (SMP-71) and `nsol-2`'s `saturation` label (SMP-68) are taken at the life's start: for a core well its initial-stage draw's state, as before, and for a tail well the core initial state drawn for it (SMP-83, $r_0$ and its water), where the port took the initial-stage draw's state, which for a tail well is its tail state. The life passes its start to every stage's draw (`draws.draw_well`'s `start`), so that the mid-life and late draws, and the lift design made from the late one, have the well's one inflow model and one non-Darcy coefficient. A `sol-2` and an `nsol-2` tail well share the life (D-105), so they take the same model and coefficient. No number is drawn: the start's numbers are the `evolution` block's, drawn for every well (D-108).
+- **Alternatives:** keep the initial-stage draw's state, which SMP-83 does not make a tail well's start; take the non-Darcy coefficient's viscosity at $p_i$, a rule change of SMP-71.
+- **Basis:** the rules as written (SMP-71, SMP-74, SMP-68, SMP-83); the choice of the start is D-105's ruling.
+- **Realism:** over `sol-2`'s draw indices 0 to 2999 at seed 2026 (without tables): the inflow model changes for 61 of 153 tail black oils (40%) and 49 of 153 tail volatile oils (32%), and `nsol-2`'s saturation label for 62 tail black oils, 39 tail volatile oils and 47 of 150 tail condensates; every tail gas well's non-Darcy coefficient changes (310 of 310), and so the inflow's coefficients of every tail well whose model or coefficient changed (420 of 616). No core well's initial-stage draw changes. The late draws' non-Darcy coefficient now is the start's for every gas well, which moves the late lift design (its capacity) of 71 of 780 core gas wells (9.1%) and of 60 of 310 tail gas wells (19%), from the late draw's gas rate; no oil's design changes. Where a tail well's draws stay at its initial-stage draw by the rules' wording, nothing changes: its `J` record (D-125 calls it the start's), a drain's friction efficiency in the geometry's factor (SMP-72, from the initial-stage draw) and the design of a tail well lifted from its start (SMP-90).
+- **Implemented** (R10, 2026-11-10): `draws.draw_well(..., start=...)`, `life.Life`; SMP-83 says where a tail well's start applies. Tests: the start sets the model and the coefficient in every stage's draw and moves no number; a tail well's model, coefficient and label are its start's.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-68, SMP-71, SMP-74 and SMP-83; `sampling/v2/draws.py` (`draw_well`, `_inflow`, `_inflow_at_stage`), `sampling/v2/life.py` (`Life`); `tests/test_sampling_v2_draws.py`, `tests/test_sampling_v2_life.py`.
+- **Ruling:**
+
+### D-129 · The pressure-balance point where the casing's gas and the tubing do not cross
+
+- **Step:** R10, 2026-11-10 (the review of R10). Corrects SMP-79's text to the code.
+- **Choice made:** SMP-79 states each case of the casing's line less the valve's drop against the tubing's, as the port's code takes them: where the tubing's pressure grows faster with depth, $H_\text{bal}$ is their crossing, and where the tubing lies above the casing's gas at every depth, no gas can enter, $H_\text{bal}$ is 0 and the strong-well rule (SMP-78) applies; where the casing's grows at least as fast, or the casing lies above the tubing at every depth, $H_\text{bal} = L$ and the valve is at the packer. The code clips its $H_\text{bal}$ at 0 to say so, which changes no draw (checked on every stage's draw and forced design of 1500 wells, 6000 draws, all equal), since a negative $H_\text{bal}$ was below $0.3\thinspace L$ for the strong-well rule and raised to it for the valve as 0 is.
+- **Alternatives:** the text's "$L$ where the two do not cross", which for a tubing above the casing at every depth would put the valve at the packer, where no gas enters, and lift a strong well that the rule leaves natural.
+- **Basis:** physics: lift gas enters the tubing only where the casing's pressure less the valve's drop exceeds the tubing's (Golan and Whitson 1991, §5.3).
+- **Realism:** of the 6000 stage draws and forced designs of `sol-2`'s draw indices 0 to 1499 at seed 2026, the tubing lies above the casing's gas at every depth in 334 oil and 826 gas draws, of which 24 and 42 are lifted and 25 are an oil's forced late design: those inject at $0.3\thinspace L$, the rest stay natural. One case remains where the code and the physics differ, left for a ruling because a fix moves draws: where the casing's gradient is the larger, the code takes $L$ even where the tubing lies above the casing at every depth (22 gas draws, 2 of them lifted, at the packer), and where the two cross with the casing below at the top (6 gas draws, 1 lifted) $L$ is right, the deepest point at which gas enters.
+- **Implemented** (R10, 2026-11-10): SMP-79's text; `draws._lift` clips $H_\text{bal}$ at 0, with a comment that names the cases.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-79; `sampling/v2/draws.py` (`_lift`).
+- **Ruling:**
+
+### D-130 · A gas well's tubing is sized at $p_i$ in every stage's draw
+
+- **Step:** R10, 2026-11-10 (the review of R10). Implements SMP-75 as written: "the tubing is the well's for its life".
+- **Choice made:** a gas or condensate well's design rate takes $\mu_g$ and $Z$ at $p_i$ and SMP-71's non-Darcy coefficient with $\mu_g$ at $p_i$, from the same number of its error factor, so that the design point is the initial state in every stage's draw and each sizes the same tubing; the lift design of a well lifted later, from its late-stage draw, sits on the well's own tubing, its capacity capped at that tubing's erosional rate. The error factor's number is now drawn as one uniform number and taken through the truncated inverse CDF at each viscosity (`_distributions.tnorm_at`), which gives the coefficient to the bit and takes the same count of numbers (D-108). SMP-75's note that the port took $\mu_g$ and $D$ at the draw's reservoir state is removed.
+- **Alternatives:** the port's, $\mu_g$ and $D$ at each draw's reservoir state, under which a later draw could size another tubing; the well's own coefficient (at the life's start, D-128) in the design rate, which sizes the same tubing within a life but not in a stage's draw made alone.
+- **Basis:** the rule as written (SMP-75): the tubing is run at the initial state and kept for the life.
+- **Realism:** over `sol-2`'s draw indices 0 to 3999 at seed 2026 (1500 gas and condensate wells), the port's draws, after D-128, put a mid-life or late draw or the lift design on another tubing than the start's in 180 wells (12%), 19 of them the lift design; now none. Every gas well's design rate changes, as $\mu_g$ is now at $p_i$; 75 wells (5.0%) take another tubing, and 5 lift designs change their capacity. No oil changes: an oil's design rate was already the initial state's.
+- **Implemented** (R10, 2026-11-10): `draws._inflow` keeps the coefficient as a function of $\mu_g$, `draws._completion` sizes a gas well at $p_i$; SMP-75's text. Tests: every stage's draw and the lift design have the well's design rate, tubing and erosional rate; a stage override keeps them, gas wells included.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-75; `sampling/v2/draws.py` (`_inflow`, `_completion`), `sampling/v2/_distributions.py` (`tnorm_at`); `tests/test_sampling_v2_draws.py`, `tests/test_sampling_v2_life.py`.
+- **Ruling:**
+
+### D-131 · An `nsol-2` well whose life ends before its lift starts is natural
+
+- **Step:** R10, 2026-11-10 (the review of R10). Implements SMP-52 as written.
+- **Choice made:** where the life scan ends an `nsol-2` well's life before the lift's start by the draws (SMP-90's `drawn_time` or `static_check`, a start that falls between two scan points, with the lifted well failing at the later one), the well is labelled `natural`, with no `lift_start` and no `lift_start_rule`. Its plan and its samples do not change: no slot's date reaches the start, and the plan draws the same numbers either way.
+- **Alternatives:** the port's label `gas_lift`, with a start after $T_\text{end}$, for a well none of whose samples is lifted.
+- **Basis:** a design choice of the labels: SMP-52's `lift` in `nsol-2` is a well lifted at some date of its life.
+- **Realism:** it follows from the solves: the start must lie within the scan's step of 5% of the life before the first point at which the lifted well fails. Not measured here; R11's pilot counts the `nsol-2` wells with a lift design that stay natural.
+- **Implemented** (R10, 2026-11-10): `generate.generate_nsol2_well`; SMP-101 says so. Test with stand-in solves: such a well is natural, and its samples are the plan's of a natural well.
+- **Needs sign-off:** yes (the labels).
+- **Used by:** `specs/sampling.md`, SMP-101; `sampling/v2/generate.py`; `tests/test_sampling_v2_generate.py`.
+- **Ruling:**
+
+### D-132 · At most 20 surveys, and one flag that counts the redraws
+
+- **Step:** R10, 2026-11-10 (the review of R10). Corrects SMP-60's text to the code.
+- **Choice made:** a well draws at most 20 surveys in all, the first and 19 redraws, and is vertical where none fits, as the port's code does and as SMP-51's "all 20 surveys' numbers" says; SMP-60 said "redrawn … at most 20 times". A well's redraws are one flag with their count, `geometry_redrawn:n`, where the port wrote `geometry_redrawn` once per failed survey, 20 times for a well that falls back to vertical.
+- **Alternatives:** 20 redraws, 21 surveys, which changes the block's count of numbers and so every later draw of the block (D-108); the flag repeated per redraw.
+- **Basis:** a design choice of the generation (SMP-60's fit rule); the count is the prototype's.
+- **Realism:** no draw changes; only the `flags` of a well with two or more redraws read differently. No well of 3000 at seed 2026 falls back to vertical (`tests/test_sampling_v2_draws.py`).
+- **Implemented** (R10, 2026-11-10): `draws._geometry`; SMP-60's text and its row in the design choices. Test: a survey that fails 0, 1, 7, 19 or 20 times gives one flag with the count, the fallback after 20, and the block's 122 numbers.
+- **Needs sign-off:** yes (sampling).
+- **Used by:** `specs/sampling.md`, SMP-60; `sampling/v2/draws.py` (`_GEOMETRY_SURVEYS`, `_geometry`); `tests/test_sampling_v2_draws.py`.
+- **Ruling:**
+
+### D-133 · The records come from the run's settings, and `design_rate` is the tubing's
+
+- **Step:** R10, 2026-11-10 (the review of R10). Implements D-125 and SMP-110 as written.
+- **Choice made:** `wells.design_rate` is the liquid rate at which the tubing was sized (`q_design`, SMP-75), as D-125 defines it, where the port wrote the start's reference rate, $J\delta_d p_r$ for an oil and the gas rate at the design drawdown for a gas well; the schema has no column for the reference rate, so it is not kept. The run records in its settings, when it starts, the best rate's lift-gas rates, its scan points and its water cut, and the lock file's hash, besides the limits and the floor; the dataset's records take them from there, and the assembly refuses code whose settings differ from the run's (all but the code's record, which the metadata keeps for both). A well's own file in the run's folder holds the hash of the settings, so that a run with other settings refuses it. The metadata names the folder of tables relative to the run's folder, and a crash's traceback in the well log writes the home directory as `~`.
+- **Alternatives:** the port's: the assembling code's constants and lock in the records, which a change between the run and the assembly makes wrong; absolute local paths in the published metadata and logs.
+- **Basis:** a design choice of the generation, for reproducibility (SMP-110) and for the rule that no local path is published.
+- **Realism:** `design_rate` changes for every well: for an oil, from $J\delta_d p_r$ at the start to $J\delta_d p_i$ at $p_i$ with no water; for a gas well, from a gas rate to the liquid rate at the design point.
+- **Implemented** (R10, 2026-11-10): `sampling/v2/run.py` (`run_settings`, the wells' files, the tracebacks), `sampling/v2/assemble.py` (`records`, `write_dataset`, `well_row`); SMP-110's text. Tests.
+- **Needs sign-off:** yes (the dataset schema and its records).
+- **Used by:** `specs/sampling.md`, SMP-110; `datasets-draft.md`, Section 2 (`design_rate`, the metadata); `sampling/v2/run.py`, `sampling/v2/assemble.py`; `tests/test_sampling_v2_run.py`.
+- **Ruling:**

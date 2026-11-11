@@ -34,7 +34,7 @@ def _grid(values, n_p, n_T, name):
         a = a.reshape(-1, 1)
     if a.shape != (n_p, n_T):
         raise ValueError(f'{name} must have shape ({n_p}, {n_T}), one value per (p, T) node, got {a.shape}')
-    return tuple(tuple(float(v) for v in row) for row in a)
+    return tuple(map(tuple, a.tolist()))
 
 
 @dataclass(frozen=True)
@@ -84,15 +84,7 @@ class PVTTable(PVTModel):
                 raise ValueError(f'a PVT table needs the column {name}')
         self._validate()
         self._derive()
-        grid = [np.array(p)] if len(T) == 1 else [np.array(p), np.array(T)]
-        object.__setattr__(
-            self,
-            '_f',
-            {
-                c: ca.interpolant(f'pvt_table_{c}', 'linear', grid, np.array(getattr(self, c)).ravel(order='F'))
-                for c in self.columns
-            },
-        )
+        object.__setattr__(self, '_f', {})  # The columns' interpolants, each built when first read (_interpolant)
 
     def _validate(self):  # spec: PVT-TAB-1
         super()._validate()
@@ -102,19 +94,19 @@ class PVTTable(PVTModel):
         for name, axis in (('p', p), ('T', T)):
             if not (np.all(np.isfinite(axis)) and np.all(axis > 0) and np.all(np.diff(axis) > 0)):
                 raise ValueError(f"the grid's {name} must be positive, finite and strictly increasing")
-        for name in self.columns:
-            a = np.array(getattr(self, name))
+        y = {name: np.array(getattr(self, name)) for name in self.columns}
+        for name, a in y.items():
             if not np.all(np.isfinite(a)):
                 raise ValueError(f'{name} must be finite at every node')
             if name != 'R_so' and not np.all(a > 0):
                 raise ValueError(f'{name} must be positive at every node')
         # R_so may fall as the pressure rises: a gas condensate's below its dew point (retrograde condensation)
-        R_so = np.array(self.R_so)
+        R_so = y['R_so']
         if np.any(R_so < 0) and not (self.mu_o is not None and self.sigma is not None):
             raise ValueError('R_so below 0 needs the columns mu_o and sigma: the live-oil correlations take R_so >= 0')
         if not np.all(self.rho_o + R_so * self.rho_g > 0):
             raise ValueError("the oil phase's mass per Sm3 of stock-tank oil, rho_o + R_so rho_g, must be positive")
-        if not np.all(np.diff(p[:, None] / np.array(self.Z), axis=0) > 0):
+        if not np.all(np.diff(p[:, None] / y['Z'], axis=0) > 0):
             raise ValueError("the free gas's density, p/Z, must rise strictly with the pressure at every temperature")
         if self.gor is not None and not (math.isfinite(self.gor) and self.gor >= 0):
             raise ValueError(f'gor must be None, or non-negative and finite, got {self.gor}')
@@ -128,6 +120,18 @@ class PVTTable(PVTModel):
     # PVT-TAB-2: a column at (p, T), may be CasADi symbolic
     # ------------------------------------------------------------------
 
+    def _interpolant(self, column):  # spec: PVT-TAB-2
+        """
+        The column's CasADi interpolant on the grid, built when it is first read: the Rust backend, which takes the
+        table's nodes, reads none, and a table read at a GOR for one solve (PVT-TAB-7) is built for it alone.
+        """
+        f = self._f.get(column)
+        if f is None:
+            grid = [np.array(self.p)] if len(self.T) == 1 else [np.array(self.p), np.array(self.T)]
+            values = np.array(getattr(self, column)).ravel(order='F')
+            f = self._f[column] = ca.interpolant(f'pvt_table_{column}', 'linear', grid, values)
+        return f
+
     def interpolate(self, column, p, T):  # spec: PVT-TAB-2
         """
         A column at (p, T): bilinear on the grid, with p and T clamped to it; with one temperature, linear in p.
@@ -138,9 +142,9 @@ class PVTTable(PVTModel):
         """
         p = ca.fmin(ca.fmax(p, self.p[0]), self.p[-1])
         if len(self.T) == 1:
-            return self._f[column](p)
+            return self._interpolant(column)(p)
         T = ca.fmin(ca.fmax(T, self.T[0]), self.T[-1])
-        return self._f[column](ca.vertcat(p, T))
+        return self._interpolant(column)(ca.vertcat(p, T))
 
     def covers(self, p, T) -> bool:
         """Whether (p, T), floats, lies on the grid; with one temperature, whether p does."""
@@ -240,6 +244,19 @@ class PVTTable(PVTModel):
             **text,
         )
 
+    @classmethod
+    def from_frame(cls, df, origin='rows', **fields) -> 'PVTTable':
+        """
+        The table of one row per node of a rectangular (p, T) grid, as a file's rows are (read_csv): the columns p,
+        T, R_so, B_o and Z, and any of mu_o, mu_g and sigma, in the files' units.
+
+        :param df: The rows, a pandas DataFrame, in any order
+        :param origin: Where the rows come from, which an error names
+        :param fields: The table's other fields: rho_o and rho_g, and gor, name, source and separation where known
+        :raises ValueError: where the rows are not one per node of a rectangular grid
+        """
+        return _from_frame(df, origin, **fields)
+
     @staticmethod
     def read_csv(path) -> 'PVTTable | PVTTableSet':
         """
@@ -300,6 +317,7 @@ class PVTTableSet(PVTModel):
             raise ValueError('the tables of a GOR axis must have the same rho_o and rho_g: one stream on one tie line')
         self._validate()
         self._derive()
+        object.__setattr__(self, '_union', {})  # Neighbouring tables on the union of their grids, kept (_on_union)
 
     @property
     def rho_o(self) -> float:
@@ -329,9 +347,8 @@ class PVTTableSet(PVTModel):
         i = int(np.searchsorted(gors, gor)) - 1
         a, b = self.tables[i], self.tables[i + 1]
         w = (gor - a.gor) / (b.gor - a.gor)
-        p, T = np.union1d(a.p, b.p), np.union1d(a.T, b.T)
-        P, TT = np.meshgrid(p, T, indexing='ij')
-        columns = {c: (1 - w) * _on_grid(a, c, P, TT) + w * _on_grid(b, c, P, TT) for c in a.columns if c in b.columns}
+        p, T, y_a, y_b = self._on_union(i)
+        columns = {c: (1 - w) * y_a[c] + w * y_b[c] for c in y_a}
         return PVTTable(
             p=p,
             T=T,
@@ -343,6 +360,24 @@ class PVTTableSet(PVTModel):
             separation=a.separation,
             **columns,
         )
+
+    def _on_union(self, i) -> tuple:  # spec: PVT-TAB-7
+        """
+        Tables i and i + 1 on the union of their grids: its pressures and temperatures, and each table's columns on
+        it (PVT-TAB-2), those that both have. They do not depend on the GOR read between the two, so they are made
+        once and kept: a table at a GOR is then one weighted sum per column.
+        """
+        if i not in self._union:
+            a, b = self.tables[i], self.tables[i + 1]
+            p, T = np.union1d(a.p, b.p), np.union1d(a.T, b.T)
+            columns = [c for c in a.columns if c in b.columns]
+            self._union[i] = (
+                p,
+                T,
+                {c: _on_grid(a, c, p, T) for c in columns},
+                {c: _on_grid(b, c, p, T) for c in columns},
+            )
+        return self._union[i]
 
     def _no_gor(self, *args):
         raise TypeError('a GOR axis has no properties of its own: read it at a GOR with at_gor, as FluidModel does')
@@ -360,12 +395,15 @@ class PVTTableSet(PVTModel):
         )
 
 
-def _on_grid(table, column, P, TT):
-    """A column of a table on the nodes P, TT (PVT-TAB-2), as floats."""
-    out = np.empty(P.shape)
-    for idx in np.ndindex(P.shape):
-        out[idx] = float(table.interpolate(column, P[idx], TT[idx]))
-    return out
+def _on_grid(table, column, p, T):
+    """
+    A column of a table on the grid of the pressures p and the temperatures T (PVT-TAB-2), as floats of shape
+    (len(p), len(T)): the column's interpolant, called once with every node, clamped to the table's grid, which gives
+    each node the value of interpolate, to the bit.
+    """
+    P, TT = np.meshgrid(np.clip(p, table.p[0], table.p[-1]), np.clip(T, table.T[0], table.T[-1]), indexing='ij')
+    nodes = P.reshape(1, -1) if len(table.T) == 1 else np.vstack([P.ravel(), TT.ravel()])
+    return np.array(table._interpolant(column)(nodes)).reshape(P.shape)
 
 
 def _from_frame(df, path, **kw) -> PVTTable:

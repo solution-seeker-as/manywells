@@ -364,6 +364,16 @@ class TestFiles:
         one.write_csv(tmp_path / 'one.csv')
         assert PVTTable.read_csv(tmp_path / 'one.csv') == one
 
+    def test_a_table_from_its_rows(self):
+        """from_frame: the table of one row per node, in any order, with its other fields; read_csv's rows."""
+        t = small(gor=120.0)
+        rows = t.frame().sample(frac=1.0, random_state=3)  # Any order
+        fields = dict(rho_o=t.rho_o, rho_g=t.rho_g, gor=t.gor, name=t.name)
+        assert PVTTable.from_frame(rows, **fields) == t
+        assert PVTTable.from_frame(rows.drop(columns=['mu_o', 'mu_g', 'sigma']), **fields).mu_o is None
+        with pytest.raises(ValueError, match='my rows: not one row per node'):
+            PVTTable.from_frame(rows.iloc[1:], 'my rows', **fields)
+
     def test_csv_round_trip_of_a_gor_axis(self, tmp_path):
         axis = PVTTableSet(tables=(small(gor=120.0), small(gor=80.0, p=(1.0, 50.0, 150.0, 400.0))))
         axis.write_csv(tmp_path / 'axis.csv')
@@ -538,6 +548,63 @@ class TestGorAxis:
                 for k, T in enumerate(t.T):
                     want = (1 - w) * num(a.interpolate(c, p, T)) + w * num(b.interpolate(c, p, T))
                     assert y[j, k] == pytest.approx(want, rel=1e-12, abs=1e-15)
+
+    @pytest.mark.parametrize(
+        'make',
+        [
+            pytest.param(lambda: TestGorAxis.AXIS, id='the example axis'),
+            pytest.param(
+                lambda: PVTTableSet(tables=(small(gor=80.0), small(gor=120.0, p=(5.0, 60.0, 150.0, 250.0, 350.0)))),
+                id='grids that differ',
+            ),
+            pytest.param(
+                lambda: PVTTableSet(
+                    tables=(small(gor=80.0, T=(350.0,)), small(gor=120.0, T=(350.0,), p=(20.0, 150.0, 320.0)))
+                ),
+                id='one temperature',
+            ),
+            pytest.param(
+                lambda: PVTTableSet(tables=(small(gor=80.0, T=(340.0, 380.0)), small(gor=120.0, T=(350.0,)))),
+                id='one temperature and two',
+            ),
+        ],
+    )
+    def test_each_node_is_the_tables_interpolated_to_the_bit(self, make):
+        """
+        PVT-TAB-7's table has, at every node of the union of the two grids, each neighbour's column as interpolate
+        gives it at the node (PVT-TAB-2), clamped to that neighbour's grid, and their weighted sum: to the bit, and the
+        same when the axis is read again between the same two GORs.
+        """
+        axis = make()
+        for a, b in zip(axis.tables, axis.tables[1:]):
+            for w in (0.3, 0.85, 0.3):
+                gor = (1 - w) * a.gor + w * b.gor
+                w = (gor - a.gor) / (b.gor - a.gor)
+                t = axis.at_gor(gor)
+                assert t.p == tuple(np.union1d(a.p, b.p)) and t.T == tuple(np.union1d(a.T, b.T))
+                for c in t.columns:
+                    want = tuple(
+                        tuple((1 - w) * num(a.interpolate(c, p, T)) + w * num(b.interpolate(c, p, T)) for T in t.T)
+                        for p in t.p
+                    )
+                    assert getattr(t, c) == want
+
+    def test_a_table_read_twice_is_the_same(self):
+        """The neighbours on their union grid are kept between reads: a read does not change the next."""
+        axis, fresh = self.AXIS, PVTTable.read_csv(DATA / 'synthetic_eos_oil_gor.csv')
+        gors = [0.5 * (a + b) for a, b in zip(axis.gors, axis.gors[1:])]
+        first = [axis.at_gor(g) for g in gors]
+        again = [axis.at_gor(g) for g in reversed(gors)][::-1]
+        for t, u, g in zip(first, again, gors):
+            assert t == u == fresh.at_gor(g) and t is not u
+
+    def test_the_core_builds_no_interpolant(self):
+        """A table's CasADi interpolants are built when they are first read, which the Rust backend never does."""
+        wp = vertical_well(self.AXIS, gor=100.0)
+        core_well(wp)
+        assert wp.fluid._hc._f == {}
+        wp.fluid.rs(150.0, 350.0)
+        assert list(wp.fluid._hc._f) == ['R_so']
 
     @pytest.mark.parametrize('k, step', [(0, -1.0), (-1, 1.0)])
     def test_refused_outside_them(self, k, step):
