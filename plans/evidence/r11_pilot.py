@@ -10,7 +10,8 @@ The checks of R11's pilot (plans/sampler-redesign/r11-measurements.md): r10_pilo
 spec's checks that R11's pilot judges: SMP-106's targets by class (wells dropped at the limits, table failures among
 them; nsol-2's dead dates; solver failures among the attempts and the wells), with the sign changes D-138 counts at
 the edge; the core wells' reservoir temperatures and pressure gradients against Nadeau, Sun and Ehrenberg's (2023)
-classes of reservoirs (Table 1, Fig. 20); and the gas wells' separator pressures and rates after D-134.
+classes of reservoirs (Table 1, Fig. 20); the gas wells' separator pressures and rates after D-134; and nsol-2's rate
+by fifth of the life, by fluid and drive, after D-135 and D-140.
 
     (ulimit -v 8000000; OMP_NUM_THREADS=1 .venv/bin/python plans/evidence/r11_pilot.py SOL_OUT NSOL_OUT)
 
@@ -56,7 +57,10 @@ def targets(t, kind, out):
         a = att[att.fluid_class == c]
         sf_att = (a.outcome == 'solver_failure').mean()
         sf_wells = (g.n_redraws_solver > 0).mean() if 'n_redraws_solver' in g else float('nan')
-        flag = ' ABOVE' if drops.mean() > 0.01 or sf_att > 0.005 or sf_wells > 0.005 else ''
+        above = [
+            n for n, x in (('drops', drops.mean() > 0.01), ('solver failures', max(sf_att, sf_wells) > 0.005)) if x
+        ]
+        flag = f' ABOVE: {", ".join(above)}' if above else ''
         print(
             f'  {c}: {len(g)} drawn ({(g.coverage_tail == "core").sum()} / {(g.coverage_tail == "tail").sum()}); '
             f'dropped at the limits {drops.sum()} ({pct(drops.mean())}) {by}; solver failures: '
@@ -106,6 +110,32 @@ def gas_separators(t):
     print(f'  oils ({len(o)}): p_sep {r10.q(o.p_sep)}; p_s_nom {r10.q(o.p_s_nom)}')
 
 
+def decline_by_fifth(t):
+    """D-140: the core wells' rate by fifth of the life over the first year's, medians by fluid and drive; the oils'
+    oil rate as well as the oil equivalent."""
+    w, s = t['wells'].set_index('ID'), t['samples']
+    s = s.join(w[['T_end', 'drive', 'fluid_type', 'coverage_tail']], on='ID')
+    s = s[s.coverage_tail == 'core'].assign(oe=r10.oil_equivalent, oil=24 * s.QOIL, tf=s.WEEKS / r10.YEAR / s.T_end)
+    s['grp'] = np.where(s.fluid_type.isin(r10.OILS), 'oil', 'gas') + ', ' + s.drive.astype(str)
+    rows = []
+    for ID, g in s.groupby('ID'):
+        first = g[g.WEEKS / r10.YEAR <= 1.0]
+        fifth = [g[(g.tf > i / 5) & (g.tf <= (i + 1) / 5) if i else (g.tf <= 0.2)] for i in range(5)]
+        rows.append(
+            dict(
+                grp=g.grp.iloc[0],
+                **{f'{c}{i}': f[c].mean() / first[c].mean() for c in ('oe', 'oil') for i, f in enumerate(fifth)},
+            )
+        )
+    r = pd.DataFrame(rows)
+    groups = [*r.groupby('grp'), ('oil, both drives', r[r.grp.str.startswith('oil')])]
+    print('\n== nsol-2 core wells: rate by fifth of the life over the first year, medians')
+    for grp, g in groups:
+        cols = ('oe', 'oil') if grp.startswith('oil') else ('oe',)
+        for c in cols:
+            print(f'  {grp} ({len(g)} wells), {c}: ' + ' '.join(f'{g[f"{c}{i}"].median():.2f}' for i in range(5)))
+
+
 def main():
     sol_out, nsol_out = sys.argv[1:3]
     sol, nsol = r10.load(sol_out, 'sol'), r10.load(nsol_out, 'nsol')
@@ -120,6 +150,7 @@ def main():
     r10.regimes(sol, 'sol')
     r10.regimes(nsol, 'nsol')
     r10.decline(nsol)
+    decline_by_fifth(nsol)
     r10.stages(sol, nsol)
     r10.cost(sol, 'sol', Path(sol_out) / 'run' / 'attempts')
     r10.cost(nsol, 'nsol', Path(nsol_out) / 'run' / 'attempts')

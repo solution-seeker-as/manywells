@@ -1,8 +1,8 @@
 # Sampler redesign — plan
 
-*Draft 2026-10-30. Owner: Bjarne Grimstad. Status: R1 to R8 done; the rework and R9's integration done; the second checkpoint ruled on 2026-11-09 and 2026-11-10; R10 done on 2026-11-10 and handed over for sign-off.*
+*Draft 2026-10-30. Owner: Bjarne Grimstad. Status: R1 to R8 done; the rework and R9's integration done; the second checkpoint ruled on 2026-11-09 and 2026-11-10; R10 done on 2026-11-10 and merged on 2026-11-11; R11's pilot done on 2026-11-11 and handed over for review.*
 
-## Where we are (2026-11-10)
+## Where we are (2026-11-11)
 
 - **Done before this plan:** the model-lock plan (`plans/model-lock-plan.md`). `v2.0.0` is named and pinned, the correlations' validity ranges are recorded, the correlations are checked against independent sources, and both backends pass the `v1.0.0` configuration's regression checks.
 - **R1 done:** the interview was held on 2026-10-30, and Bjarne confirmed the Goals below the same day, with the changes they make to `specs/goals.md` and `specs/constitution.md` (Where the goals change the specs).
@@ -43,7 +43,12 @@
   - The triage of the guesses (`guesses.md`): data, published sources or physics replaced most of them. R10's working assumptions are D-108 to D-133: a fixed count of numbers per block, the guesses replaced, the schema's choices, and an independent review's fixes. Two of the triage's proposals wait for Bjarne (G7, G30).
   - The approved changes to `specs/goals.md`, `specs/constitution.md`, `specs/model/validity.md` and feature 022.
   - The pilots from the package (`r10-measurements.md`): 400 `sol-2` and 100 `nsol-2` wells; a dataset of 10,000 wells costs about 120 to 150 CPU-hours.
-  - Next: Bjarne's sign-off of R10 and its working assumptions; then R11, a pilot dataset for his review and the full generation.
+  - Merged into `develop` by Bjarne on 2026-11-11 (#43).
+- **R11, 2026-11-11** (branch `r11-pilot`, one PR for sign-off):
+  - Working assumptions D-134 to D-140: G7 and G30 taken (the offshore gas wells' line, D-134; the oils' later breakthrough, D-135, and wet starts, D-140), and R10's drops against SMP-106's targets fixed (D-136 to D-139: the lift gas kept on in an `nsol-2` redraw, the limits raised, a sign change next to a failed march counted as no operating point, a small table allowed to lose one pressure).
+  - The datasheets of `sol-2` and `nsol-2`, the v2 schema in `docs/datasets.md` and the CHANGELOG entry, drafted.
+  - The pilot, 400 `sol-2` and 100 `nsol-2` wells, run twice (`r11-measurements.md`): `sol-2` has no solver failure and drops 4 wells at the limits; the oils' decline lies within the regions' span in the second and third fifths of the life; a dataset of 10,000 wells costs about 110 to 130 CPU-hours. Open: the oils' late life, three tail volatile-oil tables, a near-critical condensate, and the reservoirs' heat and overpressure against Nadeau et al. (2023).
+  - Next: Bjarne's review of the pilot and the working assumptions; then the full generation, at his go-ahead.
 
 This plan replaces v1's sampling procedure for the v2 datasets (`specs/goals.md`, limitation 5: unrealistic sampled wells). It ends with:
 
