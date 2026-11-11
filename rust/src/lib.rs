@@ -180,7 +180,8 @@ mod _core {
         }
 
         /// Every root the search finds at the operating point, sorted by p_0, and the work it took: the marches, the
-        /// states computed, and the sign changes of R that were not accepted as roots (rejected)
+        /// states computed, and the sign changes of R that were not accepted as roots (rejected), of which those next
+        /// to a failed march (rejected_at_edge)
         fn root_set(&self, py: Python<'_>, op: Op) -> PyResult<(Vec<Root>, HashMap<&'static str, usize>)> {
             let (spec, op) = (&self.spec, operating_point(op)?);
             let search = py.detach(|| shoot::root_set(spec, &op)).map_err(PyRuntimeError::new_err)?;
@@ -195,6 +196,7 @@ mod _core {
             }).collect();
             let c = search.counts;
             let counts = HashMap::from([("marches", c.marches), ("states", c.states), ("rejected", search.rejected),
+                                        ("rejected_at_edge", search.rejected_at_edge),
                                         ("temperature_solves", c.temperature_solves), ("step_outs", c.step_outs),
                                         ("lower_step_outs", c.lower_step_outs),
                                         ("temperature_minima", c.temperature_minima),

@@ -80,7 +80,9 @@ def stand_in_attempt(builder, inp) -> dict:
     rec.update(
         n_stable=int(outcome == 'operating_point'), several_stable=outcome == 'operating_point' and inp['u'] > 0.9
     )
-    rec.update(marches=7, non_finite=0, rejected=int(reason == 'incomplete_scan'), t_solve=0.0, t_build=0.0)
+    rec.update(
+        marches=7, non_finite=0, rejected=int(reason == 'incomplete_scan'), rejected_at_edge=0, t_solve=0.0, t_build=0.0
+    )
     if outcome == 'operating_point':
         rec.update({key: 1.0 + inp['u'] for key in FEATURES}, CHOKED=inp['u'] < 0.2, FRBH='bubbly', FRWH='annular')
         rec['q_oe'] = 100.0

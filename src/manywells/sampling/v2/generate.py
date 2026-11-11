@@ -46,8 +46,9 @@ An attempt's record is a flat dict of:
   slot, else the index of the lift-gas rate, whose share of the capacity is `lift_fraction`;
 - `outcome` and `reason` (SMP-104), and `error`, an exception's message (else None);
 - `n_roots` and `n_stable`, the sizes of the root set, and `several_stable`;
-- the search's counts `marches`, `non_finite` (scan points whose march failed) and `rejected` (sign changes of R
-  not accepted as roots), NaN without a search, and the times `t_build` and `t_solve` (s);
+- the search's counts `marches`, `non_finite` (scan points whose march failed), `rejected` (sign changes of R
+  not accepted as roots) and `rejected_at_edge` (those next to a failed march), NaN without a search, and the times
+  `t_build` and `t_solve` (s);
 - for an operating point, its FEATURES and `q_oe`, the oil equivalent (Sm3/d).
 """
 
@@ -74,7 +75,7 @@ _SLOT_LIMIT, _REDRAW_LIMIT, _SOLVER_FAILURE_LIMIT = 100, 1000, 10  # spec: SMP-1
 _BEST_RATE_LIFT = (0.0, 0.5, 1.0)  # The best rate's lift-gas rates, shares of the capacity  # spec: SMP-103
 _N_SCAN = 21  # Dates of the life scan  # spec: SMP-101
 _NO_SEARCH = dict(n_roots=0, n_stable=0, several_stable=False, marches=math.nan, non_finite=math.nan)
-_NO_SEARCH |= dict(rejected=math.nan, t_solve=0.0)
+_NO_SEARCH |= dict(rejected=math.nan, rejected_at_edge=math.nan, t_solve=0.0)
 
 
 # --- One attempt -----------------------------------------------------------------------------------------------------
@@ -103,7 +104,8 @@ def _solve(wp, bc) -> dict:  # spec: SMP-104
     memory cap, not the inputs': it is not an outcome, and goes on to the run, which solves the well again (run.py).
 
     :return: A dict of `outcome`, `reason` and `error`; `n_roots`, `n_stable` and `several_stable`; the search's
-        counts `marches`, `non_finite` and `rejected` (NaN without a search); `t_solve` (s); and `row`, the
+        counts `marches`, `non_finite`, `rejected` and `rejected_at_edge` (NaN without a search); `t_solve` (s);
+        and `row`, the
         operating point's features (None without one)
     """
     out = dict(outcome=None, reason=None, error=None, **_NO_SEARCH, row=None)
@@ -130,6 +132,7 @@ def _solve(wp, bc) -> dict:  # spec: SMP-104
         return out
     counts = finder.counts
     out.update(marches=counts['marches'], non_finite=counts['non_finite'], rejected=counts['rejected'])
+    out['rejected_at_edge'] = counts['rejected_at_edge']
     out.update(n_roots=len(rs.roots), n_stable=sum(r.label == 'stable' for r in rs.roots))
     out['several_stable'] = bool(rs.several_stable)
     op = rs.operating_point
@@ -141,9 +144,10 @@ def _solve(wp, bc) -> dict:  # spec: SMP-104
             out.update(outcome='solver_failure', reason='invalid_row')
     elif rs.roots:  # A continuous R(p_0) has at least as many stable roots as unstable ones: the search missed one
         out.update(outcome='solver_failure', reason='unstable_only')
-    elif counts['rejected'] > 0:  # A sign change of R that the search could not resolve to a root
+    elif counts['rejected'] > counts['rejected_at_edge']:  # A sign change of R that the search could not resolve
         out.update(outcome='solver_failure', reason='incomplete_scan')
-    else:  # No root and no rejected sign change, whatever the non-finite scan points
+    else:  # No root, and no rejected sign change but at the edge of the states the march admits (D-138), whatever
+        # the non-finite scan points
         out.update(outcome='no_operating_point', reason='no_root')
     out['t_solve'] = time.perf_counter() - t0
     return out

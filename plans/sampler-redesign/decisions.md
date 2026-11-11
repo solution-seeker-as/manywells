@@ -1318,3 +1318,15 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Needs sign-off:** yes (a tolerance of the generation).
 - **Used by:** `specs/sampling.md`, SMP-106; `sampling/v2/generate.py`.
 - **Ruling:**
+
+### D-138 · A sign change next to a failed march is no operating point
+
+- **Step:** R11, 2026-11-11, from R10's pilots' solver failures (SMP-106's targets). Revises D-53's `incomplete_scan`.
+- **Choice made:** the Rust core counts, of the sign changes of $R$ it rejects, those where a march fails within $10^{-9}\thinspace p_r$ of the converged $p_0$ (`rejected_at_edge`); an attempt with no root whose every rejected sign change is of this kind has no operating point (`no_root`), and only a rejection away from the edge stays a solver failure (`incomplete_scan`). The roots, their labels and the scan are unchanged.
+- **Alternatives:** keep every rejected sign change a solver failure, and the solver-failure target missed; count them all as no root, which would hide a root the search failed to resolve where the march does complete.
+- **Basis:** physics, SOL-8 and CHK-11. In R10's pilots solver failures were 0.05% of the black oils' attempts, within the target, but fell in 0.8% of the `sol-2` black oils and 2% of the `nsol-2` black oils, above it, all `incomplete_scan`. Two wells carried most: a tail oil 2.3 bar above its separator, whose march stops at a choked cell near the wellhead for every $p_0$ in the bracket, so that $R$ jumps from one partial march to another; and a heavy oil lifted at 1.5 kg/s through a nearly closed choke, where $R$ jumps between the rate below $p_s$ and the choke row. Neither has a state that zeroes every row there.
+- **Realism:** none in the samples; such attempts are redrawn as before, and counted as missing operating points, not as solver failures.
+- **Implemented** (R11, 2026-11-11): `rust/src/shoot.rs` (`root_set`, `Search::rejected_at_edge`), `rust/src/lib.rs`; `sampling/v2/generate.py` (`_solve`), SMP-104, `specs/model/solution.md`'s informative search; `tests/test_sampling_v2_generate.py` (the tail oil's attempt). `cargo test --no-default-features`, `tests/test_rust_backend.py`, `tests/test_spec_vectors.py` and `tests/test_backend_comparison.py` pass.
+- **Needs sign-off:** yes (the outcome of an attempt; a count added to the core's search, no change to its roots).
+- **Used by:** `specs/sampling.md`, SMP-104; `sampling/v2/generate.py`; `rust/src/shoot.rs`.
+- **Ruling:**

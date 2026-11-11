@@ -40,13 +40,18 @@ pub struct Root {
     pub w_g_res: f64,
 }
 
-/// The roots of a search, sorted by p_0, the work it took, and the number of sign changes of R that were not accepted
-/// as roots
+/// The roots of a search, sorted by p_0, the work it took, the number of sign changes of R that were not accepted
+/// as roots, and of those the number at the edge of the states the march admits
 pub struct Search {
     pub roots: Vec<Root>,
     pub counts: Counts,
     pub rejected: usize,
+    pub rejected_at_edge: usize,
 }
+
+/// The half-width of the neighbourhood of a rejected sign change in which a failed march puts it at the edge, over p_r:
+/// far wider than Brent's resolution of 4 ulp of p_r
+const EDGE_WIDTH: f64 = 1e-9;
 
 /// p_0 of the roots, each with whether R rises through it. Samples R(p_0) on a uniform scan of (p_s, p_r) and runs
 /// Brent on every sign change between neighbouring samples. Trickle roots, and both roots of a nearly closed choke,
@@ -174,9 +179,23 @@ pub fn root_set(spec: &WellSpec, op: &OperatingPoint) -> Result<Search, String> 
     op.check()?;
     let m = Marcher::new(spec, op);
     let found = shoot(&m);
-    let n = found.len();
-    let roots: Vec<Root> = found.into_iter().filter_map(|(p_0, rising)| root_at(&m, p_0, rising)).collect();
-    Ok(Search { rejected: n - roots.len(), roots, counts: m.counts() })
+    let (mut roots, mut rejected, mut rejected_at_edge) = (Vec::new(), 0, 0);
+    for (p_0, rising) in found {
+        match root_at(&m, p_0, rising) {
+            Some(root) => roots.push(root),
+            None => {
+                // A sign change that is not a root. Where a march fails next to it, R jumps there, between a march
+                // that reaches the wellhead and one stopped at a choked cell (SOL-8), or between the choke row and
+                // the rate below p_s (CHK-11): the edge of the states the march admits, not a root the search missed
+                rejected += 1;
+                let h = EDGE_WIDTH * op.p_r;
+                if [p_0 - h, p_0, (p_0 + h).min(op.p_r)].into_iter().any(|p| m.march(p).failed) {
+                    rejected_at_edge += 1;
+                }
+            }
+        }
+    }
+    Ok(Search { roots, rejected, rejected_at_edge, counts: m.counts() })
 }
 
 /// The shooting residual R(p_0), for tests and diagnostics
