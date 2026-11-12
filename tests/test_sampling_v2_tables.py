@@ -292,6 +292,16 @@ def test_a_table_that_loses_more_than_five_percent_of_its_pressures_fails():
         tb._repair(frame(three, p=p50, T=(300.0,)), 100.0)
 
 
+def test_a_small_table_may_lose_one_pressure():
+    """D-139: one pressure is always allowed, where it is more than 5% of a table's: 1 of 18 goes, 2 of 18 fail."""
+    p18 = [10.0 * (i + 1) for i in range(18)]
+    rising = [x * (1 + 1e-3 * x) for x in p18]
+    out, dropped = tb._repair(frame(changed(rising, i5=500.0), p=p18, T=(300.0,)), 100.0)
+    assert dropped == [60.0] and out.p.nunique() == 17
+    with pytest.raises(ValueError, match='p/Z falls at 2 of 18 pressures'):
+        tb._repair(frame(changed(rising, i5=500.0, i12=1.0), p=p18, T=(300.0,)), 100.0)
+
+
 # ---------------------------------------------------------------------------
 # SMP-115: the saturation pressure's rule, with the flash replaced
 # ---------------------------------------------------------------------------

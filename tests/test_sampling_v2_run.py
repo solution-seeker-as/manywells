@@ -17,6 +17,7 @@ a small real pilot and re-solves its samples.
 import json
 import math
 import pathlib
+import threading
 
 import numpy as np
 import pandas as pd
@@ -80,7 +81,9 @@ def stand_in_attempt(builder, inp) -> dict:
     rec.update(
         n_stable=int(outcome == 'operating_point'), several_stable=outcome == 'operating_point' and inp['u'] > 0.9
     )
-    rec.update(marches=7, non_finite=0, rejected=int(reason == 'incomplete_scan'), t_solve=0.0, t_build=0.0)
+    rec.update(
+        marches=7, non_finite=0, rejected=int(reason == 'incomplete_scan'), rejected_at_edge=0, t_solve=0.0, t_build=0.0
+    )
     if outcome == 'operating_point':
         rec.update({key: 1.0 + inp['u'] for key in FEATURES}, CHOKED=inp['u'] < 0.2, FRBH='bubbly', FRWH='annular')
         rec['q_oe'] = 100.0
@@ -227,6 +230,24 @@ def test_a_panic_outside_a_solve_is_a_crash(monkeypatch):
     assert (res['info']['scan'], res['log'], res['samples']) == ([], [], [])
 
 
+def test_the_pool_runs_every_task_and_is_renewed(monkeypatch):
+    # More tasks than the processes take before their renewal, where ProcessPoolExecutor's own renewal hung
+    pools = []
+
+    class Pool(runner.ProcessPoolExecutor):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            pools.append(self)
+
+    monkeypatch.setattr(runner, 'ProcessPoolExecutor', Pool)
+    monkeypatch.setattr(runner, '_TASKS_PER_PROCESS', 2)
+    out = []
+    worker = threading.Thread(target=lambda: out.extend(runner._imap(abs, list(range(-9, 0)), 2)), daemon=True)
+    worker.start()
+    worker.join(120)  # A hang fails the test, not the suite
+    assert sorted(out) == list(range(1, 10)) and len(pools) == 3
+
+
 def out_of_memory(monkeypatch, fails):
     """A stand-in generation in which well k runs out of memory in its first fails(k) processes, and a stand-in for
     the fresh process (run._fresh), the same process here. Returns the processes each well was given."""
@@ -292,7 +313,7 @@ def test_another_runs_settings_stop_the_run(monkeypatch, tmp_path):
         100,
         'rust',
     )
-    assert settings['limits'] == dict(slot=50, redraws=400, solver_failures=10) and settings['n_slots'] == 200
+    assert settings['limits'] == dict(slot=100, redraws=1000, solver_failures=10) and settings['n_slots'] == 200
     assert set(settings['code']) == {'version', 'commit', 'dirty'}
     with pytest.raises(ValueError, match='kind'):
         runner._run_settings('closed', SEED)
@@ -481,7 +502,7 @@ def test_a_dataset_written_from_a_run(monkeypatch, tmp_path):
     assert set(data) == {'wells', 'samples', 'geometry', 'pvt', 'metadata'} and data['metadata'] == meta
     assert set(logs) == {'drawn_wells', 'redraws', 'metadata'} and logs['metadata']['companion_of'] == 'manywells-sol-2'
     assert (meta['seed'], meta['n_wells'], meta['configuration'], meta['backend']) == (SEED, 3, 'v2.0.0', 'rust')
-    assert meta['limits'] == dict(slot=50, redraws=400, solver_failures=10) and meta['n_slots'] == N_TEST_SLOTS
+    assert meta['limits'] == dict(slot=100, redraws=1000, solver_failures=10) and meta['n_slots'] == N_TEST_SLOTS
     assert meta['producibility']['floor'] == generate._FLOOR and meta['counts']['wells_accepted'] == 3
     assert meta['files']['samples.parquet']['rows'] == 3 * N_TEST_SLOTS == len(data['samples'])
     assert {'code', 'assembled_by', 'lock_sha256', 'python', 'platform', 'created'} <= set(meta)

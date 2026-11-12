@@ -61,6 +61,7 @@ _TAIL_SHARE = 0.20  # spec: SMP-53
 _WELL_TYPES, _P_WELL_TYPE = ('platform', 'subsea', 'onshore'), (0.55, 0.35, 0.10)  # spec: SMP-54
 _FLUID_TYPES, _P_FLUID = ('black_oil', 'volatile_oil', 'gas_condensate', 'gas'), (0.55, 0.10, 0.15, 0.20)
 _P_DRY_GAS = 0.07  # Share of dry gas among the wet and dry gas wells  # spec: SMP-55
+_P_WET_START, _WLR_WET = 0.3, (0.05, 0.9)  # A core oil's wet start under pressure support (D-140)  # spec: SMP-69
 _P_STAGE = (0.25, 0.40, 0.35)  # spec: SMP-56
 _DEPTH = {  # Median (m below the mudline) and log standard deviation  # spec: SMP-57
     'black_oil': (2674, 0.317),
@@ -216,7 +217,7 @@ def draw_well(
     _temperature(gen('temperature'), w, x)
     _separator(gen('separator'), w)
     _fluid(gen('fluid'), w, x, fluid)
-    _stage(gen('stage'), w)
+    _stage(gen('stage'), w, x)
     _inflow(gen, w, x)
     _completion(gen('completion'), w, x)
     _inflow_at_stage(w, x)
@@ -349,7 +350,10 @@ def _separator(r, w):  # spec: SMP-66
     if wt == 'onshore':
         p_sep, T_sep = tlognorm(r, 15, 0.6, 2, 70), r.uniform(285, 320)
     else:
-        p_sep, T_sep = tlognorm(r, 35, 0.45, 5, 85), r.uniform(300, 340) if wt == 'platform' else r.uniform(290, 340)
+        # Offshore gas and condensate wells start against a high-pressure line (D-134)
+        gas = w['fluid_type'] not in _OILS
+        p_sep = tlognorm(r, 65, 0.5, 10, 120) if gas else tlognorm(r, 35, 0.45, 5, 85)
+        T_sep = r.uniform(300, 340) if wt == 'platform' else r.uniform(290, 340)
     r_mid, r_late = r.uniform(0.5, 1.0), r.uniform(0.1, 0.6)
     r_s = {'initial': 1.0, 'mid_life': r_mid, 'late': r_late}[w['life_stage']]
     # spec: SMP-51. The flowline's two numbers and the tail's pressure are drawn for every well
@@ -416,7 +420,7 @@ def _fluid(r, w, x, fluid):
     x.bo = bo
 
 
-def _stage(r, w):
+def _stage(r, w, x):
     tail, fc, drive, stage = _is_tail(w), w['fluid_class'], w['drive'], w['life_stage']
     oil = w['fluid_type'] in _OILS
     # spec: SMP-69
@@ -440,9 +444,13 @@ def _stage(r, w):
     wlr_tail, u_kgko = r.uniform(0, 0.98), r.random()
     wgr = logu(r, 1, 10000) if tail else logu(r, *_WGR[stage, drive])
     u_ck = r.uniform(0.5, 3.0)
+    u_wet, wlr_wet = r.random(), r.uniform(*_WLR_WET)  # Last in the block, so that no earlier number moves (D-140)
     if oil:
         if tail:
             wlr = wlr_tail
+        elif stage == 'initial' and drive == 'pressure_support' and u_wet < _P_WET_START:
+            wlr = wlr_wet  # A wet start: a well into a swept reservoir, with no breakthrough of its own (SMP-86)
+            x.flags.append('wet_start')
         w['w_kgko'] = u_kgko if tail else 0.0  # spec: SMP-70. Fig. 9.16 in the core, the book's range in the tail
     else:
         if fc == 'gas_condensate':

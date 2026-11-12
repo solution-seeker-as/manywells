@@ -68,6 +68,7 @@ FLAGS = {
     'injection_at_packer',
     'injection_raised_to_0.3L',
     'lift_capacity_at_bound',
+    'wet_start',
 }
 # The draws' ranges, as specs/sampling.md states them
 API = {'black_oil': (16, 45), 'volatile_oil': (40, 50), 'gas_condensate': (42, 58), 'wet_gas': (45, 58)}
@@ -177,6 +178,8 @@ def check_well(w, md, tvd):
         'subsea': ((5, 85), (290, 340)),
         'onshore': ((2, 70), (285, 320)),
     }[wt]
+    if wt != 'onshore' and fc not in ('black_oil', 'volatile_oil'):
+        p_sep_range = (10, 120)  # Offshore gas and condensate wells (D-134)
     assert between(w['p_sep'], *p_sep_range) and between(w['T_sep'], *T_sep_range)
     dp_fl = w['dp_fl']
     assert between(dp_fl, 5 + 0.03 * d_w, 30 + 0.07 * d_w) if wt == 'subsea' else dp_fl == 0
@@ -203,7 +206,9 @@ def check_well(w, md, tvd):
     assert between(w['r_p'], *r_p_range) and w['p_r'] == w['r_p'] * p_i
     assert w['below_hydrostatic'] == (w['p_r'] < p_h)
     if oil:
-        assert between(w['wlr'], *((0, 0.98) if tail else WLR[stage, drive]))
+        wet = 'wet_start' in w['flags'].split(';')  # D-140: a third of the core oils' initial draws under support
+        assert not wet or (not tail and stage == 'initial' and drive == 'pressure_support')
+        assert between(w['wlr'], *((0, 0.98) if tail else (0.05, 0.9) if wet else WLR[stage, drive]))
         assert w['R_go'] > 0 and (w['R_go'] == w['R_i']) == (w['p_r'] >= w['p_sat'])
         assert w['ogr'] is None and 'wgr' not in w and between(w['w_kgko'], 0, 1 if tail else 0)
     else:
@@ -444,7 +449,8 @@ def marginal_failures(wells):
     core = [w for w in ws if w['coverage_tail'] == 'core']
     tail = [w for w in ws if w['coverage_tail'] == 'tail']
     black = [w for w in core if w['fluid_class'] == 'black_oil']
-    offshore = [w for w in core if w['well_type'] != 'onshore']
+    offshore_oils = [w for w in core if w['well_type'] != 'onshore' and is_oil(w)]
+    offshore_gases = [w for w in core if w['well_type'] != 'onshore' and not is_oil(w)]
     platform_oils = [w for w in core if w['well_type'] == 'platform' and is_oil(w)]
     subsea = [w for w in core if w['well_type'] == 'subsea']
     shelf = [w for w in core if w['well_type'] == 'platform' and w['d_w'] < 400]
@@ -453,7 +459,8 @@ def marginal_failures(wells):
         ('d_w, core subsea', subsea, 'd_w', log_uniform(80, 3000)),  # SMP-58
         ('d_w, core shelf platforms', shelf, 'd_w', truncated_lognormal(90, 0.6, 5, 400)),
         ('salinity, core', core, 'salinity', truncated_lognormal(0.06, 0.6, 0.002, 0.25)),  # SMP-62
-        ('p_sep, core offshore', offshore, 'p_sep', truncated_lognormal(35, 0.45, 5, 85)),  # SMP-66
+        ('p_sep, core offshore oils', offshore_oils, 'p_sep', truncated_lognormal(35, 0.45, 5, 85)),  # SMP-66
+        ('p_sep, core offshore gases', offshore_gases, 'p_sep', truncated_lognormal(65, 0.5, 10, 120)),  # D-134
         ('API, core black oils', black, 'api', truncated_normal(33, 4.5, 16, 45)),  # SMP-67
         ('gas gravity, core black oils', black, 'sg_gas', truncated_normal(0.70, 0.07, 0.58, 0.95)),
         ('permeability, core platform oils', platform_oils, 'perm', truncated_lognormal(15, 1.2, 0.5, 3000)),  # SMP-71
@@ -565,7 +572,7 @@ BLOCK_NUMBERS = dict(  # The numbers that each block takes of its generator, for
     temperature=3,
     separator=7,
     fluid=5,
-    stage=14,
+    stage=16,
     inflow=7,
     nondarcy=2,  # A gas well's block
     completion=3,

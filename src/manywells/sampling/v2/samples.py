@@ -173,17 +173,17 @@ def _nsol2_redraw(r, slot, w_max, p_s_nom, dp_fl) -> tuple:  # spec: SMP-105
     """A redraw's controls and separator pressure: each control changed from the slot's planned value, the lift gas
     only where lift is installed. Every number is drawn whatever its branch."""
     small_u, step_u, open_u, new_u = r.random(), r.uniform(-_REDRAW_STEP, _REDRAW_STEP), r.random(), r.random()
-    small_w, step_w, off_w, new_w = r.random(), r.uniform(-_REDRAW_STEP, _REDRAW_STEP), r.random(), r.random()
+    small_w, step_w, _off, new_w = r.random(), r.uniform(-_REDRAW_STEP, _REDRAW_STEP), r.random(), r.random()
     if small_u < _REDRAW_SMALL:
         u = _reflect(slot['u'] + step_u, _U_MIN, 1.0)
     else:
         u = 1.0 if open_u < _P_OPEN else _U_MIN + (1 - _U_MIN) * new_u
     w_lg = slot['w_lg']
-    if slot['lift_on']:
+    if slot['lift_on']:  # A redraw keeps the lift gas on (D-136); _off is drawn, unused, for the count (SMP-51)
         if small_w < _REDRAW_SMALL:
             w_lg = _reflect(slot['w_lg'] + step_w * w_max, _LIFT_FLOOR * w_max, w_max)
         else:
-            w_lg = 0.0 if off_w < _P_LIFT_OFF else w_max * (_LIFT_FLOOR + (1 - _LIFT_FLOOR) * new_w)
+            w_lg = w_max * (_LIFT_FLOOR + (1 - _LIFT_FLOOR) * new_w)
     return u, w_lg, _separator_pressure(r, p_s_nom, dp_fl)
 
 

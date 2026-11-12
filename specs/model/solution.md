@@ -107,7 +107,7 @@ Not part of the model; recorded so that a reader can follow `rust/src/shoot.rs` 
   - Once the pressure falls below $p_s$, $R = w_m$ exactly (CHK-11).
   - The roots are the sign changes of $R$ on a scan of 101 points over $(p_s, p_r)$, with a ladder of halving drawdowns in the top interval and a search around each local minimum of $R \ge 0$.
   - Brent refines each sign change in the drawdown $p_r - p_0$.
-- **Acceptance and label.** A root is accepted if its march solved every row and $|R| \le 10^{-3} w_m$. Its slope comes from a central difference of $R$, labelled by SOL-3 with the verifier's `label_min`.
+- **Acceptance and label.** A root is accepted if its march solved every row and $|R| \le 10^{-3} w_m$. A sign change that is not accepted is counted (`rejected`), and counted apart where a march fails within $10^{-9}\thinspace p_r$ of it (`rejected_at_edge`): $R$ jumps there, between a march that reaches the wellhead and one stopped at a choked cell, or between CHK-11's two forms, at the edge of the states the march admits. Its slope comes from a central difference of $R$, labelled by SOL-3 with the verifier's `label_min`.
 - **Measured** on the verifier's case set (2026-10-01): every reference root found with the right label, a stable-root rate of 100%, and 65 ms per case on one core, with no build. With `develop`'s options it finds every root the CasADi backend finds, with its label, except on several void-fraction branches (2026-10-02, 015).
 
 ## Informative: roots on several void-fraction branches

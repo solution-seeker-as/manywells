@@ -72,7 +72,7 @@ CHUNK = 100  # Draw indices per chunk  # spec: SMP-110
 _GENERATE = {'sol': generate.generate_sol2_well, 'nsol': generate.generate_nsol2_well}
 _FIRST_RATE = 1.0  # The share of wells accepted that a run assumes before its first chunk: it does not overshoot
 _LEAST_RATE = 0.05  # The least share it plans with
-_TASKS_PER_PROCESS = 100  # A pool's process is renewed after this many wells, so that no leak grows over a run
+_TASKS_PER_PROCESS = 100  # The wells per process of a pool, which is then renewed, so that no leak grows over a run
 _MEMORY_RETRIES = 2  # The fresh processes in which a well that ran out of memory is solved again
 
 
@@ -295,22 +295,26 @@ def _cap(memory_cap):
 
 def _imap(fn, tasks, processes, memory_cap=None):
     """fn's results over the tasks, as they finish: in a pool of processes, each capped at memory_cap bytes, or in
-    this process for one. A worker that dies (a process killed at its memory cap, say) stops the run with
-    BrokenProcessPool, and a rerun resumes it."""
+    this process for one. Each group of _TASKS_PER_PROCESS tasks per process takes a new pool. ProcessPoolExecutor's
+    own max_tasks_per_child does not do: it replaces a process that ends only where no finished task left a process
+    idle, which with every task submitted at once is never, and a run of 10 processes hung after 1000 wells. The
+    groups leave the processes idle for 0.5 to 2% of a run, while a group's last wells finish (R11's full generation).
+    A worker that dies (a process killed at its memory cap, say) stops the run with BrokenProcessPool, and a rerun
+    resumes it."""
     if processes <= 1:
         yield from map(fn, tasks)
         return
     ctx = multiprocessing.get_context('forkserver')
-    pool = ProcessPoolExecutor(
-        processes, mp_context=ctx, initializer=_cap, initargs=(memory_cap,), max_tasks_per_child=_TASKS_PER_PROCESS
-    )
-    try:
-        for future in as_completed([pool.submit(fn, t) for t in tasks]):
-            yield future.result()
-    except BaseException:
-        pool.shutdown(wait=False, cancel_futures=True)
-        raise
-    pool.shutdown()
+    size = processes * _TASKS_PER_PROCESS
+    for i in range(0, len(tasks), size):
+        pool = ProcessPoolExecutor(processes, mp_context=ctx, initializer=_cap, initargs=(memory_cap,))
+        try:
+            for future in as_completed([pool.submit(fn, t) for t in tasks[i : i + size]]):
+                yield future.result()
+        except BaseException:
+            pool.shutdown(wait=False, cancel_futures=True)
+            raise
+        pool.shutdown()
 
 
 def _summary(headers, n_wells) -> dict:

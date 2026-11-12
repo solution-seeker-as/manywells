@@ -33,6 +33,7 @@ _T_LIFT = (0.05, 0.9)  # The lift's drawn start over the life span  # spec: SMP-
 _R_END = 0.15  # p_r / p_i of an exhausted reservoir under depletion  # spec: SMP-83
 _R_END_TOP = {True: 0.3, False: 0.2}  # The top of a core well's end under depletion: oils, gas classes  # spec: SMP-83
 _WGR_END = 10000.0  # Sm3 per 1e6 Sm3: a gas well with pressure support waters out  # spec: SMP-83
+_WLR_END = 0.85  # The bottom of a core oil's end WLR under pressure support, U(0.85, 0.98)  # spec: SMP-83
 _N_STATIC = 41  # Dates of the static check along the life  # spec: SMP-90
 _LIFT_KEYS = ('z_inj', 'injection_md', 'z_inj_frac', 'p_inj', 'dp_valve', 'packer_offset', 'T_lg', 'psi_lg')
 _LIFT_KEYS += ('glr_cap', 'w_lg_max')  # A lift design's keys (draws.draw_well)
@@ -112,11 +113,15 @@ class Life:
         self._D = (q_end**-self._b - 1) / (self._b * tau) if self._b > 1e-6 else -math.log(q_end) / tau
         self._N_T = _cumulative(self.T_life, self._t_pl, self._D, self._b)
         self._gamma = r.uniform(*_GAMMA)  # spec: SMP-85
-        # spec: SMP-86. Breakthrough: its recovery, and the water-liquid ratio that an oil jumps to
-        if support:
-            self._F_bt, self._wlr_bt = r.uniform(0.05, 0.4), r.uniform(0.05, 0.3)
+        # spec: SMP-86. Breakthrough: its recovery, an oil's for both drives (D-135), and the water-liquid ratio that
+        # an oil jumps to
+        if self.oil:
+            self._F_bt = r.uniform(0.1, 0.9)
         else:
-            self._F_bt, self._wlr_bt = r.uniform(0.2, 0.7), r.uniform(0.02, 0.1)
+            self._F_bt = r.uniform(0.05, 0.4) if support else r.uniform(0.2, 0.7)
+        self._wlr_bt = r.uniform(0.05, 0.3) if support else r.uniform(0.02, 0.1)
+        if self.oil and 'wet_start' in w0['flags'].split(';'):  # Water from the start, rising in F (D-140)
+            self._F_bt, self._wlr_bt = 0.0, w0['wlr']
         self._t_sep = tuple(float(t) for t in np.sort(r.uniform(*_T_SEP, 2)) * self.T_life)  # spec: SMP-89
         t_lift = r.uniform(*_T_LIFT) * self.T_life  # spec: SMP-90
         # spec: SMP-83. The start: the initial-stage draw's state, and for a tail well a core initial state. Its
@@ -145,8 +150,8 @@ class Life:
         self._r1, self._water1 = min(wL['r_p'], self._r0), wL[water]
         if not self._tail and not support:
             self._r1 = min(_R_END + (_R_END_TOP[self.oil] - _R_END) * u_end, self._r0)
-        elif not self._tail:
-            self._water1 = _WLR_MAX if self.oil else _WGR_END
+        elif not self._tail:  # Under pressure support an oil's end water takes the end's number (D-141)
+            self._water1 = _WLR_END + (_WLR_MAX - _WLR_END) * u_end if self.oil else _WGR_END
         # spec: SMP-85. A gas well under depletion: p_r against F from p/Z linear in F, on a grid of pressures
         self._p_of_F = None
         if not self.oil and not support and self._r1 < self._r0:
@@ -222,7 +227,7 @@ class Life:
         water-gas ratio (Sm3 per 1e6 Sm3), log-linear in F after it."""
         F, a, z = self.F(t), self._water0, self._water1
         if self.oil:
-            if z <= a or F < self._F_bt:
+            if z <= a or F <= self._F_bt:  # At F_bt the start's, to the bit: a wet start's water at t = 0 (D-140)
                 return a
             bt = min(self._wlr_bt, z)
             return max(a, _expit(_logit(bt) + (_logit(z) - _logit(bt)) * (F - self._F_bt) / (1 - self._F_bt)))

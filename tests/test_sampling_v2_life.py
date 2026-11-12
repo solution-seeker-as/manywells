@@ -101,8 +101,8 @@ def check_life(lf):
         assert (a == 0 or between(a, 0, 0.1)) if oil else between(a, 2, 20)
     else:
         assert r0 == w0['r_p'] and a == w0[water]
-        if support:  # The late draw's pressure, and the water at its cap
-            assert between(r1, 0.70, 1) and r1 <= r0 and z == (0.98 if oil else 10000)
+        if support:  # The late draw's pressure, and the water watered out (D-141)
+            assert between(r1, 0.70, 1) and r1 <= r0 and (between(z, 0.85, 0.98) if oil else z == 10000)
         else:  # The reservoir exhausted, with the late draw's water
             assert between(r1, 0.15, 0.3 if oil else 0.2) and between(z, *((0.05, 0.4) if oil else (5, 80)))
 
@@ -117,8 +117,11 @@ def check_life(lf):
 
     # The water (SMP-86)
     F_bt, wlr_bt = prm['F_bt'], prm['wlr_bt']
-    assert between(F_bt, *((0.05, 0.4) if support else (0.2, 0.7)))
-    assert between(wlr_bt, *((0.05, 0.3) if support else (0.02, 0.1)))
+    if oil and 'wet_start' in lf.w0['flags'].split(';'):  # D-140: no breakthrough of its own, water from the start
+        assert support and not tail and F_bt == 0.0 and wlr_bt == prm['water_start'] == lf.w0['wlr']
+    else:
+        assert between(F_bt, *((0.1, 0.9) if oil else (0.05, 0.4) if support else (0.2, 0.7)))  # D-135
+        assert between(wlr_bt, *((0.05, 0.3) if support else (0.02, 0.1)))
     wat = [lf.water(t) for t in ts]
     assert wat[0] == a and wat[-1] == pytest.approx(max(a, z), rel=1e-9) and np.all(np.diff(wat) >= -1e-12 * z)
     assert all(v == a for v, f in zip(wat, F) if f < F_bt)
@@ -312,7 +315,8 @@ def test_the_evolution_generators_numbers(lives):
     """SMP-83 to SMP-90, SMP-109: the numbers of a well's `evolution` generator in their order, each drawn for
     every well: the life span, the plateau, the decline's end rate and exponent, gamma, the breakthrough's recovery
     and WLR, the separator's two steps, the lift's drawn date, a tail well's start (the pressure, whether it is dry,
-    its WLR and its WGR) and a core well's end pressure under depletion."""
+    its WLR and its WGR) and a core well's end: its pressure under depletion, an oil's water under pressure
+    support (D-141)."""
     seen = set()
     for lf in lives:
         prm, T = lf.parameters(), lf.T_life
@@ -330,8 +334,12 @@ def test_the_evolution_generators_numbers(lives):
         assert b == (uniform(3, 0.3, 0.5) if support else uniform(3, 0, 0.4))
         assert b < 1e-6 or (1 + b * prm['decline_D'] * tau) ** (-1 / b) == log_uniform(2, 0.03, 0.3)
         assert prm['gamma_p'] == uniform(4, 0.7, 2.3)
-        assert prm['F_bt'] == (uniform(5, 0.05, 0.4) if support else uniform(5, 0.2, 0.7))
-        assert prm['wlr_bt'] == (uniform(6, 0.05, 0.3) if support else uniform(6, 0.02, 0.1))
+        F_bt_range = (0.1, 0.9) if lf.oil else (0.05, 0.4) if support else (0.2, 0.7)  # D-135
+        if lf.oil and 'wet_start' in lf.w0['flags'].split(';'):  # D-140: the numbers drawn, then the start's
+            assert prm['F_bt'] == 0.0 and prm['wlr_bt'] == lf.w0['wlr']
+        else:
+            assert prm['F_bt'] == uniform(5, *F_bt_range)
+            assert prm['wlr_bt'] == (uniform(6, 0.05, 0.3) if support else uniform(6, 0.02, 0.1))
         steps = sorted(0.1 + 0.8 * x for x in u[7:9])
         assert [prm['t_sep_1'] / T, prm['t_sep_2'] / T] == pytest.approx(steps, rel=1e-12)
         if lf.lift_start_rule == 'drawn_time':
@@ -344,6 +352,8 @@ def test_the_evolution_generators_numbers(lives):
                 assert prm['water_start'] == log_uniform(13, 2, 20)
         elif not support:
             assert prm['r_p_end'] == uniform(14, 0.15, 0.3 if oil else 0.2)
+        elif oil:
+            assert prm['water_end'] == uniform(14, 0.85, 0.98)
         seen.add((tail, oil, support, lf.lift_start_rule == 'drawn_time', tail and oil and u[11] < 0.5))
     assert len(seen) >= 12 and {dry for *_, dry in seen} == {True, False}
 

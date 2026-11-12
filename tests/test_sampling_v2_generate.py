@@ -37,7 +37,7 @@ from manywells.sampling.v2.generate import (
     generate_sol2_well,
 )
 from manywells.sampling.v2.inflow import _COEF_KEYS
-from manywells.sampling.v2.life import _lift_on, sol2_well
+from manywells.sampling.v2.life import Life, _lift_on, sol2_well
 from manywells.sampling.v2.mapping import WellBuilder
 from manywells.sampling.v2.samples import _N_SLOTS, _nsol2_plan, _sol2_attempt
 from manywells.sampling.v2.tables import _TABLE_CLASSES, TableMismatch
@@ -46,7 +46,7 @@ from manywells.solution import Root, RootSet
 from .sampling_v2_wells import SEED, drawn_lives, drawn_sol2_wells
 
 RECORD = (  # The keys of an attempt's record besides its inputs and labels (the module's docstring)
-    'outcome reason error n_roots n_stable several_stable marches non_finite rejected t_solve t_build'.split()
+    'outcome reason error n_roots n_stable several_stable marches non_finite rejected rejected_at_edge t_solve t_build'.split()
 )
 INFO = 'draw_index outcome error best_rate best_rate_w_lg best_rate_outcomes not_producible_reason'.split()
 RESULT = ['well', 'stations', 'table', 'nsol', 'info', 'samples', 'log', 'seconds']
@@ -88,9 +88,10 @@ def a_root(label='stable', w_res=5.0, w_g_res=0.5, p_0=200.0, n_points=101) -> R
 class StandInFinder:
     """In place of RustRootFinder: each search returns the roots and the counts given, or raises error."""
 
-    def __init__(self, roots=(), rejected=0, non_finite=0, error=None):
+    def __init__(self, roots=(), rejected=0, non_finite=0, error=None, at_edge=0):
         self.roots, self.error, self.wells = roots, error, []
         self.counts = dict(marches=7, states=700, rejected=rejected, non_finite=non_finite, edge_refinements=0)
+        self.counts['rejected_at_edge'] = at_edge
 
     def __call__(self, wp):
         self.wells.append(wp)
@@ -135,22 +136,27 @@ def test_an_operating_point(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    'roots, rejected, outcome, reason',
+    'roots, rejected, at_edge, outcome, reason',
     [
-        ([], 0, 'no_operating_point', 'no_root'),
-        ([], 2, 'solver_failure', 'incomplete_scan'),
-        (['unstable'], 0, 'solver_failure', 'unstable_only'),
-        (['unstable'], 1, 'solver_failure', 'unstable_only'),
-        (['stable', 'stable'], 0, 'operating_point', None),
+        ([], 0, 0, 'no_operating_point', 'no_root'),
+        ([], 2, 0, 'solver_failure', 'incomplete_scan'),
+        ([], 2, 1, 'solver_failure', 'incomplete_scan'),
+        ([], 2, 2, 'no_operating_point', 'no_root'),
+        (['unstable'], 0, 0, 'solver_failure', 'unstable_only'),
+        (['unstable'], 1, 1, 'solver_failure', 'unstable_only'),
+        (['stable', 'stable'], 0, 0, 'operating_point', None),
     ],
 )
-def test_the_outcome_of_a_root_set(monkeypatch, roots, rejected, outcome, reason):
-    """SMP-104: no root is no operating point unless the search rejected a sign change, whatever its non-finite scan
-    points; unstable roots alone are a missed root; of several stable roots, the one with the lowest p_0 (SOL-6)."""
+def test_the_outcome_of_a_root_set(monkeypatch, roots, rejected, at_edge, outcome, reason):
+    """SMP-104: no root is no operating point unless the search rejected a sign change away from the edge of the
+    states the march admits (D-138), whatever its non-finite scan points; unstable roots alone are a missed root; of
+    several stable roots, the one with the lowest p_0 (SOL-6)."""
     lf, w = a_sol2_well(oil=True)
     wp, bc = solve_inputs(lf, w)
     found = [a_root(label, p_0=200.0 + 10 * i) for i, label in enumerate(roots)]
-    monkeypatch.setattr(generate, 'RustRootFinder', StandInFinder(found, rejected=rejected, non_finite=4))
+    monkeypatch.setattr(
+        generate, 'RustRootFinder', StandInFinder(found, rejected=rejected, non_finite=4, at_edge=at_edge)
+    )
     out = generate._solve(wp, bc)
     assert (out['outcome'], out['reason']) == (outcome, reason)
     assert (out['n_roots'], out['n_stable']) == (len(roots), roots.count('stable'))
@@ -369,22 +375,34 @@ def test_the_passes(monkeypatch):
     assert {j: accepted[j]['attempt'] for j in needs} == {5: 1, 17: 3, 2: 2}
 
 
+def test_a_sign_change_at_a_choked_cell_is_no_root():
+    """D-138: seed 2026's well 323 at slot 16, a tail oil 2.3 bar above its separator, whose scan brackets a jump of
+    R where the march stops at a choked cell (SOL-8): the core counts the rejected sign change as at the edge, and
+    the attempt has no operating point."""
+    life = Life(2026, 323)
+    w = sol2_well(life)
+    wp, bc = WellBuilder(life.w0, life.stations, design=life.design).case(_sol2_attempt(2026, w, 16, 0))
+    out = generate._solve(wp, bc)
+    assert (out['outcome'], out['reason']) == ('no_operating_point', 'no_root')
+    assert out['rejected'] == out['rejected_at_edge'] == 1 and out['n_roots'] == 0
+
+
 def test_the_slot_limit(monkeypatch):
-    """SMP-106: a slot without an operating point after 50 attempts drops the well, as `slot_limit` in sol-2 and as
-    `dead_date` in nsol-2; every other slot keeps its operating point."""
+    """SMP-106: a slot without an operating point after 100 attempts (D-137) drops the well, as `slot_limit` in sol-2
+    and as `dead_date` in nsol-2; every other slot keeps its operating point."""
     for name in ('slot_limit', 'dead_date'):
         accepted, result, order = solve_slots(monkeypatch, lambda j, a: 'no_operating_point' if j == 7 else None, name)
-        assert result == name and _SLOT_LIMIT == 50 and 7 not in accepted and len(accepted) == _N_SLOTS - 1
+        assert result == name and _SLOT_LIMIT == 100 and 7 not in accepted and len(accepted) == _N_SLOTS - 1
         assert order[_N_SLOTS:] == [(7, a) for a in range(1, _SLOT_LIMIT)]
 
 
 def test_the_redraw_limit(monkeypatch):
-    """SMP-106: a well may redraw 400 times over its slots; a 401st redraw drops it."""
-    assert _REDRAW_LIMIT == 400
-    accepted, result, order = solve_slots(monkeypatch, lambda j, a: 'no_operating_point' if a < 2 else None)
-    assert result == 'accepted' and len(order) == _N_SLOTS + _REDRAW_LIMIT  # 2 redraws for each of 200 slots
-    accepted, result, order = solve_slots(monkeypatch, lambda j, a: 'no_operating_point' if a < 2 or j == 0 else None)
-    assert result == 'redraw_limit' and len(order) == _N_SLOTS + _REDRAW_LIMIT and order[-1] == (_N_SLOTS - 1, 2)
+    """SMP-106: a well may redraw 1000 times over its slots (D-137); a 1001st redraw drops it."""
+    assert _REDRAW_LIMIT == 1000
+    accepted, result, order = solve_slots(monkeypatch, lambda j, a: 'no_operating_point' if a < 5 else None)
+    assert result == 'accepted' and len(order) == _N_SLOTS + _REDRAW_LIMIT  # 5 redraws for each of 200 slots
+    accepted, result, order = solve_slots(monkeypatch, lambda j, a: 'no_operating_point' if a < 5 or j == 0 else None)
+    assert result == 'redraw_limit' and len(order) == _N_SLOTS + _REDRAW_LIMIT and order[-1] == (_N_SLOTS - 1, 5)
     assert 0 not in accepted and len(accepted) == _N_SLOTS - 1
 
 
@@ -801,15 +819,19 @@ def check_records(res):
     for rec in res['log']:
         outcome, reason = rec['outcome'], rec['reason']
         searched = reason not in ('p_r_le_p_s', 'exception')
-        assert all(math.isfinite(rec[key]) == searched for key in ('marches', 'non_finite', 'rejected'))
+        assert all(
+            math.isfinite(rec[key]) == searched for key in ('marches', 'non_finite', 'rejected', 'rejected_at_edge')
+        )
         if outcome == 'operating_point':
             assert reason is None and rec['n_stable'] >= 1 and generate._valid_row({key: rec[key] for key in FEATURES})
         elif reason == 'no_root':
-            assert outcome == 'no_operating_point' and rec['n_roots'] == 0 and rec['rejected'] == 0
+            assert (
+                outcome == 'no_operating_point' and rec['n_roots'] == 0 and rec['rejected'] == rec['rejected_at_edge']
+            )
         elif reason == 'p_r_le_p_s':
             assert outcome == 'no_operating_point' and rec['p_r'] <= rec['p_s']
         elif reason == 'incomplete_scan':
-            assert outcome == 'solver_failure' and rec['n_roots'] == 0 and rec['rejected'] > 0
+            assert outcome == 'solver_failure' and rec['n_roots'] == 0 and rec['rejected'] > rec['rejected_at_edge']
         elif reason == 'unstable_only':
             assert outcome == 'solver_failure' and rec['n_roots'] > 0 == rec['n_stable']
         else:
