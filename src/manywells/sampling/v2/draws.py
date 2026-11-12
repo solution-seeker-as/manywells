@@ -24,7 +24,7 @@ import numpy as np
 
 from manywells.choke import CHOKE_PROFILES
 from manywells.pvt import density_from_api, gas_density_from_sg
-from manywells.pvt.black_oil import BlackOil
+from manywells.pvt.black_oil import API_RANGE, BlackOil
 from manywells.pvt.water import water_viscosity
 from manywells.sampling.v2._distributions import logistic, logu, pick, tlognorm, tnorm, tnorm_at, unused
 from manywells.sampling.v2.reservoir import (
@@ -41,6 +41,7 @@ from manywells.sampling.v2.reservoir import (
     _slant_skin,
 )
 from manywells.sampling.v2.survey import _N_NUMBERS, _survey
+from manywells.sampling.v2.tables import _TABLE_CLASSES
 from manywells.sampling.wells import rng_for
 from manywells.units import P_REF, STD_GRAVITY
 
@@ -134,8 +135,13 @@ _CH4_CP = ((2236.0, 3011.0, 3549.0, 3336.0), (2466.0, 2801.0, 3079.0, 3234.0))  
 
 
 def _black_oil(w) -> BlackOil:
-    """The black oil of a well's draws, as the draws and a black-oil well's mapping use it (SMP-111)."""
-    return BlackOil(rho_o=w['rho_o'], rho_g=w['rho_g'], gas_law='dak', p_sep=w['p_sep'], T_sep=w['T_sep'])
+    """The black oil of a well's draws, as the draws and a black-oil well's mapping use it (SMP-111). A table fluid's
+    stock-tank oil may lie outside the API gravities that the black oil takes (API_RANGE), as a condensate lighter than
+    58 API: its draws then use the black oil at the range's end (v2: scope and conventions; D-144)."""
+    rho_o = w['rho_o']
+    if w['fluid_class'] in _TABLE_CLASSES:
+        rho_o = min(max(rho_o, density_from_api(API_RANGE[1])), density_from_api(API_RANGE[0]))
+    return BlackOil(rho_o=rho_o, rho_g=w['rho_g'], gas_law='dak', p_sep=w['p_sep'], T_sep=w['T_sep'])
 
 
 def _stream(bo, gor, wlr, rho_w, p, T) -> tuple:

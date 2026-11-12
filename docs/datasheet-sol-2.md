@@ -2,6 +2,8 @@
 
 *Draft, 2026-11-11 (Step R11 of `plans/sampler-redesign-plan.md`; D-94). Release documentation, for Bjarne's sign-off. `[full generation: …]` marks a number that exists only after the full generation, and `[maintainer: …]` a fact for the maintainer to give.*
 
+*The first full generation is a beta, `manywells-sol-2-beta1` (SMP-50): this datasheet is filled for it first, and again for the final dataset, which takes the plain name.*
+
 This datasheet follows Gebru et al. (2021), one section per section of theirs (§3.1 to §3.7), each question in bold and its answer after it. The schema, every column with its unit and type, is in [`datasets.md`](datasets.md), v2 datasets; the procedure that draws the wells and samples is `specs/sampling.md`, SMP-50 to SMP-117. The non-stationary dataset has its own datasheet, [`datasheet-nsol-2.md`](datasheet-nsol-2.md).
 
 ## 1. Motivation
@@ -74,7 +76,7 @@ The accepted wells are the drawn ones that are produced and reach 200 operating 
 
 - **The producibility filter** (SMP-102, SMP-103). A well whose best rate, at a fully open choke and at three lift-gas rates for a lifted well, is below half its economic floor, or an oil whose WLR is above 0.98, would not be produced and is dropped. A natural oil well that cannot flow first takes its life's lift design (`lift_start_rule` `no_natural_flow`).
 - **Redraws** (SMP-104, SMP-105). A slot's draw without an operating point is drawn again from the slot's own generator until the slot has one.
-- **Limits** (SMP-106). A well is dropped, and the next drawn well takes its place, when a slot needs more than 50 attempts, the well more than 400 redraws or 10 solver failures, when its inputs fail `configurations.check`, or when its table cannot be built.
+- **Limits** (SMP-106). A well is dropped, and the next drawn well takes its place, when a slot needs more than 100 attempts, the well more than 1000 redraws or 10 solver failures, when its inputs fail `configurations.check`, or when its table cannot be built. The drops are reported by group, with no target (SMP-106): [full generation: wells dropped at the limits by fluid class, well type and lift rule; the shift of each drawn input between the drawn and the kept wells]
 
 Nothing else drops a well or a sample: v1's filters (SMP-28) do not apply, and a small rate stays a sample. The labels are drawn or set before the solve, except `lift_start_rule` `no_natural_flow`, which the filter sets (SMP-52). [full generation: wells dropped by outcome; share of the attempts redrawn]
 

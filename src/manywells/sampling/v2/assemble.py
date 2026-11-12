@@ -84,9 +84,9 @@ _TABLE_FLUID = (  # A table fluid's columns: its composition, and what its build
     'comp_w1 comp_w2 comp_w3 z_c7p M_c7p alpha_c7p C_f f_int c7_mol gor_moved api_drawn sg_gas_drawn R_si_drawn '
     'p_sat_drawn offset_api offset_sg_gas offset_gor field_api field_sg_gas field_gor n_gors table_nodes'
 ).split()
-_LIFE = (  # An nsol-2 well's life (life.Life.parameters), the end that the scan gives, and its plan's p_change
-    'T_life T_end t_plateau decline_D decline_b gamma_p r_p_start r_p_end F_bt wlr_bt water_start water_end t_sep_1 '
-    't_sep_2 r_s_mid r_s_late p_change lift_start'
+_LIFE = (  # An nsol-2 well's life (life.Life.parameters), its end, the end that the scan gave, and its plan's p_change
+    'T_life T_end T_scan t_plateau decline_D decline_b gamma_p r_p_start r_p_end F_bt wlr_bt water_start water_end '
+    't_sep_1 t_sep_2 r_s_mid r_s_late p_change lift_start'
 ).split()
 _GENERATION = ('n_redraws', 'n_redraws_no_op', 'n_redraws_solver') + tuple(f'n_redraws_{r}' for r in _REASONS)
 
@@ -110,7 +110,7 @@ def _well_columns(kind: str) -> list:  # spec: SMP-110
     cols += 'design_rate floor best_rate best_rate_w_lg D'.split()
     cols += ['roughness'] if sol else ['roughness_start', 'roughness_end']
     cols += 'bean_ratio C_D K_c'.split() + list(_LIFT) + (['h'] if sol else [])
-    cols += 'U_t k_e well_age cp_o cp_w cp_g flags'.split() + list(_GENERATION)
+    cols += 'U_t k_e well_age cp_o cp_w cp_g flags'.split() + list(_GENERATION) + ([] if sol else ['n_dead_dates'])
     return cols
 
 
@@ -150,7 +150,7 @@ def _well_row(res: dict, kind: str) -> dict:  # spec: SMP-108, SMP-110
     w, info, tab = res['well'], res['info'], res['table'] or {}
     times = dict(seconds=res['seconds'], cpu_seconds=res.get('cpu_seconds', math.nan))
     if w is None:
-        row = dict(draw_index=info['draw_index'], configuration=V2, n_cells=_N_CELLS, **_counts(res))
+        row = dict(draw_index=info['draw_index'], configuration=V2, n_cells=_N_CELLS, **_counts(res, kind))
         row.update(outcome=info['outcome'], error=_strip_home(info.get('error')), best_rate_outcomes=[], **times)
         return row | (dict(scan_best_rate=[], scan_outcome=[]) if kind == 'nsol' else {})
 
@@ -181,7 +181,10 @@ def _well_row(res: dict, kind: str) -> dict:  # spec: SMP-108, SMP-110
     row.update(design_rate=w['q_design'], floor=generate._FLOOR[w['well_type']])  # The tubing's (SMP-75)
     row.update(best_rate=info['best_rate'], best_rate_w_lg=info['best_rate_w_lg'])
     row.update(D=w['D'], bean_ratio=w['beta'], C_D=w['c_d'], K_c=w['K_c'])
-    design = res['nsol']['design'] if kind == 'nsol' else (w if w['lift'] == 'gas_lift' else None)
+    if kind == 'nsol':  # The design of a well whose lift starts in its life; one that stays natural has none
+        design = res['nsol']['design'] if res['nsol']['lift_start'] is not None else None
+    else:
+        design = w if w['lift'] == 'gas_lift' else None
     row.update({col: design[key] if design is not None else math.nan for col, key in _LIFT.items()})
     row.update(U_t=w['U_t'], k_e=w['k_e'], well_age=w['age_years'] * 365, cp_o=w['cp_o'], cp_w=w['cp_w'])
     row.update(cp_g=w['cp_g'], flags=w['flags'])
@@ -197,7 +200,7 @@ def _well_row(res: dict, kind: str) -> dict:  # spec: SMP-108, SMP-110
         life = {key: v for key, v in res['nsol'].items() if key != 'design'}
         row.update(life, lift_start=math.nan if life['lift_start'] is None else life['lift_start'])
         row.update(lift='gas_lift' if life['lift_start'] is not None else 'natural')
-        row.update(T_end=info['T_end'], p_change=info['p_change'])
+        row.update(T_end=info['T_end'], T_scan=info.get('T_scan', math.nan), p_change=info['p_change'])
     if 'hook' in tab:  # The table's fluid: its composition and what it replaced (SMP-113 to SMP-115)
         comp, drawn = tab['composition'], tab['drawn']
         weights = list((comp.get('template_weights') or {}).values()) or [math.nan] * 3
@@ -212,7 +215,7 @@ def _well_row(res: dict, kind: str) -> dict:  # spec: SMP-108, SMP-110
         row.update({f'offset_{key}': offsets.get(key, math.nan) for key in ('api', 'sg_gas', 'gor')})
         row.update({f'field_{key}': field.get(key, math.nan) for key in ('api', 'sg_gas', 'gor')})
         row.update(n_gors=len(tab.get('gors', [])), table_nodes=tab.get('nodes', math.nan))
-    row.update(_counts(res), outcome=info['outcome'], not_producible_reason=info['not_producible_reason'])
+    row.update(_counts(res, kind), outcome=info['outcome'], not_producible_reason=info['not_producible_reason'])
     row.update(error=_strip_home(info['error']), best_rate_outcomes=list(info['best_rate_outcomes']), **times)
     row['table_seconds'] = sum(tab.get('seconds', {}).get(key, 0.0) for key in ('fluid', 'tables')) if tab else math.nan
     if kind == 'nsol':
@@ -220,9 +223,10 @@ def _well_row(res: dict, kind: str) -> dict:  # spec: SMP-108, SMP-110
     return row
 
 
-def _counts(res) -> dict:  # spec: SMP-108
+def _counts(res, kind) -> dict:  # spec: SMP-108
     """A well's counts of its slots' attempts: all, the redraws, those without an operating point by outcome and by
-    reason, and its samples whose root set had several stable roots."""
+    reason, and its samples whose root set had several stable roots; an nsol-2 well's dead dates that started its
+    lift or ended its life (SMP-106), too."""
     slots = [r for r in res['log'] if r['kind'] == 'slot']
     failed = [r for r in slots if r['outcome'] != 'operating_point']
     out = dict(n_attempts=len(slots), n_redraws=sum(r['attempt'] > 0 for r in slots))
@@ -230,6 +234,8 @@ def _counts(res) -> dict:  # spec: SMP-108
     out.update(n_redraws_solver=sum(r['outcome'] == 'solver_failure' for r in failed))
     out.update({f'n_redraws_{reason}': sum(r['reason'] == reason for r in failed) for reason in _REASONS})
     out['n_several_stable'] = sum(bool(r['several_stable']) for r in res['samples'])
+    if kind == 'nsol':
+        out['n_dead_dates'] = len(res['info'].get('dead_dates', ()))
     return out
 
 
@@ -255,7 +261,7 @@ def _pvt_rows(table: dict, table_id: str) -> pd.DataFrame:  # spec: SMP-110
                 break
             key, _, value = line[1:].partition(':')
             header[key.strip()] = value.strip()
-    df = pd.read_csv(path, comment='#', float_precision='round_trip')
+    df = pd.read_csv(path, comment='#', float_precision='round_trip').astype('float64')  # A whole number's too
     if 'gor' not in df:
         df.insert(0, 'gor', float(header['gor']) if 'gor' in header else math.nan)
     df.insert(0, 'pvt_table_id', table_id)
@@ -291,11 +297,13 @@ def _assemble(results, kind: str, seed: int, n_wells: int, attempts=None) -> dic
     :param attempts: None, or a callable that takes the attempt log of each hundred wells as a DataFrame (every
         record of their logs, its inputs under the samples' names, with `ID` and `well_outcome`), in draw order
     :return: A dict of the typed tables (`wells`, `samples`, `geometry`, `pvt`, `drawn_wells`, `redraws`) and
-        `counts`: the wells drawn and accepted, their outcomes and the slots' attempts by outcome, and the CPU time
+        `counts`: the wells drawn and accepted, their outcomes and the slots' attempts by outcome, the samples with a
+        point off their PVT table's grid, nsol-2's dead dates by what they did to the life, and the CPU time
     :raises ValueError: if the results hold fewer than n_wells accepted wells
     """
     drawn, samples, geometry, pvt, redraws, chunk = [], [], [], [], [], []
     attempt_outcomes, cpu, n_id = collections.Counter(), 0.0, 0
+    off_table, dead_dates = 0, collections.Counter()
     for res in results:
         if n_id >= n_wells:
             break
@@ -311,7 +319,9 @@ def _assemble(results, kind: str, seed: int, n_wells: int, attempts=None) -> dic
         kept = [rec for rec in slots if rec['outcome'] != 'operating_point' or not accepted]
         if kept:
             redraws.append(_attempt_rows(kept, kind).assign(ID=ID))
+        dead_dates.update(d['action'] for d in res['info'].get('dead_dates', ()))
         if accepted:
+            off_table += sum(bool(rec.get('off_table')) for rec in res['samples'])
             samples.append(_attempt_rows(res['samples'], kind).assign(ID=ID))
             md, tvd = res['stations']
             geometry.append(pd.DataFrame(dict(ID=ID, station=np.arange(len(md)), md=md, tvd=tvd)))
@@ -348,6 +358,10 @@ def _assemble(results, kind: str, seed: int, n_wells: int, attempts=None) -> dic
         wells_accepted=int(is_well.sum()),
         outcomes={key: int(v) for key, v in outcomes.items() if v},
         attempts=dict(attempt_outcomes),
+        samples_off_table=off_table,
+        dead_dates=dict(lift_start=dead_dates['lift_start'], life_end=dead_dates['life_end'])
+        if kind == 'nsol'
+        else None,
         cpu_seconds=cpu,
     )
     return out
@@ -377,12 +391,14 @@ def _table_build_record(tables) -> dict | None:  # spec: SMP-110, SMP-116
 
 
 def _records(kind: str, seed: int, n_wells: int, settings: dict, run_dir) -> dict:  # spec: SMP-110
-    """The records of a dataset (SMP-110), from its run's settings (run._run_settings): its seed, the configuration,
-    the grid, the backend, the limits, the floor and the best rate's constants, the folder of tables, relative to the
-    run's folder, and its build, the code that ran and assembled it, the lock file's hash and the platform."""
+    """The records of a dataset (SMP-110), from its run's settings (run._run_settings): its release label and seed,
+    the configuration, the grid, the backend, the limits, the floor and the best rate's constants, the folder of
+    tables, relative to the run's folder, and its build, the code that ran and assembled it, the lock file's hash,
+    the run's environment and the assembly's platform."""
     tables = settings['tables']
     return dict(
         dataset=_DATASETS[kind],
+        release=settings['release'],
         kind=kind,
         seed=seed,
         n_wells=n_wells,
@@ -406,6 +422,7 @@ def _records(kind: str, seed: int, n_wells: int, settings: dict, run_dir) -> dic
         code=settings['code'],
         assembled_by=code_record(),
         lock_sha256=settings['lock_sha256'],
+        environment=settings['environment'],
         created=datetime.datetime.now(datetime.timezone.utc).isoformat(timespec='seconds'),
         **_platform_record(),
     )

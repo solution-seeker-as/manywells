@@ -231,7 +231,7 @@ def frame(pz, p=None, T=(300.0, 350.0), gor=None):
 
 
 RISING = [12.0, 25.0, 39.0, 54.0, 70.0, 87.0]
-P40 = [5.0 * (i + 1) for i in range(40)]  # 40 pressures, of which the repair may drop two
+P40 = [5.0 * (i + 1) for i in range(40)]  # 40 pressures, of which the repair may drop four
 RISING40 = [x * (1 + 1e-3 * x) for x in P40]
 
 
@@ -275,31 +275,40 @@ def test_of_the_longest_runs_the_one_that_ends_highest_is_kept():
     assert tb._falling_pz_pressures(frame([12.0, 25.0, 39.0, 39.0])) == [30.0]
 
 
-def test_a_table_that_loses_more_than_five_percent_of_its_pressures_fails():
-    """2 of 40 pressures is 5%, which the repair may drop; 3 of 40 is more, as is 3 of the 50 of the pilot's well."""
-    assert tb._MAX_DROPPED == 0.05
-    out, dropped = tb._repair(frame(changed(RISING40, i10=500.0, i25=1.0), p=P40, T=(300.0,)), 123.456789)
-    assert dropped == [55.0, 130.0] and out.p.nunique() == 38
-    three = changed(RISING40, i10=500.0, i25=1.0, i30=2.0)
-    with pytest.raises(ValueError, match=r'p/Z falls at 3 of 40 pressures at GOR 123\.457$'):
-        tb._repair(frame(three, p=P40, T=(300.0,)), 123.456789)
+def test_a_table_that_loses_more_than_a_tenth_of_its_pressures_fails():
+    """4 of 40 pressures is a tenth, which the repair may drop (D-143); 5 of 40 is more, as is 6 of 50."""
+    assert tb._MAX_DROPPED == 0.10
+    four = changed(RISING40, i10=500.0, i25=1.0, i30=2.0, i35=3.0)
+    out, dropped = tb._repair(frame(four, p=P40, T=(300.0,)), 123.456789)
+    assert dropped == [55.0, 130.0, 155.0, 180.0] and out.p.nunique() == 36
+    five = changed(four, i20=1.5)
+    with pytest.raises(ValueError, match=r'p/Z falls at 5 of 40 pressures at GOR 123\.457$'):
+        tb._repair(frame(five, p=P40, T=(300.0,)), 123.456789)
     # The bad pressures of every temperature count together
-    with pytest.raises(ValueError, match='p/Z falls at 3 of 40 pressures'):
-        tb._repair(frame([changed(RISING40, i10=500.0, i25=1.0), changed(RISING40, i30=2.0)], p=P40), 100.0)
+    with pytest.raises(ValueError, match='p/Z falls at 5 of 40 pressures'):
+        tb._repair(frame([four, changed(RISING40, i20=1.5)], p=P40), 100.0)
     p50 = [5.0 * (i + 1) for i in range(50)]
-    three = changed([x * (1 + 1e-3 * x) for x in p50], i10=500.0, i25=1.0, i30=2.0)
-    with pytest.raises(ValueError, match='p/Z falls at 3 of 50 pressures'):
-        tb._repair(frame(three, p=p50, T=(300.0,)), 100.0)
+    rising50 = [x * (1 + 1e-3 * x) for x in p50]
+    five = changed(rising50, i10=500.0, i25=1.0, i30=2.0, i35=3.0, i40=4.0)
+    assert tb._repair(frame(five, p=p50, T=(300.0,)), 100.0)[1] == [55.0, 130.0, 155.0, 180.0, 205.0]
+    with pytest.raises(ValueError, match='p/Z falls at 6 of 50 pressures'):
+        tb._repair(frame(changed(five, i20=1.5), p=p50, T=(300.0,)), 100.0)
 
 
 def test_a_small_table_may_lose_one_pressure():
-    """D-139: one pressure is always allowed, where it is more than 5% of a table's: 1 of 18 goes, 2 of 18 fail."""
+    """D-139: one pressure is always allowed, where it is more than the limit's share of a table's: 1 of 8 goes, 2 of 8
+    fail; a table of 18 pressures may lose one, and not two."""
     p18 = [10.0 * (i + 1) for i in range(18)]
     rising = [x * (1 + 1e-3 * x) for x in p18]
     out, dropped = tb._repair(frame(changed(rising, i5=500.0), p=p18, T=(300.0,)), 100.0)
     assert dropped == [60.0] and out.p.nunique() == 17
     with pytest.raises(ValueError, match='p/Z falls at 2 of 18 pressures'):
         tb._repair(frame(changed(rising, i5=500.0, i12=1.0), p=p18, T=(300.0,)), 100.0)
+    p8, rising8 = p18[:8], rising[:8]
+    out, dropped = tb._repair(frame(changed(rising8, i5=500.0), p=p8, T=(300.0,)), 100.0)
+    assert dropped == [60.0] and out.p.nunique() == 7
+    with pytest.raises(ValueError, match='p/Z falls at 2 of 8 pressures'):
+        tb._repair(frame(changed(rising8, i2=500.0, i6=1.0), p=p8, T=(300.0,)), 100.0)
 
 
 # ---------------------------------------------------------------------------

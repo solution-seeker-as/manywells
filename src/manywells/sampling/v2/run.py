@@ -15,10 +15,11 @@ that a stopped run loses only the wells in progress; once every well of a chunk 
 one file, RUN/chunks/chunk-C.pkl, written to a temporary name and renamed, and the wells' files are removed. A chunk
 file holds two pickles: its header (the run's settings, the chunk, its first draw index and size, each well's outcome
 and the CPU time), then the list of its wells' results in draw order. RUN/settings.json holds the run's settings: the
-dataset and seed, the configuration, the grid, the backend, the limits, the floor and the best rate's lift-gas rates,
-scan points and water cut, the slots per well, the chunk size, the folder of tables, the lock file's hash and the
+dataset, its release label and seed, the configuration, the grid, the backend, the limits, the floor and the best
+rate's lift-gas rates, scan points and water cut, the slots per well, the chunk size, the folder of tables, the lock
+file's hash, the environment (the versions of Python, numpy and scipy, which decide a gas well's last digits) and the
 code's record (datasets.v2.code_record). A restart checks them, and stops on any difference, so that every chunk of a
-run is made by the same code with the same settings; a well's own file holds their hash, so that a file kept from
+run is made by the same code with the same settings in the same environment; a well's own file holds their hash, so that a file kept from
 another run's settings is refused too. The assembly takes the dataset's records from them (assemble.write_dataset).
 
 A crash of a well's generation, an exception or a panic of the Rust core that the generation does not catch, is
@@ -62,7 +63,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 from manywells.configurations import V2
-from manywells.datasets.v2 import _DATASETS, code_record, _lock_hash
+from manywells.datasets.v2 import _DATASETS, _RELEASE, _environment_record, _lock_hash, code_record
 from manywells.sampling.v2 import generate
 from manywells.sampling.v2.life import _WLR_MAX
 from manywells.sampling.v2.mapping import _N_CELLS
@@ -106,7 +107,7 @@ def _run_well(kind: str, seed: int, k: int, tables=None) -> dict:  # spec: SMP-1
             raise  # An interrupt or an exit stops the run
         info = generate._info(k, outcome='crash', error=_strip_home(traceback.format_exc())[-2000:])
         if kind == 'nsol':
-            info.update(scan=[], T_end=math.nan, p_change=math.nan)
+            info.update(generate._nsol_info())
         res = dict(well=None, stations=None, table=None, nsol=None, info=info, samples=[], log=[])
     res['seconds'], res['cpu_seconds'] = time.perf_counter() - t0, time.process_time() - cpu0
     return res
@@ -190,6 +191,7 @@ def _run_settings(kind: str, seed: int, tables=None, chunk_size: int = CHUNK) ->
         raise ValueError(f"kind must be 'sol' or 'nsol', got {kind!r}")
     settings = dict(
         dataset=_DATASETS[kind],
+        release=_RELEASE,
         kind=kind,
         seed=seed,
         configuration=V2,
@@ -197,7 +199,10 @@ def _run_settings(kind: str, seed: int, tables=None, chunk_size: int = CHUNK) ->
         backend='rust',
         n_slots=generate._N_SLOTS,
         limits=dict(
-            slot=generate._SLOT_LIMIT, redraws=generate._REDRAW_LIMIT, solver_failures=generate._SOLVER_FAILURE_LIMIT
+            slot=generate._SLOT_LIMIT,
+            redraws=generate._REDRAW_LIMIT,
+            solver_failures=generate._SOLVER_FAILURE_LIMIT,
+            dead_dates=generate._DEAD_DATE_LIMIT if kind == 'nsol' else None,
         ),
         floor=generate._FLOOR,
         floor_margin=generate._FLOOR_MARGIN,
@@ -207,6 +212,7 @@ def _run_settings(kind: str, seed: int, tables=None, chunk_size: int = CHUNK) ->
         chunk_size=chunk_size,
         tables=None if tables is None else str(Path(tables).resolve()),
         lock_sha256=_lock_hash(),
+        environment=_environment_record(),
         code=code_record(),
     )
     return json.loads(json.dumps(settings))

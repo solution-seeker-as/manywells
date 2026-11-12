@@ -10,8 +10,10 @@ The generation of one v2 well (specs/sampling.md, SMP-101 to SMP-106, and the li
 SMP-103): the well's draws and life are mapped to the v2.0.0 configuration and checked, its best rate is solved
 against the economic floor, at its date (sol-2) or along its life (nsol-2: the life scan, which ends the life and may
 start gas lift), and its slots are solved in passes, each attempt without an operating point redrawn, until every
-slot has one or the well reaches a limit. Every attempt is one solve by the Rust core, which takes no start
-(SMP-107); no other backend retries it. Nothing here runs many wells or writes a dataset.
+slot has one or the well reaches a limit. In nsol-2 a dead date, a slot without an operating point at the slot limit,
+starts the well's lift or ends its life there, and the slots are planned and solved again (SMP-106). Every attempt is
+one solve by the Rust core, which takes no start (SMP-107); no other backend retries it. Nothing here runs many wells
+or writes a dataset.
 
 A well's result (generate_sol2_well, generate_nsol2_well) is a dict of:
 
@@ -22,8 +24,8 @@ A well's result (generate_sol2_well, generate_nsol2_well) is a dict of:
 - `table`: a table well's manifest (tables._read_table) without its PVTTableSet, with `status` `ok`, or `failed` with
   the `step` and the `error`; None for a well of another fluid class.
 - `nsol`: None for a sol-2 well. nsol-2: the life's parameters (life.Life.parameters) with `lift_start` (years; None
-  for a well that stays natural) and `lift_start_rule` after the life scan, and `design`, the lift design's draws
-  (None for a well that no rule lifts).
+  for a well that stays natural) and `lift_start_rule` after the life scan and the dead dates, and `design`, the lift
+  design's draws (None for a well that no rule lifts).
 - `info`: `draw_index`; `outcome`, the well's (SMP-106): `accepted`, `invalid_input`, `table_failed`,
   `not_producible`, `best_rate_solver_failure`, `slot_limit` (sol-2), `dead_date` (nsol-2), `redraw_limit`,
   `solver_failure_limit` or `short_life` (nsol-2); `error`, the message of an `invalid_input` or `table_failed` well
@@ -31,11 +33,14 @@ A well's result (generate_sol2_well, generate_nsol2_well) is a dict of:
   rate, NaN without an operating point, and `best_rate_outcomes`, the outcomes of its solves (nsol-2: at the start);
   `not_producible_reason`, the best rate's status of a well dropped for it (else None). nsol-2 adds `scan`, the life
   scan's points up to the one that ends the life, each a dict of `t` (years), `status`, `best` and `lift_on`;
-  `T_end` (years), the end of the life (NaN for a well dropped before the scan ends it); and `p_change`, the
-  well's probability of a set-point change (NaN before the plan is drawn).
+  `T_end` (years), the end of the life (NaN for a well dropped before the scan ends it), and `T_scan`, the end that
+  the scan gave it; `dead_dates`, one dict per dead date that changed the life, of `t` (years), `slots` (the slots
+  without an operating point in that pass) and `action`, `lift_start` or `life_end`; and `p_change`, the well's
+  probability of a set-point change (NaN before the plan is drawn).
 - `samples`: the records of the attempts that gave a slot its operating point, in the order of the slots: all
   N_SLOTS of an accepted well, those found before the drop of a well dropped at a limit. Each is also in `log`.
-- `log`: the record of every attempt, in the order solved: the best rate's, the life scan's and the slots'.
+- `log`: the record of every attempt, in the order solved: the best rate's, the life scan's and the slots'. An
+  nsol-2 well whose life a dead date changed holds the slots' attempts of its last pass only.
 - `seconds`: the wall time.
 
 An attempt's record is a flat dict of:
@@ -45,7 +50,8 @@ An attempt's record is a flat dict of:
   `slot`; `slot`, j for a slot, -1 for a best-rate solve and -1 - i for the life scan's point i; `attempt`, a for a
   slot, else the index of the lift-gas rate, whose share of the capacity is `lift_fraction`;
 - `outcome` and `reason` (SMP-104), and `error`, an exception's message (else None);
-- `n_roots` and `n_stable`, the sizes of the root set, and `several_stable`;
+- `n_roots` and `n_stable`, the sizes of the root set, and `several_stable`; `off_table`, whether a point of the
+  operating point lies off its fluid's PVT table (None without an operating point);
 - the search's counts `marches`, `non_finite` (scan points whose march failed), `rejected` (sign changes of R
   not accepted as roots) and `rejected_at_edge` (those next to a failed march), NaN without a search, and the times
   `t_build` and `t_solve` (s);
@@ -72,10 +78,11 @@ from manywells.solvers.rust import RustRootFinder
 _FLOOR = {'platform': 1.6, 'onshore': 1.6, 'subsea': 20.0}  # Sm3/d of oil equivalent, by well type  # spec: SMP-102
 _FLOOR_MARGIN = 0.5  # A well is not produced below this share of its floor  # spec: SMP-102
 _SLOT_LIMIT, _REDRAW_LIMIT, _SOLVER_FAILURE_LIMIT = 100, 1000, 10  # spec: SMP-106 (D-137)
+_DEAD_DATE_LIMIT = 5  # The dead dates that may start an nsol-2 well's lift or end its life  # spec: SMP-106 (D-142)
 _BEST_RATE_LIFT = (0.0, 0.5, 1.0)  # The best rate's lift-gas rates, shares of the capacity  # spec: SMP-103
 _N_SCAN = 21  # Dates of the life scan  # spec: SMP-101
 _NO_SEARCH = dict(n_roots=0, n_stable=0, several_stable=False, marches=math.nan, non_finite=math.nan)
-_NO_SEARCH |= dict(rejected=math.nan, rejected_at_edge=math.nan, t_solve=0.0)
+_NO_SEARCH |= dict(rejected=math.nan, rejected_at_edge=math.nan, off_table=None, t_solve=0.0)
 
 
 # --- One attempt -----------------------------------------------------------------------------------------------------
@@ -104,8 +111,8 @@ def _solve(wp, bc) -> dict:  # spec: SMP-104
     memory cap, not the inputs': it is not an outcome, and goes on to the run, which solves the well again (run.py).
 
     :return: A dict of `outcome`, `reason` and `error`; `n_roots`, `n_stable` and `several_stable`; the search's
-        counts `marches`, `non_finite`, `rejected` and `rejected_at_edge` (NaN without a search); `t_solve` (s);
-        and `row`, the
+        counts `marches`, `non_finite`, `rejected` and `rejected_at_edge` (NaN without a search); `off_table`,
+        whether the operating point leaves its fluid's PVT table (None without one); `t_solve` (s); and `row`, the
         operating point's features (None without one)
     """
     out = dict(outcome=None, reason=None, error=None, **_NO_SEARCH, row=None)
@@ -137,6 +144,7 @@ def _solve(wp, bc) -> dict:  # spec: SMP-104
     out['several_stable'] = bool(rs.several_stable)
     op = rs.operating_point
     if op is not None:
+        out['off_table'] = bool(op.off_table)
         row = _sample_features(op, bc, wp.fluid)
         if _valid_row(row):
             out.update(outcome='operating_point', row=row)
@@ -218,6 +226,11 @@ def _solve_slots(k, draw, builder, log, slot_limit_outcome) -> tuple:  # spec: S
     The passes over a well's slots: pass a solves attempt a of every slot still without an operating point, in the
     order of the slots, until every slot has one or the well reaches a limit.
 
+    In nsol-2 a well at the redraw limit may hold a dead date that the limit hides, since ten slots without an
+    operating point use the thousand redraws before one of them has its hundred attempts. The earliest slot still
+    open then takes the rest of its attempts: without an operating point it is a dead date, and with one the well is
+    at the redraw limit.
+
     :param k: The well's draw index
     :param draw: draw(j, a), the inputs of attempt a of slot j
     :param builder: The well's WellBuilder
@@ -227,18 +240,33 @@ def _solve_slots(k, draw, builder, log, slot_limit_outcome) -> tuple:  # spec: S
     """
     accepted, open_slots = {}, list(range(_N_SLOTS))
     n_redraws = n_failures = 0
+
+    def solve(j, a) -> str:
+        """Attempt a of slot j, logged, and accepted where it has an operating point. Returns its outcome."""
+        rec = _attempt(builder, draw(j, a))
+        rec.update(draw_index=k, kind='slot', slot=j, attempt=a)
+        log.append(rec)
+        if rec['outcome'] == 'operating_point':
+            accepted[j] = rec
+        return rec['outcome']
+
     for a in range(_SLOT_LIMIT):
-        for j in open_slots:
+        for i, j in enumerate(open_slots):
             if a > 0:
                 if n_redraws >= _REDRAW_LIMIT:
-                    return accepted, 'redraw_limit'
+                    if slot_limit_outcome != 'dead_date':
+                        return accepted, 'redraw_limit'
+                    first = next(x for x in open_slots if x not in accepted)  # The earliest date still open
+                    for b in range(a + 1 if open_slots.index(first) < i else a, _SLOT_LIMIT):
+                        outcome = solve(first, b)
+                        if outcome == 'operating_point':
+                            return accepted, 'redraw_limit'
+                        n_failures += outcome == 'solver_failure'
+                        if n_failures > _SOLVER_FAILURE_LIMIT:
+                            return accepted, 'solver_failure_limit'
+                    return accepted, 'dead_date'
                 n_redraws += 1
-            rec = _attempt(builder, draw(j, a))
-            rec.update(draw_index=k, kind='slot', slot=j, attempt=a)
-            log.append(rec)
-            if rec['outcome'] == 'operating_point':
-                accepted[j] = rec
-            elif rec['outcome'] == 'solver_failure':
+            if solve(j, a) == 'solver_failure':
                 n_failures += 1
                 if n_failures > _SOLVER_FAILURE_LIMIT:
                     return accepted, 'solver_failure_limit'
@@ -300,6 +328,11 @@ def _result(t_start, well, stations, table, info, log=(), accepted=None, nsol=No
     )
 
 
+def _nsol_info() -> dict:
+    """An nsol-2 well's records of its life (the module's docstring), before its scan."""
+    return dict(scan=[], T_end=math.nan, T_scan=math.nan, dead_dates=[], p_change=math.nan)
+
+
 def _info(k, **more) -> dict:
     info = dict(draw_index=k, outcome=None, error=None, best_rate=math.nan, best_rate_w_lg=math.nan)
     return dict(info, best_rate_outcomes=[], not_producible_reason=None, **more)
@@ -318,7 +351,7 @@ def _table_failed(t_start, seed, k, kind, table) -> dict:  # spec: SMP-106
     info = _info(k, outcome='table_failed', error=table.get('error'))
     if kind == 'sol':
         return _result(t_start, sol2_well(life), life.stations, table, info)
-    info.update(scan=[], T_end=math.nan, p_change=math.nan)
+    info.update(_nsol_info())
     nsol = _life_summary(life, life.lift_start, life.lift_start_rule)
     return _result(t_start, life.w0, life.stations, table, info, nsol=nsol)
 
@@ -424,10 +457,44 @@ def _life_scan(life, best_rate_at) -> tuple:  # spec: SMP-101
     return scan, first, last_pass if failed else life.T_life, lift_start, rule
 
 
+def _lifted_life(T_end, lift_start) -> bool:  # spec: SMP-101
+    """Whether a life that ends at T_end (years) has lifted dates: its lift starts before its end. A life that ends
+    where its lift would start is natural, as one that ends before."""
+    return lift_start is not None and T_end > lift_start
+
+
+def _after_dead_date(life, plan, accepted, T_end, lift_start, rule) -> tuple:  # spec: SMP-106, SMP-90
+    """
+    What a dead date does to an nsol-2 well's life. The dead date is the earliest date of a slot without an operating
+    point at the slot limit. Where the well is natural there, has a lift design and the life goes on after it, lift
+    starts at that date (`no_natural_flow`). Else the life ends at the last earlier date, at which every slot has an
+    operating point, and at 0 where there is none.
+
+    :param life: The well's life (life.Life)
+    :param plan: The plan of the pass (samples._nsol2_plan)
+    :param accepted: The pass's accepted records, by slot
+    :param T_end: The end of the life (years) in the pass
+    :param lift_start: The lift's start (years, or None) in the pass, and rule, its rule
+    :return: (T_end, lift_start, rule, record): the life for the next pass, and the dead date's record, a dict of
+        `t` (years), `slots` (the slots without an operating point) and `action`, `lift_start` or `life_end`
+    """
+    j_dead = min(j for j in range(_N_SLOTS) if j not in accepted)
+    t_dead = plan[j_dead]['t']
+    record = dict(t=t_dead, slots=_N_SLOTS - len(accepted))
+    if life.design is not None and not plan[j_dead]['lift_on'] and t_dead < T_end:
+        return T_end, t_dead, 'no_natural_flow', dict(record, action='lift_start')
+    T_end = max((slot['t'] for slot in plan[:j_dead] if slot['t'] < t_dead), default=0.0)
+    if not _lifted_life(T_end, lift_start):
+        lift_start, rule = None, None
+    return T_end, lift_start, rule, dict(record, action='life_end')
+
+
 def generate_nsol2_well(seed: int, k: int, tables=None) -> dict:
     """
     An nsol-2 well: its life, the life scan that ends it and may start its gas lift (SMP-101, SMP-90), the plan of
-    its slots over the life (SMP-97) and the slots (SMP-105), each at its date's state.
+    its slots over the life (SMP-97) and the slots (SMP-105), each at its date's state. A dead date starts the lift
+    or ends the life there, and the slots are planned and solved again, for at most DEAD_DATE_LIMIT dead dates
+    (SMP-106).
 
     :param seed: The dataset's seed
     :param k: The well's draw index
@@ -443,7 +510,7 @@ def generate_nsol2_well(seed: int, k: int, tables=None) -> dict:
     life = Life(seed, k, fluid=hook, pvt=pvt)
     w0 = life.w0
     builder = WellBuilder(w0, life.stations, design=life.design, pvt=pvt)
-    log, info = [], _info(k, scan=[], T_end=math.nan, p_change=math.nan)
+    log, info = [], _info(k, **_nsol_info())
     lift_start, rule = life.lift_start, life.lift_start_rule
     try:  # spec: SMP-106
         start = dict(life.state(0.0), u=1.0, w_lg=0.0, lift_on=_lift_on(0.0, lift_start), p_s=w0['p_s'])
@@ -459,19 +526,27 @@ def generate_nsol2_well(seed: int, k: int, tables=None) -> dict:
         return _best_rate(builder, life.state(t), lifted, w_lg_max, floor, log, base)
 
     scan, first, T_end, lift_start, rule = _life_scan(life, best_rate_at)
-    if T_end is not None and lift_start is not None and not _lift_on(T_end, lift_start):  # spec: SMP-52, SMP-90
-        lift_start, rule = None, None  # The life ends before its lift starts: no date of it is lifted
-    nsol = _life_summary(life, lift_start, rule)
+    if T_end is not None and not _lifted_life(T_end, lift_start):  # spec: SMP-52, SMP-90
+        lift_start, rule = None, None  # The life ends where its lift would start, or before: no date of it is lifted
     info.update(scan=scan, best_rate=first['best'], best_rate_w_lg=first['best_w_lg'])
     info['best_rate_outcomes'] = first['outcomes']
     if _dropped_at_best_rate(info, first):
-        return _result(t_start, w0, life.stations, table, info, log, nsol=nsol)
-    info['T_end'] = T_end
-    if T_end <= 0.0:  # spec: SMP-101
-        info['outcome'] = 'short_life'
-        return _result(t_start, w0, life.stations, table, info, log, nsol=nsol)
-    plan, info['p_change'] = _nsol2_plan(life, T_end, lift_start)
-    accepted, info['outcome'] = _solve_slots(
-        k, lambda j, a: _nsol2_attempt(life, plan, j, a), builder, log, 'dead_date'
-    )
-    return _result(t_start, w0, life.stations, table, info, log, accepted, nsol)
+        return _result(t_start, w0, life.stations, table, info, log, nsol=_life_summary(life, lift_start, rule))
+    info['T_scan'] = T_end
+    accepted, slots = {}, []
+    while True:  # spec: SMP-106. Each pass plans and solves the slots; a dead date changes the life for the next
+        info['T_end'] = T_end
+        if T_end <= 0.0:  # spec: SMP-101
+            info['outcome'] = 'short_life'
+            break
+        plan, info['p_change'] = _nsol2_plan(life, T_end, lift_start)
+        slots = []
+        accepted, info['outcome'] = _solve_slots(
+            k, lambda j, a: _nsol2_attempt(life, plan, j, a), builder, slots, 'dead_date'
+        )
+        if info['outcome'] != 'dead_date' or len(info['dead_dates']) == _DEAD_DATE_LIMIT:
+            break
+        T_end, lift_start, rule, dead = _after_dead_date(life, plan, accepted, T_end, lift_start, rule)
+        info['dead_dates'].append(dead)
+    log += slots
+    return _result(t_start, w0, life.stations, table, info, log, accepted, _life_summary(life, lift_start, rule))
