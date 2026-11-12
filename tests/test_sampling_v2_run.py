@@ -735,7 +735,7 @@ def test_a_pilots_samples_resolve_to_their_features(monkeypatch, tmp_path, kind)
     state = runner.run(kind, 2, tmp_path / 'run', SEED, processes=1, chunk_size=4, log=lambda x: None)
     assert state['complete']
     asm.write_dataset(tmp_path / 'run', tmp_path, 2, allow_dirty=True, attempts=False)
-    name = f'manywells-{kind}-2'
+    name = v2._DATASETS[kind]
     tables = read_dataset(tmp_path / name)
     assert len(tables['samples']) == 16
     for _, s in tables['samples'].iterrows():
