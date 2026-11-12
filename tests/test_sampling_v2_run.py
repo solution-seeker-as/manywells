@@ -17,6 +17,7 @@ a small real pilot and re-solves its samples.
 import json
 import math
 import pathlib
+import threading
 
 import numpy as np
 import pandas as pd
@@ -227,6 +228,24 @@ def test_a_panic_outside_a_solve_is_a_crash(monkeypatch):
     res = runner._run_well('nsol', SEED, 3)
     assert res['info']['outcome'] == 'crash' and res['info']['error'].rstrip().endswith('on a `None` value')
     assert (res['info']['scan'], res['log'], res['samples']) == ([], [], [])
+
+
+def test_the_pool_runs_every_task_and_is_renewed(monkeypatch):
+    # More tasks than the processes take before their renewal, where ProcessPoolExecutor's own renewal hung
+    pools = []
+
+    class Pool(runner.ProcessPoolExecutor):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            pools.append(self)
+
+    monkeypatch.setattr(runner, 'ProcessPoolExecutor', Pool)
+    monkeypatch.setattr(runner, '_TASKS_PER_PROCESS', 2)
+    out = []
+    worker = threading.Thread(target=lambda: out.extend(runner._imap(abs, list(range(-9, 0)), 2)), daemon=True)
+    worker.start()
+    worker.join(120)  # A hang fails the test, not the suite
+    assert sorted(out) == list(range(1, 10)) and len(pools) == 3
 
 
 def out_of_memory(monkeypatch, fails):
