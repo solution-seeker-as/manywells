@@ -1367,3 +1367,95 @@ Entries of R6, merged from its own file on 2026-11-02. Each entry changes the dr
 - **Needs sign-off:** no, ruled.
 - **Used by:** `specs/sampling.md`, SMP-83; `sampling/v2/life.py`.
 - **Ruling:** Bjarne, 2026-11-11: "Follow your recommendation on finding 1", the drawn end $U(0.85, 0.98)$ that R11's hand-over recommended.
+
+### D-142 · A dead date starts the lift or ends the life
+
+- **Step:** the review before the full generation, 2026-11-12 (`preflight-measurements.md`). Revises D-83's failed date, and adds a start of lift to D-49's.
+- **Choice made:** in `nsol-2`, a slot without an operating point after 100 attempts no longer drops the well. The earliest such date of a pass starts the lift there, with `lift_start_rule` `no_natural_flow`, where the well is natural at the date, has a lift design and its life goes on after it; else the life ends at the last earlier date. The slots are planned again over the changed life, from the same generators, and solved again, for at most five dead dates per well; the logs hold the last pass's attempts. At the redraw limit the earliest slot still open takes the rest of its 100 attempts, so that a dead date among more than ten open slots is found: without an operating point it is a dead date, and with one the well is dropped as `redraw_limit`. The well's row records the scan's end, `T_scan`, and `n_dead_dates`.
+- **Alternatives:** drop the well, as before; start a static-check lift one date of its grid earlier, which reaches fewer than half of the dead dates; check natural flow at every sample's date before the slots, a second scan of 168 best rates per well; a finer life scan, which does not see a date's drift.
+- **Basis:** a design choice after operating practice, as SMP-90's rule 3 and SMP-103's filter: an operator starts the lift of a well that stops flowing, or stops producing it. That a dead date is the well's is the model's own result: the CasADi backend finds no root in 72 of 72 such attempts of 24 wells, at a fully open choke included.
+- **Realism:** in the first 1000 `nsol-2` draws of the generation of 2026-11-11, 28 wells were dead dates (2.8%) and 16 at the redraw limit, together 9.8% of the oils whose lift starts during their life and 15 of the 27 whose lift the static check starts. Of the 28 dead dates, 20 lay in a natural well shortly before its lift started, 6 in a lifted well, mostly at the life's end, and 2 in gas wells without a design. With the rule, 27 of the 28 are kept: 20 by a lift that starts at the dead date and 7 by a shorter life, one of them after two cuts; the 28th, a lifted tail oil that barely flows over the last tenth of its life, has a dead date after five cuts and is dropped. Of the 16 at the redraw limit, 3 hold a dead date behind it and are kept, by shorter lives, one of them with a lift from a dead date too; in the other 13 the earliest open slot flows within its 100 attempts, and they are dropped as before: wells that flow in few of their draws, not at dead dates. The 30 kept wells' lives end at the scan's end in 20, and before it in 10, by 1% to 43% of the scan's life and by more than a tenth in 4.
+- **Cost:** a well with a dead date is solved twice or more. The 28 wells took 3970 s where they took 2356 s, and the 16 took 2703 s where they took 2452 s: together 0.5 CPU-hours more in 1000 drawn wells, 4% of `nsol-2`'s cost, for 30 more wells kept, so that 10,000 wells need about 360 fewer draws. No kept well needed more than two dead dates; the limit of five bounds the cost of a well like the 28th, which took 633 s.
+- **Implemented** (2026-11-12): `sampling/v2/generate.py` (`_solve_slots`, `_after_dead_date`, `_lifted_life`, `generate_nsol2_well`, `_DEAD_DATE_LIMIT`), `sampling/v2/assemble.py` (`T_scan`, `n_dead_dates`, the counts), SMP-90, SMP-97, SMP-101, SMP-106 and SMP-108; `tests/test_sampling_v2_generate.py`, `tests/test_sampling_v2_run.py`; `plans/evidence/preflight_checks.py`.
+- **Needs sign-off:** the rule is ruled; its details are working assumptions: the label `no_natural_flow` in `nsol-2`, the two new columns, the limit of five, and the redraw limit's test of the earliest open slot.
+- **Used by:** `specs/sampling.md`, SMP-90, SMP-101 and SMP-106; `sampling/v2/generate.py`; `docs/datasets.md`.
+- **Ruling:** Bjarne, 2026-11-12: "Fix", to the recommendation that a date with no operating point in 100 attempts starts the lift there if the well is natural and has a lift design, and that the life otherwise ends at the last date that flows.
+
+### D-143 · A table's repair may drop a tenth of its pressures
+
+- **Step:** the review before the full generation, 2026-11-12. Amends D-106's limit (L1) and D-139.
+- **Choice made:** a table fails where the repair would drop more than 10% of its pressures at a GOR, or more than one where one is more than 10%.
+- **Alternatives:** keep 5%; 15%, at which every table of the build passes at the GOR at which it failed; a cap on the rise of a volatile oil's GOR; a closer look at NeqSim's phase split near the critical point.
+- **Basis:** a design choice of the build, set on the full build of 2026-11-11. At 5% the repair failed 108 of 1618 `nsol-2` volatile oils (6.7%; core 5.7%, tail 8.2%) and 30 of 1713 `sol-2` ones (1.8%), so D-139's finding, tail wells at the top of their GOR axis, held for the pilots' few wells only. The share of the pressures to drop at the GOR that failed has a median of 6.5% and a largest of 15%.
+- **Realism:** with 10%, the build's failed tables built again, the repair fails 6 of the 1713 `sol-2` volatile oils and 18 of the 1618 `nsol-2` ones (1.1%), 13 of them in the tail, where 5% failed 30 and 108; with the build's other failures, 0.4% and 1.2% of the volatile oils and 0.2% of the condensates have no table. A repaired table holds the flash's values at every node it keeps; it has fewer pressures near the near-critical bubble point, where the model interpolates over the gap.
+- **Implemented** (2026-11-12): `sampling/v2/table_build.py` (`_MAX_DROPPED`), SMP-116; `tests/test_sampling_v2_tables.py`. The tables of 2026-11-11 are kept, and the failed ones built again.
+- **Needs sign-off:** no, ruled.
+- **Used by:** `specs/sampling.md`, SMP-116; `sampling/v2/table_build.py`.
+- **Ruling:** Bjarne, 2026-11-12: "Widen to 10%".
+
+### D-144 · A table fluid's draws use the black oil at the end of its API range
+
+- **Step:** the review before the full generation, 2026-11-12.
+- **Choice made:** where a table's stock-tank oil lies outside the API gravities that the black oil takes (16 to 58), the draws that evaluate the well's black oil (v2: scope and conventions) use the range's end. The well keeps its table's densities, and the model uses the table.
+- **Alternatives:** keep the refusal, which made the well `table_failed`; a black oil without the range's check for these draws.
+- **Basis:** physics, by the black oil's own rule: its message sends a lighter oil to a PVT table, and these wells have one. The stand-in serves the draws that size the well, not the model.
+- **Realism:** the build of 2026-11-11 refused 24 `sol-2` and 19 `nsol-2` condensates, 5.4% of those drawn above 56 °API and 0.4% of the others, since the table's single-stage oil is lighter than the drawn, field-reported one by its offsets (SMP-113). With the range's end, all 43 get their GOR axis and their table.
+- **Implemented** (2026-11-12): `sampling/v2/draws.py` (`_black_oil`), the Conventions and the checks of `specs/sampling.md`.
+- **Needs sign-off:** no, ruled.
+- **Used by:** `specs/sampling.md`, v2: scope and conventions; `sampling/v2/draws.py`.
+- **Ruling:** Bjarne, 2026-11-12: the fix "Light condensates" taken.
+
+### D-145 · The drops at the limits are reported, not held to targets
+
+- **Step:** the review before the full generation, 2026-11-12. Replaces D-81's and D-83's targets.
+- **Choice made:** SMP-106 has no target for the wells dropped at the limits. Each dataset's datasheet reports them by fluid class, well type and lift rule, the dead dates that started a lift or ended a life with the lives' cuts, and the shift of each drawn input between the drawn and the kept wells. Thresholds for the final datasets are set from the beta's report.
+- **Alternatives:** a selectivity rule now, no group losing more than a tenth of its wells; the 1% per class kept as a tripwire.
+- **Basis:** a design choice. The targets of 1% of a class's wells and 0.5% dead dates had no derivation (D-81; D-83: "failed dates should be rare"); they stood in for acceptance criterion 4, that the limits do not shape the kept wells' distributions, which a count measures poorly: 2.8% of the wells hid 56% of one group.
+- **Implemented** (2026-11-12): SMP-106; the datasheets' placeholders.
+- **Needs sign-off:** no, ruled.
+- **Used by:** `specs/sampling.md`, SMP-106; `docs/datasheet-sol-2.md`, `docs/datasheet-nsol-2.md`.
+- **Ruling:** Bjarne, 2026-11-12: the target of 0.5% is "somewhat arbitrary"; "Report now, set after beta".
+
+### D-146 · A life that ends where its lift would start is natural
+
+- **Step:** the review before the full generation, 2026-11-12. Completes D-131.
+- **Choice made:** an `nsol-2` well whose life ends at the date its lift starts has no lifted date: it is natural, with no `lift_start_rule`, as a well whose life ends before the start.
+- **Basis:** a design choice for consistent labels. Rule 3 starts lift at the last scan point before natural flow fails; where the lifted well fails at the next point too, the life ends at that same point, and the test "at or after the start" lifted the last sample alone.
+- **Realism:** 6 of 891 accepted wells of the first 1000 `nsol-2` draws were labelled gas-lifted with one lifted sample of 200, the last, where the rate stepped (from 232 to 53 Sm³/d of oil equivalent in one well).
+- **Implemented** (2026-11-12): `sampling/v2/generate.py` (`_lifted_life`), SMP-101; `tests/test_sampling_v2_generate.py`.
+- **Needs sign-off:** no, ruled.
+- **Used by:** `specs/sampling.md`, SMP-101; `sampling/v2/generate.py`.
+- **Ruling:** Bjarne, 2026-11-12: the fix "Single lifted sample" taken.
+
+### D-147 · The run keeps whether an operating point leaves its table's grid
+
+- **Step:** the review before the full generation, 2026-11-12.
+- **Choice made:** an attempt's record holds `off_table`, the root's flag that a point lies off its fluid's PVT table (PVT-TAB-2). It stays with the run's attempt log, and a dataset's records count its samples with the flag (`counts.samples_off_table`). The published tables do not change.
+- **Basis:** a design choice of the generation: the datasheets report the share of the samples off their tables' grid, and SMP-116's Basis rests on it, but the run did not keep the flag, so the number needed every table sample solved again.
+- **Realism:** on 1500 table samples of each dataset of the first 1000 draws, solved again, 0.7% (`sol-2`) and 0.5% (`nsol-2`) have a point off the grid, every one a volatile oil above the grid's top temperature, by up to 5.6 K: liquid heats on its way up, by up to 7.9 K above $T_r$, and the grid ends 1 to 11 K above $T_r$. Whether the grid's top should rise is a question for the beta's analysis.
+- **Implemented** (2026-11-12): `sampling/v2/generate.py` (`_solve`), `sampling/v2/assemble.py` (`_assemble`), SMP-108; `tests/test_sampling_v2_generate.py`, `tests/test_sampling_v2_run.py`.
+- **Needs sign-off:** no, ruled.
+- **Used by:** `specs/sampling.md`, SMP-108; `docs/datasets.md`, `metadata.json`.
+- **Ruling:** Bjarne, 2026-11-12: the fix "Record off-table" taken, in the run's attempt log, with no change to the published schema.
+
+### D-148 · The run's settings hold its environment
+
+- **Step:** the review before the full generation, 2026-11-12.
+- **Choice made:** a run's settings hold the versions of Python, numpy and scipy and the machine's architecture. A resumed run and the assembly refuse another environment, and the dataset's records give the run's.
+- **Basis:** the model's own result. `uv.lock` pins numpy and scipy by Python version, 2.4.6 and 1.17.1 below Python 3.12 and 2.5.3 and 1.18.1 from it, so the lock's hash alone does not fix them. Wells of the first 1000 draws generated again under Python 3.11 are the run's to the bit for the oils, and differ for some gas wells: SMP-117's least-squares fit gives Forchheimer coefficients that differ by up to $3\cdot10^{-14}$ relative, the features by $4\cdot10^{-15}$, and the search's count of marches in a few attempts. A sample solved again from its rows is not affected, since the rows hold the coefficients.
+- **Implemented** (2026-11-12): `datasets/v2.py` (`_environment_record`), `sampling/v2/run.py` (`_run_settings`), `sampling/v2/assemble.py` (`_records`), SMP-110; `tests/test_sampling_v2_run.py`, `tests/test_datasets_v2.py`.
+- **Needs sign-off:** no, ruled.
+- **Used by:** `specs/sampling.md`, SMP-110; `docs/datasets.md`.
+- **Ruling:** Bjarne, 2026-11-12: the fix "Interpreter in settings" taken.
+
+### D-149 · The first full generation is a beta
+
+- **Step:** the review before the full generation, 2026-11-12.
+- **Choice made:** the first full generation's datasets are `manywells-sol-2-beta1` and `manywells-nsol-2-beta1`, with `release` `beta1` in their records and the final datasets' seeds, 2026 and 2027. The final datasets take the plain names. The label is the code's (`datasets.v2._RELEASE`), so a commit generates one release.
+- **Alternatives:** the label in the metadata only; `-beta` without a number.
+- **Basis:** a design choice: a published dataset is never modified (`specs/constitution.md`), and the first full run is analysed before the final one, which most likely follows it. The same seeds make a well whose rules do not change the same well in both runs.
+- **Open, for after the beta:** the rule points of the review (`preflight-measurements.md`): the class labels of table fluids whose GOR left their class, the `sol-2` tail's downstream pressure, the tubing flag's share against D-100's "few percent", and the lift capacity's point mass at 0.1 kg/s.
+- **Implemented** (2026-11-12): `datasets/v2.py` (`_RELEASE`, `_DATASETS`), SMP-50 and SMP-110; `docs/datasets.md`, the datasheets.
+- **Needs sign-off:** no, ruled.
+- **Used by:** `specs/sampling.md`, SMP-50; `datasets/v2.py`.
+- **Ruling:** Bjarne, 2026-11-12: "I would like the first full v2 run to be beta-labeled. Most likely we will do another full run after having analysed the data"; "Numbered: -beta1".

@@ -8,8 +8,9 @@ Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
 The files of a v2 dataset, manywells-sol-2 or manywells-nsol-2 (specs/sampling.md, SMP-108 and SMP-110;
 plans/sampler-redesign/datasets-draft.md, Sections 2 and 3): the labels' codes and the columns' types, the records
-of the generation (the code version, the lock file's hash, the platform), the writer of a folder of tables with its
-metadata.json, and the re-solve of a sample from the dataset's rows alone. The tables themselves are assembled from a
+of the generation (the code version, the lock file's hash, the environment and the platform), the writer of a folder
+of tables with its metadata.json, and the re-solve of a sample from the dataset's rows alone. The datasets that this
+code generates carry the release label RELEASE in their names, a beta before the final ones (SMP-50). The tables themselves are assembled from a
 run's results by manywells.sampling.v2.assemble.
 
 A dataset is a folder of four tables, `wells`, `samples`, `geometry` and `pvt`, with its logs `drawn_wells` and
@@ -29,6 +30,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import scipy
 
 from manywells.choke import CHOKE_PROFILES, SimpsonChokeModel
 from manywells.configurations import V2, V2_SLIP, check
@@ -45,7 +47,10 @@ from manywells.simulator import BoundaryConditions, SSDFSimulator, WellPropertie
 from manywells.slip import HASAN_REGIMES
 from manywells.thermal import ThermalModel
 
-_DATASETS = {'sol': 'manywells-sol-2', 'nsol': 'manywells-nsol-2'}
+_RELEASE = (
+    'beta1'  # The release label of the datasets that this code generates; None for the final ones  # spec: SMP-50
+)
+_DATASETS = {kind: f'manywells-{kind}-2' + (f'-{_RELEASE}' if _RELEASE else '') for kind in ('sol', 'nsol')}
 _TABLES = ('wells', 'samples', 'geometry', 'pvt')  # A dataset's tables  # spec: SMP-110
 _LOGS = ('drawn_wells', 'redraws')  # Its logs, in the companion folder  # spec: SMP-108
 # The operating point's columns of a sample: SMP-30's features but the inputs
@@ -128,7 +133,7 @@ _INTEGERS = {  # Integer columns: nullable where a row may hold none
 }
 _COUNTS = ('n_attempts', 'n_redraws', 'n_redraws_no_op', 'n_redraws_solver')  # A well's counts of its slots' attempts
 _COUNTS += tuple(f'n_redraws_{reason}' for reason in _REASONS) + ('n_several_stable',)
-_INTEGERS |= dict.fromkeys(_COUNTS, 'int32')
+_INTEGERS |= dict.fromkeys(_COUNTS + ('n_dead_dates',), 'int32')
 _BOOLEANS = ('CHOKED', 'LIFT')
 assert set(_CODES['FRBH']) == set(HASAN_REGIMES)  # SLIP-16's five regimes
 
@@ -190,6 +195,14 @@ def _lock_hash() -> str | None:
 
 def _platform_record() -> dict:
     return dict(python=sys.version, platform=platform.platform(), machine=platform.machine())
+
+
+def _environment_record() -> dict:  # spec: SMP-110
+    """The interpreter and the numeric libraries of a run, which decide its last digits: the versions of Python, numpy
+    and scipy, and the machine's architecture. The lock file fixes numpy and scipy only given the Python version."""
+    return dict(
+        python=platform.python_version(), numpy=np.__version__, scipy=scipy.__version__, machine=platform.machine()
+    )
 
 
 def _sha256(path) -> str:

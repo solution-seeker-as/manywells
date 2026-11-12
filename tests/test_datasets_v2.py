@@ -81,6 +81,10 @@ def test_the_code_and_platform_records():
     lock = v2._lock_hash()
     assert lock is None or len(lock) == 64
     assert set(v2._platform_record()) == {'python', 'platform', 'machine'}
+    env = v2._environment_record()
+    assert set(env) == {'python', 'numpy', 'scipy', 'machine'} and env['numpy'] == np.__version__
+    assert v2._platform_record()['python'].startswith(env['python'])
+    assert v2._DATASETS == {'sol': 'manywells-sol-2-beta1', 'nsol': 'manywells-nsol-2-beta1'}
 
 
 @pytest.mark.parametrize('name', ['synthetic_eos_oil_gor.csv', 'synthetic_eos_oil_360K.csv'])

@@ -37,6 +37,7 @@ from manywells.datasets.v2 import (
     _sha256,
     _write_tables,
 )
+from manywells.datasets import v2
 from manywells.sampling.v2 import assemble as asm
 from manywells.sampling.v2 import generate
 from manywells.sampling.v2 import run as runner
@@ -308,12 +309,14 @@ def test_another_runs_settings_stop_the_run(monkeypatch, tmp_path):
             runner.run(kind, 5, tmp_path, seed, processes=1, chunk_size=chunk_size, log=lambda line: None)
     settings = runner._run_settings('sol', SEED, None, 10)
     assert (settings['dataset'], settings['configuration'], settings['n_cells'], settings['backend']) == (
-        'manywells-sol-2',
+        'manywells-sol-2-beta1',
         'v2.0.0',
         100,
         'rust',
     )
-    assert settings['limits'] == dict(slot=100, redraws=1000, solver_failures=10) and settings['n_slots'] == 200
+    assert settings['release'] == 'beta1' and settings['environment'] == v2._environment_record()
+    assert settings['limits'] == dict(slot=100, redraws=1000, solver_failures=10, dead_dates=None)
+    assert runner._run_settings('nsol', SEED, None, 10)['limits']['dead_dates'] == 5 and settings['n_slots'] == 200
     assert set(settings['code']) == {'version', 'commit', 'dirty'}
     with pytest.raises(ValueError, match='kind'):
         runner._run_settings('closed', SEED)
@@ -340,7 +343,8 @@ def test_the_assembled_tables(results, kind, tmp_path):
     res = results[kind]
     outcomes = [r['info']['outcome'] for r in res]
     assert {'accepted', 'table_failed', 'crash'} <= set(outcomes)
-    assert {'solver_failure_limit', 'slot_limit' if kind == 'sol' else 'dead_date'} <= set(outcomes)
+    # nsol-2: the well that never flows has a dead date at its start, which lift does not help: a short life
+    assert {'solver_failure_limit', 'slot_limit' if kind == 'sol' else 'short_life'} <= set(outcomes)
     n = outcomes.count('accepted')
     attempts = []
     out = asm._assemble(res, kind, SEED, n, attempts=attempts.append)
@@ -397,7 +401,14 @@ def test_the_assembled_tables(results, kind, tmp_path):
     counts = out['counts']
     assert counts['wells_drawn'] == len(drawn) and counts['wells_accepted'] == n
     assert sum(counts['outcomes'].values()) == len(drawn)
-    assert sum(counts['attempts'].values()) == drawn['n_attempts'].sum()
+    assert sum(counts['attempts'].values()) == drawn['n_attempts'].sum() and counts['samples_off_table'] == 0
+    if kind == 'nsol':
+        dead = [d['action'] for r in res[: len(drawn)] for d in r['info'].get('dead_dates', ())]
+        assert counts['dead_dates'] == dict(lift_start=dead.count('lift_start'), life_end=dead.count('life_end'))
+        assert sum(counts['dead_dates'].values()) == drawn['n_dead_dates'].sum() > 0
+        assert drawn['n_dead_dates'].dtype == np.dtype('int32') and wells['n_dead_dates'].eq(0).all()
+    else:
+        assert counts['dead_dates'] is None and 'n_dead_dates' not in drawn
 
 
 @pytest.mark.parametrize('kind', ['sol', 'nsol'])
@@ -419,14 +430,19 @@ def test_a_wells_row(results, kind):
         )
     else:
         life = res['nsol']
-        assert (row['T_life'], row['T_end'], row['p_change']) == (
+        assert (row['T_life'], row['T_end'], row['T_scan'], row['p_change']) == (
             life['T_life'],
             res['info']['T_end'],
+            res['info']['T_scan'],
             res['info']['p_change'],
         )
         assert row['lift'] == ('natural' if life['lift_start'] is None else 'gas_lift')
-        design = life['design']
+        design = life['design'] if life['lift_start'] is not None else None  # A natural well's design is not its row's
         assert same(row['injection_md'], design['injection_md'] if design is not None else math.nan)
+        natural = next(
+            r for r in results[kind] if r['nsol'] and r['nsol']['design'] and r['nsol']['lift_start'] is None
+        )
+        assert math.isnan(asm._well_row(natural, kind)['injection_md'])
     crash = asm._well_row(results[kind][CRASHED], kind)
     assert (crash['outcome'], crash['n_attempts']) == ('crash', 0) and 'ValueError' in crash['error']
     assert str(pathlib.Path.home()) not in crash['error']  # No local path
@@ -497,12 +513,15 @@ def test_a_dataset_written_from_a_run(monkeypatch, tmp_path):
     state = runner.run('sol', 3, tmp_path / 'run', SEED, processes=1, chunk_size=5, log=lambda x: None)
     assert state['complete']
     meta = asm.write_dataset(tmp_path / 'run', tmp_path / 'out', 3, allow_dirty=True)
-    data = read_dataset(tmp_path / 'out' / 'manywells-sol-2')
-    logs = read_dataset(tmp_path / 'out' / 'manywells-sol-2-logs')
+    name = 'manywells-sol-2-beta1'  # The datasets that this code generates are the beta's (SMP-50)
+    data = read_dataset(tmp_path / 'out' / name)
+    logs = read_dataset(tmp_path / 'out' / f'{name}-logs')
     assert set(data) == {'wells', 'samples', 'geometry', 'pvt', 'metadata'} and data['metadata'] == meta
-    assert set(logs) == {'drawn_wells', 'redraws', 'metadata'} and logs['metadata']['companion_of'] == 'manywells-sol-2'
+    assert set(logs) == {'drawn_wells', 'redraws', 'metadata'} and logs['metadata']['companion_of'] == name
+    assert (meta['dataset'], meta['release']) == (name, 'beta1') and meta['environment'] == v2._environment_record()
     assert (meta['seed'], meta['n_wells'], meta['configuration'], meta['backend']) == (SEED, 3, 'v2.0.0', 'rust')
-    assert meta['limits'] == dict(slot=100, redraws=1000, solver_failures=10) and meta['n_slots'] == N_TEST_SLOTS
+    assert meta['limits'] == dict(slot=100, redraws=1000, solver_failures=10, dead_dates=None)
+    assert meta['n_slots'] == N_TEST_SLOTS
     assert meta['producibility']['floor'] == generate._FLOOR and meta['counts']['wells_accepted'] == 3
     assert meta['files']['samples.parquet']['rows'] == 3 * N_TEST_SLOTS == len(data['samples'])
     assert {'code', 'assembled_by', 'lock_sha256', 'python', 'platform', 'created'} <= set(meta)
@@ -524,6 +543,13 @@ def test_a_dataset_written_from_a_run(monkeypatch, tmp_path):
     monkeypatch.setattr(generate, '_BEST_RATE_LIFT', (0.0, 1.0))  # Code that differs from the run's settings
     with pytest.raises(runner.SettingsMismatch, match='other settings than the assembling code has: lift_fractions'):
         asm.write_dataset(tmp_path / 'run', tmp_path / 'out3', 3, allow_dirty=True)
+    monkeypatch.undo()
+    other = dict(v2._environment_record(), numpy='0.0.0')  # Another interpreter's libraries than the run's
+    monkeypatch.setattr(runner, '_environment_record', lambda: other)
+    with pytest.raises(runner.SettingsMismatch, match='other settings than the assembling code has: environment'):
+        asm.write_dataset(tmp_path / 'run', tmp_path / 'out4', 3, allow_dirty=True)
+    with pytest.raises(runner.SettingsMismatch, match='holds a run with other settings: environment'):
+        runner.run('sol', 3, tmp_path / 'run', SEED, processes=1, chunk_size=5, log=lambda x: None)
 
 
 def test_a_datasets_folder_of_tables_is_relative_to_its_run(tmp_path):
@@ -709,7 +735,7 @@ def test_a_pilots_samples_resolve_to_their_features(monkeypatch, tmp_path, kind)
     state = runner.run(kind, 2, tmp_path / 'run', SEED, processes=1, chunk_size=4, log=lambda x: None)
     assert state['complete']
     asm.write_dataset(tmp_path / 'run', tmp_path, 2, allow_dirty=True, attempts=False)
-    name = f'manywells-{kind}-2'
+    name = v2._DATASETS[kind]
     tables = read_dataset(tmp_path / name)
     assert len(tables['samples']) == 16
     for _, s in tables['samples'].iterrows():

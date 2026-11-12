@@ -2,6 +2,8 @@
 
 *Draft, 2026-11-11 (Step R11 of `plans/sampler-redesign-plan.md`; D-94). Release documentation, for Bjarne's sign-off. `[full generation: …]` marks a number that exists only after the full generation, and `[maintainer: …]` a fact for the maintainer to give.*
 
+*The first full generation is a beta, `manywells-nsol-2-beta1` (SMP-50): this datasheet is filled for it first, and again for the final dataset, which takes the plain name.*
+
 This datasheet follows Gebru et al. (2021), one section per section of theirs (§3.1 to §3.7), each question in bold and its answer after it. The schema, every column with its unit and type, is in [`datasets.md`](datasets.md), v2 datasets; the procedure that draws the wells and samples is `specs/sampling.md`, SMP-50 to SMP-117. The stationary dataset has its own datasheet, [`datasheet-sol-2.md`](datasheet-sol-2.md).
 
 ## 1. Motivation
@@ -75,7 +77,8 @@ The accepted wells are the drawn ones that are produced from their start and rea
 
 - **The producibility filter and the life scan** (SMP-101 to SMP-103). A well whose best rate at its start, at a fully open choke and at three lift-gas rates for a lifted well, is below half its economic floor, or an oil whose WLR is above 0.98, would not be produced and is dropped. Along the life, the scan ends the life at its last point that passes before the first that fails, and may start lift at the point before a natural well's best rate fails (SMP-90; `lift_start_rule` `end_of_natural_flow`). A life that ends at its start is dropped (`short_life`).
 - **Redraws** (SMP-104, SMP-105). A slot's draw without an operating point is redrawn, at the same date, until the slot has one.
-- **Limits** (SMP-106). A well is dropped, and the next drawn well takes its place, when a date has no operating point after 50 attempts (`dead_date`), the well needs more than 400 redraws or has more than 10 solver failures, its inputs fail `configurations.check`, or its table cannot be built.
+- **Limits** (SMP-106). A well is dropped, and the next drawn well takes its place, when it needs more than 1000 redraws or has more than 10 solver failures, its inputs fail `configurations.check`, or its table cannot be built. The drops are reported by group, with no target (SMP-106): [full generation: wells dropped at the limits by fluid class, well type and lift rule; the shift of each drawn input between the drawn and the kept wells]
+- **Dead dates** (SMP-106). A date at which the well has no operating point in 100 draws of its controls does not drop it: a natural well with a lift design is lifted from that date (`lift_start_rule` `no_natural_flow`), and any other well's life ends at the date before (`T_end` earlier than `T_scan`). The slots are then planned and solved again; a well with a dead date after five such changes is dropped as `dead_date`. [full generation: wells whose lift a dead date started; wells whose life one ended, and the share of the life cut]
 
 Nothing else drops a well or a sample: v1's filters (SMP-28) do not apply, and a small rate stays a sample. The labels are drawn or set before the solves, except the lift's labels that the life scan sets (SMP-52, SMP-101). [full generation: wells dropped by outcome, `dead_date` and `short_life` among them; share of the attempts redrawn]
 

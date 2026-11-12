@@ -28,6 +28,7 @@ from manywells.sampling.v2 import run as runner
 from manywells.sampling.v2 import table_wells as tw
 from manywells.sampling.v2.generate import (
     FEATURES,
+    _DEAD_DATE_LIMIT,
     _FLOOR,
     _FLOOR_MARGIN,
     _REDRAW_LIMIT,
@@ -46,9 +47,11 @@ from manywells.solution import Root, RootSet
 from .sampling_v2_wells import SEED, drawn_lives, drawn_sol2_wells
 
 RECORD = (  # The keys of an attempt's record besides its inputs and labels (the module's docstring)
-    'outcome reason error n_roots n_stable several_stable marches non_finite rejected rejected_at_edge t_solve t_build'.split()
+    'outcome reason error n_roots n_stable several_stable marches non_finite rejected rejected_at_edge off_table t_solve '
+    't_build'.split()
 )
 INFO = 'draw_index outcome error best_rate best_rate_w_lg best_rate_outcomes not_producible_reason'.split()
+NSOL_INFO = ['scan', 'T_end', 'T_scan', 'dead_dates', 'p_change']  # An nsol-2 well's, after INFO
 RESULT = ['well', 'stations', 'table', 'nsol', 'info', 'samples', 'log', 'seconds']
 
 
@@ -128,7 +131,7 @@ def test_an_operating_point(monkeypatch):
     out = generate._solve(wp, bc)
     assert (out['outcome'], out['reason'], out['error']) == ('operating_point', None, None)
     assert (out['n_roots'], out['n_stable'], out['several_stable']) == (2, 1, False)
-    assert (out['marches'], out['non_finite'], out['rejected']) == (7, 3, 0)
+    assert (out['marches'], out['non_finite'], out['rejected']) == (7, 3, 0) and out['off_table'] is False
     row = out['row']
     assert list(row) == list(FEATURES) and row['PBH'] == 220.0 and row['WLIQ'] == 5.0 and row['WGAS'] == 0.5
     assert math.isclose(row['FGAS'] + row['FOIL'] + row['FWAT'], 1.0, rel_tol=1e-12)
@@ -616,7 +619,8 @@ def test_an_nsol2_wells_scan_lift_and_slots(monkeypatch):
     monkeypatch.setattr(generate, '_attempt', attempt)
     res = generate_nsol2_well(SEED, lf.k)
     info, nsol = res['info'], res['nsol']
-    assert list(res) == RESULT and list(info) == INFO + ['scan', 'T_end', 'p_change']
+    assert list(res) == RESULT and list(info) == INFO + NSOL_INFO
+    assert info['T_scan'] == T and info['dead_dates'] == []
     dates = np.linspace(0.0, T, 21)
     i_fail = 7  # The first date at or past 0.32 T_life
     assert (nsol['lift_start'], nsol['lift_start_rule']) == (float(dates[i_fail - 1]), 'end_of_natural_flow')
@@ -671,24 +675,173 @@ def test_an_nsol2_well_whose_life_ends_before_its_lift_starts_is_natural(monkeyp
     assert info['p_change'] == p_c and [rec['u'] for rec in res['samples']] == [slot['u'] for slot in plan]
 
 
-def test_an_nsol2_wells_short_life_and_dead_date(monkeypatch):
-    """SMP-101: a life that ends at its first point is `short_life`, without slots; SMP-106: a slot that has no
-    operating point at 50 attempts is a dead date."""
+def test_an_nsol2_wells_short_life(monkeypatch):
+    """SMP-101: a life that ends at its first point is `short_life`, without slots. Rule 3's lift, which would start
+    where the life ends, does not make the well a lifted one."""
     lf = an_nsol2_life()
     attempt, _ = stand_in_attempt(
         lambda inp: ('operating_point', 50.0) if inp['t'] == 0.0 else ('no_operating_point', None)
     )
     monkeypatch.setattr(generate, '_attempt', attempt)
     res = generate_nsol2_well(SEED, lf.k)
-    assert (res['info']['outcome'], res['info']['T_end'], res['nsol']['lift_start']) == ('short_life', 0.0, 0.0)
+    assert (res['info']['outcome'], res['info']['T_end'], res['nsol']['lift_start']) == ('short_life', 0.0, None)
     assert res['samples'] == [] and math.isnan(res['info']['p_change']) and len(res['info']['scan']) == 2
+    assert res['info']['T_scan'] == 0.0 and res['info']['dead_dates'] == []
 
+
+def test_an_nsol2_life_that_ends_where_its_lift_would_start_is_natural(monkeypatch):
+    """SMP-101 (D-146): rule 3 starts lift at the last point before natural flow fails; where the lifted well fails at
+    the next point too, the life ends at the lift's start. The well is natural: no sample of it is lifted."""
+    lf = an_nsol2_life()
+    T = lf.T_life
     attempt, _ = stand_in_attempt(
-        lambda inp: ('no_operating_point', None) if inp.get('test') == 8 else ('operating_point', 50.0)
+        lambda inp: (
+            ('operating_point', 50.0) if not inp['lift_on'] and inp['t'] < 0.32 * T else ('no_operating_point', 0)
+        )
     )
     monkeypatch.setattr(generate, '_attempt', attempt)
     res = generate_nsol2_well(SEED, lf.k)
-    assert res['info']['outcome'] == 'dead_date' and len(res['samples']) == _N_SLOTS - 5
+    info, nsol = res['info'], res['nsol']
+    t_6 = float(np.linspace(0.0, T, 21)[6])  # The last scan point before 0.32 T_life
+    assert (info['outcome'], info['T_end'], info['T_scan']) == ('accepted', t_6, t_6)
+    assert info['scan'][-1] == dict(
+        t=float(np.linspace(0.0, T, 21)[7]), status='no_operating_point', best=math.nan, lift_on=True
+    ) or (info['scan'][-1]['lift_on'] and info['scan'][-1]['status'] == 'no_operating_point')
+    assert (nsol['lift_start'], nsol['lift_start_rule']) == (None, None)
+    assert not any(rec['lift_on'] for rec in res['samples']) and len(res['samples']) == _N_SLOTS
+
+
+def slots_fail(dead):
+    """A stand-in attempt: the best rate and the life scan pass, and a slot has an operating point unless dead(inp)."""
+    return stand_in_attempt(
+        lambda inp: ('no_operating_point', None) if 'test' in inp and dead(inp) else ('operating_point', 50.0)
+    )
+
+
+def a_natural_life(design=True):
+    """The first life of the tests' seed that no draw lifts, with a lift design (an oil) or without (a gas well)."""
+    return next(
+        lf
+        for lf in drawn_lives()
+        if lf.lift_start is None and (lf.design is not None) == design and lf.w0['fluid_class'] not in _TABLE_CLASSES
+    )
+
+
+def test_a_dead_date_starts_the_lift_of_a_natural_well(monkeypatch):
+    """SMP-106, SMP-90 (D-142): a natural well with a lift design that flows at none of a date's 100 draws is lifted
+    from that date, with `no_natural_flow`; its slots are planned and solved again, and the log holds that pass."""
+    lf = a_natural_life()
+    T = lf.T_life
+    attempt, calls = slots_fail(lambda inp: not inp['lift_on'] and 0.33 * T <= inp['t'] < 0.36 * T)
+    monkeypatch.setattr(generate, '_attempt', attempt)
+    res = generate_nsol2_well(SEED, lf.k)
+    info, nsol = res['info'], res['nsol']
+    natural, _ = _nsol2_plan(lf, T, None)
+    t_dead = min(slot['t'] for slot in natural if slot['t'] >= 0.33 * T)
+    n_dead = sum(0.33 * T <= slot['t'] < 0.36 * T for slot in natural)
+    assert n_dead == 5 and info['dead_dates'] == [dict(t=t_dead, slots=n_dead, action='lift_start')]
+    assert (info['outcome'], info['T_end'], info['T_scan']) == ('accepted', T, T)
+    assert (nsol['lift_start'], nsol['lift_start_rule']) == (t_dead, 'no_natural_flow')
+    plan, p_c = _nsol2_plan(lf, T, t_dead)
+    assert info['p_change'] == p_c and len(res['samples']) == _N_SLOTS
+    assert [(rec['t'], rec['lift_on'], rec['u']) for rec in res['samples']] == [
+        (slot['t'], slot['t'] >= t_dead, slot['u']) for slot in plan
+    ]
+    slots = [rec for rec in res['log'] if rec['kind'] == 'slot']
+    assert len(slots) == _N_SLOTS and all(rec['attempt'] == 0 for rec in slots)  # The second pass's attempts only
+    assert sum('test' in c for c in calls) == _N_SLOTS + (_SLOT_LIMIT - 1) * n_dead + _N_SLOTS
+
+
+def test_a_dead_date_behind_the_redraw_limit(monkeypatch):
+    """SMP-106 (D-142): more than ten dead slots use the thousand redraws before any has its hundred attempts. The
+    earliest slot still open then takes the rest of its attempts: without an operating point it is a dead date, and
+    with one the well is dropped at the redraw limit."""
+    lf = a_natural_life()
+    T = lf.T_life
+    window = lambda inp: not inp['lift_on'] and 0.3 * T <= inp['t'] < 0.5 * T  # noqa: E731
+    attempt, calls = slots_fail(window)
+    monkeypatch.setattr(generate, '_attempt', attempt)
+    res = generate_nsol2_well(SEED, lf.k)
+    natural, _ = _nsol2_plan(lf, T, None)
+    t_dead = min(slot['t'] for slot in natural if slot['t'] >= 0.3 * T)
+    n_dead = sum(0.3 * T <= slot['t'] < 0.5 * T for slot in natural)
+    assert n_dead == 42 and res['info']['dead_dates'] == [dict(t=t_dead, slots=n_dead, action='lift_start')]
+    assert res['info']['outcome'] == 'accepted' and res['nsol']['lift_start'] == t_dead
+    passes, rest = divmod(_REDRAW_LIMIT, n_dead)
+    first = _SLOT_LIMIT - (1 + passes + (rest > 0))  # The attempts that the earliest dead slot had left
+    assert sum('test' in c for c in calls) == _N_SLOTS + _REDRAW_LIMIT + first + _N_SLOTS
+
+    seen = []  # The earliest slot of the window flows at its 96th attempt: the well is at the redraw limit
+
+    def dead(inp):
+        seen.append(inp['t'])
+        return window(inp) and not (inp['t'] == t_dead and seen.count(t_dead) > 95)
+
+    attempt, calls = slots_fail(dead)
+    monkeypatch.setattr(generate, '_attempt', attempt)
+    res = generate_nsol2_well(SEED, lf.k)
+    assert res['info']['outcome'] == 'redraw_limit' and res['info']['dead_dates'] == []
+    assert len(res['samples']) == _N_SLOTS - n_dead + 1 and res['samples'][-1]['attempt'] < _SLOT_LIMIT
+    assert max(rec['attempt'] for rec in res['log'] if rec['kind'] == 'slot') == 95
+
+
+@pytest.mark.parametrize('design', [True, False])
+def test_a_dead_date_ends_the_life_of_a_well_that_lift_cannot_help(monkeypatch, design):
+    """SMP-106 (D-142): where a date is dead for a lifted well, or for one without a lift design, the life ends at the
+    last earlier date. A natural well with a design is lifted first, and its life ends when the date stays dead; the
+    lift that would start where the life ends leaves it natural."""
+    lf = a_natural_life(design)
+    T = lf.T_life
+    attempt, _ = slots_fail(lambda inp: inp['t'] >= 0.8 * T)
+    monkeypatch.setattr(generate, '_attempt', attempt)
+    res = generate_nsol2_well(SEED, lf.k)
+    info, nsol = res['info'], res['nsol']
+    natural, _ = _nsol2_plan(lf, T, None)
+    t_dead = min(slot['t'] for slot in natural if slot['t'] >= 0.8 * T)
+    t_before = max(slot['t'] for slot in natural if slot['t'] < t_dead)
+    n_dead = sum(slot['t'] >= 0.8 * T for slot in natural)
+    assert [d['action'] for d in info['dead_dates']] == (['lift_start', 'life_end'] if design else ['life_end'])
+    assert all((d['t'], d['slots']) == (t_dead, n_dead) for d in info['dead_dates'])
+    assert (info['outcome'], info['T_end'], info['T_scan']) == ('accepted', t_before, T)
+    assert (nsol['lift_start'], nsol['lift_start_rule']) == (None, None)
+    plan, _ = _nsol2_plan(lf, t_before, None)
+    assert [rec['t'] for rec in res['samples']] == [slot['t'] for slot in plan] and plan[-1]['t'] == t_before
+    assert not any(rec['lift_on'] for rec in res['samples'])
+
+
+def test_a_dead_date_at_the_lifes_end_cuts_the_life(monkeypatch):
+    """A natural well with a design whose last date is dead is not lifted for that date alone: its life ends at the
+    date before."""
+    lf = a_natural_life()
+    T = lf.T_life
+    attempt, _ = slots_fail(lambda inp: inp['t'] == T)
+    monkeypatch.setattr(generate, '_attempt', attempt)
+    res = generate_nsol2_well(SEED, lf.k)
+    natural, _ = _nsol2_plan(lf, T, None)
+    t_before = max(slot['t'] for slot in natural if slot['t'] < T)
+    assert res['info']['dead_dates'] == [dict(t=T, slots=1, action='life_end')]
+    assert (res['info']['outcome'], res['info']['T_end'], res['nsol']['lift_start']) == ('accepted', t_before, None)
+
+
+def test_the_dead_date_limit_and_a_life_cut_to_nothing(monkeypatch):
+    """SMP-106: a well is dropped as `dead_date` when a date is dead after DEAD_DATE_LIMIT dead dates have changed its
+    life, with the attempts of its last pass; a life that a dead date cuts to its start is `short_life`."""
+    lf = a_natural_life()
+    attempt, _ = slots_fail(lambda inp: inp.get('test') == 8)  # The last test period is dead in every plan
+    monkeypatch.setattr(generate, '_attempt', attempt)
+    res = generate_nsol2_well(SEED, lf.k)
+    info = res['info']
+    assert info['outcome'] == 'dead_date' and len(res['samples']) == _N_SLOTS - 5
+    assert [d['action'] for d in info['dead_dates']] == ['lift_start', 'life_end'] * 2 + ['lift_start']
+    assert len(info['dead_dates']) == _DEAD_DATE_LIMIT and info['T_end'] < info['T_scan']
+    slots = [rec for rec in res['log'] if rec['kind'] == 'slot']
+    assert len(slots) == _N_SLOTS - 5 + 5 * _SLOT_LIMIT
+
+    attempt, _ = slots_fail(lambda inp: inp['t'] > 0.0 and not inp['lift_on'] or inp['lift_on'])
+    monkeypatch.setattr(generate, '_attempt', attempt)
+    res = generate_nsol2_well(SEED, a_natural_life(design=False).k)
+    assert (res['info']['outcome'], res['info']['T_end']) == ('short_life', 0.0)
+    assert [d['action'] for d in res['info']['dead_dates']] == ['life_end']
 
 
 # --- Wells dropped before a solve -------------------------------------------------------------------------------------

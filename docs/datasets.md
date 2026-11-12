@@ -63,6 +63,8 @@ The WEEKS feature is only present in non-stationary datasets.
 
 *Draft, 2026-11-11 (Step R11 of `plans/sampler-redesign-plan.md`). The schema needs Bjarne's sign-off: D-85 to D-94 are ruled, and R10's D-122 to D-126, which this section follows, await their rulings (`plans/sampler-redesign/decisions.md`). The v2 datasets are not published yet. The v1 datasets and the text above are unchanged.*
 
+*The first full generation is a beta (SMP-50, D-149): its datasets are `manywells-sol-2-beta1` and `manywells-nsol-2-beta1`, with `release` `beta1` in their `metadata.json`, and this section describes them. The final datasets take the plain names, after the beta's analysis.*
+
 The v2 datasets are new datasets with a schema of their own (`specs/goals.md`, Compatibility):
 
 | | `manywells-sol-2` | `manywells-nsol-2` |
@@ -203,7 +205,7 @@ One row per accepted well, sorted by `ID`.
 | `choke_model` | category | the choke model (SMP-77) | new |
 | `chk_profile` | category | the choke's profile (SMP-77) | kept |
 | `lift` | category | `natural` or `gas_lift`: in `sol-2` at its date, in `nsol-2` lifted at some date of its life (SMP-52, SMP-90) | renamed: `has_gas_lift` → `lift` |
-| `lift_start_rule` | category | the rule that started the well's lift (SMP-90, SMP-101, SMP-103); null for a natural well | new |
+| `lift_start_rule` | category | the rule that started the well's lift (SMP-90, SMP-101, SMP-103, SMP-106); null for a natural well | new |
 
 The other groups' columns are float64 unless their row says otherwise.
 
@@ -276,7 +278,7 @@ The other groups' columns are float64 unless their row says otherwise.
 | `wgr_nom` (s) | Sm³ per 10⁶ Sm³ | a gas well's nominal water–gas ratio; null for oils | new |
 | `kgko_weight` | – | an oil's blend of the $k_g/k_o$ curves, 0 in the core (SMP-70); null for gas classes | new |
 | `gor_factor_cond` | – | a condensate's GOR factor $c_k$ (SMP-70); null otherwise | new |
-| `T_life`, `T_end` (n) | years | the life span (SMP-84), and the life's end after the life scan (SMP-101) | new |
+| `T_life`, `T_end`, `T_scan` (n) | years | the life span (SMP-84), the life's end, and the end that the life scan gave it (SMP-101); `T_end` is earlier than `T_scan` where a dead date ended the life (SMP-106) | new |
 | `t_plateau`, `decline_D`, `decline_b` (n) | years, 1/year, – | the depletion clock's plateau and Arps's $D_\text{A}$ and $b_\text{A}$ (SMP-84) | new |
 | `gamma_p`, `r_p_start`, `r_p_end` (n) | – | the pressure's exponent, and $p_r/p_i$ at the life's start and end (SMP-83, SMP-85) | new |
 | `F_bt`, `wlr_bt` (n) | – | the water's breakthrough recovery, and an oil's WLR after it (SMP-86) | new |
@@ -321,7 +323,7 @@ The other groups' columns are float64 unless their row says otherwise.
 | `cp_o`, `cp_w`, `cp_g` | J/(kg K) | the heat capacities (`FluidModel`; SMP-82) | kept |
 | `flags` | – | string: the draws' truncations, redraws and fallbacks that applied, joined by `;`, such as SMP-60's `geometry_redrawn:n` | new |
 
-The lift design's columns, `injection_md` to `psi_lg`, are null for a well without a lift design: in `sol-2` a well natural at its date, in `nsol-2` one that no rule lifts.
+The lift design's columns, `injection_md` to `psi_lg`, are null for a well without lift: in `sol-2` a well natural at its date, in `nsol-2` a well with no lifted date in its life (`lift` `natural`), whose draws may have held a design that its life never used.
 
 **Generation summary** (int32)
 
@@ -330,6 +332,7 @@ The lift design's columns, `injection_md` to `psi_lg`, are null for a well witho
 | `n_redraws` | the redraws of the well's slots: its attempts beyond each slot's first | new |
 | `n_redraws_no_op`, `n_redraws_solver` | its attempts without an operating point, by outcome: `no_operating_point` and `solver_failure` (SMP-104) | new |
 | `n_redraws_<reason>` | the same by reason, one column for each of SMP-104's six: `p_r_le_p_s`, `no_root`, `exception`, `invalid_row`, `incomplete_scan` and `unstable_only` | new |
+| `n_dead_dates` (n) | the dead dates that changed the well's life, each by starting its lift or ending the life (SMP-106); the counts above are those of the slots' last pass | new |
 
 v1's `f_D`, a fixed friction factor, has no counterpart: `v2.0.0` takes friction from the roughness.
 
@@ -393,7 +396,7 @@ A crashed well's row holds its draw index, outcome, error and times only. The we
 
 ### `metadata.json`
 
-The records of SMP-110: `dataset`, `kind`, `seed`, `n_wells`, `n_slots`, `configuration`, `n_cells`, `backend` (`rust`) and `retry_backend` (null, D-122); `limits` and `producibility` (the floors, the margin, the best rate's lift-gas fractions, the life scan's points and the water cut); `split` (the test share and the strata); `chunk_size`; `tables`, the folder of tables relative to the run's, and `table_build` (the SHA-256 of its `wells.json` and `axes.json`, the draw indices and table wells it covers, and NeqSim's version); `code`, the code that ran the wells, and `assembled_by`, the code that wrote the files, each with its `version` (`datasets.io.code_version`), full `commit` and `dirty`; `lock_sha256`, the SHA-256 of `uv.lock`; `created`; `python`, `platform` and `machine`; `counts`, the wells drawn and accepted, the wells by outcome, the slots' attempts by outcome and the CPU seconds; and `files`, each file's rows and SHA-256. The logs' copy adds `companion_of`.
+The records of SMP-110: `dataset`, `release` (`beta1` for the beta, null for the final datasets), `kind`, `seed`, `n_wells`, `n_slots`, `configuration`, `n_cells`, `backend` (`rust`) and `retry_backend` (null, D-122); `limits` and `producibility` (the floors, the margin, the best rate's lift-gas fractions, the life scan's points and the water cut); `split` (the test share and the strata); `chunk_size`; `tables`, the folder of tables relative to the run's, and `table_build` (the SHA-256 of its `wells.json` and `axes.json`, the draw indices and table wells it covers, and NeqSim's version); `code`, the code that ran the wells, and `assembled_by`, the code that wrote the files, each with its `version` (`datasets.io.code_version`), full `commit` and `dirty`; `lock_sha256`, the SHA-256 of `uv.lock`; `environment`, the versions of Python, numpy and scipy and the machine's architecture that the run had, which the assembly must have too; `created`; `python`, `platform` and `machine`, the assembly's; `counts`, the wells drawn and accepted, the wells by outcome, the slots' attempts by outcome, `samples_off_table` (the samples with a point off their PVT table's grid, PVT-TAB-2), `dead_dates` (n: those that started a lift and those that ended a life) and the CPU seconds; and `files`, each file's rows and SHA-256. The logs' copy adds `companion_of`.
 
 ### Labels and codes
 
@@ -422,7 +425,7 @@ A label is stored as its string, and its code is its position in the list (D-89)
 | `choke_model` | wells | 0 `simpson` |
 | `chk_profile` | wells | 0 `linear`, 1 `sigmoid`, 2 `convex`, 3 `concave` |
 | `lift` | wells | 0 `natural`, 1 `gas_lift` |
-| `lift_start_rule` | wells | 0 `from_start`, 1 `static_check`, 2 `end_of_natural_flow` (n), 3 `drawn_time`, 4 `no_natural_flow` (s) |
+| `lift_start_rule` | wells | 0 `from_start`, 1 `static_check`, 2 `end_of_natural_flow` (n), 3 `drawn_time`, 4 `no_natural_flow` (s: the producibility filter's lift, SMP-103; n: a dead date's, SMP-106) |
 | `split` | wells | 0 `train`, 1 `test` |
 | `SWEEP` | samples (n) | 0 `choke`, 1 `lift` |
 | `FRBH`, `FRWH` | samples | 0 `bubbly`, 1 `dispersed-bubbly`, 2 `slug`, 3 `churn`, 4 `annular` (SLIP-16) |

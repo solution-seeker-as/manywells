@@ -63,7 +63,7 @@ _V_M_SC = _R_UNIVERSAL * _T_REF / _P_REF  # m3/kmol of an ideal gas at standard 
 _RHO_AIR = _P_REF * _M_AIR / (_R_UNIVERSAL * _T_REF)
 
 _DELTA = 1e-4  # The liquid mass fraction kept where the stream is all vapour (PVT-TAB-6)
-_MAX_DROPPED = 0.05  # The largest share of a table's pressures that the repair may drop; beyond it the table fails
+_MAX_DROPPED = 0.10  # The largest share of a table's pressures that the repair may drop; beyond it the table fails
 _P_EXAMPLE = 0.2  # A table well's probability of a published example fluid of its class
 
 _LIGHT = (
@@ -692,7 +692,7 @@ def _falling_pz_pressures(df) -> list:  # spec: SMP-116
 
 def _repair(df, gor) -> tuple:  # spec: SMP-116
     """A table of one GOR without the pressures at which p/Z does not rise (_falling_pz_pressures), and those
-    pressures. A table that would lose more than MAX_DROPPED of its pressures, or one pressure where that is more (D-139),
+    pressures. A table that would lose more than MAX_DROPPED of its pressures, or one pressure where that is more (D-139, D-143),
     fails, with a ValueError."""
     bad = _falling_pz_pressures(df)
     if len(bad) > max(1.0, _MAX_DROPPED * df.p.nunique()):

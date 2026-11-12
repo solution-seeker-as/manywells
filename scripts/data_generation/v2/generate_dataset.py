@@ -17,8 +17,9 @@ the run's processes cap themselves at --memory-cap:
         --n 100 --seed 2026 --processes 6 --out data/pilot-sol-2 --allow-dirty)
     (... nsol --n 100 --seed 2027 --processes 6 --out data/pilot-nsol-2 --allow-dirty)
 
-OUT holds tables/ (the table fluids' build), run/ (the run's chunks and settings), and the dataset's folder
-manywells-<kind>-2/ with its companion folder of logs manywells-<kind>-2-logs/. Every step resumes: a stopped run of
+OUT holds tables/ (the table fluids' build), run/ (the run's chunks and settings), and the dataset's folder, named
+with the code's release label (manywells-<kind>-2-beta1/ for the beta, SMP-50), with its companion folder of logs,
+<dataset>-logs/. Every step resumes: a stopped run of
 the script carries on where it stopped. The table wells are drawn for a first guess of the draw indices the run needs
 (--draws, by default 1.5 n rounded up to the chunks); where the run needs more, the tables are extended and the run
 carries on.
