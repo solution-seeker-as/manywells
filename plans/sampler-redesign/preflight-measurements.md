@@ -110,6 +110,20 @@ The first full generation is a **beta**, `manywells-sol-2-beta1` and `manywells-
 
 The tables that still fail the repair would lose 10% to 20% of their pressures at a GOR.
 
+**The pilot**, at `917afe0`: the first 300 draws of each dataset, with the tables above, against the same draws of the stopped run (a well's times and the records that the branch adds left out):
+
+| | `sol-2` | `nsol-2` |
+|---|---|---|
+| Wells the same to the bit | 299 of 300 | 283 of 300 |
+| Wells changed | 1, a table well whose table still fails | 17: 8 dead dates and 1 well at the redraw limit now kept; 3 wells kept with the table they now have, and a fourth one's life too short; 3 still at the redraw limit; 1 natural where its life ended at its lift's start |
+| Accepted, before; after | 245; 245 | 262; 274 |
+| Dropped at the limits, after | 3 at the redraw limit, 1 table | 3 at the redraw limit, 1 at the solver-failure limit; no dead date |
+| Dead dates that changed a life | – | 10, in 9 kept wells: 9 lift starts and 1 life end |
+| Samples with a point off their table's grid, of the 48,000 of 240 wells | 214, in 2 wells | 0 |
+| Wall time on 12 processes; CPU per drawn well | 16 min; 36 s | 20 min; 47 s |
+
+Every well that changed did so for one of the rulings. The datasets, 240 wells each, are written from a clean tree with the beta's names and records, and no `nsol-2` well has a single lifted sample or a lift design without a lifted date.
+
 ## For after the beta
 
 Four findings are questions of the rules, which the beta's data informs (D-149):
