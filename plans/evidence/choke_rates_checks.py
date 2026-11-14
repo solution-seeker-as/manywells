@@ -33,7 +33,7 @@ Prints plain-text tables, the beta's draws 0 to N - 1 before the pilot's:
 3. Rates: the wells' best rates and their samples' rates in oil equivalent by well type; in `nsol-2` the first year's
    and the best 12 months' mean rates, and the lives' ends.
 4. What the population keeps: the reservoirs below hydrostatic, the low downstream pressures, the overpressured
-   wells at high rates, the fully open chokes, the lift gas, and the samples' ranges.
+   wells' rates and pressures, the fully open chokes, the lift gas, and the samples' ranges.
 5. Cost: the seconds and the redraws per well.
 
 Then the wells accepted in both: those lost and gained by outcome, their best rates, beans and redraws, and their
@@ -84,6 +84,7 @@ def load(kind, folder, n=None, hurdles=None):
     s['y'] = s.PDC / s.PWH
     s['oe'] = 24 * (s.QOIL + s.QGAS / 1000)  # Sm3/d of oil equivalent
     keep = ['ID', 'draw_index', 'coverage_tail', 'well_type', 'fluid_type', 'best_rate', 'p_h', 'D', 'bean_ratio']
+    keep += ['pressure_class']
     keep += ['life_stage'] if kind == 'sol' else ['T_end', 'T_life']
     return wells, s.merge(wells[keep], on='ID'), drawn
 
@@ -219,12 +220,10 @@ def report(kind, name, wells, s, drawn):
     print(f'  rows with p_r below hydrostatic: {(r_h < 1).mean():.3f}; below 0.8 of it: {(r_h < 0.8).mean():.3f}')
     by_type = ', '.join(f'{wt} {(x.PDC < 10).mean():.3f}' for wt, x in s.groupby('well_type', observed=True))
     print(f'  rows with PDC below 10 bar: {(s.PDC < 10).mean():.3f} ({by_type}); below 5 bar: {(s.PDC < 5).mean():.3f}')
-    hot = s[(s.PBH > 500) & (s.WTOT > 60)]
-    print(
-        f'  rows with PBH above 500 bar and above 60 kg/s: {len(hot) / len(s):.4f}, in {hot.ID.nunique()} wells',
-        end='; ',
-    )
-    print(f'PBH above 500 bar: {(s.PBH > 500).mean():.4f}')
+    over = s[s.pressure_class == 'over']  # The wells that SMP-63 labels overpressured
+    print(f'  rows of overpressured wells: {len(over) / len(s):.3f}; their WTOT (kg/s) and PBH (bar):')
+    line('    WTOT, overpressured wells', over.WTOT)
+    line('    PBH, overpressured wells', over.PBH)
     quartiles = ' '.join(f'{v:.3f}' for v in s.CHK[s.CHK < 1].quantile([0.25, 0.5, 0.75]))
     print(f'  rows fully open: {(s.CHK == 1).mean():.3f}; CHK quartiles of the rest: {quartiles}')
     lifted = s[s.WGL > 0]
@@ -233,9 +232,6 @@ def report(kind, name, wells, s, drawn):
     print(' '.join(f'{v:.3g}' for v in lifted.WGL.quantile(Q)), end='; ')
     rank = lw.wgl.corr(lw.w - lw.wgl, method='spearman')
     print(f"rank correlation of a well's lift gas with its formation rate: {rank:.2f}")
-    late = (s.WLR > 0.85) & (s.PWH < 20) & (s.WTOT > 15)
-    print(f'  rows with WLR above 0.85, PWH below 20 bar and above 15 kg/s: {late.mean():.4f}', end='')
-    print(f', in {s[late].ID.nunique()} wells')
     print("  the samples' 0.5% and 99.5% quantiles: ", end='')
     cols = ('PBH', 'PWH', 'PDC', 'TWH', 'WTOT')
     print(', '.join(f'{c} {s[c].quantile(0.005):.3g} to {s[c].quantile(0.995):.4g}' for c in cols))

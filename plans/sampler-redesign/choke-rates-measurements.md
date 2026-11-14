@@ -157,14 +157,12 @@ Against the starts of the regions' wells that begin within the open data, by the
 | Median `PBH` (bar) | 216 | 214 | 188 | 207 |
 | `PBH`, 0.5% to 99.5% (bar) | 7 to 683 | 9 to 659 | 10 to 725 | 14 to 689 |
 | `WTOT`, 0.5% to 99.5% (kg/s) | 0.011 to 112 | 0.011 to 132 | 0.033 to 124 | 0.013 to 140 |
-| Samples with `PBH` above 500 bar and `WTOT` above 60 kg/s | 0.9%, in 8 wells | 1.6%, in 8 wells | 0.9%, in 10 wells | 2.0%, in 12 wells |
-| Samples with `WLR` above 0.85, `PWH` below 20 bar and `WTOT` above 15 kg/s | 0.4%, in 4 wells | 0.6%, in 6 wells | 0.3%, in 12 wells | 0.7%, in 14 wells |
 
 **What stays.** The reservoirs below hydrostatic, the low downstream pressures, the fully open samples and the openings, the lift, and the samples' ranges. The wellheads are warmer and at a lower pressure because the wells are stronger and fewer of them are subsea.
 
 **What does not improve.**
 
-- **The strongest wells flow more.** A choke sized to the rate lets a strong well flow what its tubing passes, where a small bean of D-27 held some of them back: the samples at a bottomhole pressure above 500 bar and above 60 kg/s are about 40% (`sol-2`) and 80% (`nsol-2`) more, in nearly the same wells, and twice the share of the samples; `WTOT`'s 99.5% quantile rises from 112 to 132 kg/s (`sol-2`) and from 124 to 140 kg/s (`nsol-2`). Of the core subsea oils that pass the hurdle, 28% have a design rate above their largest tubing's capacity (D-100's flag), 20% in the beta. The rule for these wells is D-149's open point; it matters more with these two rules.
+- **The strongest wells flow more.** A choke sized to the rate lets a strong well flow what its tubing passes, where a small bean of D-27 held some of them back: `WTOT`'s 99.5% quantile rises from 112 to 132 kg/s (`sol-2`) and from 124 to 140 kg/s (`nsol-2`). Of the core subsea oils that pass the hurdle, 28% have a design rate above their largest tubing's capacity (D-100's flag), 20% in the beta. Since D-155 a sized choke holds such a well below its tubing's erosional velocity.
 - **`nsol-2`'s subsea wells lose grip late in their lives** (section 3): 16% of their last fifth's samples have a choke that takes less than 1%.
 - **The mix by well type moves.** Hurdles of 50 and 500 Sm³/d drop 24% of the drawn platform wells and 44% of the drawn subsea wells. By the whole beta's wells that pass, the accepted core wells are 61% platform, 27% subsea and 12% onshore in `sol-2` and 59%, 29% and 13% in `nsol-2`, where D-5 draws 55%, 35% and 10% and the beta accepted 58%, 33% and 9%, and 55%, 35% and 9%. Of all accepted wells, the onshore wells are 17% and 18% (the beta's: 13.5% and 13.4%), since they have no hurdle. Section 6 has the mix with the hurdles taken, which moves further.
 
@@ -184,7 +182,7 @@ For Bjarne's rulings, with D-150 to D-153:
 
 ## 6. The values taken on 2026-11-14
 
-Bjarne took the recommendation that followed the first pilot: a platform hurdle of 20 Sm³/d for 50, and a lower end of 0.005 for 0.02 in the choke's share. The reason is the Goals' (Coverage first, shape second): a sample of real wells shows its own fields and areas, so its range is a lower bound on what the draws must cover, and its shape is weak evidence of what is typical. The open regions differ widely in both respects, in the rates at which their wells start [own analysis of BOEM's OGOR-A production, ANP's production by well and Sodir's FactPages] and in what their chokes take [own analysis of BSEE's well tests], and each first value left out wells that one region has: the shelf's weak starts, and the wells that are produced wide open.
+Bjarne took the recommendation that followed the first pilot: a platform hurdle of 20 Sm³/d for 50, and a lower end of 0.005 for 0.02 in the choke's share. The reason is coverage (the Goals, Coverage first, shape second). The open regions differ widely in both respects, in the rates at which their wells start [own analysis of BOEM's OGOR-A production, ANP's production by well and Sodir's FactPages] and in what their chokes take [own analysis of BSEE's well tests], and each first value left out wells that one region has: the shelf's weak starts, and the wells that are produced wide open.
 
 ### The platform hurdle of 20 Sm³/d
 
