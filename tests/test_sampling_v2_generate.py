@@ -42,7 +42,7 @@ from manywells.sampling.v2.generate import (
 from manywells.sampling.v2.inflow import _COEF_KEYS
 from manywells.sampling.v2.life import Life, _lift_on, sol2_well
 from manywells.sampling.v2.mapping import WellBuilder
-from manywells.sampling.v2.samples import _N_SLOTS, _nsol2_plan, _sol2_attempt
+from manywells.sampling.v2.samples import _LIFT_GAS_ALWAYS_ON, _N_SLOTS, _nsol2_plan, _sol2_attempt
 from manywells.sampling.v2.tables import _TABLE_CLASSES, TableMismatch
 from manywells.solution import Root, RootSet
 
@@ -314,9 +314,8 @@ def test_the_best_rate_at_three_lift_gas_rates(monkeypatch):
     out, log, calls = best_rate(
         monkeypatch, [('no_operating_point', None), ('operating_point', 5.0), ('operating_point', 3.0)]
     )
-    assert out == dict(
-        best=5.0, best_w_lg=1.0, outcomes=['no_operating_point', 'operating_point', 'operating_point'], status='pass'
-    )
+    outcomes = ['no_operating_point', 'operating_point', 'operating_point']
+    assert out == dict(best=5.0, best_w_lg=1.0, outcomes=outcomes, flows_without_lift_gas=False, status='pass')
     assert [(c['u'], c['p_s'], c['w_lg'], c['lift_on']) for c in calls] == [
         (1.0, 20.0, f * 2.0, True) for f in (0, 0.5, 1)
     ]
@@ -620,7 +619,9 @@ def test_the_best_rate_of_a_sized_well(monkeypatch):
     state = dict(p_r=200.0, gor=100.0, wlr=0.3, wgr=math.nan, p_s_nom=20.0, h=10.0, roughness=1e-5)
     builder, log = StandInBuilder(), []
     out = generate._sized_best_rate(builder, state, True, 2.0, 1.6, log, dict(draw_index=4, kind='best_rate'))
-    assert out == dict(best=4.0, best_w_lg=1.0, outcomes=['operating_point'] * 3, status='pass')
+    assert out == dict(
+        best=4.0, best_w_lg=1.0, outcomes=['operating_point'] * 3, flows_without_lift_gas=True, status='pass'
+    )
     assert [r['kind'] for r in log] == ['choke_sizing'] * 3 + ['best_rate'] * 3 and builder.choke[0] == 5.0
 
     for wlr, status in ((0.3, 'no_operating_point'), (0.981, 'water_cut')):
@@ -714,6 +715,30 @@ def test_the_producibility_filter_lifts_a_natural_oil_well(monkeypatch):
     assert kinds == ['choke_sizing'] * n + ['choke_sizing'] * 3 + ['best_rate_lifted'] * 3 + ['slot'] * _N_SLOTS
     assert res['info']['best_rate_outcomes'] == ['operating_point'] * 3  # the lifted well's
     assert all(c['lift_on'] for c in calls[n:]) and calls[n + 6]['w_lg'] == _sol2_attempt(SEED, lifted, 0)['w_lg']
+
+
+@pytest.mark.parametrize('off_outcome', [('no_operating_point', None), ('operating_point', 1e-3), None])
+def test_a_lifted_sol2_well_that_cannot_flow_without_lift_gas(monkeypatch, off_outcome):
+    """SMP-94: a lifted sol-2 well whose best rate's solve without lift gas has no operating point, or one below the
+    floor's margin, is flagged lift_gas_always_on, and none of its slots is drawn without lift gas; a well that flows
+    without it keeps the draws of SMP-94 (off_outcome None: every solve at 50 Sm3/d)."""
+    lf, w = a_sol2_well(oil=True, lifted=True)
+
+    def outcome_of(inp):
+        return off_outcome if (inp['w_lg'] == 0 and off_outcome is not None) else ('operating_point', 50.0)
+
+    attempt, calls = stand_in_attempt(outcome_of)
+    monkeypatch.setattr(generate, '_attempt', attempt)
+    res = generate_sol2_well(SEED, lf.k)
+    assert res['info']['outcome'] == 'accepted'
+    flagged = _LIFT_GAS_ALWAYS_ON in res['well']['flags'].split(';')
+    assert flagged == (off_outcome is not None)
+    assert res['well']['flags'].split(';')[:-1] == [f for f in w['flags'].split(';') if f] or not flagged
+    slots = calls[6:]
+    assert len(slots) == _N_SLOTS
+    assert all(c['w_lg'] > 0 for c in slots) if flagged else any(c['w_lg'] == 0 for c in slots)
+    for j, c in enumerate(slots):
+        assert c['w_lg'] == _sol2_attempt(SEED, res['well'], j)['w_lg']
 
 
 @pytest.mark.parametrize(
