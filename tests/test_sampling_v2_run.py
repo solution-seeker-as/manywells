@@ -14,6 +14,7 @@ fast tests generate wells with stand-in solves, or put a stand-in in place of a 
 a small real pilot and re-solves its samples.
 """
 
+import itertools
 import json
 import math
 import pathlib
@@ -43,6 +44,7 @@ from manywells.sampling.v2 import generate
 from manywells.sampling.v2 import run as runner
 from manywells.sampling.v2 import table_build as tb
 from manywells.sampling.v2 import table_wells as tw
+from manywells.sampling.v2.draws import _stratum
 from manywells.sampling.v2.life import Life, sol2_well
 from manywells.sampling.v2.mapping import WellBuilder
 from manywells.sampling.v2.samples import _nsol2_attempt, _nsol2_plan, _sol2_attempt
@@ -155,45 +157,81 @@ def stand_in_run(monkeypatch, outcome=accepted, raise_at=None):
 
 
 # --- SMP-110: the run in chunks ---------------------------------------------------------------------------------------
-def first_accepted(n) -> list:
-    return [k for k in range(10 * n) if k % 4 != 3][:n]
+def stratum_wells(s, n) -> list:
+    """The first n draw indices of stratum s of the tests' seed."""
+    return list(itertools.islice((k for k in itertools.count() if _stratum(SEED, k) == s), n))
 
 
-def test_a_run_until_n_wells_are_accepted(monkeypatch, tmp_path):
-    """Draw indices 0, 1, 2, ... in chunks until the first n accepted wells are known; each chunk in one file."""
+def selection(n, outcome=lambda k: accepted(k)['outcome']) -> list:
+    """The draw indices of a dataset of n wells, whose well k's outcome is outcome(k): each stratum's wells up to the
+    last of its quota's accepted wells, in draw order."""
+    out = []
+    for s, quota in runner._quotas(n).items():
+        wells = (k for k in itertools.count() if _stratum(SEED, k) == s)
+        n_accepted = 0
+        while n_accepted < quota:
+            out.append(k := next(wells))
+            n_accepted += outcome(k) == 'accepted'
+    return sorted(out)
+
+
+def test_the_quotas():
+    """SMP-53, SMP-54: 15% tail wells, and the core's by the well types' shares, summing to n."""
+    assert runner._quotas(10_000) == dict(tail=1500, platform=4675, subsea=2975, onshore=850)
+    assert runner._quotas(100) == dict(tail=15, platform=47, subsea=30, onshore=8)
+    for n in range(0, 400):
+        q = runner._quotas(n)
+        assert sum(q.values()) == n and list(q) == ['tail', 'platform', 'subsea', 'onshore']
+        exact = dict(tail=0.15 * n, platform=0.4675 * n, subsea=0.2975 * n, onshore=0.085 * n)
+        assert all(abs(q[s] - exact[s]) < 1 for s in q)
+
+
+def test_a_run_until_each_quota_is_accepted(monkeypatch, tmp_path):
+    """Each stratum's wells in draw order, in chunks of its own, until its quota is accepted, each chunk in one file;
+    the dataset's wells are each stratum's up to the last of its quota's accepted wells."""
     calls = stand_in_run(monkeypatch)
     state = runner.run('sol', 25, tmp_path, SEED, processes=1, chunk_size=10, log=lambda line: None)
-    last = first_accepted(25)[-1]
-    assert (state['complete'], state['accepted'], state['drawn']) == (True, 25, last + 1)
-    assert state['outcomes'] == {'accepted': 25, 'not_producible': last // 4}
-    assert sorted(calls) == list(range(40)) and state['next_chunk'] == 4  # Chunks 0 to 3, each well once
-    assert sorted(p.name for p in (tmp_path / 'chunks').iterdir()) == [f'chunk-{c:06d}.pkl' for c in range(4)]
-    assert not list((tmp_path / 'wells').iterdir())
-    assert [r['info']['draw_index'] for r in runner._read_results(tmp_path)] == list(range(40))
+    quotas, ks = runner._quotas(25), selection(25)
+    assert (state['complete'], state['accepted'], state['drawn'], state['draws_needed']) == (True, 25, len(ks), None)
+    assert {s: (st['quota'], st['accepted']) for s, st in state['strata'].items()} == {
+        s: (q, q) for s, q in quotas.items()
+    }
+    assert state['outcomes'] == {'accepted': 25, 'not_producible': sum(k % 4 == 3 for k in ks)}
+    assert [r['info']['draw_index'] for r in runner._read_results(tmp_path, 25)] == ks
     headers = runner._chunk_headers(tmp_path)
-    assert headers[2]['first'] == 20 and len(headers[2]['outcomes']) == 10
-    assert headers[2]['settings'] == json.loads((tmp_path / 'settings.json').read_text())
+    for (s, c), h in headers.items():  # A stratum's chunk c holds its wells 10 c to 10 c + 9
+        assert h['wells'] == stratum_wells(s, 10 * c + 10)[10 * c :] and len(h['outcomes']) == 10
+        assert h['settings'] == json.loads((tmp_path / 'settings.json').read_text())
+    assert sorted(calls) == sorted(k for h in headers.values() for k in h['wells'])  # Each well once
+    assert set(ks) < set(calls)  # A stratum's last chunk holds wells beyond its quota's last accepted well
+    assert sorted(p.name for p in (tmp_path / 'chunks').iterdir()) == sorted(
+        f'chunk-{s}-{c:06d}.pkl' for s, c in headers
+    )
+    assert not list((tmp_path / 'wells').iterdir())
 
     calls.clear()  # The same run again does nothing; a run of more wells resumes it
     assert runner.run('sol', 25, tmp_path, SEED, processes=1, chunk_size=10, log=lambda line: None)['complete']
     assert calls == []
+    made = {k for h in headers.values() for k in h['wells']}
     state = runner.run('sol', 31, tmp_path, SEED, processes=1, chunk_size=10, log=lambda line: None)
-    assert state['accepted'] == 31 and sorted(calls) == list(range(40, 50))
+    assert state['accepted'] == 31 and calls and not made & set(calls)
+    assert [r['info']['draw_index'] for r in runner._read_results(tmp_path, 31)] == selection(31)
 
 
 def test_a_stopped_run_resumes(monkeypatch, tmp_path):
-    """A run stopped within a chunk keeps the wells it solved: the rerun solves the rest, and gives the same
+    """A run stopped within its chunks keeps the wells it solved: the rerun solves the rest, and gives the same
     results as a run that did not stop."""
     stand_in_run(monkeypatch, raise_at=15)
     with pytest.raises(Stop):
         runner.run('nsol', 12, tmp_path / 'a', SEED, processes=1, chunk_size=10, log=lambda line: None)
-    assert [p.name for p in (tmp_path / 'a' / 'chunks').iterdir()] == ['chunk-000000.pkl']
-    assert sorted(p.name for p in (tmp_path / 'a' / 'wells').iterdir()) == [f'k{k:06d}.pkl' for k in range(10, 15)]
+    kept = [int(p.stem[1:]) for p in (tmp_path / 'a' / 'wells').iterdir()]
+    packed = [k for h in runner._chunk_headers(tmp_path / 'a').values() for k in h['wells']]
+    assert sorted(kept + packed) == list(range(15))  # The wells before the stop, in draw order
     calls = stand_in_run(monkeypatch)
     state = runner.run('nsol', 12, tmp_path / 'a', SEED, processes=1, chunk_size=10, log=lambda line: None)
-    assert state['complete'] and sorted(calls) == list(range(15, 20))
+    assert state['complete'] and 15 in calls and min(calls) == 15
     runner.run('nsol', 12, tmp_path / 'b', SEED, processes=1, chunk_size=10, log=lambda line: None)
-    a, b = list(runner._read_results(tmp_path / 'a')), list(runner._read_results(tmp_path / 'b'))
+    a, b = list(runner._read_results(tmp_path / 'a', 12)), list(runner._read_results(tmp_path / 'b', 12))
     assert [r['info'] for r in a] == [r['info'] for r in b]
 
 
@@ -206,10 +244,11 @@ def test_a_wells_file_kept_from_other_settings_is_refused(monkeypatch, tmp_path)
     (tmp_path / 'settings.json').unlink()
     for path in (tmp_path / 'chunks').iterdir():
         path.unlink()
+    first = min(int(p.stem[1:]) for p in (tmp_path / 'wells').iterdir())
     calls = stand_in_run(monkeypatch)
-    with pytest.raises(runner.SettingsMismatch, match='k000010.pkl was made with other settings'):
+    with pytest.raises(runner.SettingsMismatch, match=f'k{first:06d}.pkl was made with other settings'):
         runner.run('sol', 12, tmp_path, SEED + 1, processes=1, chunk_size=10, log=lambda line: None)
-    assert calls == list(range(10))
+    assert calls == list(range(first))
 
 
 def test_a_crash_is_logged_and_counted(monkeypatch, tmp_path):
@@ -217,8 +256,8 @@ def test_a_crash_is_logged_and_counted(monkeypatch, tmp_path):
     gen, calls = crashing(lambda k: k in (2, 13))
     monkeypatch.setitem(runner._GENERATE, 'sol', gen)
     state = runner.run('sol', 12, tmp_path, SEED, processes=1, chunk_size=10, log=lambda line: None)
-    assert state['complete'] and state['outcomes']['crash'] == 2 and sorted(calls) == list(range(20))
-    crashed = [r for r in runner._read_results(tmp_path) if r['info']['outcome'] == 'crash']
+    assert state['complete'] and state['outcomes']['crash'] == 2 and {2, 13} <= set(calls)
+    crashed = [r for r in runner._read_results(tmp_path, 12) if r['info']['outcome'] == 'crash']
     assert [r['info']['draw_index'] for r in crashed] == [2, 13]
     info = crashed[0]['info']
     assert info['error'].startswith('Traceback') and "ValueError: gor 2 is outside the PVT table's GOR" in info['error']
@@ -287,25 +326,27 @@ def test_a_well_out_of_memory_is_solved_again_in_a_fresh_process(monkeypatch, tm
     )
     out_of_memory(monkeypatch, lambda k: 0)
     runner.run('sol', 12, tmp_path / 'b', SEED, processes=1, chunk_size=10, log=lambda x: None)
-    a, b = list(runner._read_results(tmp_path / 'a')), list(runner._read_results(tmp_path / 'b'))
+    a, b = list(runner._read_results(tmp_path / 'a', 12)), list(runner._read_results(tmp_path / 'b', 12))
     assert [r['info'] for r in a] == [r['info'] for r in b]
 
 
 def test_a_well_always_out_of_memory_stops_the_run_and_is_not_kept(monkeypatch, tmp_path):
     """After MEMORY_RETRIES fresh processes the run stops with a message that names the well; the batch's other
     wells are kept, the well is not, and a rerun solves it."""
-    tries, fresh = out_of_memory(monkeypatch, lambda k: 99 if k == 6 else 0)
+    tries, fresh = out_of_memory(monkeypatch, lambda k: 99 if k == 4 else 0)
     with pytest.raises(
-        runner.OutOfMemory, match='well 6 ran out of memory, with a cap of 2.50 GB, in the pool and in 2'
+        runner.OutOfMemory, match='well 4 ran out of memory, with a cap of 2.50 GB, in the pool and in 2'
     ):
         runner.run('sol', 5, tmp_path, SEED, processes=1, chunk_size=10, memory_cap=2.5e9, log=lambda x: None)
-    assert tries[6] == 1 + runner._MEMORY_RETRIES and fresh == [6, 6]
-    assert sorted(p.name for p in (tmp_path / 'wells').iterdir()) == [f'k{k:06d}.pkl' for k in range(10) if k != 6]
-    assert not list((tmp_path / 'chunks').iterdir())
+    assert tries[4] == 1 + runner._MEMORY_RETRIES and fresh == [4, 4]
+    subsea = stratum_wells('subsea', 10)  # Well 4's chunk is not made; the batch's other chunks are
+    assert sorted(p.name for p in (tmp_path / 'wells').iterdir()) == [f'k{k:06d}.pkl' for k in subsea if k != 4]
+    assert sorted(runner._chunk_headers(tmp_path)) == [('platform', 0), ('tail', 0)]
     tries, fresh = out_of_memory(monkeypatch, lambda k: 0)
     state = runner.run('sol', 5, tmp_path, SEED, processes=1, chunk_size=10, log=lambda x: None)
-    assert state['complete'] and tries == {6: 1} and fresh == []
-    assert [r['info']['outcome'] for r in runner._read_results(tmp_path)][6] == accepted(6)['outcome']
+    assert state['complete'] and tries == {4: 1} and fresh == []
+    results = {r['info']['draw_index']: r for r in runner._read_results(tmp_path, 5)}
+    assert results[4]['info']['outcome'] == accepted(4)['outcome']
 
 
 def test_another_runs_settings_stop_the_run(monkeypatch, tmp_path):
@@ -324,6 +365,7 @@ def test_another_runs_settings_stop_the_run(monkeypatch, tmp_path):
     assert settings['release'] == 'beta2' and settings['environment'] == v2._environment_record()
     assert settings['limits'] == dict(slot=100, redraws=1000, solver_failures=10, dead_dates=None)
     assert settings['start_hurdle'] == generate._START_HURDLE and settings['floor'] == generate._FLOOR
+    assert settings['strata'] == ['tail', 'platform', 'subsea', 'onshore']
     assert runner._run_settings('nsol', SEED, None, 10)['limits']['dead_dates'] == 5 and settings['n_slots'] == 200
     assert set(settings['code']) == {'version', 'commit', 'dirty'}
     with pytest.raises(ValueError, match='kind'):
@@ -331,13 +373,17 @@ def test_another_runs_settings_stop_the_run(monkeypatch, tmp_path):
 
 
 def test_the_tables_range_limits_the_run(monkeypatch, tmp_path):
-    """No chunk runs beyond the draw indices that the folder of tables covers: a table well there has no table."""
+    """No chunk runs beyond the draw indices that the folder of tables covers: a table well there has no table. The
+    run asks for tables for the draw indices that its next chunks take."""
     stand_in_run(monkeypatch)
     tables = tmp_path / 'tables'
     tables.mkdir()
-    (tables / 'wells.json').write_text(json.dumps(dict(kind='sol', seed=SEED, wells_range=[0, 25], wells=[])))
+    (tables / 'wells.json').write_text(json.dumps(dict(kind='sol', seed=SEED, wells_range=[0, 40], wells=[])))
     state = runner.run('sol', 30, tmp_path / 'run', SEED, processes=1, tables=tables, chunk_size=10, log=lambda x: None)
-    assert (state['complete'], state['limit'], state['next_chunk']) == (False, 25, 2)
+    headers = runner._chunk_headers(tmp_path / 'run')
+    assert (state['complete'], state['limit']) == (False, 40) and state['draws_needed'] > 40
+    assert headers and all(max(h['wells']) < 40 for h in headers.values())
+    assert state['strata']['onshore']['accepted'] == 0  # Its first chunk reaches beyond the tables
     assert json.loads((tmp_path / 'run' / 'settings.json').read_text())['tables'] == str(tables.resolve())
     with pytest.raises(ValueError, match='not nsol'):
         runner.run('nsol', 3, tmp_path / 'other', SEED, processes=1, tables=tables, chunk_size=10, log=lambda x: None)
@@ -528,6 +574,7 @@ def test_a_dataset_written_from_a_run(monkeypatch, tmp_path):
     assert set(logs) == {'drawn_wells', 'redraws', 'metadata'} and logs['metadata']['companion_of'] == name
     assert (meta['dataset'], meta['release']) == (name, 'beta2') and meta['environment'] == v2._environment_record()
     assert (meta['seed'], meta['n_wells'], meta['configuration'], meta['backend']) == (SEED, 3, 'v2.0.0', 'rust')
+    assert meta['quotas'] == dict(tail=1, platform=1, subsea=1, onshore=0)
     assert meta['limits'] == dict(slot=100, redraws=1000, solver_failures=10, dead_dates=None)
     assert meta['n_slots'] == N_TEST_SLOTS
     assert meta['producibility']['floor'] == generate._FLOOR and meta['counts']['wells_accepted'] == 3
@@ -537,7 +584,7 @@ def test_a_dataset_written_from_a_run(monkeypatch, tmp_path):
     assert len(logs['drawn_wells']) == meta['counts']['wells_drawn']
     parts = sorted((tmp_path / 'run' / 'attempts').glob('part-*.parquet'))
     assert sum(len(pd.read_parquet(p)) for p in parts) == sum(
-        len(r['log']) for r in list(runner._read_results(tmp_path / 'run'))[: meta['counts']['wells_drawn']]
+        len(r['log']) for r in runner._read_results(tmp_path / 'run', 3)
     )
     settings = json.loads((tmp_path / 'run' / 'settings.json').read_text())
     for key in (

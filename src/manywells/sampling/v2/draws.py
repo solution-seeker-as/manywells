@@ -243,6 +243,16 @@ def _is_tail(w) -> bool:
     return w['coverage_tail'] == 'tail'
 
 
+_STRATA = ('tail', *_WELL_TYPES)  # A dataset's strata: the tail, and the core by well type  # spec: SMP-110
+
+
+def _stratum(seed: int, k: int) -> str:  # spec: SMP-110
+    """Well k's stratum, from its labels block alone: `tail` for a tail well, else its well type."""
+    w = {}
+    _labels(rng_for(seed, k, 'v2', 'labels'), w, None)
+    return 'tail' if _is_tail(w) else w['well_type']
+
+
 def _labels(r, w, stage):  # spec: SMP-52
     tail = bool(r.random() < _TAIL_SHARE)  # spec: SMP-53
     wt = pick(r, _WELL_TYPES, (1, 1, 1) if tail else _P_WELL_TYPE)  # spec: SMP-54

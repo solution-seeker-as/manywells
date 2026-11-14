@@ -6,21 +6,25 @@ terms of the CC BY-NC 4.0 International Public License.
 Created 10 November 2026
 Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
-The run of the v2 generator over many wells (specs/sampling.md, SMP-109 and SMP-110): wells k = 0, 1, 2, ... are
-generated (generate.generate_sol2_well or generate_nsol2_well), one task per well in a pool of processes, until the
-first n wells it accepts are known. The same function runs a pilot of a hundred wells and a dataset of 10,000.
+The run of the v2 generator over many wells (specs/sampling.md, SMP-109 and SMP-110): a dataset of n wells has a
+quota of wells in each stratum, the tail and the core's three well types (quotas), and each stratum's wells, the draw
+indices k = 0, 1, 2, ... whose labels put them in it (draws._stratum), are generated in draw order
+(generate.generate_sol2_well or generate_nsol2_well) until its quota of accepted wells is known, one task per well in
+a pool of processes. A well of a stratum whose quota is known is not generated. The same function runs a pilot of a
+hundred wells and a dataset of 10,000.
 
-The draw indices are run in chunks of CHUNK. A well's result is kept in RUN/wells/kK.pkl as soon as it is solved, so
-that a stopped run loses only the wells in progress; once every well of a chunk is solved, the chunk's results go to
-one file, RUN/chunks/chunk-C.pkl, written to a temporary name and renamed, and the wells' files are removed. A chunk
-file holds two pickles: its header (the run's settings, the chunk, its first draw index and size, each well's outcome
-and the CPU time), then the list of its wells' results in draw order. RUN/settings.json holds the run's settings: the
-dataset, its release label and seed, the configuration, the grid, the backend, the limits, the floor and the best
-rate's lift-gas rates, scan points and water cut, the slots per well, the chunk size, the folder of tables, the lock
-file's hash, the environment (the versions of Python, numpy and scipy, which decide a gas well's last digits) and the
-code's record (datasets.v2.code_record). A restart checks them, and stops on any difference, so that every chunk of a
-run is made by the same code with the same settings in the same environment; a well's own file holds their hash, so that a file kept from
-another run's settings is refused too. The assembly takes the dataset's records from them (assemble.write_dataset).
+Each stratum's wells are run in chunks of CHUNK: its chunk C holds its wells C * CHUNK to (C + 1) * CHUNK - 1. A
+well's result is kept in RUN/wells/kK.pkl as soon as it is solved, so that a stopped run loses only the wells in
+progress; once every well of a chunk is solved, the chunk's results go to one file, RUN/chunks/chunk-S-C.pkl for
+stratum S, written to a temporary name and renamed, and the wells' files are removed. A chunk file holds two pickles:
+its header (the run's settings, the stratum, the chunk, its draw indices, each well's outcome and the CPU time), then
+the list of its wells' results in draw order. RUN/settings.json holds the run's settings: the dataset, its release
+label and seed, the configuration, the grid, the backend, the limits, the floor and the best rate's lift-gas rates,
+scan points and water cut, the slots per well, the strata, the chunk size, the folder of tables, the lock file's hash,
+the environment (the versions of Python, numpy and scipy, which decide a gas well's last digits) and the code's record
+(datasets.v2.code_record). A restart checks them, and stops on any difference, so that every chunk of a run is made by
+the same code with the same settings in the same environment; a well's own file holds their hash, so that a file kept
+from another run's settings is refused too. The assembly takes the dataset's records from them (assemble.write_dataset).
 
 A crash of a well's generation, an exception or a panic of the Rust core that the generation does not catch, is
 logged as the well's outcome, `crash`, with its traceback, and the run carries on. Each result records its wall time
@@ -36,11 +40,12 @@ OutOfMemory, which names the well, and a rerun resumes from it.
 
 A table well takes its table from the folder that table_wells.py and table_build.py made for the dataset and seed;
 the run runs no chunk beyond the draw indices that the folder covers (its wells.json's `wells_range`), since a table
-well there would have no table, and returns incomplete, so that the tables are extended first. It starts only where
-the build is complete, every table well of wells.json with its manifest, and it stops with TableMismatch where the
-folder's record of a well or the well's GOR axis is not what the run's draws give (generate._table), as after a rule
-changed since the build: such a folder is built again, not used. Without a folder of tables every table well is
-`table_failed`.
+well there would have no table, and returns incomplete, with the draw indices it needs, so that the tables are
+extended first. A folder covers every stratum's wells in its range, so the table wells of a stratum whose quota is
+known before the range's end are built and not used. It starts only where the build is complete, every table well of
+wells.json with its manifest, and it stops with TableMismatch where the folder's record of a well or the well's GOR
+axis is not what the run's draws give (generate._table), as after a rule changed since the build: such a folder is
+built again, not used. Without a folder of tables every table well is `table_failed`.
 
 From the repository root, with the sandbox off (the pool needs Unix sockets), each process capped:
 
@@ -52,6 +57,7 @@ scripts/data_generation/v2/generate_dataset.py runs the whole pipeline: the tabl
 
 import collections
 import hashlib
+import heapq
 import json
 import math
 import multiprocessing
@@ -65,14 +71,17 @@ from pathlib import Path
 from manywells.configurations import V2
 from manywells.datasets.v2 import _DATASETS, _RELEASE, _environment_record, _lock_hash, code_record
 from manywells.sampling.v2 import generate
+from manywells.sampling.v2.draws import _P_WELL_TYPE, _STRATA, _WELL_TYPES, _stratum
 from manywells.sampling.v2.life import _WLR_MAX
 from manywells.sampling.v2.mapping import _N_CELLS
 from manywells.sampling.v2.tables import TableMismatch
 
-CHUNK = 100  # Draw indices per chunk  # spec: SMP-110
+CHUNK = 100  # A stratum's wells per chunk  # spec: SMP-110
+_TAIL_QUOTA = 0.15  # The tail wells' share of a dataset's wells  # spec: SMP-53
 _GENERATE = {'sol': generate.generate_sol2_well, 'nsol': generate.generate_nsol2_well}
-_FIRST_RATE = 1.0  # The share of wells accepted that a run assumes before its first chunk: it does not overshoot
+_FIRST_RATE = 1.0  # The share of wells accepted that a run assumes for a stratum without chunks: no overshoot
 _LEAST_RATE = 0.05  # The least share it plans with
+_TABLES_MARGIN = 1.1  # The draw indices a run asks tables for: a tenth more wells than its rates give
 _TASKS_PER_PROCESS = 100  # The wells per process of a pool, which is then renewed, so that no leak grows over a run
 _MEMORY_RETRIES = 2  # The fresh processes in which a well that ran out of memory is solved again
 
@@ -210,6 +219,7 @@ def _run_settings(kind: str, seed: int, tables=None, chunk_size: int = CHUNK) ->
         lift_fractions=list(generate._BEST_RATE_LIFT),
         scan_points=generate._N_SCAN if kind == 'nsol' else None,
         wlr_max=_WLR_MAX,
+        strata=list(_STRATA),
         chunk_size=chunk_size,
         tables=None if tables is None else str(Path(tables).resolve()),
         lock_sha256=_lock_hash(),
@@ -231,27 +241,50 @@ def _check_settings(run_dir, settings):
         raise SettingsMismatch(f'{run_dir} holds a run with other settings: {", ".join(diff)} differ')
 
 
-def _chunk_path(run_dir, c) -> Path:
-    return Path(run_dir) / 'chunks' / f'chunk-{c:06d}.pkl'
+def _quotas(n_wells: int) -> dict:  # spec: SMP-53, SMP-54, SMP-110
+    """A dataset's wells by stratum, {stratum: wells}: the tail's TAIL_QUOTA of the n_wells, and the rest by the core's
+    well types' shares (SMP-54); each is rounded down, and the wells left go to the largest remainders."""
+    core = {t: (1 - _TAIL_QUOTA) * p / sum(_P_WELL_TYPE) for t, p in zip(_WELL_TYPES, _P_WELL_TYPE)}
+    exact = {s: round(n_wells * p, 9) for s, p in dict(tail=_TAIL_QUOTA, **core).items()}  # 4675.0000001 is 4675
+    out = {s: math.floor(x) for s, x in exact.items()}
+    for s in sorted(exact, key=lambda s: out[s] - exact[s])[: n_wells - sum(out.values())]:
+        out[s] += 1
+    return out
 
 
-def _pack(run_dir, settings, c):
-    """Chunk c's wells' results into its file, and their own files removed. Returns the chunk's header."""
-    size = settings['chunk_size']
-    ks = range(c * size, (c + 1) * size)
+class _Strata:
+    """Each stratum's draw indices in draw order (draws._stratum), drawn as far as they are asked for."""
+
+    def __init__(self, seed):
+        self.seed, self.n, self.ks = seed, 0, {s: [] for s in _STRATA}
+
+    def chunk(self, s, c, size) -> list:
+        """The draw indices of stratum s's chunk c: its wells c * size to (c + 1) * size - 1."""
+        while len(self.ks[s]) < (c + 1) * size:
+            self.ks[_stratum(self.seed, self.n)].append(self.n)
+            self.n += 1
+        return self.ks[s][c * size : (c + 1) * size]
+
+
+def _chunk_path(run_dir, s, c) -> Path:
+    return Path(run_dir) / 'chunks' / f'chunk-{s}-{c:06d}.pkl'
+
+
+def _pack(run_dir, settings, s, c, ks):
+    """Stratum s's chunk c, the wells ks, into its file, and their own files removed. Returns the chunk's header."""
     results = [_load(_well_path(run_dir, k)) for k in ks]
     for res in results:  # Each was checked against the settings when it was solved or kept
         res.pop('settings_sha256', None)
-    header = dict(settings=settings, chunk=c, first=ks[0], size=size)
+    header = dict(settings=settings, stratum=s, chunk=c, wells=list(ks))
     header.update(outcomes=[r['info']['outcome'] for r in results], cpu_seconds=sum(r['cpu_seconds'] for r in results))
-    _dump(header, _chunk_path(run_dir, c), results)
+    _dump(header, _chunk_path(run_dir, s, c), results)
     for k in ks:
         _well_path(run_dir, k).unlink()
     return header
 
 
 def _chunk_headers(run_dir) -> dict:
-    """The headers of a run's chunks, {chunk: header}, each checked against the run's settings."""
+    """The headers of a run's chunks, {(stratum, chunk): header}, each checked against the run's settings."""
     run_dir = Path(run_dir)
     settings = json.loads((run_dir / 'settings.json').read_text())
     out = {}
@@ -259,19 +292,30 @@ def _chunk_headers(run_dir) -> dict:
         header = _load(path)
         if header['settings'] != settings:
             raise SettingsMismatch(f'{path} was made with other settings than {run_dir}/settings.json')
-        out[header['chunk']] = header
+        out[header['stratum'], header['chunk']] = header
     return out
 
 
-def _read_results(run_dir):
-    """The results of a run's wells in draw order, chunk by chunk from chunk 0 up to the first chunk not yet made."""
+def _read_results(run_dir, n_wells):
+    """The results of a dataset's drawn wells in draw order: each stratum's wells up to the last of its quota's
+    accepted wells, or up to its first chunk not yet made (SMP-110)."""
     headers = _chunk_headers(run_dir)
-    c = 0
-    while c in headers:
-        with open(_chunk_path(run_dir, c), 'rb') as f:
-            pickle.load(f)
-            yield from pickle.load(f)
-        c += 1
+
+    def stratum(s, quota):
+        accepted, c = 0, 0
+        while accepted < quota and (s, c) in headers:
+            with open(_chunk_path(run_dir, s, c), 'rb') as f:
+                pickle.load(f)
+                results = pickle.load(f)
+            for res in results:
+                if accepted == quota:
+                    return
+                yield res
+                accepted += res['info']['outcome'] == 'accepted'
+            c += 1
+
+    by_stratum = [stratum(s, quota) for s, quota in _quotas(n_wells).items()]
+    yield from heapq.merge(*by_stratum, key=lambda res: res['info']['draw_index'])
 
 
 def _tables_limit(tables, kind, seed):  # spec: SMP-116
@@ -324,19 +368,45 @@ def _imap(fn, tasks, processes, memory_cap=None):
         pool.shutdown()
 
 
-def _summary(headers, n_wells) -> dict:
-    """The run's state from its chunks' headers: the chunks made from 0 on without a gap, the wells they drew and
-    accepted up to the n-th accepted, and whether the run is complete."""
-    accepted = drawn = c = 0
-    outcomes = collections.Counter()
-    while c in headers and accepted < n_wells:
-        for outcome in headers[c]['outcomes']:
-            if accepted < n_wells:
-                drawn += 1
-                outcomes[outcome] += 1
-                accepted += outcome == 'accepted'
-        c += 1
-    return dict(complete=accepted >= n_wells, accepted=accepted, drawn=drawn, next_chunk=c, outcomes=dict(outcomes))
+def _summary(headers, quotas) -> dict:
+    """The run's state from its chunks' headers. By stratum: its quota, the chunks made from 0 on without a gap, the
+    wells they drew and accepted up to the last of its quota's accepted wells, the first chunk not made after those,
+    and whether its quota is known. Summed: the wells drawn and accepted and their outcomes, and whether every quota
+    is known."""
+    strata, outcomes = {}, collections.Counter()
+    for s, quota in quotas.items():
+        accepted = drawn = c = 0
+        while (s, c) in headers and accepted < quota:
+            for outcome in headers[s, c]['outcomes']:
+                if accepted < quota:
+                    drawn += 1
+                    outcomes[outcome] += 1
+                    accepted += outcome == 'accepted'
+            c += 1
+        strata[s] = dict(quota=quota, accepted=accepted, drawn=drawn, next_chunk=c, complete=accepted >= quota)
+    accepted, drawn = (sum(st[key] for st in strata.values()) for key in ('accepted', 'drawn'))
+    complete = all(st['complete'] for st in strata.values())
+    return dict(complete=complete, accepted=accepted, drawn=drawn, outcomes=dict(outcomes), strata=strata)
+
+
+def _plan(headers, state, strata, chunk_size, margin=1.0) -> dict:
+    """The chunks that the run makes next, {(stratum, chunk): its draw indices}: for each stratum whose quota is not
+    known, the chunks not yet made from its first on, as many as hold margin times the wells that the rest of its
+    quota takes at its share of wells accepted so far."""
+    plan = {}
+    for s, st in state['strata'].items():
+        if st['complete']:
+            continue
+        done = [outcome for (s_, _), h in headers.items() if s_ == s for outcome in h['outcomes']]
+        rate = max(done.count('accepted') / len(done) if done else _FIRST_RATE, _LEAST_RATE)
+        n_more = math.ceil(margin * (st['quota'] - st['accepted']) / rate / chunk_size)
+        c = st['next_chunk']
+        while n_more > 0:
+            if (s, c) not in headers:
+                plan[s, c] = strata.chunk(s, c, chunk_size)
+                n_more -= 1
+            c += 1
+    return plan
 
 
 def run(
@@ -351,9 +421,9 @@ def run(
     log=print,
 ) -> dict:  # spec: SMP-109, SMP-110
     """
-    Generate wells k = 0, 1, 2, ... of a dataset in chunks of draw indices until its first n_wells accepted wells are
-    known, each well's result kept on disk (the module's docstring). A stopped run resumes where it stopped; a run
-    with another n_wells resumes the same chunks.
+    Generate each stratum's wells of a dataset in draw order, in chunks, until its quota of accepted wells is known,
+    each well's result kept on disk (the module's docstring). A stopped run resumes where it stopped; a run with
+    another n_wells resumes the same chunks.
 
     :param kind: 'sol' or 'nsol'
     :param n_wells: The accepted wells the dataset needs
@@ -361,13 +431,15 @@ def run(
     :param seed: The dataset's seed
     :param processes: The pool's processes; 1 runs the wells in this process
     :param tables: The folder of the dataset's tables (table_wells.py, table_build.py), or None
-    :param chunk_size: Draw indices per chunk
+    :param chunk_size: A stratum's wells per chunk
     :param memory_cap: Each pool process's cap of address space (bytes), or None
     :param log: Called with each line of progress
-    :return: A dict of `complete` (whether the first n_wells accepted wells are known), `accepted` and `drawn` (the
-        wells up to the n-th accepted, or all of the chunks made), `next_chunk` (the first chunk not made, after those
-        up to the n-th accepted), `outcomes` (the drawn wells' outcomes, counted), `limit` (the draw indices that the
-        tables cover, or None) and `seconds` (the call's wall time)
+    :return: A dict of `complete` (whether every quota is known), `accepted` and `drawn` (the wells up to the last of
+        each quota's accepted wells, or all of the chunks made), `outcomes` (the drawn wells' outcomes, counted),
+        `strata` (each stratum's state, _summary), `limit` (the draw indices that the tables cover, or None),
+        `draws_needed` (None for a complete run, else the draw indices, 0 to this number, that the chunks it needs
+        next take with a tenth more wells than its rates give, which tables are built for) and `seconds` (the call's
+        wall time)
     :raises OutOfMemory: where a well runs out of memory in the pool and in each of its fresh processes, once the
         batch's other wells are kept
     :raises TableMismatch: where the folder of tables was not built from the run's draws (generate._table)
@@ -381,37 +453,33 @@ def run(
     if tables is None:
         log('no tables: every volatile oil and gas condensate is table_failed')
     _check_settings(run_dir, settings)
-    headers = _chunk_headers(run_dir)
+    headers, quotas, strata = _chunk_headers(run_dir), _quotas(n_wells), _Strata(seed)
     t0 = time.perf_counter()
     while True:
-        state = _summary(headers, n_wells)
+        state = _summary(headers, quotas)
         if state['complete']:
             break
-        done = [h['outcomes'] for h in headers.values()]
-        n_done = sum(len(o) for o in done)
-        rate = sum(o.count('accepted') for o in done) / n_done if n_done else _FIRST_RATE
-        n_more = math.ceil((n_wells - state['accepted']) / max(rate, _LEAST_RATE) / chunk_size)
-        batch, c = [], state['next_chunk']
-        while len(batch) < n_more:
-            if c not in headers:
-                batch.append(c)
-            c += 1
-        batch = [c for c in batch if limit is None or (c + 1) * chunk_size <= limit]
+        batch = _plan(headers, state, strata, chunk_size)
+        batch = {key: ks for key, ks in batch.items() if limit is None or ks[-1] < limit}
         if not batch:
-            log(f'the tables cover draw indices below {limit}: chunk {state["next_chunk"]} needs more')
+            short = [s for s, st in state['strata'].items() if not st['complete']]
+            log(f'the tables cover draw indices below {limit}: {", ".join(short)} need more')
             break
-        log(f'chunks {batch[0]} to {batch[-1]}: {len(batch) * chunk_size} wells')
+        for s in quotas:
+            if cs := [c for s_, c in batch if s_ == s]:
+                log(f'{s}: chunks {min(cs)} to {max(cs)}, {len(cs) * chunk_size} wells')
+        chunk_of = {k: key for key, ks in batch.items() for k in ks}
+        pending = {key: set(ks) for key, ks in batch.items()}
         task = (kind, seed, str(run_dir), settings['tables'], _settings_hash(settings))
-        tasks = {k: (*task[:2], k, *task[2:]) for c in batch for k in _ks(c, chunk_size)}
-        pending = {c: set(_ks(c, chunk_size)) for c in batch}
+        tasks = {k: (*task[:2], k, *task[2:]) for k in sorted(chunk_of)}  # In draw order, whatever the stratum
 
         def done(k, outcome, sec, read):
-            c = k // chunk_size
-            pending[c].discard(k)
+            key = chunk_of[k]
+            pending[key].discard(k)
             log(f'well {k}: {outcome} in {sec:.1f} s' + (' (kept)' if read else ''))
-            if not pending[c]:
-                headers[c] = _pack(run_dir, settings, c)
-                log(f'chunk {c} done: {dict(collections.Counter(headers[c]["outcomes"]))}')
+            if not pending[key]:
+                headers[key] = _pack(run_dir, settings, *key, batch[key])
+                log(f'{key[0]} chunk {key[1]} done: {dict(collections.Counter(headers[key]["outcomes"]))}')
 
         out_of_memory = []
         for k, outcome, sec, read in _imap(_task, list(tasks.values()), processes, memory_cap):
@@ -421,14 +489,12 @@ def run(
                 done(k, outcome, sec, read)
         for k in sorted(out_of_memory):
             done(*_retry(tasks[k], memory_cap, log))
-    state = _summary(headers, n_wells)
-    state.update(limit=limit, seconds=time.perf_counter() - t0)
+    state = _summary(headers, quotas)
+    plan = _plan(headers, state, strata, chunk_size, _TABLES_MARGIN)
+    draws_needed = max((ks[-1] + 1 for ks in plan.values()), default=None)
+    state.update(limit=limit, draws_needed=draws_needed, seconds=time.perf_counter() - t0)
     log(f'{state["accepted"]} wells accepted of {state["drawn"]} drawn; complete: {state["complete"]}')
     return state
-
-
-def _ks(c, chunk_size):
-    return range(c * chunk_size, (c + 1) * chunk_size)
 
 
 def _run_wells(kind: str, seed: int, ks, out, processes: int = 6, tables=None, memory_cap=None, log=print) -> None:
