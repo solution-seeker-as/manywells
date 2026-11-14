@@ -75,7 +75,7 @@ from manywells.sampling.v2.inflow import _COEF_KEYS
 from manywells.sampling.v2.life import _LIFT_KEYS, _WLR_MAX, Life, _lift_on, sol2_well
 from manywells.sampling.v2.mapping import WellBuilder
 from manywells.sampling.v2.reservoir import _OILS
-from manywells.sampling.v2.samples import _N_SLOTS, _nsol2_attempt, _nsol2_plan, _sol2_attempt
+from manywells.sampling.v2.samples import _LIFT_GAS_ALWAYS_ON, _N_SLOTS, _nsol2_attempt, _nsol2_plan, _sol2_attempt
 from manywells.sampling.v2.table_wells import _gor_axis, _table_well
 from manywells.sampling.v2.tables import TableMismatch, _read_table, _wells_file
 from manywells.solvers.rust import RustRootFinder
@@ -215,7 +215,8 @@ def _best_rate(builder, state, lifted, w_lg_max, floor, log, base) -> dict:  # s
     :param base: The labels of the solves' records
     :return: A dict of `status`: `water_cut`, `pass`, `below_floor`, `solver_failure` (no operating point, and a
         solver failure among the solves) or `no_operating_point`; `best` (Sm3/d) and `best_w_lg` (kg/s), NaN without
-        an operating point; and `outcomes`, the solves' outcomes
+        an operating point; `outcomes`, the solves' outcomes; and `flows_without_lift_gas`, whether the solve without
+        lift gas has an operating point of at least the floor's margin (SMP-94)
     """
     recs = []
     for i, f in enumerate(_BEST_RATE_LIFT if lifted else (0.0,)):
@@ -226,6 +227,8 @@ def _best_rate(builder, state, lifted, w_lg_max, floor, log, base) -> dict:  # s
         log.append(rec)
     ops = [rec for rec in recs if rec['outcome'] == 'operating_point']
     out = dict(best=math.nan, best_w_lg=math.nan, outcomes=[rec['outcome'] for rec in recs])
+    off = recs[0]  # The solve without lift gas, the first of _BEST_RATE_LIFT
+    out['flows_without_lift_gas'] = off['outcome'] == 'operating_point' and off['q_oe'] >= _FLOOR_MARGIN * floor
     if builder.w['fluid_type'] in _OILS and state['wlr'] > _WLR_MAX:  # spec: SMP-102
         out['status'] = 'water_cut'
     elif ops:
@@ -579,6 +582,8 @@ def generate_sol2_well(seed: int, k: int, tables=None) -> dict:
     info.update(best_rate=br['best'], best_rate_w_lg=br['best_w_lg'], best_rate_outcomes=br['outcomes'])
     if _dropped_at_best_rate(info, br):
         return _result(t_start, w, life.stations, table, info, log)
+    if lifted and not br['flows_without_lift_gas']:  # spec: SMP-94. No slot of it is drawn without lift gas
+        w['flags'] = ';'.join([f for f in w['flags'].split(';') if f] + [_LIFT_GAS_ALWAYS_ON])
     accepted, info['outcome'] = _solve_slots(k, lambda j, a: _sol2_attempt(seed, w, j, a), builder, log, 'slot_limit')
     return _result(t_start, w, life.stations, table, info, log, accepted)
 

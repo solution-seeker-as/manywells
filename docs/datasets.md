@@ -323,7 +323,7 @@ The other groups' columns are float64 unless their row says otherwise.
 | `h` (s) | W/(m² K) | `ThermalModel.h` at the date (SMP-81, SMP-88) | kept |
 | `U_t`, `k_e`, `well_age` | W/(m² K), W/(m K), d | the draws behind the heat transfer, at the initial-stage draw (SMP-81) | new |
 | `cp_o`, `cp_w`, `cp_g` | J/(kg K) | the heat capacities (`FluidModel`; SMP-82) | kept |
-| `flags` | – | string: the draws' truncations, redraws and fallbacks that applied, joined by `;`, such as SMP-60's `geometry_redrawn:n`, SMP-75's `design_rate_above_tubing_capacity`, and SMP-77's `choke_at_erosional_rate`, a choke made smaller to hold the well below its tubing's erosional velocity, or `erosional_cap_unmet` where its search did not reach it | new |
+| `flags` | – | string: the draws' truncations, redraws and fallbacks that applied, joined by `;`, such as SMP-60's `geometry_redrawn:n`, SMP-75's `design_rate_above_tubing_capacity`, SMP-77's `choke_at_erosional_rate`, a choke made smaller to hold the well below its tubing's erosional velocity, or `erosional_cap_unmet` where its search did not reach it, and SMP-94's `lift_gas_always_on`, a lifted `sol-2` well that cannot flow without lift gas and so has no sample without it | new |
 
 The lift design's columns, `injection_md` to `psi_lg`, are null for a well without lift: in `sol-2` a well natural at its date, in `nsol-2` a well with no lifted date in its life (`lift` `natural`), whose draws may have held a design that its life never used.
 
