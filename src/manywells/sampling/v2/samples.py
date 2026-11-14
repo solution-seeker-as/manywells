@@ -32,6 +32,7 @@ _N_OPERATING, _N_TESTS, _N_SWEEP = 160, 8, 5  # Operating samples, test periods,
 _U_MIN = 0.05  # The smallest choke position  # spec: SMP-93
 _P_OPEN = 0.05  # Share of fully open chokes: of the sol-2 slots, and of the set point's draws  # spec: SMP-93, SMP-98
 _P_LIFT_OFF = 0.20  # Share of a lifted well's draws without lift gas  # spec: SMP-94, SMP-98
+_LIFT_GAS_ALWAYS_ON = 'lift_gas_always_on'  # The flag of a sol-2 well that cannot flow without lift gas  # spec: SMP-94
 _P_S_JITTER = 0.10  # The separator pressure about its nominal  # spec: SMP-95
 _P_R_DRIFT, _RATIO_DRIFT = 0.02, 0.05  # The drift of p_r, and of the GOR and the water  # spec: SMP-96, SMP-100
 _P_CHANGE = (0.2, 0.95)  # A set point's probability of a change at an operating sample  # spec: SMP-98
@@ -67,7 +68,8 @@ def _sol2_attempt(seed: int, w: dict, j: int, a: int = 0) -> dict:  # spec: SMP-
     draw again from its own, so no slot depends on another.
 
     :param seed: The dataset's seed
-    :param w: The well at its date (life.sol2_well)
+    :param w: The well at its date (life.sol2_well), with the flag _LIFT_GAS_ALWAYS_ON where its best rate found that
+        it cannot flow without lift gas (generate.generate_sol2_well)
     :param j: The slot, 0 to N_SLOTS - 1
     :param a: The attempt, 0 for the slot's first
     :return: The attempt's inputs (the module's docstring); `h`, `roughness` and the coefficients are the well's
@@ -78,7 +80,8 @@ def _sol2_attempt(seed: int, w: dict, j: int, a: int = 0) -> dict:  # spec: SMP-
     open_, u_c = r.random(), r.uniform(_U_MIN, 1.0)
     u = 1.0 if open_ < _P_OPEN else u_c  # spec: SMP-93
     off, v = r.random(), r.uniform(0.0, 1.0)
-    w_lg = (0.0 if off < _P_LIFT_OFF else v * w['w_lg_max']) if lifted else 0.0  # spec: SMP-94
+    off = off < _P_LIFT_OFF and _LIFT_GAS_ALWAYS_ON not in w['flags'].split(';')
+    w_lg = (0.0 if off else v * w['w_lg_max']) if lifted else 0.0  # spec: SMP-94
     p_s = _separator_pressure(r, w['p_s'], w['dp_fl'])
     # spec: SMP-96
     p_r = w['p_r'] * r.uniform(1 - _P_R_DRIFT, 1 + _P_R_DRIFT)
