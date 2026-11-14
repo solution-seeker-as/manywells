@@ -542,7 +542,7 @@ class StandInBuilder:
     """In place of a WellBuilder at the sizing: it records the choke that it is given."""
 
     def __init__(self, fluid_type='black_oil'):
-        self.w, self.choke = dict(fluid_type=fluid_type), None
+        self.w, self.choke = dict(fluid_type=fluid_type, c_e=120.0, flags=''), None
 
     def widest_choke(self, share=1.0):
         self.choke = ('widest', share)
@@ -558,9 +558,12 @@ def size_choke(monkeypatch, outcomes, lifted=True):
     it = iter(outcomes)
     attempt, calls = stand_in_attempt(lambda inp: next(it))
     monkeypatch.setattr(generate, '_attempt', attempt)
+    capped = []  # The cap's own solves are tested on their own
+    monkeypatch.setattr(generate, '_cap_choke', lambda builder, *args: capped.append(builder.choke))
     builder, log = StandInBuilder(), []
     state = dict(p_r=200.0, gor=100.0, wlr=0.3, wgr=math.nan, p_s_nom=20.0, h=10.0, roughness=1e-5)
     out = generate._size_choke(builder, state, lifted, 2.0, log, dict(draw_index=4, kind='choke_sizing'))
+    assert capped == ([builder.choke] if out[0] == 'sized' else [])  # A sized choke is capped, after its sizing
     return out, builder, log, calls
 
 
@@ -612,7 +615,7 @@ def test_the_best_rate_of_a_sized_well(monkeypatch):
     """SMP-77, SMP-103: the best rate is the sized well's; a well that the sizing leaves without a choke has the
     sizing's status and outcomes and no best rate, an oil above the water cut the water cut's."""
     it = iter(
-        [('operating_point', 3.0)] * 3 + [('operating_point', 2.0), ('operating_point', 4.0), ('operating_point', 1.0)]
+        [('operating_point', 3.0)] * 6 + [('operating_point', 2.0), ('operating_point', 4.0), ('operating_point', 1.0)]
     )
     attempt, calls = stand_in_attempt(lambda inp: next(it))
     monkeypatch.setattr(generate, '_attempt', attempt)
@@ -622,7 +625,8 @@ def test_the_best_rate_of_a_sized_well(monkeypatch):
     assert out == dict(
         best=4.0, best_w_lg=1.0, outcomes=['operating_point'] * 3, flows_without_lift_gas=True, status='pass'
     )
-    assert [r['kind'] for r in log] == ['choke_sizing'] * 3 + ['best_rate'] * 3 and builder.choke[0] == 5.0
+    kinds = ['choke_sizing'] * 3 + ['erosional_cap'] * 3 + ['best_rate'] * 3  # The stand-in's wellhead is below v_e
+    assert [r['kind'] for r in log] == kinds and builder.choke[0] == 5.0
 
     for wlr, status in ((0.3, 'no_operating_point'), (0.981, 'water_cut')):
         attempt, calls = stand_in_attempt(lambda inp: ('no_operating_point', None))
@@ -632,6 +636,95 @@ def test_the_best_rate_of_a_sized_well(monkeypatch):
         )
         assert out['status'] == status and math.isnan(out['best']) and out['outcomes'] == ['no_operating_point']
         assert len(calls) == len(_SIZING_CHOKES)  # No best rate is solved
+
+
+def test_the_erosional_ratio():
+    """SMP-77, SMP-75: the no-slip mixture velocity at the wellhead over 1.22 C / sqrt(rho_ns), rho_ns the no-slip
+    density of the stream there."""
+    p, v_g, v_l, alpha, rho_g, rho_l, T = WELLHEAD
+    v_sg, v_sl = alpha * v_g, (1 - alpha) * v_l
+    rho_ns = (v_sg * rho_g + v_sl * rho_l) / (v_sg + v_sl)
+    assert generate._erosional_ratio(WELLHEAD, 120.0) == pytest.approx((v_sg + v_sl) / (1.22 * 120.0 / rho_ns**0.5))
+    faster = [p, 2 * v_g, 2 * v_l, alpha, rho_g, rho_l, T]  # Twice the velocities: twice the ratio
+    assert generate._erosional_ratio(faster, 120.0) == pytest.approx(2 * generate._erosional_ratio(WELLHEAD, 120.0))
+
+
+class CapBuilder:
+    """In place of a WellBuilder at the erosional cap: it holds the choke it is given, at most its largest."""
+
+    def __init__(self, K_c, flags=''):
+        self.w = dict(c_e=120.0, flags=flags, K_c_max=1.0)
+        self.choke = types.SimpleNamespace(K_c=K_c)
+
+    def take_choke(self, K_c):
+        self.choke = types.SimpleNamespace(K_c=min(K_c, self.w['K_c_max']))
+        return self.choke.K_c
+
+
+def cap(monkeypatch, ratio_of, K_c=0.01, lifted=False, flags=''):
+    """The cap of a well whose erosional ratio at the choke K_c is ratio_of(K_c, w_lg), or that has no operating point
+    where that is None: its builder, log and solves' inputs."""
+    r0 = generate._erosional_ratio(WELLHEAD, 120.0)
+
+    def attempt(builder, inp, wellhead=None):
+        calls.append(dict(inp, K_c=builder.choke.K_c))
+        r = ratio_of(builder.choke.K_c, inp['w_lg'])
+        if r is None:
+            wellhead.append(None)
+            return dict(inp, outcome='no_operating_point', reason=None, error=None)
+        p, v_g, v_l, alpha, rho_g, rho_l, T = WELLHEAD
+        wellhead.append([p, v_g * r / r0, v_l * r / r0, alpha, rho_g, rho_l, T])
+        return dict(inp, outcome='operating_point', reason=None, error=None, q_oe=50.0, WTOT=5.0)
+
+    calls, log = [], []
+    monkeypatch.setattr(generate, '_attempt', attempt)
+    builder = CapBuilder(K_c, flags)
+    state = dict(p_r=200.0, gor=100.0, wlr=0.3, wgr=math.nan, p_s_nom=20.0, h=10.0, roughness=1e-5)
+    generate._cap_choke(builder, state, lifted, 2.0, log, dict(draw_index=4, kind='choke_sizing'))
+    return builder, log, calls
+
+
+def test_a_well_below_its_erosional_velocity_keeps_its_choke(monkeypatch):
+    """SMP-77: the check at the sized choke, fully open at the best rate's lift-gas rates, finds every ratio at most 1:
+    the choke stays, and a cap flag of an earlier sizing goes."""
+    builder, log, calls = cap(
+        monkeypatch, lambda K, w_lg: 0.5 + w_lg / 4, lifted=True, flags='a;choke_at_erosional_rate'
+    )
+    assert builder.choke.K_c == 0.01 and builder.w['flags'] == 'a'
+    assert [(c['u'], c['w_lg'], c['p_s']) for c in calls] == [(1.0, f * 2.0, 20.0) for f in (0.0, 0.5, 1.0)]
+    assert [(r['kind'], r['cap_step'], r['attempt'], r['lift_fraction']) for r in log] == [
+        ('erosional_cap', 0, i, f) for i, f in enumerate((0.0, 0.5, 1.0))
+    ]
+    assert [r['erosional_ratio'] for r in log] == pytest.approx([0.5, 0.75, 1.0])
+
+
+@pytest.mark.parametrize('slope', [0.3, 0.5, 1.0, 1.8])
+def test_the_cap_holds_the_well_at_its_erosional_velocity(monkeypatch, slope):
+    """SMP-77: a well above its erosional velocity at its sized choke takes the largest choke found whose ratio, the
+    largest over the lift-gas rates, lies within [0.97, 1], in at most 12 chokes; it is flagged."""
+    K_e = 0.002  # The choke at which the full lift gas's ratio is 1
+    builder, log, calls = cap(monkeypatch, lambda K, w_lg: (K / K_e) ** slope * (0.8 + 0.1 * w_lg), lifted=True)
+    r = (builder.choke.K_c / K_e) ** slope
+    assert generate._EROSIONAL_LOW <= r <= 1.0 and builder.w['flags'] == 'choke_at_erosional_rate'
+    steps = sorted({rec['cap_step'] for rec in log})
+    assert steps == list(range(len(steps))) and len(steps) <= generate._EROSIONAL_STEPS and len(log) == 3 * len(steps)
+    assert len(steps) <= 6  # A smooth ratio is found in a few chokes
+
+
+def test_the_cap_passes_chokes_without_an_operating_point(monkeypatch):
+    """SMP-77: a choke so small that the well cannot flow is below the band: the search goes between it and the
+    smallest choke above."""
+    builder, _, _ = cap(monkeypatch, lambda K, w_lg: None if K < 0.0018 else (K / 0.002) ** 0.2)
+    r = (builder.choke.K_c / 0.002) ** 0.2
+    assert generate._EROSIONAL_LOW <= r <= 1.0 and builder.w['flags'] == 'choke_at_erosional_rate'
+
+
+def test_a_cap_that_is_not_met(monkeypatch):
+    """SMP-77: where the 12 chokes find none within the band, the well keeps the last choke above it and is
+    flagged."""
+    builder, log, calls = cap(monkeypatch, lambda K, w_lg: 1.5, flags='a')
+    assert len(calls) == generate._EROSIONAL_STEPS and builder.w['flags'] == 'a;erosional_cap_unmet'
+    assert builder.choke.K_c == calls[-1]['K_c']
 
 
 # --- SMP-102: the start hurdle ----------------------------------------------------------------------------------------
@@ -689,14 +782,14 @@ def test_a_sol2_wells_choke_best_rate_and_slots(monkeypatch):
     assert res['well']['K_c'] == WellBuilder(dict(lf.w0), lf.stations).size_choke(5.0, WELLHEAD, w['p_s'])
     assert res['stations'] == lf.stations and all(r['draw_index'] == lf.k for r in res['log'])
     nominal = dict(p_r=w['p_r'], gor=w['R_go'], wlr=w['wlr'], p_s=w['p_s'], h=w['h'], roughness=w['roughness'])
-    for c in calls[:6]:  # The sizing's solves, then the best rate's
+    for c in calls[:9]:  # The sizing's solves, the erosional cap's check, then the best rate's
         assert {key: c[key] for key in nominal} == nominal and (c['u'], c['lift_on']) == (1.0, True)
         assert all(nan_or(c[key], w[key]) for key in _COEF_KEYS)
-    assert [c['w_lg'] for c in calls[:6]] == [f * w['w_lg_max'] for f in (0.0, 0.5, 1.0)] * 2
-    for j, c in enumerate(calls[6:]):
+    assert [c['w_lg'] for c in calls[:9]] == [f * w['w_lg_max'] for f in (0.0, 0.5, 1.0)] * 3
+    for j, c in enumerate(calls[9:]):
         assert all(nan_or(c[key], v) for key, v in _sol2_attempt(SEED, w, j).items())
-    assert [r['kind'] for r in res['log'][:6]] == ['choke_sizing'] * 3 + ['best_rate'] * 3
-    assert [r['slot'] for r in res['samples']] == list(range(_N_SLOTS)) and len(res['log']) == 6 + _N_SLOTS
+    assert [r['kind'] for r in res['log'][:9]] == ['choke_sizing'] * 3 + ['erosional_cap'] * 3 + ['best_rate'] * 3
+    assert [r['slot'] for r in res['samples']] == list(range(_N_SLOTS)) and len(res['log']) == 9 + _N_SLOTS
 
 
 def test_the_producibility_filter_lifts_a_natural_oil_well(monkeypatch):
@@ -712,9 +805,10 @@ def test_the_producibility_filter_lifts_a_natural_oil_well(monkeypatch):
     assert same_but_the_choke(res['well'], lifted)
     kinds = [r['kind'] for r in res['log']]  # The natural well's sizing finds no operating point at either choke
     n = len(_SIZING_CHOKES)
-    assert kinds == ['choke_sizing'] * n + ['choke_sizing'] * 3 + ['best_rate_lifted'] * 3 + ['slot'] * _N_SLOTS
+    lifted_kinds = ['choke_sizing'] * 3 + ['erosional_cap'] * 3 + ['best_rate_lifted'] * 3
+    assert kinds == ['choke_sizing'] * n + lifted_kinds + ['slot'] * _N_SLOTS
     assert res['info']['best_rate_outcomes'] == ['operating_point'] * 3  # the lifted well's
-    assert all(c['lift_on'] for c in calls[n:]) and calls[n + 6]['w_lg'] == _sol2_attempt(SEED, lifted, 0)['w_lg']
+    assert all(c['lift_on'] for c in calls[n:]) and calls[n + 9]['w_lg'] == _sol2_attempt(SEED, lifted, 0)['w_lg']
 
 
 @pytest.mark.parametrize('off_outcome', [('no_operating_point', None), ('operating_point', 1e-3), None])
@@ -734,7 +828,7 @@ def test_a_lifted_sol2_well_that_cannot_flow_without_lift_gas(monkeypatch, off_o
     flagged = _LIFT_GAS_ALWAYS_ON in res['well']['flags'].split(';')
     assert flagged == (off_outcome is not None)
     assert res['well']['flags'].split(';')[:-1] == [f for f in w['flags'].split(';') if f] or not flagged
-    slots = calls[6:]
+    slots = calls[9:]  # After the sizing, the erosional cap's check and the best rate, three solves each
     assert len(slots) == _N_SLOTS
     assert all(c['w_lg'] > 0 for c in slots) if flagged else any(c['w_lg'] == 0 for c in slots)
     for j, c in enumerate(slots):
@@ -745,9 +839,15 @@ def test_a_lifted_sol2_well_that_cannot_flow_without_lift_gas(monkeypatch, off_o
     'natural, lifted, outcome, reason, solves',
     [
         # The sizing finds no natural flow at its two chokes; lifted, the well is sized and is below the floor
-        (('no_operating_point', None), ('operating_point', 1e-3), 'not_producible', 'below_floor', 2 + 3 + 3),
+        (('no_operating_point', None), ('operating_point', 1e-3), 'not_producible', 'below_floor', 2 + 3 + 3 + 3),
         # Sized, the natural well is below the floor; the lifted well's sizing finds no operating point
-        (('operating_point', 1e-3), ('no_operating_point', None), 'not_producible', 'no_operating_point', 1 + 1 + 6),
+        (
+            ('operating_point', 1e-3),
+            ('no_operating_point', None),
+            'not_producible',
+            'no_operating_point',
+            1 + 1 + 1 + 6,
+        ),
         (('no_operating_point', None), ('solver_failure', None), 'best_rate_solver_failure', 'solver_failure', 2 + 6),
         (('solver_failure', None), ('operating_point', 50.0), 'best_rate_solver_failure', 'solver_failure', 2),
     ],
@@ -808,9 +908,10 @@ def test_an_nsol2_wells_scan_lift_and_slots(monkeypatch):
     assert (info['outcome'], info['T_end'], info['best_rate'], info['best_rate_w_lg']) == ('accepted', T, 50.0, 0.0)
     assert [p['t'] for p in info['scan']] == [float(t) for t in dates]
     assert [p['lift_on'] for p in info['scan']] == [i >= i_fail for i in range(21)]
-    assert [r['kind'] for r in res['log'][:2]] == ['choke_sizing', 'scan']  # The choke is sized at the life's start
+    # The choke is sized at the life's start, and its erosional cap checked
+    assert [r['kind'] for r in res['log'][:3]] == ['choke_sizing', 'erosional_cap', 'scan']
     assert res['well']['K_c'] == WellBuilder(dict(lf.w0), lf.stations).size_choke(5.0, WELLHEAD, lf.p_s_nom(0.0))
-    scan_calls = [c for c in calls if 'test' not in c][1:]  # The slots' inputs hold their test period
+    scan_calls = [c for c in calls if 'test' not in c][2:]  # The slots' inputs hold their test period
     assert all(nan_or(calls[0][key], v) for key, v in scan_calls[0].items()) and set(calls[0]) == set(scan_calls[0])
     assert len(scan_calls) == i_fail + 1 + 3 * (21 - i_fail)  # A lifted point at the three lift-gas rates
     assert [c['w_lg'] for c in scan_calls[: i_fail + 1]] == [0.0] * (i_fail + 1)

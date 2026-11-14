@@ -50,10 +50,10 @@ A well's result (generate_sol2_well, generate_nsol2_well) is a dict of:
 An attempt's record is a flat dict of:
 
 - its inputs (samples._sol2_attempt or samples._nsol2_attempt; a best-rate solve's are the state's, with `p_s_nom`);
-- `draw_index`; `kind`, `choke_sizing`, `best_rate`, `best_rate_lifted` (a sol-2 well's best rate with the filter's
-  lift), `scan` or `slot`; `slot`, j for a slot, -1 for a sizing or best-rate solve and -1 - i for the life scan's
-  point i; `attempt`, a for a slot, else the index of the lift-gas rate, whose share of the capacity is
-  `lift_fraction`;
+- `draw_index`; `kind`, `choke_sizing`, `erosional_cap` (with `cap_step` and `erosional_ratio`, _cap_choke),
+  `best_rate`, `best_rate_lifted` (a sol-2 well's best rate with the filter's lift), `scan` or `slot`; `slot`, j for a
+  slot, -1 for a sizing or best-rate solve and -1 - i for the life scan's point i; `attempt`, a for a slot, else the
+  index of the lift-gas rate, whose share of the capacity is `lift_fraction`;
 - `outcome` and `reason` (SMP-104), and `error`, an exception's message (else None);
 - `n_roots` and `n_stable`, the sizes of the root set, and `several_stable`; `off_table`, whether a point of the
   operating point lies off its fluid's PVT table (None without an operating point);
@@ -86,6 +86,10 @@ _FLOOR_MARGIN = 0.5  # A well is not produced below this share of its floor  # s
 _START_HURDLE = {'platform': 20.0, 'onshore': 0.0, 'subsea': 500.0}  # spec: SMP-102
 # The chokes that the sizing solves a well with, shares of its largest: the second is a bean of half the diameter
 _SIZING_CHOKES = (1.0, 1 / 4)  # spec: SMP-77
+# The erosional cap: a capped choke lets the well flow at this share of its tubing's erosional velocity up to it, found
+# among at most so many chokes, the sized one included
+_EROSIONAL_LOW, _EROSIONAL_STEPS = 0.97, 12  # spec: SMP-77
+_CAP_FLAGS = ('choke_at_erosional_rate', 'erosional_cap_unmet')  # spec: SMP-77
 _SLOT_LIMIT, _REDRAW_LIMIT, _SOLVER_FAILURE_LIMIT = 100, 1000, 10  # spec: SMP-106 (D-137)
 _DEAD_DATE_LIMIT = 5  # The dead dates that may start an nsol-2 well's lift or end its life  # spec: SMP-106 (D-142)
 _BEST_RATE_LIFT = (0.0, 0.5, 1.0)  # The best rate's lift-gas rates, shares of the capacity  # spec: SMP-103
@@ -273,10 +277,92 @@ def _size_choke(builder, state, lifted, w_lg_max, log, base) -> tuple:  # spec: 
         if ops:
             top, head = max(ops, key=lambda op: op[0]['q_oe'])
             builder.size_choke(top['WTOT'], head, state['p_s_nom'], K_c)
+            _cap_choke(builder, state, lifted, w_lg_max, log, base)
             return 'sized', outcomes
         failed |= 'solver_failure' in outcomes
     builder.widest_choke()
     return ('solver_failure' if failed else 'no_operating_point'), outcomes
+
+
+def _erosional_ratio(wellhead, c_e) -> float:  # spec: SMP-77
+    """The no-slip mixture velocity at the wellhead over the erosional velocity 1.22 C / sqrt(rho_ns) m/s (SMP-75),
+    with the no-slip density rho_ns (kg/m3) of the stream there and the well's C."""
+    _p, v_g, v_l, alpha, rho_g, rho_l, _T = (float(v) for v in wellhead)
+    v_sg, v_sl = alpha * v_g, (1 - alpha) * v_l
+    v_m = v_sg + v_sl
+    return v_m * math.sqrt((v_sg * rho_g + v_sl * rho_l) / v_m) / (1.22 * c_e)
+
+
+def _cap_choke(builder, state, lifted, w_lg_max, log, base) -> None:  # spec: SMP-77
+    """
+    Holds a sized choke below the erosional velocity of the well's tubing (SMP-77, the erosional cap). The well is
+    solved at the sizing state with its sized choke fully open, at the best rate's lift-gas rates for a lifted well;
+    where the mixture's velocity at the wellhead passes the erosional velocity at any of them (_erosional_ratio), the
+    choke is made smaller, by a search on ln K_c, until the largest ratio lies within [_EROSIONAL_LOW, 1], for at most
+    _EROSIONAL_STEPS chokes. A capped well's draws carry the flag `choke_at_erosional_rate`; where the search ends
+    above the erosional velocity, it keeps the smallest choke tried with an operating point and the flag
+    `erosional_cap_unmet`.
+
+    :param builder: The well's WellBuilder, which holds the sized choke and takes the capped one
+    :param state: The state (life.Life.state's keys), as _best_rate takes it
+    :param lifted: Whether the well is lifted at the state
+    :param w_lg_max: The lift-gas capacity (kg/s)
+    :param log: The well's log, to which the solves' records are added with the kind `erosional_cap`, `cap_step`, the
+        search's step, and `erosional_ratio`, the ratio of an operating point (NaN without one)
+    :param base: The labels of the solves' records
+    """
+    w = builder.w
+    flags = [f for f in w['flags'].split(';') if f and f not in _CAP_FLAGS]  # A well sized again is capped again
+
+    def ratio(step) -> float:
+        """The largest ratio over the lift-gas rates at the builder's choke, 0 without an operating point."""
+        worst = 0.0
+        for i, f in enumerate(_BEST_RATE_LIFT if lifted else (0.0,)):
+            inp = dict(state, u=1.0, w_lg=f * w_lg_max if lifted else 0.0, lift_on=lifted, p_s=state['p_s_nom'])
+            head = []
+            rec = _attempt(builder, inp, head)
+            r = _erosional_ratio(head[0], w['c_e']) if rec['outcome'] == 'operating_point' else math.nan
+            rec.update(base, kind='erosional_cap', attempt=i, lift_fraction=f, cap_step=step, erosional_ratio=r)
+            log.append(rec)
+            worst = max(worst, 0.0 if math.isnan(r) else r)
+        return worst
+
+    r_hi = ratio(0)
+    if r_hi <= 1.0:
+        w['flags'] = ';'.join(flags)
+        return
+    K_hi = builder.choke.K_c
+    lo = None  # (K_c, ratio) of the largest choke tried at or below the erosional velocity with an operating point
+    K_dead = 0.0  # The largest choke tried without an operating point
+    aim, slope = math.log((1 + _EROSIONAL_LOW) / 2), 0.5  # The middle of the band; d ln r / d ln K_c, a first guess
+    K = K_hi * math.exp((aim - math.log(r_hi)) / slope)
+    for step in range(1, _EROSIONAL_STEPS):
+        K = builder.take_choke(K)
+        r = ratio(step)
+        if r > 1.0:  # The slope through the last two chokes above the band, for the next step
+            slope = min(max(math.log(r_hi / r) / math.log(K_hi / K), 0.05), 2.0)
+            K_hi, r_hi = K, r
+        elif r > 0.0:
+            lo = (K, r)
+            if r >= _EROSIONAL_LOW:
+                break
+        else:
+            K_dead = max(K_dead, K)
+        if lo is None and K_dead == 0.0:  # Below the band is not bracketed yet
+            K = K_hi * math.exp((aim - math.log(r_hi)) / slope)
+        elif lo is None:
+            K = math.sqrt(K_dead * K_hi)
+        else:  # ln r linear in ln K_c through the bracket
+            K_lo, r_lo = lo
+            t = (aim - math.log(r_lo)) / (math.log(r_hi) - math.log(r_lo))
+            K = K_lo * (K_hi / K_lo) ** min(max(t, 0.1), 0.9)
+    if lo is not None:
+        builder.take_choke(lo[0])
+        flags.append('choke_at_erosional_rate')
+    else:
+        builder.take_choke(K_hi)
+        flags.append('erosional_cap_unmet')
+    w['flags'] = ';'.join(flags)
 
 
 def _sized_best_rate(builder, state, lifted, w_lg_max, floor, log, base) -> dict:  # spec: SMP-77, SMP-103

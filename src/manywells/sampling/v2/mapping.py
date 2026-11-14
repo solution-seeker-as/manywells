@@ -74,7 +74,12 @@ class WellBuilder:  # spec: SMP-111
         rho, phi = SimpsonChokeModel(K_c=1.0).density_and_multiplier(s, self.geometry.A)
         xi = self.w['xi_choke']
         dp = CF_BAR * p_dn * xi / (1 - xi)  # Pa: p_up - p_dn at p_dn = (1 - xi) p_up
-        K_c = _size_bean(self.w, min(w_m / math.sqrt(2 * rho / float(phi) * dp), K_c_most))
+        return self.take_choke(min(w_m / math.sqrt(2 * rho / float(phi) * dp), K_c_most))
+
+    def take_choke(self, K_c: float) -> float:  # spec: SMP-77
+        """Gives the well the choke K_c (m2), at most its largest (draws._size_bean), which the well's draws take, and
+        returns its coefficient."""
+        K_c = _size_bean(self.w, K_c)
         self.choke = SimpsonChokeModel(K_c=K_c, chk_profile=self.w['chk_profile'])
         return K_c
 
