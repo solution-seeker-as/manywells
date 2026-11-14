@@ -113,6 +113,7 @@ lists the datasets' errata, including the samples that lie on an unstable soluti
 - [`docs/corrigendum.md`](docs/corrigendum.md): errors in the paper and errata in the published datasets
 - [`docs/thermal_energy_modeling.md`](docs/thermal_energy_modeling.md): the derivation of the energy balance's terms
 - [`docs/testing.md`](docs/testing.md): running the tests
+- [`docs/markdown_math.md`](docs/markdown_math.md): writing math in markdown that renders on GitHub and in VS Code
 - [`specs/`](specs/): the model's equations (`specs/model/`), the dataset sampling, the verifier and the
   architecture
 - [`AGENTS.md`](AGENTS.md): for contributors, including coding agents: the environment, the layout and the rules

@@ -5,7 +5,7 @@ These scripts produce the verifier's reference data: the case set and its refere
 | Environment | Where | Used for |
 |---|---|---|
 | v1.0.0 | `.worktrees/v1.0.0` (git worktree of the `v1.0.0` tag, Python 3.11, casadi 3.6.4) | selecting cases; every reference root is a v1 solution |
-| Rust | `.worktrees/rust` (worktree of `rust_implementation@0e9e98b`, with `manywells_rs` built into it) | fold brackets; Rust roots as starting points for v1 |
+| Rust | `.worktrees/rust` (worktree of `rust_implementation@0e9e98b`, with `manywells_rs` built into it); the old port, never the Rust core in `rust/`, so that the reference stays independent of the core it checks | fold brackets; Rust roots as starting points for v1 |
 | develop | the repository root | labelling and writing the committed files |
 
 The environments exchange files through `verification/data/build/` (gitignored), using JSON and `.npz`, because the v1.0.0 environment has no pyarrow. The committed output goes to `verification/data/`.
@@ -44,3 +44,13 @@ uv run python verification/build/label_cases.py                                 
 Both v1 stages use one process per core with one thread each and take a few minutes. Every random draw is seeded from the case's source, well and draw number, so a rerun gives the same case set.
 
 `tolerance_stats.py` (develop environment) prints the measurements behind the tolerances. `make_test_fixtures.py` (v1.0.0 environment) writes the small root set behind the unit tests, `verification/tests/data/fixtures.npz`.
+
+## Adding a case
+
+Never edit the case set or the reference roots by hand. Every reference root is a v1.0.0 solution found by two independent searches, so a new case goes through the build:
+
+1. Add a selector to `make_cases.py` and add its cases in `select`, after the existing selectors. Give it its own generator, `np.random.default_rng(seed_for('<source>'))`, rather than the shared `rng`, so the existing cases keep their draws, and seed every other draw with `seed_for(source, well, draw)`.
+2. Rebuild as above, then run `uv run python verification/build/expected_failures.py`. The rebuild needs the v1.0.0 and Rust worktrees, the published config files and network access for the setup.
+3. Check that the new case is settled: a case the two searches disagree on is left out and listed in `verification/data/build/disagreements.md`. Check that no existing case or reference root changed (load the old and new parquet files with pandas; `git diff` only shows that they changed). Update the counts in `specs/verification.md` and in `AGENTS.md`.
+
+The case set and the reference roots need Bjarne's sign-off (`AGENTS.md`).

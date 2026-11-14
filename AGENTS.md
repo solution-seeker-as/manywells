@@ -30,34 +30,23 @@ The layout is `src/`-based. Scripts under `scripts/` import both `manywells.*` a
 
 ## Layout
 
-The modules follow `specs/architecture.md`. `src/manywells/simulator.py` holds `SSDFSimulator`, its inputs `WellProperties` (one component object per model part) and `BoundaryConditions` (the operating point), `SimError` and `NoOperatingPoint`. The components are frozen dataclasses or ABCs whose methods work on CasADi symbols as well as floats, and import only `units`, `ca_functions` and, within `pvt/`, each other:
+`specs/architecture.md` (Layers, Modules) gives each module's contents and the rules on what may import what. In short, under `src/manywells/`:
 
-- `geometry.py`: the trajectory and grid (MD/TVD, inclination, TVD fraction).
-- `pvt/`: fluid properties. `fluid.py` (`FluidModel`) is the one interface the rest calls, including the phase rates with dissolved gas. It holds the stream (water, the ratios, the heat capacities) and mixes oil and water; its component `pvt`, a `PVTModel` (`model.py`), gives the hydrocarbon properties: `DeadOil` (`dead_oil.py`) or `BlackOil` (`black_oil.py`), each with a gas law, or `PVTTable` (`table.py`), a table on a $(p, T)$ grid, and `PVTTableSet`, tables at several GORs. The other modules hold phase correlations.
-- `slip.py`: drift-flux closure and flow-regime classification.
-- `friction.py`, `thermal.py`: the friction model (fixed `f_D` or from roughness) and the thermal model (heat loss, frictional heating, gravity term, Joule–Thomson cooling, inflow temperature).
-- `inflow.py`, `choke.py`: the bottom and top boundary models.
-- `ca_functions.py`, `units.py`: smooth approximations for CasADi, constants and unit conversions.
-
-On top of them:
-
-- `discretization.py`: `build_system(wp)`, the rows of every point (DISC-11), built once per well with the operating point as parameters.
-- `solvers/`: the Ipopt adapter, the initial-guess march, and the multi-start root search with the stability label. `solution.py`: `Root`, `RootSet` and the operating point (SOL-4 to SOL-6).
+- `simulator.py`: `SSDFSimulator`, its inputs `WellProperties` (one component object per model part) and `BoundaryConditions` (the operating point), `SimError` and `NoOperatingPoint`.
+- The components: `geometry.py`, `pvt/`, `slip.py`, `friction.py`, `thermal.py`, `inflow.py` and `choke.py`, with `ca_functions.py` (smooth approximations) and `units.py`. They are frozen dataclasses or ABCs whose methods work on CasADi symbols as well as floats, and import only `units`, `ca_functions` and, within `pvt/`, each other. `pvt/fluid.py`'s `FluidModel` is the one fluid interface the rest calls; its component `pvt`, a `PVTModel`, gives the hydrocarbon properties (`DeadOil`, `BlackOil`, `PVTTable` or `PVTTableSet`).
+- `discretization.py` (the rows of every point, DISC-11), `solvers/` (the Ipopt adapter, the initial-guess march, the root search with the stability label) and `solution.py` (`Root`, `RootSet` and the operating point).
 - `configurations.py`: the `v1.0.0` configuration (`v1_well`), the `v2.0.0` configuration, and the check that a well is in a configuration.
-- `sampling/`, `datasets/`: the ported dataset sampler (`specs/sampling.md`) and the rows and files of a dataset. `sampling/v2/` is the v2 sampler: one well's generation (`generate.py`), the run over many wells in resumable chunks (`run.py`), a dataset's tables and logs (`assemble.py`), and the table fluids' build (`table_wells.py`, and `table_build.py` in NeqSim's environment); `datasets/v2.py` holds the v2 files' codes, types and records, and re-solves a sample from its rows.
-- `calibration/`: calibrating a well to its production data (`specs/calibration.md`): the data and its noise (`data.py`), the free parameters and their priors (`parameters.py`), the residuals of each row's operating point (`objective.py`), the MAP fit (`fit.py`), and synthetic data at known parameters (`synthetic.py`). It sits on top of the simulator and works with either backend. Closed loop is out of v2; `closed_loop/` was retired (it remains in v1.0.0).
+- On top of the simulator: `sampling/` (the ported sampler, and the v2 sampler in `sampling/v2/`; `specs/sampling.md`), `datasets/` (a dataset's rows and files) and `calibration/` (`specs/calibration.md`).
 
-`rust/` is the Rust core (crate `manywells-core`, built as `manywells._core`): the same model parts, one module per spec file, with `// spec:` tags, the rows of each point defined once in `discretization.rs`, and a shooting search on the bottomhole pressure (`march.rs`, `shoot.rs`). It implements every option of `develop`'s model (`specs/features/014-rust-solver.md` for the `v1.0.0` configuration, `specs/features/015-rust-develop-model.md` for the rest). Both backends are kept and developed together, so a new equation goes into both, under the same spec ID (`specs/goals.md`), and its option goes into the comparison of the two (`tests/backend_cases.py`). `solvers/rust.py` converts a well to its inputs and builds the `RootSet` from its roots; the bindings in `lib.rs` sit behind the crate's `python` feature.
+`rust/` is the Rust core (crate `manywells-core`, built as `manywells._core`): the same model parts, one module per spec file, with `// spec:` tags, implementing every option of `develop`'s model (`specs/architecture.md`, Rust core). Both backends are kept and developed together, so a new equation goes into both, under the same spec ID (`specs/goals.md`), and its option goes into the comparison of the two (`tests/backend_cases.py`). `solvers/rust.py` converts a well to the core's inputs and builds the `RootSet` from its roots; the bindings in `lib.rs` sit behind the crate's `python` feature.
 
-`scripts/` is research code, not library API. `sim_examples/` is the best reference for setting up and running a simulation; `data_generation/` holds the dataset generators, thin callers of `manywells.sampling`; `verification/` the scripts that run `develop` for the verifier; `calibration/` the calibration's twin study. Tests in `tests/` follow the module layout.
-
-`specs/` holds the decided specifications: goals, the constitution, the model, sampling, verification, the architecture and the feature specs (`specs/features/`). `verification/` is the verifier, a separate package. `plans/` holds the plan of work and the backlog; plans are drafts, not specs.
+`scripts/` is research code, not library API: `sim_examples/` is the best reference for setting up and running a simulation, `data_generation/` holds the dataset generators, `verification/` the scripts that run `develop` for the verifier, and `calibration/` the calibration's twin study. Tests in `tests/` follow the module layout (`docs/testing.md`). `specs/` holds the decided specifications, `verification/` the verifier, a separate package, and `plans/` the plans of work and the backlog, which are drafts, not specs.
 
 ## How a simulation runs
 
-The pipe is discretized into `n_cells` cells, and each grid point carries the seven state variables listed under Contracts. `SSDFSimulator(wp)` builds the well's system once (`discretization.build_system`): inflow rows at the bottom, mass, momentum and energy rows for each cell, the choke row at the top and closure relations at every point, with the boundary conditions as parameters, and an Ipopt feasibility NLP on it. `simulate(bc)` runs the root search (`solvers/roots.py`): marches from several bottomhole pressures (Newton per point, Ipopt where Newton fails) give starts for Ipopt, the solutions are merged into roots, and each root is labelled stable or unstable from the residual's Jacobian. It returns the operating point, the stable root, as a `Root`, and raises `NoOperatingPoint` (a `SimError`) if there is none; `root_set(bc)` returns every root found. `solution_as_df` turns a root into a DataFrame with a flow regime per grid point. The two-argument constructor `SSDFSimulator(wp, bc)` with `simulate()` still works, with a `DeprecationWarning`.
+`SSDFSimulator(wp)` builds the well's system once (`discretization.build_system`): inflow rows at the bottom, mass, momentum and energy rows for each of the `n_cells` cells, the choke row at the top and closure relations at every point, with the boundary conditions as parameters. `simulate(bc)` runs the root search (`solvers/roots.py`): marches from several bottomhole pressures give starts for Ipopt, the solutions are merged into roots, and each root is labelled stable or unstable from the residual's Jacobian. It returns the operating point, the stable root, as a `Root`, and raises `NoOperatingPoint` (a `SimError`) if there is none; `root_set(bc)` returns every root found, and `solution_as_df` turns a root into a DataFrame with a flow regime per grid point. The two-argument constructor `SSDFSimulator(wp, bc)` with `simulate()` still works, with a `DeprecationWarning`.
 
-`SSDFSimulator(wp, backend='rust')` solves the same model with the Rust core instead, with the same inputs and outputs; a well with a component class the core does not have, such as a user's subclass of `InflowModel`, raises `ValueError`. It builds no CasADi system: given $p_0$ it marches the rows from the bottomhole to the wellhead, so the choke row is the only one left, and it scans that residual over $(p_s, p_r)$ for its roots. Where the energy row depends on the pressure, each cell's temperature is solved at each trial pressure. It is about 10 to 30 times faster per case than the CasADi backend (median and total, on one process).
+`SSDFSimulator(wp, backend='rust')` solves the same model with the Rust core, with the same inputs and outputs, and is much faster. It builds no CasADi system: it marches from the bottomhole to the wellhead and searches the bottomhole pressure for the roots of the choke row, the only row left. A well with a component class the core does not have, such as a user's subclass of `InflowModel`, raises `ValueError`.
 
 ## Contracts to preserve
 
@@ -69,35 +58,23 @@ The pipe is discretized into `n_cells` cells, and each grid point carries the se
 
 ## The verifier
 
-`verification/` is the package `manywells-verify`, a uv workspace member that `uv sync` installs. It checks a candidate's roots, case by case, against reference root sets computed from ManyWells v1.0.0. It holds no model: it imports neither `manywells` nor CasADi, and must stay that way. `specs/verification.md` defines the cases, the checks and the tolerances.
+`verification/` is the package `manywells-verify`, a uv workspace member that `uv sync` installs. It checks a candidate's roots, case by case, against reference root sets computed from ManyWells v1.0.0. It holds no model: it imports neither `manywells` nor CasADi, and must stay that way. `specs/verification.md` defines the cases, the checks, the tolerances and the files.
 
-The command under Environment and commands checks v1.0.0's own solutions, the baseline, as the CI job `verify` does. Its report must say `Verdict: PASS` with 0 unexpected failures, 35 expected failures, 141 cases and a stable-root rate of 74.3%; it exits with status 1 on any unexpected failure. Always pass `--expected-failures`: without it, v1.0.0's 35 known defects count as failures and the verdict is FAIL. `--json OUT` writes every check of every root, and `--name` names the candidate in the report.
+The command under Environment and commands checks v1.0.0's own solutions, the baseline, as the CI job `verify` does. Its report must say `Verdict: PASS` with 0 unexpected failures, 35 expected failures, 141 cases and a stable-root rate of 74.3%; it exits with status 1 on any unexpected failure. Always pass `--expected-failures` for the baseline: without it, v1.0.0's 35 known defects count as failures and the verdict is FAIL. `--json OUT` writes every check of every root, and `--name` names the candidate in the report.
 
-- **Candidates.** A candidate is a parquet file with one row per root: `case_id`, `root`, `x` (the 7(N + 1) state values, point by point from the bottomhole, in state-vector order), `label` (`stable`, `unstable` or empty), `operating_point` and `choked` (nullable). Read the cases with `manywells_verify.cases.read_cases('verification/data/cases.parquet')` and write the roots with `write_roots({case_id: [Root(x, label, operating_point, choked)], ...}, path)`. Every `case_id` must be in the case set; a case with no rows means the candidate found no root. The cases are v1.0.0 wells (`L`, `D`, `rho_l`, ...).
-- **`develop`'s candidate.** `scripts/verification/develop_candidate.py` maps each case to `develop` in the `v1.0.0` configuration (`manywells.configurations.v1_well`) and writes every root it finds, about 40 s on 24 cores. The CI job `verify` runs it and the verifier, with no expected failures: the report must say `Verdict: PASS` with 0 failures and a stable-root rate of 100%.
+- **Candidates.** A candidate is a parquet file with one row per root (`specs/verification.md`, Files). Read the cases with `manywells_verify.cases.read_cases('verification/data/cases.parquet')` and write the roots with `write_roots({case_id: [Root(x, label, operating_point, choked)], ...}, path)`, where `x` is the state point by point from the bottomhole, in state-vector order. Every `case_id` must be in the case set; a case with no rows means the candidate found no root. The cases are v1.0.0 wells (`L`, `D`, `rho_l`, ...).
+- **`develop`'s candidates.** `scripts/verification/develop_candidate.py` maps each case to `develop` in the `v1.0.0` configuration (`manywells.configurations.v1_well`) and writes every root it finds; with `--backend rust` it writes the Rust core's. The CI job `verify` runs both. They are checked without `--expected-failures`, so every failure counts: each report must say `Verdict: PASS` with 0 failures and a stable-root rate of 100%. This is what "both candidates pass" means below. The Rust core's one finding, a second root at `fold-1503` that the reference lacks, is known (`specs/verification.md`).
 
   ```console
   uv run python -m scripts.verification.develop_candidate develop.parquet
   uv run manywells-verify develop.parquet --data verification/data --name "develop (v1.0.0 configuration)"
-  ```
-
-  With `--backend rust` it writes the Rust core's roots instead, in about 10 s on one core. The CI job runs that too, and the report must also say `Verdict: PASS` with 0 failures and a stable-root rate of 100%; its one finding, a second root at `fold-1503` that the reference lacks, is known (`specs/verification.md`).
-
-  ```console
   uv run python -m scripts.verification.develop_candidate rust.parquet --backend rust
   uv run manywells-verify rust.parquet --data verification/data --name "Rust core (v1.0.0 configuration)"
   ```
-- **Distributions.** `uv run manywells-verify-distributions ROWS --dataset sol-1` (or `nsol-1`) compares a regenerated dataset (parquet or CSV with the datasets' feature columns and the published wells' `ID`) with the stable-root reference of the published one, weighting the candidate's rows so that its wells mix as the reference's do. `scripts/verification/regenerate_distributions.py` regenerates samples at the stable root for the published `sol-1` wells and runs the check; at 5 samples per well it takes about 17 minutes on 24 cores.
+- **Distributions.** `uv run manywells-verify-distributions ROWS --dataset sol-1` (or `nsol-1`) compares a regenerated dataset with the published one (`specs/verification.md`, Distributions). `scripts/verification/regenerate_distributions.py` regenerates samples for the published `sol-1` wells and runs the check; it is slow.
 - **Expected failures.** `verification/expected_failures.csv` lists v1.0.0's known defects on the case set: cases where its default guess reaches the trickle root or fails. `verification/build/expected_failures.py` writes it. Never add an entry to make a candidate pass.
+- **Cases.** Never edit the case set or the reference roots by hand: a new case goes through the build (`verification/build/README.md`, Adding a case).
 - **Tests of the verifier itself:** `uv run pytest verification/tests`.
-
-### Adding a case
-
-Never edit the case set or the reference roots by hand. Every reference root is a v1.0.0 solution found by two independent searches, so a new case goes through the build:
-
-1. Add a selector to `verification/build/make_cases.py` and add its cases in `select`, after the existing selectors. Give it its own generator, `np.random.default_rng(seed_for('<source>'))`, rather than the shared `rng`, so the existing cases keep their draws, and seed every other draw with `seed_for(source, well, draw)`.
-2. Rebuild as `verification/build/README.md` describes, then run `uv run python verification/build/expected_failures.py`. The rebuild needs the v1.0.0 and Rust worktrees, the published config files and network access for the setup; its two v1 stages use every core for a few minutes.
-3. Check that the new case is settled: a case the two searches disagree on is left out and listed in `verification/data/build/disagreements.md`. Check that no existing case or reference root changed (load the old and new parquet files with pandas; `git diff` only shows that they changed). Update the counts in `specs/verification.md` and in this file.
 
 ### Regenerating reference data
 
@@ -114,7 +91,7 @@ All reference data is built from v1.0.0, which is frozen. A rebuild reproduces t
 | `tests/data/pvt/vazquez_beggs.csv`, `synthetic_eos_oil_360K.csv` | `specs/tools/make_pvt_tables.py` | develop | `tests/data/pvt/README.md` |
 | `tests/data/pvt/synthetic_eos_oil.csv`, `synthetic_eos_oil_gor.csv` | `plans/evidence/pvt_table_eos.py` | NeqSim 3.4.0 and Java | its docstring |
 
-The v1.0.0 environment is a git worktree of the tag in `.worktrees/v1.0.0`, set up as `verification/build/README.md` describes. The Rust environment is a worktree of the old port, `rust_implementation` at `0e9e98b`, in `.worktrees/rust`: the reference's second search uses that port, never the Rust core in `rust/`, so that the reference stays independent of the core it checks. Run its scripts from the project root with `.worktrees/v1.0.0/.venv/bin/python`, never with `uv run`, because `develop`'s package has the same name.
+The v1.0.0 and Rust environments are worktrees in `.worktrees/`, set up as `verification/build/README.md` describes. Run their scripts from the project root with their own `.venv/bin/python`, never with `uv run`, because `develop`'s package has the same name.
 
 ## Adding an equation
 
@@ -127,18 +104,11 @@ A new equation is a model option that is off in the `v1.0.0` configuration. Thes
 5. **Rust.** The same option as an enum variant or a field, with `// spec:` tags, passed by `solvers/rust.py` and `Well::new` in `lib.rs`, and the component functions the vectors call added to `_component`. Add test wells with the option on to `input.rs`'s `all()`: the march's assumption tests run on every test well. A new energy term must keep the temperature solve's bracket valid (`specs/architecture.md`, Rust core, design point 4).
 6. **Vectors.** A table per new ID in `specs/tools/make_develop_vectors.py`, then regenerate. Where a default changes, pin the old option in its own tables, so that their values do not change. Add the Rust adapters to `RUST_ADAPTERS` in `tests/test_spec_vectors.py`.
 7. **Tests.** Unit and property tests in `tests/test_<module>.py`. Tests that assumed the old default pin it. In `tests/backend_cases.py`: the feature in `FEATURES` and `features()`, overlays that switch it on and off, matrix entries, and comparison-set groups. Properties of solved wells go in `tests/test_model_properties.py`.
-8. **Run and measure.** `cargo test --no-default-features`, the full suite, both verifier candidates (PASS, 100%, no expected failures), and `scripts/verification/compare_backends.py` on the new groups. Measure the option's effect on sampled wells with each backend, with the option on and off: a fall in the number of operating points found is a solver finding, as it was for feature 016 in gas wells. State the cost and gain of any solver machinery, timed on one process (principle 7).
+8. **Run and measure.** `cargo test --no-default-features`, the full suite, both verifier candidates (both pass), and `scripts/verification/compare_backends.py` on the new groups. Measure the option's effect on sampled wells with each backend, with the option on and off: a fall in the number of operating points found is a solver finding, as it was for feature 016 in gas wells. State the cost and gain of any solver machinery, timed on one process (principle 7).
 
 ## Math in markdown
 
-The specs, docs and plans are read on GitHub and in VS Code. VS Code's KaTeX sees the math as written; GitHub parses the markdown first, so a backslash escape, an emphasis delimiter or an HTML tag in the math is changed before MathJax sees it. `tests/test_markdown_math.py` checks these rules.
-
-- **Delimiters.** `$...$` inline, with no letter or digit right after the closing `$` (VS Code does not close the math there), and `$$...$$` for display, starting on a new line. Not ```` ```math ```` blocks or `` $`...`$ ``: GitHub renders them, but VS Code shows them as code.
-- **No backslash before punctuation.** Markdown drops the backslash, so `\,` reaches MathJax as a comma. Write `\thinspace`, `\negthinspace`, `\ `, `\lbrace` and `\rbrace` for `\,`, `\!`, `\;`, `\{` and `\}`. Two exceptions render in both: `\\` in display math, which GitHub keeps, and `\_` in `\text{...}`.
-- **No emphasis.** Write `\ast` for `*`, as in `p^\ast`: two of them make emphasis, which display math turns into `_`. In inline math, a `_` after a bracket or a brace can open emphasis that the next subscript closes, so put a space after it: `(\alpha\rho_g v_g)_ i`, `\Delta\text{MD}_ i`. TeX ignores the space. Display math needs no space, because GitHub puts the `_` back.
-- **No HTML.** Put a space after `<`, as in `a < b`, or markdown may read a tag. In a table cell, a `|` ends the cell: write `\lvert x\rvert`.
-- **Operators.** GitHub refuses `\operatorname` ("macros are not allowed"): write `\mathop{\mathrm{smax}}(x, y)`.
-- **Thin spaces.** TeX spaces a product itself. Add `\thinspace` only where the symbols read differently without it: a symbol before a bracket (`4h\thinspace(T - T_a)`, so that it does not read as a function), next to `\text{...}`, before a differential (`c_{pl}\thinspace dT`) and between digit groups (`101\thinspace 325`).
+Math in the markdown files must render the same on GitHub as in VS Code, and GitHub's markdown parser changes some math before MathJax sees it. `docs/markdown_math.md` gives the rules and `tests/test_markdown_math.py` checks them. The most common: no backslash before punctuation (`\thinspace` for `\,`, `\lbrace` for `\{`), `\ast` for `*`, a space after a `_` that follows a bracket in inline math (`(x)_ i`), and `\mathop{\mathrm{...}}` for `\operatorname`.
 
 ## Releases
 
@@ -154,9 +124,9 @@ Between releases, `develop` carries the next version with `.dev0`; the change th
 
 - The relevant tests pass. `uv run pytest -m "not slow"` is fine while iterating; run the full suite before finishing changes to the solver, the physics or the public API, since only the slow tests run a full solve and the examples.
 - New physics or a new model comes with a test, and with its spec change in `specs/model/` in the same commit: equation IDs, `# spec:` tags in the code and test vectors (`specs/model/README.md`; a new option's vectors come from `specs/tools/make_develop_vectors.py`). `tests/test_spec_traceability.py` and `tests/test_spec_vectors.py` pass.
-- A change to the model keeps the `v1.0.0` configuration's rows exactly v1.0.0's (the row vectors) and its verifier report at PASS with no expected failures; a new option is off in that configuration.
+- A change to the model keeps the `v1.0.0` configuration's rows exactly v1.0.0's (the row vectors), and both verifier candidates pass; a new option is off in that configuration.
 - The examples in `scripts/sim_examples/` still run if you changed the public API. `tests/test_examples.py` (slow) runs each one headless.
-- A change to the Rust core keeps `cargo test --no-default-features`, the Rust row and component vectors in `tests/test_spec_vectors.py`, `tests/test_rust_backend.py`, `tests/test_backend_comparison.py` (the core against the CasADi backend in every configuration; its slow test runs the comparison set) and the Rust candidate's verifier report (PASS, 100%, no expected failures) passing. Physics in `rust/` carries `// spec:` tags, as in Python. `uv run python -m scripts.verification.compare_backends OUT.json` compares the backends on more wells and times them.
+- A change to the Rust core keeps `cargo test --no-default-features`, the Rust row and component vectors in `tests/test_spec_vectors.py`, `tests/test_rust_backend.py`, `tests/test_backend_comparison.py` (the core against the CasADi backend in every configuration; its slow test runs the comparison set) and the Rust candidate passing. Physics in `rust/` carries `// spec:` tags, as in Python. `uv run python -m scripts.verification.compare_backends OUT.json` compares the backends on more wells and times them.
 - A change to `verification/` keeps `uv run pytest verification/tests` passing and the verifier's baseline report unchanged, unless changing it was the point.
 - If the change adds a solver routine or path (a subroutine, a special-case path, a fallback, a tuning constant), state its measured gain in speed or robustness on the verifier's case set (constitution, principle 7). Bjarne decides whether the gain is large enough.
 - Your summary or PR description names every change that needs sign-off (next section).
@@ -203,13 +173,10 @@ The maintainer (`pyproject.toml`, `maintainers`) holds the private data and deci
 
 ## Where to look for more
 
-- `specs/constitution.md` for the rules, and `specs/goals.md` for the goals and the direction for v2 (scope, non-goals, API and dataset compatibility).
-- `specs/model/` before changing any physics: the model's equations with stable IDs, one file per module (`specs/model/README.md`). Code that implements an equation carries a `# spec: <ID>` tag; `tests/test_spec_traceability.py` checks the tags and `tests/test_spec_vectors.py` checks `develop` against test vectors from v1.0.0. `specs/discrepancies.md` lists where the paper and v1.0.0 differ, `specs/sampling.md` specifies the dataset sampling, and `specs/calibration.md` the calibration to a well's data (`docs/calibration.md` explains how to use it).
-- `specs/verification.md` for the verifier's case set, checks and tolerances, and `verification/build/README.md` for how its reference data is built.
-- `specs/architecture.md` before moving code between modules, adding a module or a model option, or changing an interface: the module layout (implemented in Step 7 of the plan), the interface contracts with units, the extension points, the Rust core's design, and the module each planned v2 feature belongs to.
-- `docs/thermal_energy_modeling.md` when changing the energy equation; it derives the temperature terms and cites the sources.
-- `docs/testing.md` for the test layout and pytest configuration.
-- `docs/datasets.md` when touching data generation, for the dataset feature definitions and the relations between them.
-- `docs/simulate.md` and `scripts/sim_examples/` for how a simulation is set up end to end.
-- `plans/manywells-v2-plan.md` for the current plan of work (the v2 foundation) and `plans/backlog.md` for the backlog of code-level findings, each tagged with the plan step that handles it.
-- The ManyWells paper (cited in `README.md`) documents release v1.0.0, which also generated the published HuggingFace datasets (`solution-seeker-as/manywells`). The code has changed since, so treat the paper as background rather than the spec for current behaviour; `git log v1.0.0..HEAD` shows what moved, and `docs/corrigendum.md` lists known typos in the paper.
+- `specs/goals.md` for the goals and the direction for v2 (scope, non-goals, API and dataset compatibility).
+- `specs/model/` before changing any physics: the equations with stable IDs, one file per module, the configurations and the test vectors (`specs/model/README.md`). `specs/discrepancies.md` lists where the paper and v1.0.0 differ.
+- `specs/architecture.md` before moving code between modules, adding a module or a model option, or changing an interface.
+- `specs/sampling.md` and `docs/datasets.md` when touching data generation; `specs/calibration.md` and `docs/calibration.md` for calibration.
+- `docs/simulate.md` for how a simulation is set up end to end, `docs/testing.md` for the tests and CI, and `docs/thermal_energy_modeling.md` when changing the energy equation.
+- `plans/` for the plans of work, and `plans/backlog.md` for the backlog of code-level findings.
+- The ManyWells paper (cited in `README.md`) documents release v1.0.0, which also generated the published HuggingFace datasets (`solution-seeker-as/manywells`). The code has changed since, so treat it as background rather than the spec for current behaviour; `git log v1.0.0..HEAD` shows what moved, and `docs/corrigendum.md` lists known typos in the paper.

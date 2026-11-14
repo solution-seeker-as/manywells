@@ -6,7 +6,7 @@ terms of the CC BY-NC 4.0 International Public License.
 Created 5 October 2026
 Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
-The math in the project's markdown renders the same on GitHub as in VS Code (AGENTS.md, Math in markdown). VS Code's
+The math in the project's markdown renders the same on GitHub as in VS Code (docs/markdown_math.md). VS Code's
 KaTeX sees the math as written. GitHub parses the markdown before MathJax sees the math, so a backslash escape, an
 emphasis delimiter or an HTML tag in the math changes it first: `\\,` reaches MathJax as a comma, and in inline math
 the `_` of `(x)_i` opens emphasis that the `_` of the next `c_{p}` closes. In display math GitHub passes `\\\\` through
@@ -102,6 +102,4 @@ def test_markdown_math_renders_on_github():
         for offset, what in problems(text):
             line = text.count('\n', 0, offset) + 1
             found.append(f'{path.relative_to(ROOT)}:{line}: {what}')
-    assert not found, 'math that GitHub renders differently from VS Code (AGENTS.md, Math in markdown):\n' + '\n'.join(
-        found
-    )
+    assert not found, 'math that GitHub renders differently from VS Code (docs/markdown_math.md):\n' + '\n'.join(found)
