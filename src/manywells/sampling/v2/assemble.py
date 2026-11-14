@@ -7,12 +7,13 @@ Created 10 November 2026
 Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
 The assembly of a v2 dataset from its run's results (specs/sampling.md, SMP-108 and SMP-110;
-plans/sampler-redesign/datasets-draft.md, Section 2): the wells up to the n-th accepted, in draw order, give the
-tables `wells` (the accepted wells, numbered by `ID` and split into train and test), `samples` (their operating
-points), `geometry` (their surveys) and `pvt` (their tables), and the logs `drawn_wells` (every drawn well) and
-`redraws` (every slot's attempt without an operating point, and every attempt of a dropped well), written by
-datasets.v2 as the dataset's folder and its companion folder of logs. The attempts' search counts and times stay with
-the run: the chunks hold them, and the assembly can write them by chunk as the run's attempt log.
+plans/sampler-redesign/datasets-draft.md, Section 2): each stratum's wells up to the last of its quota's accepted
+wells (run._read_results), in draw order, give the tables `wells` (the accepted wells, numbered by `ID` and split into
+train and test), `samples` (their operating points), `geometry` (their surveys) and `pvt` (their tables), and the logs
+`drawn_wells` (every drawn well) and `redraws` (every slot's attempt without an operating point, and every attempt of
+a dropped well), written by datasets.v2 as the dataset's folder and its companion folder of logs. The attempts' search
+counts and times stay with the run: the chunks hold them, and the assembly can write them by chunk as the run's
+attempt log.
 
 The columns follow datasets-draft.md's Section 2 with the changes of decisions D-122 to D-125
 (plans/sampler-redesign/decisions.md): no columns of the CasADi retry, `lift_start_rule` in both datasets, the counts
@@ -52,7 +53,7 @@ from manywells.geometry import WellGeometry
 from manywells.sampling.v2 import generate, table_build
 from manywells.sampling.v2.mapping import _N_CELLS
 from manywells.sampling.v2.reservoir import _OILS
-from manywells.sampling.v2.run import SettingsMismatch, _read_results, _run_settings, _strip_home
+from manywells.sampling.v2.run import SettingsMismatch, _quotas, _read_results, _run_settings, _strip_home
 from manywells.sampling.v2.tables import _TABLE_CLASSES
 from manywells.sampling.wells import rng_for
 
@@ -291,7 +292,8 @@ def _assemble(results, kind: str, seed: int, n_wells: int, attempts=None) -> dic
     A dataset's tables and logs from its run's results, in draw order: the wells up to the n-th accepted are drawn,
     the first n accepted are the dataset's, numbered by `ID` from 0 in draw order.
 
-    :param results: The wells' results in draw order (run._read_results), from draw index 0
+    :param results: The dataset's drawn wells' results in draw order (run._read_results: each stratum's wells up to
+        the last of its quota's accepted wells)
     :param kind: 'sol' or 'nsol'
     :param seed: The dataset's seed
     :param n_wells: The accepted wells of the dataset
@@ -393,9 +395,9 @@ def _table_build_record(tables) -> dict | None:  # spec: SMP-110, SMP-116
 
 def _records(kind: str, seed: int, n_wells: int, settings: dict, run_dir) -> dict:  # spec: SMP-110
     """The records of a dataset (SMP-110), from its run's settings (run._run_settings): its release label and seed,
-    the configuration, the grid, the backend, the limits, the floor and the best rate's constants, the folder of
-    tables, relative to the run's folder, and its build, the code that ran and assembled it, the lock file's hash,
-    the run's environment and the assembly's platform."""
+    its quotas by stratum, the configuration, the grid, the backend, the limits, the floor and the best rate's
+    constants, the folder of tables, relative to the run's folder, and its build, the code that ran and assembled it,
+    the lock file's hash, the run's environment and the assembly's platform."""
     tables = settings['tables']
     return dict(
         dataset=_DATASETS[kind],
@@ -403,6 +405,7 @@ def _records(kind: str, seed: int, n_wells: int, settings: dict, run_dir) -> dic
         kind=kind,
         seed=seed,
         n_wells=n_wells,
+        quotas=_quotas(n_wells),
         n_slots=settings['n_slots'],
         configuration=V2,
         n_cells=_N_CELLS,
@@ -467,7 +470,7 @@ def write_dataset(run_dir, out, n_wells: int, allow_dirty: bool = False, attempt
         def writer(df):
             df.to_parquet(run_dir / 'attempts' / f'part-{next(part):06d}.parquet', index=False)
 
-    tables = _assemble(_read_results(run_dir), kind, seed, n_wells, attempts=writer)
+    tables = _assemble(_read_results(run_dir, n_wells), kind, seed, n_wells, attempts=writer)
     meta['counts'] = tables.pop('counts')
     name = _DATASETS[kind]
     data = _write_tables(out / name, {key: tables[key] for key in _TABLES}, meta)

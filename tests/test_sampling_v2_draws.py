@@ -510,6 +510,12 @@ def test_label_shares(wells):
     assert share_failures(wells) == []
 
 
+def test_a_wells_stratum_is_its_labels(wells):
+    """SMP-110: a well's stratum, from its labels block alone, is `tail` for a tail well, else its well type."""
+    for w, _ in wells:
+        assert draws._stratum(SEED, w['well']) == ('tail' if w['coverage_tail'] == 'tail' else w['well_type'])
+
+
 def test_marginals(wells):
     """v2: checks, Marginals: a few draws' distributions within their sampling error of the rule's."""
     assert marginal_failures(wells) == []

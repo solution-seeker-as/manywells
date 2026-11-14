@@ -35,13 +35,14 @@ OILS = ('black_oil', 'volatile_oil')
 
 
 def results(run_dir) -> list:
-    """The results of a run's wells, in draw order (run._read_results, without the settings' check)."""
+    """The results of a run's wells, in draw order, from every chunk, by stratum or not (run._read_results, without
+    the settings' check or the quotas)."""
     out = []
     for path in sorted((Path(run_dir) / 'chunks').glob('chunk-*.pkl')):
         with open(path, 'rb') as f:
             pickle.load(f)
             out += pickle.load(f)
-    return out
+    return sorted(out, key=lambda res: res['info']['draw_index'])
 
 
 def share(n, total) -> str:

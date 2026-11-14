@@ -175,7 +175,7 @@ One row per accepted well, sorted by `ID`.
 
 | Column | Unit | Type | Meaning | v1 |
 |---|---|---|---|---|
-| `ID` | – | int32 | the well's ID, 0 to 9,999 in draw order; unique within a dataset only (SMP-110) | kept |
+| `ID` | – | int32 | the well's ID, 0 to 9,999 in draw order; unique within a dataset only. The wells are quotas by stratum, which fill at different draw indices, so the last IDs are mostly subsea wells (SMP-110) | kept |
 | `draw_index` | – | int64 | the well's place $k$ in the sequence of drawn wells, which seeds its draws (SMP-109) | new |
 | `split` | – | category | `train` or `test` (SMP-110) | new |
 | `configuration` | – | string | `v2.0.0` | new |
@@ -364,7 +364,7 @@ One row per node of a table, in the columns of a PVT table file (`PVTTable.read_
 
 ### `redraws`: the redraw log
 
-One row per slot attempt without an operating point, of every well drawn up to the last accepted one, and one per slot attempt of a dropped well, its operating points included (SMP-108). With `samples` it holds every draw of the accepted wells' slots, so the inputs of all draws and of the accepted ones can be compared column by column. The best-rate solves and the life scan's are not in it.
+One row per slot attempt without an operating point, of every drawn well, and one per slot attempt of a dropped well, its operating points included (SMP-108). With `samples` it holds every draw of the accepted wells' slots, so the inputs of all draws and of the accepted ones can be compared column by column. The best-rate solves and the life scan's are not in it.
 
 | Column | Unit | Type | Meaning |
 |---|---|---|---|
@@ -380,7 +380,7 @@ The search counts and times of the attempts stay with the run (SMP-108).
 
 ### `drawn_wells`: the well log
 
-One row per drawn well, from draw index 0 to the last accepted well, accepted or not, in draw order. It has every column of `wells`, with `ID` and `split` null for a well that was not accepted, and:
+One row per drawn well, accepted or not, in draw order: each stratum's wells (the tail, and the core's platform, subsea and onshore wells) from its first to the last of its quota's accepted wells (SMP-110). A draw index of a stratum whose quota was reached earlier is not in the log. It has every column of `wells`, with `ID` and `split` null for a well that was not accepted, and:
 
 | Column | Type | Meaning |
 |---|---|---|
@@ -398,7 +398,7 @@ A crashed well's row holds its draw index, outcome, error and times only. The we
 
 ### `metadata.json`
 
-The records of SMP-110: `dataset`, `release` (`beta1`, `beta2` and so on for a beta, null for the final datasets), `kind`, `seed`, `n_wells`, `n_slots`, `configuration`, `n_cells`, `backend` (`rust`) and `retry_backend` (null, D-122); `limits` and `producibility` (the floors, the margin, the start hurdles, the best rate's lift-gas fractions, the life scan's points and the water cut); `split` (the test share and the strata); `chunk_size`; `tables`, the folder of tables relative to the run's, and `table_build` (the SHA-256 of its `wells.json` and `axes.json`, the draw indices and table wells it covers, and NeqSim's version); `code`, the code that ran the wells, and `assembled_by`, the code that wrote the files, each with its `version` (`datasets.io.code_version`), full `commit` and `dirty`; `lock_sha256`, the SHA-256 of `uv.lock`; `environment`, the versions of Python, numpy and scipy and the machine's architecture that the run had, which the assembly must have too; `created`; `python`, `platform` and `machine`, the assembly's; `counts`, the wells drawn and accepted, the wells by outcome, the slots' attempts by outcome, `samples_off_table` (the samples with a point off their PVT table's grid, PVT-TAB-2), `dead_dates` (n: those that started a lift and those that ended a life) and the CPU seconds; and `files`, each file's rows and SHA-256. The logs' copy adds `companion_of`.
+The records of SMP-110: `dataset`, `release` (`beta1`, `beta2` and so on for a beta, null for the final datasets), `kind`, `seed`, `n_wells`, `quotas` (the wells by stratum: `tail`, `platform`, `subsea` and `onshore`), `n_slots`, `configuration`, `n_cells`, `backend` (`rust`) and `retry_backend` (null, D-122); `limits` and `producibility` (the floors, the margin, the start hurdles, the best rate's lift-gas fractions, the life scan's points and the water cut); `split` (the test share and the strata); `chunk_size`; `tables`, the folder of tables relative to the run's, and `table_build` (the SHA-256 of its `wells.json` and `axes.json`, the draw indices and table wells it covers, and NeqSim's version); `code`, the code that ran the wells, and `assembled_by`, the code that wrote the files, each with its `version` (`datasets.io.code_version`), full `commit` and `dirty`; `lock_sha256`, the SHA-256 of `uv.lock`; `environment`, the versions of Python, numpy and scipy and the machine's architecture that the run had, which the assembly must have too; `created`; `python`, `platform` and `machine`, the assembly's; `counts`, the wells drawn and accepted, the wells by outcome, the slots' attempts by outcome, `samples_off_table` (the samples with a point off their PVT table's grid, PVT-TAB-2), `dead_dates` (n: those that started a lift and those that ended a life) and the CPU seconds; and `files`, each file's rows and SHA-256. The logs' copy adds `companion_of`.
 
 ### Labels and codes
 

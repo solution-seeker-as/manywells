@@ -20,8 +20,9 @@ the run's processes cap themselves at --memory-cap:
 OUT holds tables/ (the table fluids' build), run/ (the run's chunks and settings), and the dataset's folder, named
 with the code's release label (manywells-<kind>-2-beta2/ for the second beta, SMP-50), with its companion folder of
 logs, <dataset>-logs/. Every step resumes: a stopped run of the script carries on where it stopped. The table wells are
-drawn for a first guess of the draw indices the run needs (--draws, by default 1.5 n rounded up to the chunks); where
-the run needs more, the tables are extended and the run carries on.
+drawn for a first guess of the draw indices the run needs (--draws, by default 1.8 n rounded up to the chunks: the
+subsea wells' quota fills last, at about 1.8 n in nsol-2 and 2.1 n in sol-2 by the first beta's wells); where the run
+needs more, the tables are extended to the draw indices that it asks for, and the run carries on.
 
 NeqSim's build runs in an environment of its own (table_build.py's docstring), twice: the fluids, and, once their GOR
 axes are written, the tables. --neqsim run (the default) launches it, each JVM's process capped at 8 GB of address
@@ -128,7 +129,7 @@ def main():
 
     out, t0 = args.out, time.perf_counter()
     tables = out / 'tables'
-    n_draws = args.draws or CHUNK * math.ceil(1.5 * args.n / CHUNK)
+    n_draws = args.draws or CHUNK * math.ceil(1.8 * args.n / CHUNK)
     if (tables / 'wells.json').exists():
         n_draws = max(n_draws, json.loads((tables / 'wells.json').read_text())['wells_range'][1])
     while True:
@@ -140,8 +141,7 @@ def main():
             sys.exit(f'the run stopped: {e}')
         if state['complete']:
             break
-        rate = max(state['accepted'], 1) / max(state['drawn'], 1)
-        n_draws += CHUNK * math.ceil(1.1 * (args.n - state['accepted']) / rate / CHUNK)
+        n_draws = max(n_draws + CHUNK, CHUNK * math.ceil(state['draws_needed'] / CHUNK))
         print(f'the run needs more draw indices: tables for 0 to {n_draws - 1}', flush=True)
     meta = write_dataset(out / 'run', out, args.n, allow_dirty=args.allow_dirty)
     counts = meta['counts']
