@@ -79,8 +79,10 @@ def beta(dataset, logs):
     print('kept lifted wells of the beta: redraws without lift gas, and redraws per well, by lift rule')
     for rule, g in r.groupby('lift_start_rule', observed=True):
         ww = w[w.lift_start_rule == rule]
-        print(f'  {rule:20s} wells {len(ww):5d}  redraws {len(g):7d}  without lift gas {np.mean(g.WGL == 0):.3f}'
-              f'  per well: mean {ww.n_redraws.mean():6.1f}, median {ww.n_redraws.median():5.0f}')
+        print(
+            f'  {rule:20s} wells {len(ww):5d}  redraws {len(g):7d}  without lift gas {np.mean(g.WGL == 0):.3f}'
+            f'  per well: mean {ww.n_redraws.mean():6.1f}, median {ww.n_redraws.median():5.0f}'
+        )
 
 
 def compare(after, runs):
@@ -89,7 +91,9 @@ def compare(after, runs):
     for k, path in sorted(after_files.items()):
         a, b = _load(path), _load(before_files[k])
         sa, sb = summary(a), summary(b)
-        rows.append(dict(k=k, **{f'{key}_after': v for key, v in sa.items()}, **{f'{key}_before': v for key, v in sb.items()}))
+        rows.append(
+            dict(k=k, **{f'{key}_after': v for key, v in sa.items()}, **{f'{key}_before': v for key, v in sb.items()})
+        )
         if not sa['flagged']:
             keys = ('u', 'w_lg', 'p_s', 'p_r', 'gor', 'wlr', 'WTOT', 'PBH', 'PWH')
             equal = sa['outcome'] == sb['outcome'] and len(a['samples']) == len(b['samples'])
@@ -115,17 +119,25 @@ def compare(after, runs):
         )
     f = d[d.flagged_after]
     print()
-    print(f'flagged wells: {len(f)}; their redraws before {f.redraws_before.sum()}, of which without lift gas '
-          f'{f.off_redraws_before.sum()}; after {f.redraws_after.sum()}')
-    print(f'flagged wells\' accepted samples without lift gas before: {f.accepted_off_before.sum()} of '
-          f'{f.accepted_before.sum()}')
+    print(
+        f'flagged wells: {len(f)}; their redraws before {f.redraws_before.sum()}, of which without lift gas '
+        f'{f.off_redraws_before.sum()}; after {f.redraws_after.sum()}'
+    )
+    print(
+        f"flagged wells' accepted samples without lift gas before: {f.accepted_off_before.sum()} of "
+        f'{f.accepted_before.sum()}'
+    )
     moved = d[d.outcome_before != d.outcome_after]
     print('outcomes that moved:', [(r.k, r.rule_after, r.outcome_before, r.outcome_after) for r in moved.itertuples()])
     acc = d[d.outcome_after == 'accepted']
-    print(f'accepted lifted wells\' samples without lift gas: before {acc.accepted_off_before.sum() / max(acc.accepted_before.sum(), 1):.3f}, '
-          f'after {acc.accepted_off_after.sum() / max(acc.accepted_after.sum(), 1):.3f}')
-    print(f'total slot solves before {d.slot_solves_before.sum()}, after {d.slot_solves_after.sum()}; '
-          f'wall time before {d.seconds_before.sum():.0f} s, after {d.seconds_after.sum():.0f} s')
+    print(
+        f"accepted lifted wells' samples without lift gas: before {acc.accepted_off_before.sum() / max(acc.accepted_before.sum(), 1):.3f}, "
+        f'after {acc.accepted_off_after.sum() / max(acc.accepted_after.sum(), 1):.3f}'
+    )
+    print(
+        f'total slot solves before {d.slot_solves_before.sum()}, after {d.slot_solves_after.sum()}; '
+        f'wall time before {d.seconds_before.sum():.0f} s, after {d.seconds_after.sum():.0f} s'
+    )
 
 
 if __name__ == '__main__':
