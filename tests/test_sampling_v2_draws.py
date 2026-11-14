@@ -402,7 +402,7 @@ def share_failures(wells):
     def categorical(name, subset, key, shares):
         checks.extend((f'{name} {key} {v}', subset, lambda w, v=v: w[key] == v, p) for v, p in shares.items())
 
-    categorical('core', core, 'well_type', dict(platform=0.55, subsea=0.35, onshore=0.10))
+    categorical('core', core, 'well_type', dict(platform=0.46, subsea=0.46, onshore=0.08))
     categorical('core', core, 'fluid_type', dict(black_oil=0.55, volatile_oil=0.10, gas_condensate=0.15, gas=0.20))
     categorical('core', core, 'life_stage', dict(initial=0.25, mid_life=0.40, late=0.35))
     categorical('tail', tail, 'well_type', dict.fromkeys(LABELS['well_type'], 1 / 3))

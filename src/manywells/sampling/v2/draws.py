@@ -59,7 +59,8 @@ _TUBING = {  # Inner diameter (m) by nominal size (in)  # spec: SMP-75
 }
 
 _TAIL_SHARE = 0.20  # spec: SMP-53
-_WELL_TYPES, _P_WELL_TYPE = ('platform', 'subsea', 'onshore'), (0.55, 0.35, 0.10)  # spec: SMP-54
+# Drawn so that the accepted core wells are 0.55, 0.35 and 0.10 (D-5, D-157)
+_WELL_TYPES, _P_WELL_TYPE = ('platform', 'subsea', 'onshore'), (0.46, 0.46, 0.08)  # spec: SMP-54
 _FLUID_TYPES, _P_FLUID = ('black_oil', 'volatile_oil', 'gas_condensate', 'gas'), (0.55, 0.10, 0.15, 0.20)
 _P_DRY_GAS = 0.07  # Share of dry gas among the wet and dry gas wells  # spec: SMP-55
 _P_WET_START, _WLR_WET = 0.3, (0.05, 0.9)  # A core oil's wet start under pressure support (D-140)  # spec: SMP-69

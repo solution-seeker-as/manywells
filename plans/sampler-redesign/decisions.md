@@ -1543,3 +1543,31 @@ Entries D-150 to D-153 follow the analysis of the first beta, `manywells-sol-2-b
 - **Needs sign-off:** yes (a release's name).
 - **Used by:** `specs/sampling.md`, SMP-50; `datasets/v2.py`.
 - **Ruling:** none on the point itself. Bjarne, 2026-11-14: the branch was merged into `develop` at his direction, with the label as a working assumption.
+
+### D-157 · The well types are drawn so that the accepted core wells keep D-5's shares
+
+- **Step:** a review of the sampler's rulings at Bjarne's ask, 2026-11-14, item 2: the start hurdle (D-151) moved the accepted wells' mix off D-5's shares. Revises SMP-54's drawn shares; D-5's shares stay.
+- **Choice made:** the core's well types are drawn as platform 0.46, subsea 0.46 and onshore 0.08, so that the core wells that the datasets accept are D-5's 0.55, 0.35 and 0.10 within a point or two in both datasets. D-5's shares are taken as the accepted core wells', a working assumption. The tail keeps its equal shares (SMP-53), and the hurdles their values.
+- **Alternatives:**
+  - *Keep the drawn shares*, D-5's as the draws' shares. The accepted core wells are then about 0.63, 0.25 and 0.11 in `sol-2` and 0.62, 0.26 and 0.12 in `nsol-2`, and the onshore wells 16% to 17% of all accepted wells. The well type with the least evidence behind it gains most, since nothing in hand counts onshore wells that flow or are gas-lifted (SMP-54, checkpoint A1).
+  - *Shares for each dataset*, 0.45, 0.46 and 0.08 for `sol-2` and 0.47, 0.45 and 0.08 for `nsol-2`, which meet D-5's shares a little more closely. SMP-54 is one draw for both datasets, and a `sol-2` well is its `nsol-2` life at one date (D-105), so one set is taken.
+  - *A lower subsea hurdle*, which would keep more subsea wells but undo D-151's reason, the subsea wells' weak starts.
+  - *A higher permeability* in place of the hurdle, with which item 1 of the review would have moved the mix. The gas classes' factor stays (D-156), and a higher subsea median raises the top of the rates with their middle (D-151).
+  - *The tail's shares too*, so that all accepted wells are 0.10 onshore. The tail's equal shares are a design choice for coverage (SMP-53); with them, the onshore wells are about 15% of all accepted wells.
+- **Basis:** a design choice of the datasets' mix, made with the model's own outcomes. The drawn shares are D-5's over each type's accepted share of its drawn core wells, normalised. On the first beta's drawn wells with the hurdles, as D-151 measured them (a well below its hurdle dropped, the others with the beta's outcomes), 0.82 of the platform, 0.51 of the subsea and 0.80 of the onshore core wells are accepted in `sol-2`, out of 9859 drawn core wells, and 0.87, 0.58 and 0.92 in `nsol-2`, out of 8624 (`plans/evidence/well_type_mix.py beta`). The first 400 `sol-2` draws and 300 `nsol-2` draws of develop's pilots agree within their counts (`well_type_mix.py pilot`).
+- **Realism:** by the beta's drawn wells weighted to the new shares:
+
+  | | `sol-2` | `nsol-2` |
+  |---|---|---|
+  | Accepted core wells, platform, subsea, onshore: drawn 0.55, 0.35, 0.10 | 0.634, 0.254, 0.112 | 0.618, 0.264, 0.118 |
+  | Drawn 0.46, 0.46, 0.08 | 0.556, 0.350, 0.094 | 0.539, 0.362, 0.099 |
+  | Onshore wells among all accepted wells, before; after | 0.160; 0.147 | 0.165; 0.151 |
+  | Tail wells among all accepted wells, before; after | 0.169; 0.176 | 0.176; 0.182 |
+  | Fluid types among the accepted wells (black oil, volatile oil, condensate, gas), after | 0.530, 0.161, 0.151, 0.158 | 0.513, 0.148, 0.166, 0.173 |
+
+  The fluid types move by less than half a point. The subsea core wells that the datasets keep are the ones above the hurdle, as before; there are only more of them.
+- **Cost:** 10,000 accepted wells take about 15,160 draws of `sol-2` and 13,830 of `nsol-2`, where the hurdle alone took about 14,580 and 13,350: 4% more draws, and table fluids for them. A draw's well type changes for the draws whose labels' number falls between the old and the new shares' bounds: their water depth, surface temperature and so their table fluids' $p_i$ and $T_r$ change, so the tables of those draws are built again before the next generation, as they are for the draws beyond the beta's (`choke-rates-measurements.md`, section 5) and for the redraws of the beta's analysis (section 12). No pilot was run with the new shares for that reason: each type's acceptance is the model's, measured on the beta's 18,483 drawn core wells, and a type's share does not change how its wells are drawn.
+- **Implemented** (2026-11-14): `sampling/v2/draws.py` (`_P_WELL_TYPE`); SMP-54; the datasheets and the CHANGELOG; `tests/test_sampling_v2_draws.py`; `plans/evidence/well_type_mix.py`.
+- **Needs sign-off:** yes (sampling: SMP-54's drawn shares, and the reading of D-5's shares as the accepted core wells').
+- **Used by:** `specs/sampling.md`, SMP-54; `sampling/v2/draws.py`; the datasheets.
+- **Ruling:**
