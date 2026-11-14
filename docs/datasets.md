@@ -243,8 +243,8 @@ The other groups' columns are float64 unless their row says otherwise.
 | Column | Unit | Meaning | v1 |
 |---|---|---|---|
 | `p_sep`, `T_sep` | bar, K | the host's first-stage separator (`BlackOil.p_sep`, `T_sep`; SMP-66) | new |
-| `p_s_nom` (s) | bar | the nominal pressure downstream of the choke at the date, around which `PDC` is drawn (SMP-66, SMP-89) | renamed: `p_s` → `p_s_nom` |
-| `r_s` (s) | – | the separator's factor at the date (SMP-66, SMP-89) | new |
+| `p_s_nom` (s) | bar | the nominal pressure downstream of the choke at the date, around which `PDC` is drawn (SMP-66, SMP-89); a tail well's is SMP-66's tail draw as drawn (SMP-92) | renamed: `p_s` → `p_s_nom` |
+| `r_s` (s) | – | the separator's factor at the date (SMP-66, SMP-89); 1 for a tail well (SMP-92) | new |
 | `dp_flowline` | bar | a subsea well's flowline and riser loss; 0 otherwise (SMP-66) | new |
 | `api`, `sg_gas` | °API, – | the stock-tank oil's API gravity and the gas gravity (SMP-67); for a published example, or a fluid taken as its equilibrium phase, the fluid's own as reported at the separator (SMP-114, SMP-115) | new |
 | `rho_o` | kg/m³ | the stock-tank oil's density (`BlackOil.rho_o`, or the table's) | kept |
@@ -263,7 +263,8 @@ The other groups' columns are float64 unless their row says otherwise.
 | `C_f`, `f_int` | – | Søreide's factor and the factor on C₂ to C₆, matched to the gravities (SMP-113) | new |
 | `c7_mol` | – | the reservoir fluid's heptanes-plus mole fraction, after its GOR is set | new |
 | `gor_moved` | – | the factor by which SMP-115's rule moved the GOR; null where `matched` | new |
-| `api_drawn`, `sg_gas_drawn`, `R_si_drawn`, `p_sat_drawn` | °API, –, Sm³/Sm³, bar | the `fluid` block's draws, kept as records where the table replaces them (SMP-68, SMP-114, SMP-115) | new |
+| `fluid_redraws` | – | the draws of the well's fluid rejected before the kept one, because their built fluid was not of the well's class (SMP-115); 0 for a well that keeps its own draw | new |
+| `api_drawn`, `sg_gas_drawn`, `R_si_drawn`, `p_sat_drawn` | °API, –, Sm³/Sm³, bar | the `fluid` block's draws, those of the fluid's draw that was kept (SMP-115), kept as records where the table replaces them (SMP-68, SMP-114, SMP-115) | new |
 | `offset_api`, `offset_sg_gas`, `offset_gor` | °API, –, – | the fluid's offsets of the separator's report from one stage at standard conditions: the gravities' differences and the GORs' ratio (SMP-113) | new |
 | `field_api`, `field_sg_gas`, `field_gor` | °API, –, Sm³/Sm³ | the fluid as reported through the well's separator and a stock tank (SMP-113) | new |
 | `n_gors`, `table_nodes` | – | the GORs on the table set's axis, and the nodes of its tables (SMP-116) | new |
@@ -323,7 +324,7 @@ The other groups' columns are float64 unless their row says otherwise.
 | `h` (s) | W/(m² K) | `ThermalModel.h` at the date (SMP-81, SMP-88) | kept |
 | `U_t`, `k_e`, `well_age` | W/(m² K), W/(m K), d | the draws behind the heat transfer, at the initial-stage draw (SMP-81) | new |
 | `cp_o`, `cp_w`, `cp_g` | J/(kg K) | the heat capacities (`FluidModel`; SMP-82) | kept |
-| `flags` | – | string: the draws' truncations, redraws and fallbacks that applied, joined by `;`, such as SMP-60's `geometry_redrawn:n`, SMP-75's `design_rate_above_tubing_capacity`, SMP-77's `choke_at_erosional_rate`, a choke made smaller to hold the well below its tubing's erosional velocity, or `erosional_cap_unmet` where its search did not reach it, and SMP-94's `lift_gas_always_on`, a lifted `sol-2` well that cannot flow without lift gas and so has no sample without it | new |
+| `flags` | – | string: the draws' truncations, redraws and fallbacks that applied, joined by `;`, such as SMP-60's `geometry_redrawn:n`, SMP-75's `design_rate_above_tubing_capacity`, SMP-77's `choke_at_erosional_rate`, a choke made smaller to hold the well below its tubing's erosional velocity, or `erosional_cap_unmet` where its search did not reach it, and SMP-94's `lift_gas_always_on`, a lifted `sol-2` well that cannot flow without lift gas and so has no sample without it. The lift block's flags, `injection_at_packer`, `injection_raised_to_0.3L` and `lift_capacity_at_bound`, are those of the lift design that the well uses (SMP-90); a well that is not lifted has none | new |
 
 The lift design's columns, `injection_md` to `psi_lg`, are null for a well without lift: in `sol-2` a well natural at its date, in `nsol-2` a well with no lifted date in its life (`lift` `natural`), whose draws may have held a design that its life never used.
 
@@ -385,8 +386,8 @@ One row per drawn well, accepted or not, in draw order: each stratum's wells (th
 | Column | Type | Meaning |
 |---|---|---|
 | `outcome` | category | `accepted`, why the well was dropped (SMP-106), or `crash` where its generation raised |
-| `not_producible_reason` | category | the best rate's status of a well dropped for it (SMP-103), its choke's sizing's (SMP-77), or `below_start_hurdle` for a platform or subsea well whose design rate lies below its start hurdle (SMP-102); null otherwise |
-| `error` | string | the message of an `invalid_input` or `table_failed` well, or a crash's traceback, the home directory written as `~`; null otherwise |
+| `not_producible_reason` | category | the best rate's status of a well dropped for it (SMP-103), its choke's sizing's (SMP-77), `below_start_hurdle` for a platform or subsea well whose design rate lies below its start hurdle (SMP-102), or `no_fluid_of_class` for a table well none of whose fluid draws gives a fluid of its class (SMP-115); null otherwise |
+| `error` | string | the message of an `invalid_input` or `table_failed` well, or of a well without a fluid of its class, or a crash's traceback, the home directory written as `~`; null otherwise |
 | `n_attempts` | int32 | the attempts of its slots; 0 for a well dropped before its slots |
 | `n_several_stable` | int32 | its samples whose root set had more than one stable root (SOL-6) |
 | `best_rate_outcomes` | list of strings | the outcomes of its best-rate solves, one per lift-gas rate (SMP-103; `nsol-2`: at its start), or of its choke's sizing's solves for a well dropped there (SMP-77) |
@@ -427,14 +428,14 @@ A label is stored as its string, and its code is its position in the list (D-89)
 | `choke_model` | wells | 0 `simpson` |
 | `chk_profile` | wells | 0 `linear`, 1 `sigmoid`, 2 `convex`, 3 `concave` |
 | `lift` | wells | 0 `natural`, 1 `gas_lift` |
-| `lift_start_rule` | wells | 0 `from_start`, 1 `static_check`, 2 `end_of_natural_flow` (n), 3 `drawn_time`, 4 `no_natural_flow` (s: the producibility filter's lift, SMP-103; n: a dead date's, SMP-106) |
+| `lift_start_rule` | wells | 0 `from_start`, 1 `static_check`, 2 `end_of_natural_flow` (n), 3 `drawn_time`, 4 `no_natural_flow` (the producibility filter's lift, SMP-103, in `nsol-2` from the life's start; n: also a dead date's, SMP-106) |
 | `split` | wells | 0 `train`, 1 `test` |
 | `SWEEP` | samples (n) | 0 `choke`, 1 `lift` |
 | `FRBH`, `FRWH` | samples | 0 `bubbly`, 1 `dispersed-bubbly`, 2 `slug`, 3 `churn`, 4 `annular` (SLIP-16) |
 | `outcome` | redraws | 0 `operating_point`, 1 `no_operating_point`, 2 `solver_failure` |
 | `reason` | redraws | 0 `p_r_le_p_s`, 1 `no_root`, 2 `exception`, 3 `invalid_row`, 4 `incomplete_scan`, 5 `unstable_only` |
 | `outcome` | drawn_wells | 0 `accepted`, 1 `not_producible`, 2 `best_rate_solver_failure`, 3 `invalid_input`, 4 `slot_limit` (s), 5 `redraw_limit`, 6 `solver_failure_limit`, 7 `dead_date` (n), 8 `short_life` (n), 9 `table_failed`, 10 `crash` |
-| `not_producible_reason` | drawn_wells | 0 `water_cut`, 1 `below_floor`, 2 `no_operating_point`, 3 `solver_failure`, 4 `below_start_hurdle` |
+| `not_producible_reason` | drawn_wells | 0 `water_cut`, 1 `below_floor`, 2 `no_operating_point`, 3 `solver_failure`, 4 `below_start_hurdle`, 5 `no_fluid_of_class` |
 
 Reasons 0 and 1 make an attempt `no_operating_point`, reasons 2 to 5 a `solver_failure` (SMP-104).
 

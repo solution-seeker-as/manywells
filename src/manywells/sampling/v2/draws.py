@@ -211,22 +211,7 @@ def draw_well(
       `packer_offset`, `T_lg`, `psi_lg` (its share of the way from the ambient to T_r), `glr_cap`, `w_lg_max`.
     - heat: `h`, `age_years`, `U_t`, `k_e`, `cp_o`, `cp_w`, `cp_g`.
     """
-    if stage is not None and stage not in _STAGES:
-        raise ValueError(f'stage must be one of {_STAGES} or None, got {stage!r}')
-    w = {'well': k}
-    x = SimpleNamespace(flags=[], start=start)  # Working values that the well's draws do not record
-
-    def gen(block):  # spec: SMP-109
-        return rng_for(seed, k, 'v2', block)
-
-    # spec: SMP-51. The blocks, in their order
-    _labels(gen('labels'), w, stage)
-    _depth(gen('depth'), w)
-    _geometry(gen('geometry'), w, x)
-    _water(gen('water'), w)
-    _pressure(gen('pressure'), w, x)
-    _temperature(gen('temperature'), w, x)
-    _separator(gen('separator'), w)
+    w, x, gen = _above_fluid(seed, k, stage, start)
     _fluid(gen('fluid'), w, x, fluid)
     _stage(gen('stage'), w, x)
     _inflow(gen, w, x)
@@ -237,6 +222,47 @@ def draw_well(
     _heat(gen('heat'), w)
     w['flags'] = ';'.join(x.flags)
     return w, x.stations
+
+
+def _above_fluid(seed, k, stage, start) -> tuple:  # spec: SMP-51
+    """A well's blocks above the fluid block, in their order: the draws so far, the working values that the draws do
+    not record, and the blocks' generators (draw_well's arguments)."""
+    if stage is not None and stage not in _STAGES:
+        raise ValueError(f'stage must be one of {_STAGES} or None, got {stage!r}')
+    w = {'well': k}
+    x = SimpleNamespace(flags=[], start=start)
+
+    def gen(block):  # spec: SMP-109
+        return rng_for(seed, k, 'v2', block)
+
+    _labels(gen('labels'), w, stage)
+    _depth(gen('depth'), w)
+    _geometry(gen('geometry'), w, x)
+    _water(gen('water'), w)
+    _pressure(gen('pressure'), w, x)
+    _temperature(gen('temperature'), w, x)
+    _separator(gen('separator'), w)
+    return w, x, gen
+
+
+def fluid_redraws(seed: int, k: int, n: int) -> list:  # spec: SMP-115
+    """
+    The redraws 1 to n of well k's fluid block, for a table well whose built fluid leaves its class: the block drawn
+    again with the blocks above it as they are, redraw a from its own generator, rng_for(seed, k, 'v2', 'fluid', a)
+    (SMP-109). The well's own draw, draw_well's, is the block's first.
+
+    :param seed: The dataset's seed
+    :param k: The well's draw index
+    :param n: The number of redraws
+    :return: One dict per redraw of the drawn `api`, `sg_gas`, `p_sat` (bar) and `R_i` (Sm3/Sm3)
+    """
+    above, _, _ = _above_fluid(seed, k, None, None)
+    out = []
+    for a in range(1, n + 1):
+        w = dict(above)
+        _fluid(rng_for(seed, k, 'v2', 'fluid', a), w, SimpleNamespace(flags=[], start=None), None)
+        out.append({key: w[key] for key in ('api', 'sg_gas', 'p_sat', 'R_i')})
+    return out
 
 
 def _is_tail(w) -> bool:

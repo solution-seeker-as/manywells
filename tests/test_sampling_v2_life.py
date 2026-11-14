@@ -228,8 +228,10 @@ def check_sol2_well(lf, w, drawn_stage):
         lo, hi = {'initial': (0, 1), 'mid_life': (1, T / 2), 'late': (T / 2, T)}[stage]
         assert lo <= t <= hi and lf.stage(t) == stage
     st = lf.state(t)
-    assert (w['p_r'], w['R_go'], w['wlr'], w['p_s']) == (st['p_r'], st['gor'], st['wlr'], st['p_s_nom'])
-    assert (w['h'], w['roughness'], w['r_s'], w['r_p']) == (st['h'], st['roughness'], lf.r_s(t), w['p_r'] / w0['p_i'])
+    assert (w['p_r'], w['R_go'], w['wlr']) == (st['p_r'], st['gor'], st['wlr'])
+    # A tail well's downstream pressure is SMP-66's tail draw, without the separator's factor (SMP-92)
+    assert (w['p_s'], w['r_s']) == ((lf.p_s_nom(0.0), 1.0) if is_tail(lf) else (st['p_s_nom'], lf.r_s(t)))
+    assert (w['h'], w['roughness'], w['r_p']) == (st['h'], st['roughness'], w['p_r'] / w0['p_i'])
     assert all(w[key] == st[key] or (math.isnan(w[key]) and math.isnan(st[key])) for key in _COEF_KEYS)
     assert w['below_hydrostatic'] == (w['p_r'] < w0['p_h'])
     if lf.oil:
@@ -495,6 +497,20 @@ def test_a_sol2_well_is_its_life_at_a_date(lives, sol2_wells):
     core = [w for w in sol2_wells if w['coverage_tail'] == 'core']
     assert {w['life_stage'] for w in core} == set(_STAGES)
     assert {w['lift_start_rule'] for w in sol2_wells} == {'from_start', 'static_check', 'drawn_time', None}
+
+
+def test_a_sol2_tail_well_takes_its_downstream_pressure_as_drawn(lives, sol2_wells):
+    """SMP-92: a tail well is at the end of its life, where the separator's factor would have scaled SMP-66's tail
+    draw of the downstream pressure down; a `sol-2` tail well takes the draw as it is, and an nsol-2 well's life keeps
+    its steps."""
+    tail = [(lf, w) for lf, w in zip(lives, sol2_wells) if is_tail(lf)]
+    stepped = [(lf, w) for lf, w in tail if lf.r_s(lf.T_life) < 1.0]
+    assert len(tail) >= 15 and len(stepped) >= 10
+    for lf, w in tail:
+        assert w['p_s'] == max(lf.w0['p_s'], 1.5) and w['r_s'] == 1.0
+    for lf, w in stepped:
+        assert lf.p_s_nom(lf.T_life) < w['p_s'] or lf.p_s_nom(lf.T_life) == 1.5 or lf.w0['p_s'] == lf.w0['dp_fl']
+    assert max(w['p_s'] - lf.w0['dp_fl'] for lf, w in tail) > 80.0  # The tail's high downstream pressures are back
 
 
 def test_a_sol2_wells_date_is_uniform_in_its_stage(lives, sol2_wells):

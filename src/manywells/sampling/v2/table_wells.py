@@ -23,7 +23,9 @@ tables by running the four steps again with a larger n.
 DIR/wells.json holds `kind` ('sol' or 'nsol'), `seed`, `wells_range` ([0, n]: the draw indices it covers) and `wells`,
 one record per table well, in draw order: `well` (its draw index), `fluid_class`, `coverage_tail`, the drawn `api`,
 `sg_gas`, `p_sat`, `p_i`, `p_r` (at the drawn stage), `T_r`, `T_s`, `p_sep` and `T_sep`, `R_si` (the drawn initial
-GOR), `composition_seed`, the grid's `T_axis` and `p_top` (table_build._well_grid) and `source` (table_build._fluid_source).
+GOR), `composition_seed`, the grid's `T_axis` and `p_top` (table_build._well_grid), `source`
+(table_build._fluid_source) and `redraws`, the fluid's redraws in their order (SMP-115), each a dict of the fluid
+block's `api`, `sg_gas`, `p_sat` and `R_si` drawn again and of the redraw's `composition_seed` and `source`.
 DIR/axes.json holds, by draw index as a string, `gors` (Sm3/Sm3, ascending), `p_r_range` (bar) and `gor_range`
 (Sm3/Sm3), the reservoir pressures and producing GORs that the axis covers before the GOR's drift, and the fluid's
 `R_i`; or `error`, the traceback of a well whose axis could not be made, which table_build.py records as the well's
@@ -35,7 +37,7 @@ import math
 import traceback
 from pathlib import Path
 
-from manywells.sampling.v2.draws import draw_well
+from manywells.sampling.v2.draws import draw_well, fluid_redraws
 from manywells.sampling.v2.life import Life, _sol2_date
 from manywells.sampling.v2.reservoir import _GOR_NODES, _OILS, _producing_gor
 from manywells.sampling.v2.samples import _P_R_DRIFT, _RATIO_DRIFT
@@ -44,6 +46,7 @@ from manywells.sampling.v2.tables import _TABLE_CLASSES
 from manywells.sampling.wells import rng_for
 
 _GOR_STEP = 1.25  # The largest ratio of neighbouring GORs on a table set's axis  # spec: SMP-116
+_FLUID_REDRAWS = 9  # The redraws of a table well's fluid that the build may take, after its own draw  # spec: SMP-115
 _MARGIN = 1e-6  # The axis's margin beyond the GORs it covers, for the CSV's rounding to ten significant digits
 _RECORD = ('well', 'fluid_class', 'coverage_tail', 'api', 'sg_gas', 'p_sat', 'p_i', 'p_r', 'T_r', 'T_s', 'p_sep')
 _RECORD += ('T_sep',)
@@ -52,7 +55,8 @@ _RECORD += ('T_sep',)
 def _table_well(seed: int, k: int) -> dict | None:  # spec: SMP-112
     """
     Well k's record of wells.json (the module's docstring) if its fluid class takes a table, else None. The
-    `composition` generator, rng_for(seed, k, 'v2', 'composition'), draws the composition's seed, then the source.
+    `composition` generator, rng_for(seed, k, 'v2', 'composition'), draws the composition's seed, then the source;
+    redraw a's generator, rng_for(seed, k, 'v2', 'composition', a), draws them for that redraw of the fluid.
 
     :param seed: The dataset's seed
     :param k: The well's draw index
@@ -66,6 +70,14 @@ def _table_well(seed: int, k: int) -> dict | None:  # spec: SMP-112
     rec = {key: w[key] for key in _RECORD}
     rec.update(R_si=w['R_i'], composition_seed=comp_seed, T_axis=[float(T) for T in T_axis], p_top=float(p_top))
     rec['source'] = _fluid_source(w['fluid_class'], u_source, u_key)
+    # spec: SMP-115. The fluid's redraws, which the build takes in their order where a built fluid leaves its class:
+    # the fluid block's, and the composition's seed and source from the redraw's own generator (SMP-109)
+    rec['redraws'] = []
+    for a, f in enumerate(fluid_redraws(seed, k, _FLUID_REDRAWS), start=1):
+        r = rng_for(seed, k, 'v2', 'composition', a)
+        comp_seed, u_source, u_key = int(r.integers(2**63)), r.random(), r.random()
+        redraw = dict(api=f['api'], sg_gas=f['sg_gas'], p_sat=f['p_sat'], R_si=f['R_i'], composition_seed=comp_seed)
+        rec['redraws'].append(redraw | dict(source=_fluid_source(w['fluid_class'], u_source, u_key)))
     return rec
 
 

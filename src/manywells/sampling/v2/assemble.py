@@ -82,8 +82,8 @@ _GEOMETRY = {  # The survey's parameters, by the draws' keys
     'drain_length': 'drain_length',
 }
 _TABLE_FLUID = (  # A table fluid's columns: its composition, and what its build records
-    'comp_w1 comp_w2 comp_w3 z_c7p M_c7p alpha_c7p C_f f_int c7_mol gor_moved api_drawn sg_gas_drawn R_si_drawn '
-    'p_sat_drawn offset_api offset_sg_gas offset_gor field_api field_sg_gas field_gor n_gors table_nodes'
+    'comp_w1 comp_w2 comp_w3 z_c7p M_c7p alpha_c7p C_f f_int c7_mol gor_moved fluid_redraws api_drawn sg_gas_drawn '
+    'R_si_drawn p_sat_drawn offset_api offset_sg_gas offset_gor field_api field_sg_gas field_gor n_gors table_nodes'
 ).split()
 _LIFE = (  # An nsol-2 well's life (life.Life.parameters), its end, the end that the scan gave, and its plan's p_change
     'T_life T_end T_scan t_plateau decline_D decline_b gamma_p r_p_start r_p_end F_bt wlr_bt water_start water_end '
@@ -214,6 +214,7 @@ def _well_row(res: dict, kind: str) -> dict:  # spec: SMP-108, SMP-110
         row.update(C_f=comp.get('Cf', math.nan), f_int=comp.get('intermediates_factor', math.nan))
         row.update(api_drawn=drawn['api'], sg_gas_drawn=drawn['sg_gas'], R_si_drawn=drawn['R_si'])
         row.update(p_sat_drawn=drawn['p_sat'], gor_moved=tab.get('gor_moved') or math.nan, c7_mol=tab.get('c7_mol'))
+        row.update(fluid_redraws=tab.get('fluid_redraws', math.nan))  # spec: SMP-115
         row.update({f'offset_{key}': offsets.get(key, math.nan) for key in ('api', 'sg_gas', 'gor')})
         row.update({f'field_{key}': field.get(key, math.nan) for key in ('api', 'sg_gas', 'gor')})
         row.update(n_gors=len(tab.get('gors', [])), table_nodes=tab.get('nodes', math.nan))

@@ -399,6 +399,7 @@ def test_a_sign_change_at_a_choked_cell_is_no_root():
     the attempt has no operating point."""
     life = Life(2026, 323)
     w = sol2_well(life)
+    w = dict(w, p_s=life.state(w['date'])['p_s_nom'])  # The separator's factor at its date, a tail well's before D-159
     wp, bc = WellBuilder(life.w0, life.stations, design=life.design).case(_sol2_attempt(2026, w, 16, 0))
     out = generate._solve(wp, bc)
     assert (out['outcome'], out['reason']) == ('no_operating_point', 'no_root')
@@ -979,15 +980,101 @@ def test_an_nsol2_wells_short_life(monkeypatch):
 )
 def test_an_nsol2_well_whose_choke_cannot_be_sized_is_dropped(monkeypatch, outcome, well_outcome, reason):
     """SMP-77: a well without an operating point at its life's start with its largest choke gets no choke: it is
-    dropped before its life scan, with the sizing's outcomes."""
+    dropped before its life scan, with the sizing's outcomes. SMP-103: a natural oil without an operating point is
+    first sized again with its lift design, at the three lift-gas rates; a solver failure lifts no well."""
     lf = an_nsol2_life()
     attempt, _ = stand_in_attempt(lambda inp: (outcome, None))
     monkeypatch.setattr(generate, '_attempt', attempt)
     res = generate_nsol2_well(SEED, lf.k)
-    info = res['info']
+    info, lifted = res['info'], outcome == 'no_operating_point'
     assert (info['outcome'], info['not_producible_reason']) == (well_outcome, reason)
-    assert info['best_rate_outcomes'] == [outcome] and info['scan'] == [] and res['samples'] == []
-    assert [r['kind'] for r in res['log']] == ['choke_sizing'] * len(_SIZING_CHOKES) and res['well']['K_c'] is None
+    assert info['best_rate_outcomes'] == [outcome] * (3 if lifted else 1)
+    assert info['scan'] == [] and res['samples'] == [] and res['well']['K_c'] is None
+    assert [r['kind'] for r in res['log']] == ['choke_sizing'] * len(_SIZING_CHOKES) * (1 + 3 if lifted else 1)
+    assert [r['lift_on'] for r in res['log']] == [False] * len(_SIZING_CHOKES) + [True] * (len(res['log']) - 2)
+    start = (0.0, 'no_natural_flow') if lifted else (lf.lift_start, lf.lift_start_rule)
+    assert (res['nsol']['lift_start'], res['nsol']['lift_start_rule']) == start
+
+
+@pytest.mark.parametrize('natural', ['no_operating_point', 'below_floor'])
+def test_an_nsol2_natural_oil_that_cannot_flow_at_its_start_is_lifted_from_it(monkeypatch, natural):
+    """SMP-103 at an nsol-2 well's start: a natural oil without an operating point there, at the sizing or at the life
+    scan's first point, or with one below half its floor, takes its lift design from the start. Its choke is sized
+    again with the lift, and the life is scanned again."""
+    lf = an_nsol2_life()
+    floor = _FLOOR[lf.w0['well_type']]
+    weak = ('no_operating_point', None) if natural == 'no_operating_point' else ('operating_point', 0.1 * floor)
+    attempt, _ = stand_in_attempt(lambda inp: ('operating_point', 50.0) if inp['lift_on'] else weak)
+    monkeypatch.setattr(generate, '_attempt', attempt)
+    res = generate_nsol2_well(SEED, lf.k)
+    info, nsol = res['info'], res['nsol']
+    assert (info['outcome'], info['T_end'], info['best_rate']) == ('accepted', lf.T_life, 50.0)
+    assert (nsol['lift_start'], nsol['lift_start_rule']) == (0.0, 'no_natural_flow')
+    assert len(info['scan']) == 21 and all(p['lift_on'] and p['status'] == 'pass' for p in info['scan'])
+    assert len(res['samples']) == _N_SLOTS and all(rec['lift_on'] for rec in res['samples'])
+    kinds = [r['kind'] for r in res['log'] if r['kind'] != 'slot']
+    if natural == 'no_operating_point':  # The natural well has no choke: its sizing's two chokes, one solve each
+        first = ['choke_sizing'] * len(_SIZING_CHOKES)
+    else:  # The natural well is sized and its cap checked, and its first scan point is below the floor's margin
+        first = ['choke_sizing', 'erosional_cap', 'scan']
+    assert kinds == first + ['choke_sizing'] * 3 + ['erosional_cap'] * 3 + ['scan_lifted'] * 3 * 21
+    assert res['well']['K_c'] == WellBuilder(dict(lf.w0), lf.stations).size_choke(5.0, WELLHEAD, lf.p_s_nom(0.0))
+
+
+def test_an_nsol2_gas_well_that_cannot_flow_at_its_start_is_dropped(monkeypatch):
+    """SMP-103: only an oil is lifted for want of natural flow. A natural gas well without an operating point at its
+    start is dropped, as before."""
+    lf = next(
+        lf
+        for lf in drilled_lives()
+        if not lf.oil and lf.lift_start != 0.0 and lf.w0['fluid_class'] not in _TABLE_CLASSES
+    )
+    attempt, _ = stand_in_attempt(lambda inp: ('no_operating_point', None))
+    monkeypatch.setattr(generate, '_attempt', attempt)
+    res = generate_nsol2_well(SEED, lf.k)
+    assert (res['info']['outcome'], res['info']['not_producible_reason']) == ('not_producible', 'no_operating_point')
+    assert [r['kind'] for r in res['log']] == ['choke_sizing'] * len(_SIZING_CHOKES)
+    assert not any(r['lift_on'] for r in res['log']) and res['nsol']['lift_start_rule'] != 'no_natural_flow'
+
+
+# --- SMP-90: the flags of the lift design that a well uses ----------------------------------------------------------
+def test_the_lift_blocks_flags_are_the_used_designs():
+    """SMP-90: the lift block's flags of a well are those of the lift design that it uses. A lifted well whose design
+    is another stage's draw takes that draw's, a well that is not lifted has none, and the other flags stay."""
+    flags = generate._lift_flags
+    own = 'wet_start;injection_at_packer;choke_at_erosional_rate'
+    late = dict(flags='T_r_cap_binds;injection_raised_to_0.3L;lift_capacity_at_bound')
+    assert flags(own, dict(flags=own), True) == own  # The design is the draw's own: nothing moves
+    assert flags(own, late, True) == 'wet_start;choke_at_erosional_rate;injection_raised_to_0.3L;lift_capacity_at_bound'
+    assert flags(own, late, False) == 'wet_start;choke_at_erosional_rate'
+    assert flags('', late, True) == 'injection_raised_to_0.3L;lift_capacity_at_bound' and flags('', late, False) == ''
+    assert flags('wet_start', dict(flags=''), True) == 'wet_start' and flags('', None, False) == ''
+    assert set(generate._DESIGN_FLAGS) == {'injection_at_packer', 'injection_raised_to_0.3L', 'lift_capacity_at_bound'}
+
+
+@pytest.mark.parametrize('kind', ['sol', 'nsol'])
+def test_a_well_lifted_with_a_later_stages_design_has_that_designs_flags(monkeypatch, kind):
+    """SMP-90: a well that is natural by its initial-stage draw and lifted in the dataset, here by the producibility
+    filter (SMP-103), holds its lift design's flags, which its initial-stage draw does not have."""
+    design_flags = lambda lf: [f for f in lf.design['flags'].split(';') if f in generate._DESIGN_FLAGS]  # noqa: E731
+    lf, w = next(
+        (lf, w)
+        for lf, w in zip(drawn_lives(), drawn_sol2_wells())
+        if lf.oil
+        and not generate._below_start_hurdle(lf.w0)
+        and w['lift'] == 'natural'
+        and lf.lift_start != 0.0
+        and lf.w0['fluid_class'] not in _TABLE_CLASSES
+        and design_flags(lf)
+    )
+    assert not any(f in lf.w0['flags'].split(';') for f in generate._DESIGN_FLAGS)
+    attempt, _ = stand_in_attempt(
+        lambda inp: ('operating_point', 50.0) if inp['lift_on'] else ('no_operating_point', 0)
+    )
+    monkeypatch.setattr(generate, '_attempt', attempt)
+    res = (generate_sol2_well if kind == 'sol' else generate_nsol2_well)(SEED, lf.k)
+    assert res['info']['outcome'] == 'accepted'
+    assert [f for f in res['well']['flags'].split(';') if f in generate._DESIGN_FLAGS] == design_flags(lf)
 
 
 def test_an_nsol2_life_that_ends_where_its_lift_would_start_is_natural(monkeypatch):
@@ -1187,6 +1274,12 @@ def test_a_table_well_without_a_usable_table(monkeypatch, tmp_path, kind):
         'tables',
     )
     assert 'pvt' not in res['table'] and res['well']['fluid_class'] in _TABLE_CLASSES
+    # SMP-115: no fluid of its class among its draws is no failure of the build: the well is not producible
+    failed = dict(kind=kind, seed=SEED, status='failed', step='class', error='no fluid of the class')
+    (tmp_path / f'k{k:06d}.json').write_text(json.dumps(failed))
+    info = run(SEED, k, tmp_path)['info']
+    assert (info['outcome'], info['not_producible_reason']) == ('not_producible', 'no_fluid_of_class')
+    assert info['error'] == 'no fluid of the class'
     if kind == 'sol':
         drawn = sol2_well(drawn_lives()[k])
         assert set(res['well']) == set(drawn) and all(nan_or(res['well'][key], v) for key, v in drawn.items())
