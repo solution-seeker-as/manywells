@@ -1,6 +1,6 @@
 # Sampler redesign — the beta's analysis (2026-11-14)
 
-*The first full generation of the v2 datasets is a beta (D-149): `manywells-sol-2-beta1` and `manywells-nsol-2-beta1`, 10,000 wells of 200 samples each, generated on 2026-11-12 and 13 from `e23705d`, the merge of #46. This file holds what the analysis of the beta measured: the checks at generation (`datasets-draft.md`, Checks at generation), the drops and shifts that D-145 asks the datasheets to report, the four rule points left for after the beta (`preflight-measurements.md`, For after the beta) and a fifth that the analysis found, and options for the thresholds that D-145 left to the beta. Every measurement is `plans/evidence/beta1_checks.py`'s, on the datasets as written, their logs and the run's attempt log. Every number here is ManyWells' own, from synthetic wells. The rulings are Bjarne's; the recommendations are working assumptions until he rules.*
+*The first full generation of the v2 datasets is a beta (D-149): `manywells-sol-2-beta1` and `manywells-nsol-2-beta1`, 10,000 wells of 200 samples each, generated on 2026-11-12 and 13 from `e23705d`, the merge of #46. This file holds what the analysis of the beta measured: the checks at generation (`datasets-draft.md`, Checks at generation), the drops and shifts that D-145 asks the datasheets to report, the four rule points left for after the beta (`preflight-measurements.md`, For after the beta) and a fifth that the analysis found, and options for the thresholds that D-145 left to the beta. Every measurement is `plans/evidence/beta1_checks.py`'s, on the datasets as written, their logs and the run's attempt log. Every number here is ManyWells' own, from synthetic wells. The rulings are Bjarne's, given on 2026-11-14 (section 12); the recommendations in sections 8 and 9 are kept as they were put to him.*
 
 ## Summary
 
@@ -381,12 +381,14 @@ The outcomes are the same in both measurements; the CPU times differ with the ma
 
 ## 12. For Bjarne's ruling
 
-1. The class label of a moved table fluid (8.1): A, B or C; with A, whether to raise the volatile oils' drawn share.
-2. The `sol-2` tail's downstream pressure (8.2): A, B or C.
-3. The tubing flag (8.3): A, B or C.
-4. The lift capacity's floor (8.4): A, B or C.
-5. `nsol-2`'s natural oils that cannot flow at the start (8.5): A or B.
-6. The thresholds for the final datasets (9), and whether the redraw limit rises from 1000 to 3000.
-7. Whether the datasheets are filled for the beta as well as for the final datasets (10).
+Bjarne ruled on 2026-11-14:
 
-Taken together, the recommendations change `specs/sampling.md` in SMP-52 (labels), SMP-89 or SMP-92 (the tail's separator), SMP-101 and SMP-103 (the start), SMP-106 (the thresholds and the redraw limit) and the flags' bookkeeping, and need a pilot before the final run: step 3 of the plan of 2026-11-13.
+1. **The class of a moved table fluid (8.1): C, redraw.** A table fluid whose built fluid leaves its drawn class is drawn again, so that the labels and the classes' shares hold. SMP-115's move stays for a fluid it keeps in its class. The compositions are then conditioned on $p_i$ and $T_r$, which D-65 had chosen moving to avoid. The working reading, until the implementation's decision states it: the test is McCain's limits (SMP-55) on the built fluid's field GOR, whatever its `saturation_rule`, so the few `matched` condensates at the class's edge are redrawn too. In the beta that would have redrawn about 24% of the volatile oils and 8% of the condensates, so the table build draws about that many more fluids.
+2. **The `sol-2` tail's downstream pressure (8.2): A.** A `sol-2` tail well takes SMP-66's tail draw unscaled; the separator's factor applies to the core.
+3. **The tubing flag (8.3): A.** The flag stays a label, with its share and the samples' $C$ in the datasheets; D-100's redraw above a few percent does not apply.
+4. **The lift capacity's floor (8.4): A.** The floor stays at 0.1 kg/s, and the flag marks the lift design the well uses.
+5. **`nsol-2`'s natural oils that cannot flow at the start (8.5): A.** SMP-103's `sol-2` rule applies at `nsol-2`'s first point: the oil takes its lift design from $t = 0$ and is dropped only if it then fails.
+6. **The thresholds (9): A, C and D at 2%, 10% and 10%; the redraw limit stays at 1000.** In the beta, `nsol-2`'s static-check oils were the one group past D (17%). With 8.5's rule the group's makeup changes, and a pilot of a few hundred wells holds only a few of them, so the final run's report is the first to show whether it holds.
+7. **The datasheets (10): filled once, from the final run.** The beta's numbers stay in section 11.
+
+Taken together, the rulings change `specs/sampling.md` in SMP-115 and the table build (the redraw), SMP-89 (the tail's separator), SMP-101 and SMP-103 (the start), SMP-106 (the thresholds), D-100's and D-149's texts, and the flags' bookkeeping, and need a pilot before the final run: step 3 of the plan of 2026-11-13.

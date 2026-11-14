@@ -58,8 +58,8 @@
 - **The beta, 2026-11-12 to 14** (branch `beta1-analysis`, one PR for sign-off; `plans/sampler-redesign/beta1-analysis.md`):
   - Generated at Bjarne's go-ahead from `e23705d`: `manywells-sol-2-beta1` (12,299 wells drawn, 150 CPU-hours) and `manywells-nsol-2-beta1` (10,816 drawn, 192 CPU-hours), 10,000 wells of 200 samples each, in 18 hours without a restart.
   - Both pass the checks at generation, and 5000 rows of each solve again from their rows to the bit; 400 of them agree with the CasADi backend within the verifier's `tol_x`, 13 after a start from the core's root. The limits drop 1.1% and 1.4% of the wells past the filters and move no drawn input by more than a KS distance of 0.01. Dead dates started the lift of 2.3% of `nsol-2`'s kept wells and cut the lives of 0.4%.
-  - For Bjarne's ruling: the four rule points left for after the beta; a fifth, `nsol-2` dropping a natural oil that cannot flow at its start, which `sol-2` lifts; and the thresholds for the final datasets. The analysis's section 12 lists them with recommendations.
-  - Next: his rulings, then their implementation with a pilot, then the final generation.
+  - Bjarne's rulings on 2026-11-14 (the analysis's section 12): a table fluid whose built fluid leaves its drawn class is drawn again; a `sol-2` tail well takes SMP-66's tail draw unscaled; the tubing flag stays a label; the lift capacity's floor stays, and its flag marks the design the well uses; `nsol-2` lifts a natural oil that cannot flow at its start, as `sol-2` does; the thresholds are at most 2% dropped at the limits, and at most 10% in any decile of a drawn input or any group of 100 wells, with the redraw limit kept at 1000; the datasheets are filled once, from the final run.
+  - Next: the rulings' implementation with a pilot, then the final generation.
 
 This plan replaces v1's sampling procedure for the v2 datasets (`specs/goals.md`, limitation 5: unrealistic sampled wells). It ends with:
 
