@@ -11,7 +11,7 @@ dataset's generation folder: the dataset, its logs and its run (manywells.sampli
 from synthetic wells.
 
     python plans/evidence/beta1_checks.py checks GEN          # the checks at generation: counts, rows, configuration, split
-    python plans/evidence/beta1_checks.py report GEN          # drops by group, dead dates, shifts, redraws, datasheet numbers
+    python plans/evidence/beta1_checks.py report GEN          # drops by group, thresholds, shifts, redraws, datasheet numbers
     python plans/evidence/beta1_checks.py resolve GEN OUT     # a seeded sample of rows solved again: to the bit, and CasADi
     python plans/evidence/beta1_checks.py validity OUT        # the re-solved samples against the correlations' ranges
     python plans/evidence/beta1_checks.py rules GEN           # the four rule points left for after the beta
@@ -286,7 +286,16 @@ def _shift_rows(ref, kept, columns, min_n=200):
                 kept_median=float(np.median(b)),
             )
         )
-    return pd.DataFrame(rows).sort_values('ks', ascending=False)
+    names = [
+        'column',
+        'n_ref',
+        'n_kept',
+        'ks',
+        'median_at',
+        'ref_median',
+        'kept_median',
+    ]  # Also with no row, as in a pilot
+    return pd.DataFrame(rows, columns=names).sort_values('ks', ascending=False)
 
 
 def _label_shift(ref, kept, columns):
@@ -301,6 +310,43 @@ def _label_shift(ref, kept, columns):
             )
         )
     return pd.DataFrame(rows).sort_values('max_pp', ascending=False)
+
+
+THRESHOLDS = dict(overall=2.0, decile=10.0, group=10.0)  # Percent of the wells past the filters (SMP-106, D-162)
+GROUPS = ('fluid_class', 'well_type', 'lift_rule', 'tail', ['fluid_class', 'lift_rule'])
+
+
+def _thresholds(dw, past, dec, kind):
+    """The thresholds for the final datasets (SMP-106, D-162), each on the drawn wells past the filters: the share
+    dropped at the limits overall, in the worst tenth of a drawn input that 1000 wells or more hold (dec, report's
+    table of the deciles), and in the worst group of 100 drawn wells or more."""
+    overall = 100 * past['outcome'].isin(LIMITS).mean()
+    groups = pd.concat([_group_table(dw, key, kind).assign(by=str(key)) for key in GROUPS])
+    # nsol-2's wells dropped before their life scan have no lift rule: a group by its outcome, not by its draws
+    groups = groups[(groups['drawn'] >= 100) & ~groups['group'].astype(str).str.contains('no life scan')]
+    groups = groups.sort_values('limits_past_filters', ascending=False)
+    verdict = lambda value, bound: 'holds' if value <= bound else 'EXCEEDED'  # noqa: E731
+    print('\n-- thresholds for the final datasets (SMP-106), of the wells past the filters:')
+    print(
+        f'   overall: {overall:.2f}% dropped at the limits, at most {THRESHOLDS["overall"]}%: {verdict(overall, THRESHOLDS["overall"])}'
+    )
+    if len(dec):
+        worst = 100 * dec['largest'].iloc[0]
+        print(
+            f'   a tenth of a drawn input: the largest {worst:.1f}% ({dec["column"].iloc[0]}), at most {THRESHOLDS["decile"]}%:'
+            f' {verdict(worst, THRESHOLDS["decile"])}'
+        )
+    else:
+        print('   a tenth of a drawn input: no input with 1000 wells')
+    if len(groups):
+        g = groups.iloc[0]
+        print(
+            f'   a group of 100 drawn wells or more: the largest {g["limits_past_filters"]:.1f}% ({g["by"]}: {g["group"]},'
+            f' {int(g["drawn"])} drawn), at most {THRESHOLDS["group"]}%: {verdict(g["limits_past_filters"], THRESHOLDS["group"])}'
+        )
+        print(f'   groups past it: {int((groups["limits_past_filters"] > THRESHOLDS["group"]).sum())} of {len(groups)}')
+    else:
+        print('   a group of 100 drawn wells or more: none')
 
 
 def report(gen):
@@ -331,19 +377,18 @@ def report(gen):
     oils = dw[dw['fluid_type'].isin(['black_oil', 'volatile_oil'])]
     print('\n-- oils, by lift rule:')
     print(_group_table(oils, 'lift_rule', kind).to_string(index=False, **fmt))
-    # Oils natural where the filter applies that do not pass it: sol-2 lifts them (SMP-103), nsol-2 drops them
+    # Oils natural where the filter applies that do not pass it: lifted by SMP-103, sol-2's at their date and nsol-2's
+    # from their start (D-161; the first beta's nsol-2 dropped them), where a dead date's lift has a later start
     rule = oils['lift_start_rule'].astype(str)
+    nnf = oils[(rule == 'no_natural_flow') & ((oils['lift_start'] == 0) if kind == 'nsol' else True)]
+    print(
+        f'   lifted by the filter because they cannot flow naturally (no_natural_flow): kept {share(int((nnf["outcome"] == "accepted").sum()), len(nnf))}'
+    )
     if kind == 'nsol':
-        dropped = (rule != 'from_start') & (oils['outcome'] == 'not_producible')
-        static = rule == 'static_check'
+        failed = oils['not_producible_reason'].astype(str).isin(['no_operating_point', 'below_floor'])
+        dropped = (rule != 'from_start') & (oils['outcome'] == 'not_producible') & failed
         print(
-            f'   natural at their start and dropped as not_producible: {share(int(dropped.sum()), len(oils))} of the drawn oils;'
-            f' of those the static check lifts {share(int((dropped & static).sum()), int(static.sum()))}'
-        )
-    else:
-        nnf = oils[rule == 'no_natural_flow']
-        print(
-            f'   lifted because they cannot flow naturally (no_natural_flow): kept {share(int((nnf["outcome"] == "accepted").sum()), len(nnf))}'
+            f'   not lifted from their start by their draws, and dropped there without flow: {share(int(dropped.sum()), len(oils))}'
         )
 
     # Dead dates (nsol-2, SMP-106)
@@ -387,13 +432,18 @@ def report(gen):
         decile = pd.qcut(x.rank(method='first'), 10, labels=False)
         d = lim.loc[x.index].groupby(decile).mean()
         rows.append(dict(column=c, n=len(x), largest=d.max(), decile=int(d.idxmax()), smallest=d.min()))
-    dec = pd.DataFrame(rows).sort_values('largest', ascending=False)
-    print(
-        f'   share dropped in a decile of an input: the largest {dec["largest"].iloc[0]:.4f} ({dec["column"].iloc[0]},'
-        f' decile {dec["decile"].iloc[0]}); inputs with a decile above 5%: {int((dec["largest"] > 0.05).sum())},'
-        f' above 10%: {int((dec["largest"] > 0.10).sum())}, of {len(dec)}'
-    )
-    print(dec.head(6).to_string(index=False, **fmt))
+    dec = pd.DataFrame(rows, columns=['column', 'n', 'largest', 'decile', 'smallest'])
+    dec = dec.sort_values('largest', ascending=False)
+    if len(dec):
+        print(
+            f'   share dropped in a decile of an input: the largest {dec["largest"].iloc[0]:.4f} ({dec["column"].iloc[0]},'
+            f' decile {dec["decile"].iloc[0]}); inputs with a decile above 5%: {int((dec["largest"] > 0.05).sum())},'
+            f' above 10%: {int((dec["largest"] > 0.10).sum())}, of {len(dec)}'
+        )
+        print(dec.head(6).to_string(index=False, **fmt))
+    else:
+        print('   share dropped in a decile of an input: no input with 1000 wells past the filters')
+    _thresholds(dw, past, dec, kind)
     for name, ref in (('past the filters', past), ('drawn', dw)):
         s = _shift_rows(ref, kept, num)
         print(f'\n-- shift, {name} ({len(ref)}) against kept ({len(kept)}), the ten largest KS of {len(s)} inputs:')

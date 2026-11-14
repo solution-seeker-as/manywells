@@ -22,19 +22,22 @@ A well's result (generate_sol2_well, generate_nsol2_well) is a dict of:
 - `well`: the well's draws and labels. sol-2: the life at the well's date (life.sol2_well), with the lift design and
   `lift_start_rule` `no_natural_flow` where the producibility filter lifted it. nsol-2: the initial-stage draws
   (draws.draw_well), which hold what is fixed for the life. A `table_failed` well's are drawn without its table.
-  Its choke (`K_c`, `d_bean` and `beta`) is the sizing's, None for a well dropped before it or at it.
+  Its choke (`K_c`, `d_bean` and `beta`) is the sizing's, None for a well dropped before it or at it. The lift
+  block's flags in `flags` are those of the lift design that the well uses, and none for a well that is not lifted.
 - `stations`: the survey, (md, tvd).
 - `table`: a table well's manifest (tables._read_table) without its PVTTableSet, with `status` `ok`, or `failed` with
   the `step` and the `error`; None for a well of another fluid class.
 - `nsol`: None for a sol-2 well. nsol-2: the life's parameters (life.Life.parameters) with `lift_start` (years; None
-  for a well that stays natural) and `lift_start_rule` after the life scan and the dead dates, and `design`, the lift
+  for a well that stays natural) and `lift_start_rule` after the life scan and the dead dates (`no_natural_flow`
+  with a start of 0 for a natural oil that the producibility filter lifted at its start), and `design`, the lift
   design's draws (None for a well that no rule lifts).
 - `info`: `draw_index`; `outcome`, the well's (SMP-106): `accepted`, `invalid_input`, `table_failed`,
   `not_producible`, `best_rate_solver_failure`, `slot_limit` (sol-2), `dead_date` (nsol-2), `redraw_limit`,
   `solver_failure_limit` or `short_life` (nsol-2); `error`, the message of an `invalid_input` or `table_failed` well
   (else None); `best_rate` (Sm3/d of oil equivalent) and `best_rate_w_lg` (kg/s), the best rate and its lift-gas
   rate, NaN without an operating point, and `best_rate_outcomes`, the outcomes of its solves (nsol-2: at the start);
-  `not_producible_reason`, the best rate's status of a well dropped for it, or `below_start_hurdle` (else None); a
+  `not_producible_reason`, the best rate's status of a well dropped for it, `below_start_hurdle`, or
+  `no_fluid_of_class` for a table well none of whose fluid draws is of its class (else None); a
   well dropped at its choke's sizing has the sizing's status and outcomes. nsol-2 adds `scan`, the life
   scan's points up to the one that ends the life, each a dict of `t` (years), `status`, `best` and `lift_on`;
   `T_end` (years), the end of the life (NaN for a well dropped before the scan ends it), and `T_scan`, the end that
@@ -51,7 +54,8 @@ An attempt's record is a flat dict of:
 
 - its inputs (samples._sol2_attempt or samples._nsol2_attempt; a best-rate solve's are the state's, with `p_s_nom`);
 - `draw_index`; `kind`, `choke_sizing`, `erosional_cap` (with `cap_step` and `erosional_ratio`, _cap_choke),
-  `best_rate`, `best_rate_lifted` (a sol-2 well's best rate with the filter's lift), `scan` or `slot`; `slot`, j for a
+  `best_rate`, `best_rate_lifted` (a sol-2 well's best rate with the filter's lift), `scan`, `scan_lifted` (an
+  nsol-2 well's life scan with the filter's lift from its start) or `slot`; `slot`, j for a
   slot, -1 for a sizing or best-rate solve and -1 - i for the life scan's point i; `attempt`, a for a slot, else the
   index of the lift-gas rate, whose share of the capacity is `lift_fraction`;
 - `outcome` and `reason` (SMP-104), and `error`, an exception's message (else None);
@@ -90,6 +94,8 @@ _SIZING_CHOKES = (1.0, 1 / 4)  # spec: SMP-77
 # among at most so many chokes, the sized one included
 _EROSIONAL_LOW, _EROSIONAL_STEPS = 0.97, 12  # spec: SMP-77
 _CAP_FLAGS = ('choke_at_erosional_rate', 'erosional_cap_unmet')  # spec: SMP-77
+# The lift block's flags of a lift design (draws._lift): a well's are those of the design that it uses
+_DESIGN_FLAGS = ('injection_at_packer', 'injection_raised_to_0.3L', 'lift_capacity_at_bound')  # spec: SMP-90
 _SLOT_LIMIT, _REDRAW_LIMIT, _SOLVER_FAILURE_LIMIT = 100, 1000, 10  # spec: SMP-106 (D-137)
 _DEAD_DATE_LIMIT = 5  # The dead dates that may start an nsol-2 well's lift or end its life  # spec: SMP-106 (D-142)
 _BEST_RATE_LIFT = (0.0, 0.5, 1.0)  # The best rate's lift-gas rates, shares of the capacity  # spec: SMP-103
@@ -377,6 +383,17 @@ def _sized_best_rate(builder, state, lifted, w_lg_max, floor, log, base) -> dict
     return dict(status=status, best=math.nan, best_w_lg=math.nan, outcomes=outcomes)
 
 
+def _lift_flags(flags: str, design, lifted: bool) -> str:  # spec: SMP-90
+    """A well's flags with the lift block's flags (_DESIGN_FLAGS) of the lift design that the well uses: a lifted
+    well's are its design's, which is the late-stage draw's where the lift starts after the life's start (SMP-90),
+    and a well that is not lifted has none. The other flags stay, in their order."""
+    own = [f for f in flags.split(';') if f and f not in _DESIGN_FLAGS]
+    used = [f for f in design['flags'].split(';') if f in _DESIGN_FLAGS] if lifted else []
+    if [f for f in flags.split(';') if f in _DESIGN_FLAGS] == used:
+        return flags  # The design is the draw's own, or neither has a flag of it
+    return ';'.join(own + used)
+
+
 def _below_start_hurdle(w0) -> bool:  # spec: SMP-102
     """Whether a well's design rate in oil equivalent lies below its type's start hurdle: it is not drilled."""
     return w0['q_design_oe'] < _START_HURDLE[w0['well_type']]
@@ -510,6 +527,8 @@ def _table_failed(t_start, seed, k, kind, table) -> dict:  # spec: SMP-106
     table's values."""
     life = Life(seed, k)
     info = _info(k, outcome='table_failed', error=table.get('error'))
+    if table.get('step') == 'class':  # spec: SMP-115. Its reservoir holds no fluid of its class: no well
+        info.update(outcome='not_producible', not_producible_reason='no_fluid_of_class')
     if kind == 'sol':
         return _result(t_start, sol2_well(life), life.stations, table, info)
     info.update(_nsol_info())
@@ -579,6 +598,7 @@ def generate_sol2_well(seed: int, k: int, tables=None) -> dict:
         base = dict(base, kind='best_rate_lifted')
         br = _sized_best_rate(builder, nominal, lifted, w['w_lg_max'], floor, log, base)
     w.update({key: life.w0[key] for key in ('K_c', 'd_bean', 'beta', 'flags')})  # The sized choke (SMP-77)
+    w['flags'] = _lift_flags(w['flags'], life.design, lifted)  # spec: SMP-90
     info.update(best_rate=br['best'], best_rate_w_lg=br['best_w_lg'], best_rate_outcomes=br['outcomes'])
     if _dropped_at_best_rate(info, br):
         return _result(t_start, w, life.stations, table, info, log)
@@ -588,7 +608,7 @@ def generate_sol2_well(seed: int, k: int, tables=None) -> dict:
     return _result(t_start, w, life.stations, table, info, log, accepted)
 
 
-def _life_scan(life, best_rate_at) -> tuple:  # spec: SMP-101
+def _life_scan(life, best_rate_at, lift=None) -> tuple:  # spec: SMP-101
     """
     The life scan of an nsol-2 well: its best rate at _N_SCAN dates from 0 to T_life, with the lift that it has at
     each. A point that fails ends the scan, and one whose solves gave a solver failure and no operating point is
@@ -598,12 +618,14 @@ def _life_scan(life, best_rate_at) -> tuple:  # spec: SMP-101
     :param life: The well's life (life.Life)
     :param best_rate_at: best_rate_at(i, t, lifted), the best rate (_best_rate) at point i, the date t (years), of
         the well natural or lifted
+    :param lift: (lift_start, rule), the lift's start (years, or None) and its rule as the scan begins; None for the
+        life's own, by its draws
     :return: (scan, first, T_end, lift_start, rule): the points solved, each a dict of `t`, `status`, `best` and
         `lift_on`; the best rate at the first point; the end of the life (years), the last point that passes before
         the first that fails, or T_life if none fails, and None if the first point does not pass; and the lift's
         start (years, or None) and its rule after the scan
     """
-    lift_start, rule = life.lift_start, life.lift_start_rule
+    lift_start, rule = (life.lift_start, life.lift_start_rule) if lift is None else lift
     dates = np.linspace(0.0, life.T_life, _N_SCAN)
     scan, first, last_pass, failed = [], None, None, False
     for i in range(_N_SCAN):
@@ -682,36 +704,53 @@ def generate_nsol2_well(seed: int, k: int, tables=None) -> dict:
     builder = WellBuilder(w0, life.stations, design=life.design, pvt=pvt)
     log, info = [], _info(k, **_nsol_info())
     lift_start, rule = life.lift_start, life.lift_start_rule
+
+    def result(log=(), accepted=None) -> dict:
+        """The well's result, with the lift's start and rule as they then are, and the flags of the lift design that
+        the well uses (SMP-90)."""
+        if life.design is not None:
+            w0['flags'] = _lift_flags(w0['flags'], life.design, lift_start is not None)
+        return _result(t_start, w0, life.stations, table, info, log, accepted, _life_summary(life, lift_start, rule))
+
     if _below_start_hurdle(w0):  # spec: SMP-102. Not drilled: nothing is solved
         info.update(outcome='not_producible', not_producible_reason='below_start_hurdle')
-        return _result(t_start, w0, life.stations, table, info, nsol=_life_summary(life, lift_start, rule))
+        return result()
     try:  # spec: SMP-106
         start = dict(life.state(0.0), u=1.0, w_lg=0.0, lift_on=_lift_on(0.0, lift_start), p_s=w0['p_s'])
         check(builder.case(start)[0], V2)
     except ValueError as e:
         info.update(outcome='invalid_input', error=str(e)[:300])
-        return _result(t_start, w0, life.stations, table, info, nsol=_life_summary(life, lift_start, rule))
+        return result()
     floor = _FLOOR[w0['well_type']]
     w_lg_max = life.design['w_lg_max'] if life.design is not None else 0.0
-    # spec: SMP-77. The choke is sized at the life's start, and is the well's for its life
-    base = dict(draw_index=k, kind='choke_sizing', slot=-1, t=0.0)
-    status, outcomes = _size_choke(builder, life.state(0.0), _lift_on(0.0, lift_start), w_lg_max, log, base)
-    if status != 'sized':
-        info['best_rate_outcomes'] = outcomes
-        _dropped_at_best_rate(info, dict(status=status))
-        return _result(t_start, w0, life.stations, table, info, log, nsol=_life_summary(life, lift_start, rule))
 
-    def best_rate_at(i, t, lifted):
-        base = dict(draw_index=k, kind='scan', slot=-1 - i, t=t)
-        return _best_rate(builder, life.state(t), lifted, w_lg_max, floor, log, base)
+    def from_start(lift_start, rule, scan_kind) -> tuple:  # spec: SMP-77, SMP-101
+        """The choke sized at the life's start, where it is the well's for its life, and the life scan, for a lift
+        that starts as given: _life_scan's values, with the sizing's status and outcomes as the first point's where
+        the sizing leaves the well without a choke."""
+        base = dict(draw_index=k, kind='choke_sizing', slot=-1, t=0.0)
+        status, outcomes = _size_choke(builder, life.state(0.0), _lift_on(0.0, lift_start), w_lg_max, log, base)
+        if status != 'sized':
+            return [], dict(status=status, best=math.nan, best_w_lg=math.nan, outcomes=outcomes), None, lift_start, rule
 
-    scan, first, T_end, lift_start, rule = _life_scan(life, best_rate_at)
+        def best_rate_at(i, t, lifted):
+            base = dict(draw_index=k, kind=scan_kind, slot=-1 - i, t=t)
+            return _best_rate(builder, life.state(t), lifted, w_lg_max, floor, log, base)
+
+        return _life_scan(life, best_rate_at, (lift_start, rule))
+
+    scan, first, T_end, lift_start, rule = from_start(lift_start, rule, 'scan')
+    natural_oil = life.oil and life.design is not None and not _lift_on(0.0, life.lift_start)
+    if natural_oil and first['status'] in ('no_operating_point', 'below_floor'):
+        # spec: SMP-103. A natural oil that cannot flow at its life's start takes its lift design from the start, as
+        # a sol-2 well does at its date, and its choke is sized again, with the lift
+        scan, first, T_end, lift_start, rule = from_start(0.0, 'no_natural_flow', 'scan_lifted')
     if T_end is not None and not _lifted_life(T_end, lift_start):  # spec: SMP-52, SMP-90
         lift_start, rule = None, None  # The life ends where its lift would start, or before: no date of it is lifted
     info.update(scan=scan, best_rate=first['best'], best_rate_w_lg=first['best_w_lg'])
     info['best_rate_outcomes'] = first['outcomes']
     if _dropped_at_best_rate(info, first):
-        return _result(t_start, w0, life.stations, table, info, log, nsol=_life_summary(life, lift_start, rule))
+        return result(log)
     info['T_scan'] = T_end
     accepted, slots = {}, []
     while True:  # spec: SMP-106. Each pass plans and solves the slots; a dead date changes the life for the next
@@ -729,4 +768,4 @@ def generate_nsol2_well(seed: int, k: int, tables=None) -> dict:
         T_end, lift_start, rule, dead = _after_dead_date(life, plan, accepted, T_end, lift_start, rule)
         info['dead_dates'].append(dead)
     log += slots
-    return _result(t_start, w0, life.stations, table, info, log, accepted, _life_summary(life, lift_start, rule))
+    return result(log, accepted)

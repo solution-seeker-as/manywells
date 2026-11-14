@@ -113,7 +113,14 @@ _CODES = {
     'SWEEP': ('choke', 'lift'),
     'FRBH': ('bubbly', 'dispersed-bubbly', 'slug', 'churn', 'annular'),
     'FRWH': ('bubbly', 'dispersed-bubbly', 'slug', 'churn', 'annular'),
-    'not_producible_reason': ('water_cut', 'below_floor', 'no_operating_point', 'solver_failure', 'below_start_hurdle'),
+    'not_producible_reason': (
+        'water_cut',
+        'below_floor',
+        'no_operating_point',
+        'solver_failure',
+        'below_start_hurdle',
+        'no_fluid_of_class',
+    ),
     'reason': _REASONS,
 }
 _OUTCOMES = {  # The outcome's codes: an attempt's in `redraws`, a well's in `drawn_wells`

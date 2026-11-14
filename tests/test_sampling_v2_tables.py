@@ -408,11 +408,89 @@ def test_a_fluid_whose_field_flash_finds_no_liquid_keeps_its_streams_gor(monkeyp
         return PassFlash(), PassFlash().recombine(SEP, target['R_si']), dict(SEP), dict(z7=0.1)
 
     monkeypatch.setattr(tb, '_synthetic', synthetic)
-    fluid = tb._build_fluid(WELL | dict(source=source, R_si=PassFlash.DRAWN))
+    fluid = tb._build_draw(WELL | dict(source=source, R_si=PassFlash.DRAWN))
     target = PassFlash.DRAWN / 1.1  # The second pass's, shifted by the first pass's offset
     assert fluid['composition']['passes'] == 1 and fluid['composition']['field'] is None
     assert fluid['R_i'] == fluid['hook']['R_i'] == fluid['composition']['recombined_gor'] == pytest.approx(target)
     assert fluid['stream']['z'][0] == fluid['R_i'] and fluid['saturation_rule'] == 'matched'
+
+
+# ---------------------------------------------------------------------------
+# SMP-115: a fluid that leaves its class is drawn again
+# ---------------------------------------------------------------------------
+
+
+def test_a_fluids_class_by_its_field_gor():
+    """SMP-55's limits on the GOR that the field reports: above the lower, up to the upper; no liquid, no class."""
+    assert [tb._in_class('volatile_oil', dict(gor=g)) for g in (356.0, 356.1, 588.0, 588.1)] == [
+        False,
+        True,
+        True,
+        False,
+    ]
+    assert [tb._in_class('gas_condensate', dict(gor=g)) for g in (588.0, 588.1, 8900.0, 8900.1)] == [
+        False,
+        True,
+        True,
+        False,
+    ]
+    assert not tb._in_class('volatile_oil', None) and not tb._in_class('gas_condensate', None)
+    assert tb._CLASS_GOR['volatile_oil'][1] == tb._CLASS_GOR['gas_condensate'][0]
+
+
+def a_draws_fluid(w):
+    """In place of _build_draw: a fluid whose field GOR is the draw's R_si, moved where the draw says so."""
+    field = None if w['R_si'] is None else dict(gor=w['R_si'], api=w['api'] + 1.0, sg_gas=w['sg_gas'])
+    hook = dict(p_sat=w['p_sat'], R_i=w['R_si'], rho_o=800.0, rho_g=0.9)
+    if w['source'] != 'synthetic':
+        hook |= dict(api=field['api'], sg_gas=field['sg_gas'])
+    drawn = {key: w[key] for key in ('api', 'sg_gas', 'R_si', 'p_sat')}
+    return dict(well=w['well'], status='ok', field=field, hook=hook, drawn=drawn, saturation_rule='gor_moved')
+
+
+def redraw(R_si, source='synthetic', api=45.0):
+    return dict(api=api, sg_gas=0.8, p_sat=300.0, R_si=R_si, composition_seed=int(R_si or 0), source=source)
+
+
+def test_the_first_draw_of_the_class_is_the_wells_fluid(monkeypatch):
+    """SMP-115: the well's own draw where its built fluid is of the class; else the first redraw whose fluid is, with
+    the draws rejected before it. A redraw's hook holds its API and gas gravity, the drawn ones where the fluid is
+    matched to them and the field's where the build gives them."""
+    monkeypatch.setattr(tb, '_build_draw', a_draws_fluid)
+    well = WELL | dict(redraws=[redraw(320.0), redraw(None), redraw(400.0, api=47.0), redraw(500.0)])
+    own = tb._build_fluid(well)  # WELL's own R_si is a volatile oil's
+    assert (own['fluid_redraws'], own['rejected']) == (0, []) and set(own['hook']) == {'p_sat', 'R_i', 'rho_o', 'rho_g'}
+    assert (
+        own['drawn']['R_si'] == WELL['R_si'] and tb._build_fluid(WELL)['fluid_redraws'] == 0
+    )  # A record without redraws
+    fluid = tb._build_fluid(well | dict(R_si=300.0))  # A black oil's GOR: the third redraw is the first of the class
+    assert fluid['fluid_redraws'] == 3 and fluid['drawn'] == dict(api=47.0, sg_gas=0.8, R_si=400.0, p_sat=300.0)
+    assert fluid['rejected'] == [
+        dict(saturation_rule='gor_moved', R_si=300.0, field_gor=300.0),
+        dict(saturation_rule='gor_moved', R_si=320.0, field_gor=320.0),
+        dict(saturation_rule='gor_moved', R_si=None, field_gor=None),
+    ]
+    assert fluid['hook'] == dict(api=47.0, sg_gas=0.8, p_sat=300.0, R_i=400.0, rho_o=800.0, rho_g=0.9)
+    example = tb._build_fluid(well | dict(R_si=300.0, redraws=[redraw(450.0, source='wb2000_volatile_oil')]))
+    assert (
+        example['fluid_redraws'] == 1 and example['hook']['api'] == 46.0
+    )  # The example's own, as the field reports it
+
+
+def test_a_well_without_a_fluid_of_its_class(monkeypatch, tmp_path):
+    """SMP-115: where none of the well's draws gives a fluid of its class, the build records the step `class`, which
+    is no failure of the build, and no table is made."""
+    monkeypatch.setattr(tb, '_build_draw', a_draws_fluid)
+    well = WELL | dict(well=9, R_si=300.0, redraws=[redraw(320.0), redraw(700.0)], kind='sol', seed=1)
+    with pytest.raises(tb.NoFluidOfClass, match='no fluid of the class volatile_oil in 3 draws'):
+        tb._build_fluid(well)
+    (tmp_path / 'fluids').mkdir()
+    assert tb._build_task((str(tmp_path), well, None))[:3] == (9, 'fluid', 'failed')
+    fluid = json.loads((tmp_path / 'fluids' / 'k000009.json').read_text())
+    assert (fluid['status'], fluid['step']) == ('failed', 'class') and 'in 3 draws' in fluid['error']
+    assert tb._build_task((str(tmp_path), well, None))[:3] == (9, 'tables', 'failed')
+    manifest = json.loads((tmp_path / 'k000009.json').read_text())
+    assert (manifest['status'], manifest['step']) == ('failed', 'class') and not (tmp_path / 'k000009.csv').exists()
 
 
 # ---------------------------------------------------------------------------

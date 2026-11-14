@@ -44,9 +44,10 @@ def _read_table(tables_dir, k, kind, seed) -> dict:  # spec: SMP-116
     """
     Table well k's manifest from the folder that table_build.py built for the dataset kind ('sol' or 'nsol') and
     seed, with its PVTTableSet under 'pvt'. Its status is 'ok', or 'failed' with the step and the error: a step of the
-    build failed ('fluid', 'axis' or 'tables'); the folder holds no table for the well, or another dataset's
-    ('missing'); or PVT-TAB-1's checks refuse the table ('check'). A well whose table failed is table_failed
-    (SMP-106) and is not solved.
+    build failed ('fluid', 'axis' or 'tables'); none of the well's fluid draws gave a fluid of its class ('class',
+    SMP-115); the folder holds no table for the well, or another dataset's ('missing'); or PVT-TAB-1's checks refuse
+    the table ('check'). A well without a fluid of its class is not_producible, and another whose table failed is
+    table_failed (SMP-106); neither is solved.
 
     :param tables_dir: The folder of the build, with the manifests kK.json and the tables kK.csv
     :param k: The well's draw index
