@@ -2,7 +2,7 @@
 
 *Draft 2026-10-30. Owner: Bjarne Grimstad. Status: R1 to R8 done; the rework and R9's integration done; the second checkpoint ruled on 2026-11-09 and 2026-11-10; R10 done on 2026-11-10 and merged on 2026-11-11; R11's pilot done on 2026-11-11 and handed over for review.*
 
-## Where we are (2026-11-11)
+## Where we are (2026-11-14)
 
 - **Done before this plan:** the model-lock plan (`plans/model-lock-plan.md`). `v2.0.0` is named and pinned, the correlations' validity ranges are recorded, the correlations are checked against independent sources, and both backends pass the `v1.0.0` configuration's regression checks.
 - **R1 done:** the interview was held on 2026-10-30, and Bjarne confirmed the Goals below the same day, with the changes they make to `specs/goals.md` and `specs/constitution.md` (Where the goals change the specs).
@@ -54,7 +54,12 @@
   - Before the run started again, Bjarne asked for a check of `develop`. No bug makes a kept sample wrong: 4810 samples of the stopped run solve again from their rows to the bit, and the Rust core's operating points agree with the CasADi backend's. But the stopped run's wells show that `nsol-2` drops 2.8% of its wells as dead dates, a tenth of the oils whose lift starts during their life, and the tables show that 6.7% of its volatile oils lose theirs at the repair's limit.
   - Bjarne ruled the same day. The first full generation is a beta, `manywells-sol-2-beta1` and `manywells-nsol-2-beta1`, most likely followed by a final run after its analysis (D-149). A dead date starts the lift or ends the life (D-142); a table's repair may drop a tenth of its pressures (D-143); SMP-106's targets go, and the drops are reported by group (D-145); and four smaller fixes are taken (D-144, D-146 to D-148).
   - Open for after the beta: the class labels of table fluids whose GOR left their class, the `sol-2` tail's downstream pressure, the tubing flag's share and the lift capacity's point mass.
-  - Next: Bjarne's sign-off of the branch; then the beta's generation from the merged commit, at his go-ahead, on 20 processes and at most 36 GB of memory.
+  - Merged into `develop` by Bjarne on 2026-11-12 (#46).
+- **The beta, 2026-11-12 to 14** (branch `beta1-analysis`, one PR for sign-off; `plans/sampler-redesign/beta1-analysis.md`):
+  - Generated at Bjarne's go-ahead from `e23705d`: `manywells-sol-2-beta1` (12,299 wells drawn, 150 CPU-hours) and `manywells-nsol-2-beta1` (10,816 drawn, 192 CPU-hours), 10,000 wells of 200 samples each, in 18 hours without a restart.
+  - Both pass the checks at generation, and 5000 rows of each solve again from their rows to the bit; 400 of them agree with the CasADi backend within the verifier's `tol_x`, 13 after a start from the core's root. The limits drop 1.1% and 1.4% of the wells past the filters and move no drawn input by more than a KS distance of 0.01. Dead dates started the lift of 2.3% of `nsol-2`'s kept wells and cut the lives of 0.4%.
+  - Bjarne's rulings on 2026-11-14 (the analysis's section 12): a table fluid whose built fluid leaves its drawn class is drawn again; a `sol-2` tail well takes SMP-66's tail draw unscaled; the tubing flag stays a label; the lift capacity's floor stays, and its flag marks the design the well uses; `nsol-2` lifts a natural oil that cannot flow at its start, as `sol-2` does; the thresholds are at most 2% dropped at the limits, and at most 10% in any decile of a drawn input or any group of 100 wells, with the redraw limit kept at 1000; the datasheets are filled once, from the final run.
+  - Next: the rulings' implementation with a pilot, then the final generation.
 
 This plan replaces v1's sampling procedure for the v2 datasets (`specs/goals.md`, limitation 5: unrealistic sampled wells). It ends with:
 
