@@ -122,6 +122,8 @@ _D_ERROR, _D_BOUNDS = 0.7, (1e-5, 2e-3)  # The non-Darcy estimate's log error, a
 _LINER_MAX = 0.1571  # m, the largest liner of a gas well's drain (7 in)  # spec: SMP-73
 _SLANT_FLOOR = 2.0  # The floor on ln(r_e/r_w) - 0.75 + s + s_theta of a slanted well  # spec: SMP-72
 _ROUGHNESS = {'initial': (1.5e-6, 3e-5), 'mid_life': (1e-5, 6e-5), 'late': (2e-5, 1.5e-4)}  # m  # spec: SMP-76
+_XI_CHOKE = (0.02, 0.45)  # The fully open choke's share of the pressure upstream of it, at its sizing  # spec: SMP-77
+_BETA_MAX = 0.6  # The largest bean's share of the tubing's diameter  # spec: SMP-77
 _BEAN_MAX = 0.1016  # m, the fully open bean's largest diameter (4 in)  # spec: SMP-77
 _P_LIFT_OIL = {'offshore': (0.20, 0.45, 0.70), 'onshore': (0.15, 0.25, 0.35)}  # By stage  # spec: SMP-78
 _P_LIFT_GAS = (0.0, 0.05, 0.15)  # spec: SMP-78
@@ -200,8 +202,11 @@ def draw_well(
       [`I_ani`, `s_theta`] (slanted wells), `f_geo`, `inflow`, `q_l_ref`; oils: `mu_o`, `B_o`, `J`, `k_l`, `w_l_max`, [`eta_drain`]; gas classes:
       `perf_share`, `D_eq434`, `D_nondarcy` (d/Mscf), `a_gas`, `b_gas` (bar2 per Sm3/d and its square), `a_ratio`,
       `b_ratio` (over a vertical well's), `AOF`, `q_g_ref`, [`b_friction_share`].
-    - completion: `c_e`, `q_design`, `D`, `tubing`, `q_cap`, `roughness`.
-    - choke: `beta`, `d_bean`, `c_d`, `K_c`, `choke_model`, `chk_profile`.
+    - completion: `c_e`, `q_design`, `q_design_oe` (the design rate in oil equivalent), `D`, `tubing`, `q_cap`,
+      `roughness`.
+    - choke: `xi_choke`, `c_d`, `K_c_max` (the largest choke coefficient the well may take), `choke_model`,
+      `chk_profile`; and `K_c`, `d_bean` and `beta`, None until the generation sizes the bean at a solve
+      (_size_bean; SMP-77).
     - lift: `lift`, `needs_lift`, and for a lifted well `z_inj`, `injection_md`, `z_inj_frac`, `p_inj`, `dp_valve`,
       `packer_offset`, `T_lg`, `psi_lg` (its share of the way from the ambient to T_r), `glr_cap`, `w_lg_max`.
     - heat: `h`, `age_years`, `U_t`, `k_e`, `cp_o`, `cp_w`, `cp_g`.
@@ -553,12 +558,15 @@ def _completion(r, w, x):
         b_i = bo.at_gor(R_i)
         J_i = _j_radial(w['perm'], w['h_net'], b_i.oil_viscosity(p_i, T_r), b_i.bo(p_i, T_r), ln_term, skin) * x.f_geo
         q_d = J_i * delta_d * p_i
+        q_oe = q_d * (1 + R_i / 1000)
     else:  # The coefficients at p_i, the non-Darcy coefficient's gas viscosity too, whatever the stage
         wlr_d = 10 / (10 + 1e6 / R_i)
         mu_i = bo.gas_viscosity(p_i, T_r, bo.gas_density(p_i, T_r))
         coef = _forchheimer(w['perm'], w['h_net'], mu_i, bo.z_factor(p_i, T_r), T_r, ln_term, skin, x.D_at(mu_i))
         a_i, b_i = _on_geometry(w, x, *coef)
-        q_d = _gas_rate(a_i, b_i, p_i**2 - ((1 - delta_d) * p_i) ** 2) * (1e6 / R_i + 10) / 1e6
+        q_g = _gas_rate(a_i, b_i, p_i**2 - ((1 - delta_d) * p_i) ** 2)
+        q_d = q_g * (1e6 / R_i + 10) / 1e6
+        q_oe = q_g * (1 / R_i + 1 / 1000)
     vol, mass = _stream(bo, R_i, wlr_d, w['rho_w'], p_wh, T_wh)
     v_e = 1.22 * c_e / math.sqrt(mass / vol)  # Erosional velocity (m/s)
     names = list(_TUBING) if not oil else list(_TUBING)[:-1]
@@ -575,7 +583,7 @@ def _completion(r, w, x):
     D = sizes[i]
     q_cap = v_e * math.pi * D * D / 4 * 86400 / vol  # Sm3/d of liquid at the erosional velocity
     eps = logu(r, 1.5e-6, 1.5e-4) if tail else logu(r, *_ROUGHNESS[stage])  # spec: SMP-76
-    w.update(c_e=c_e, q_design=q_d, D=D, tubing=names[i], q_cap=q_cap, roughness=eps)
+    w.update(c_e=c_e, q_design=q_d, q_design_oe=q_oe, D=D, tubing=names[i], q_cap=q_cap, roughness=eps)
 
 
 def _inflow_at_stage(w, x):
@@ -619,14 +627,25 @@ def _inflow_at_stage(w, x):
 
 
 def _choke(r, w, x):  # spec: SMP-77
-    D = w['D']
-    beta = r.uniform(0.15, 0.75) if _is_tail(w) else r.uniform(0.15, 0.6)
-    d_bean = min(beta * D, _BEAN_MAX)
-    if d_bean < beta * D:
-        x.flags.append('bean_capped_at_4_in')
+    """The choke's draws, and the largest choke that the well may take. Its bean is sized to the well at a solve of
+    the generation (_size_bean): until then the well's `K_c`, `d_bean` and `beta` are None."""
+    xi = _XI_CHOKE[0] * (_XI_CHOKE[1] / _XI_CHOKE[0]) ** r.random()  # Log-uniform, core and tail
     c_d = r.uniform(0.75, 0.9)
-    w.update(beta=d_bean / D, d_bean=d_bean, c_d=c_d, K_c=c_d * math.pi * d_bean**2 / 4)
+    d_max = min(_BETA_MAX * w['D'], _BEAN_MAX)
+    w.update(xi_choke=xi, c_d=c_d, K_c_max=c_d * math.pi * d_max**2 / 4, K_c=None, d_bean=None, beta=None)
     w.update(choke_model='simpson', chk_profile=pick(r, CHOKE_PROFILES, (1,) * 4))
+
+
+def _size_bean(w, K_c: float) -> float:  # spec: SMP-77
+    """
+    Gives a well's draws their choke: the coefficient K_c (m2) that the generation's sizing asks for, at most the
+    well's largest, `K_c_max`. Sets `K_c`, `d_bean` (m), the bean of the well's discharge coefficient, and `beta`, its
+    share of the tubing's diameter, and returns the well's K_c.
+    """
+    K_c = min(K_c, w['K_c_max'])
+    d_bean = math.sqrt(4 * K_c / (math.pi * w['c_d']))
+    w.update(K_c=K_c, d_bean=d_bean, beta=d_bean / w['D'])
+    return K_c
 
 
 def _needs_lift(w, bo, p_r, p_s, R_go, wlr) -> bool:  # spec: SMP-78

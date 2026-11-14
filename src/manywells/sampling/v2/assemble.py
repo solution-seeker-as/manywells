@@ -107,9 +107,9 @@ def _well_columns(kind: str) -> list:  # spec: SMP-110
     cols += ['kgko_weight', 'gor_factor_cond'] + ([] if sol else _LIFE)
     cols += 'permeability net_pay skin ln_re_rw drawdown_design anisotropy productivity_factor J non_darcy_D'.split()
     cols += ['k_l', 'w_l_max', 'forchheimer_a', 'forchheimer_b'] if sol else []
-    cols += 'design_rate floor best_rate best_rate_w_lg D'.split()
+    cols += 'design_rate design_rate_oe floor best_rate best_rate_w_lg D'.split()
     cols += ['roughness'] if sol else ['roughness_start', 'roughness_end']
-    cols += 'bean_ratio C_D K_c'.split() + list(_LIFT) + (['h'] if sol else [])
+    cols += 'choke_dp_share bean_ratio C_D K_c'.split() + list(_LIFT) + (['h'] if sol else [])
     cols += 'U_t k_e well_age cp_o cp_w cp_g flags'.split() + list(_GENERATION) + ([] if sol else ['n_dead_dates'])
     return cols
 
@@ -179,8 +179,9 @@ def _well_row(res: dict, kind: str) -> dict:  # spec: SMP-108, SMP-110
     row.update(drawdown_design=w['delta_d'], anisotropy=g('I_ani'), productivity_factor=w['f_geo'])
     row.update(J=g('J') if oil else math.nan, non_darcy_D=math.nan if oil else w['D_nondarcy'] / _MSCF)
     row.update(design_rate=w['q_design'], floor=generate._FLOOR[w['well_type']])  # The tubing's (SMP-75)
+    row.update(design_rate_oe=w['q_design_oe'])
     row.update(best_rate=info['best_rate'], best_rate_w_lg=info['best_rate_w_lg'])
-    row.update(D=w['D'], bean_ratio=w['beta'], C_D=w['c_d'], K_c=w['K_c'])
+    row.update(D=w['D'], choke_dp_share=w['xi_choke'], bean_ratio=g('beta'), C_D=w['c_d'], K_c=g('K_c'))
     if kind == 'nsol':  # The design of a well whose lift starts in its life; one that stays natural has none
         design = res['nsol']['design'] if res['nsol']['lift_start'] is not None else None
     else:
@@ -411,6 +412,7 @@ def _records(kind: str, seed: int, n_wells: int, settings: dict, run_dir) -> dic
         producibility=dict(
             floor=settings['floor'],
             margin=settings['floor_margin'],
+            start_hurdle=settings['start_hurdle'],
             lift_fractions=settings['lift_fractions'],
             scan_points=settings['scan_points'],
             wlr_max=settings['wlr_max'],

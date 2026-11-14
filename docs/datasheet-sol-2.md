@@ -2,7 +2,7 @@
 
 *Draft, 2026-11-11 (Step R11 of `plans/sampler-redesign-plan.md`; D-94). Release documentation, for Bjarne's sign-off. `[full generation: …]` marks a number that exists only after the full generation, and `[maintainer: …]` a fact for the maintainer to give.*
 
-*The first full generation is a beta, `manywells-sol-2-beta1` (SMP-50): this datasheet is filled for it first, and again for the final dataset, which takes the plain name.*
+*A full generation before the final one is a beta (SMP-50): `manywells-sol-2-beta1` was the first, and the code now generates `manywells-sol-2-beta2`, with a choke sized to the well's rate (SMP-77) and a start hurdle (SMP-102), both awaiting Bjarne's ruling (D-150 to D-153). This datasheet is filled for a beta first, and again for the final dataset, which takes the plain name.*
 
 This datasheet follows Gebru et al. (2021), one section per section of theirs (§3.1 to §3.7), each question in bold and its answer after it. The schema, every column with its unit and type, is in [`datasets.md`](datasets.md), v2 datasets; the procedure that draws the wells and samples is `specs/sampling.md`, SMP-50 to SMP-117. The non-stationary dataset has its own datasheet, [`datasheet-nsol-2.md`](datasheet-nsol-2.md).
 
@@ -58,7 +58,7 @@ The accepted wells are the drawn ones that are produced and reach 200 operating 
 
 ## 3. Collection process
 
-**How was the data associated with each instance acquired?** By simulation. Each well is drawn by the v2 procedure (SMP-50 to SMP-117), built in the `v2.0.0` configuration with 100 cells (SMP-111), and each sample is solved by the Rust core, `SSDFSimulator(wp, backend='rust')`, whose operating point is the root set's stable root (SOL-4). A `sol-2` well is its life (SMP-83) at one date, drawn within its life stage (SMP-92). Its samples vary the choke (SMP-93), the lift gas (SMP-94) and the separator pressure (SMP-95), and drift the reservoir pressure by ±2% and the GOR and the water by ±5% (SMP-96).
+**How was the data associated with each instance acquired?** By simulation. Each well is drawn by the v2 procedure (SMP-50 to SMP-117), built in the `v2.0.0` configuration with 100 cells (SMP-111), and each sample is solved by the Rust core, `SSDFSimulator(wp, backend='rust')`, whose operating point is the root set's stable root (SOL-4). A `sol-2` well is its life (SMP-83) at one date, drawn within its life stage (SMP-92). Its choke's bean is sized to its rate at that date, so that the fully open choke takes 2% to 45% of the pressure upstream of it (SMP-77). Its samples vary the choke (SMP-93), the lift gas (SMP-94) and the separator pressure (SMP-95), and drift the reservoir pressure by ±2% and the GOR and the water by ±5% (SMP-96).
 
 **What mechanisms or procedures were used, and how were they validated?** ManyWells' generator, `scripts/data_generation/v2/generate_dataset.py` with `manywells.sampling.v2`, and NeqSim 3.4.0 for the volatile oils' and condensates' tables (SMP-112 to SMP-116). The model is specified in `specs/model/`. The Rust core is checked against the CasADi backend, and in the `v1.0.0` configuration by the verifier against v1.0.0's roots (`specs/verification.md`). The draws are tested for their bounds, shares, marginals and reproducibility (`specs/sampling.md`, v2: checks; `tests/test_sampling_v2_*.py`). The generation is checked for the counts (10,000 wells, 200 samples each, every slot once), every well against `configurations.check(wp, 'v2.0.0')`, the re-solve of a seeded sample of rows read back from the files, and the split's shares per stratum (`plans/sampler-redesign/datasets-draft.md`, Checks at generation). [full generation: the results of these checks]
 
@@ -74,6 +74,7 @@ The accepted wells are the drawn ones that are produced and reach 200 operating 
 
 **Was any preprocessing, cleaning or labelling of the data done?** No value is changed after its solve. Wells and draws are selected:
 
+- **The start hurdle** (SMP-102). A platform or subsea well whose design rate in oil equivalent lies below its type's start hurdle, 50 and 500 Sm³/d, would not be drilled, and is dropped before any solve.
 - **The producibility filter** (SMP-102, SMP-103). A well whose best rate, at a fully open choke and at three lift-gas rates for a lifted well, is below half its economic floor, or an oil whose WLR is above 0.98, would not be produced and is dropped. A natural oil well that cannot flow first takes its life's lift design (`lift_start_rule` `no_natural_flow`).
 - **Redraws** (SMP-104, SMP-105). A slot's draw without an operating point is drawn again from the slot's own generator until the slot has one.
 - **Limits** (SMP-106). A well is dropped, and the next drawn well takes its place, when a slot needs more than 100 attempts, the well more than 1000 redraws or 10 solver failures, when its inputs fail `configurations.check`, or when its table cannot be built. The drops are reported by group, with no target (SMP-106): [full generation: wells dropped at the limits by fluid class, well type and lift rule; the shift of each drawn input between the drawn and the kept wells]

@@ -63,7 +63,7 @@ The WEEKS feature is only present in non-stationary datasets.
 
 *Draft, 2026-11-11 (Step R11 of `plans/sampler-redesign-plan.md`). The schema needs Bjarne's sign-off: D-85 to D-94 are ruled, and R10's D-122 to D-126, which this section follows, await their rulings (`plans/sampler-redesign/decisions.md`). The v2 datasets are not published yet. The v1 datasets and the text above are unchanged.*
 
-*The first full generation is a beta (SMP-50, D-149): its datasets are `manywells-sol-2-beta1` and `manywells-nsol-2-beta1`, with `release` `beta1` in their `metadata.json`, and this section describes them. The final datasets take the plain names, after the beta's analysis.*
+*A full generation before the final one is a beta (SMP-50, D-149). The first beta's datasets are `manywells-sol-2-beta1` and `manywells-nsol-2-beta1`, with `release` `beta1` in their `metadata.json`. This section describes the datasets that the code generates as it stands, which carry `beta2` (D-153): against the first beta's, their `wells` add the columns `design_rate_oe` and `choke_dp_share`, their beans are sized to the wells' rates (SMP-77), and their logs add the reason `below_start_hurdle` (SMP-102); these await Bjarne's ruling (D-150 to D-153). The final datasets take the plain names, after the betas' analysis.*
 
 The v2 datasets are new datasets with a schema of their own (`specs/goals.md`, Compatibility):
 
@@ -302,6 +302,7 @@ The other groups' columns are float64 unless their row says otherwise.
 | `w_l_max` (s) | kg/s | `Vogel.w_l_max` at the date (SMP-111); null unless `inflow` is `vogel` | kept |
 | `forchheimer_a`, `forchheimer_b` (s) | bar² s/kg, bar² s²/kg² | `Forchheimer.a` and `Forchheimer.b` at the date (SMP-117); null unless `inflow` is `forchheimer` | new |
 | `design_rate` | Sm³/d | the liquid rate the tubing was sized for (SMP-75) | new |
+| `design_rate_oe` | Sm³/d | the design rate in oil equivalent, which a platform or subsea well's start hurdle is set against (SMP-102) | new |
 | `floor` | Sm³/d | the economic floor in oil equivalent (SMP-102) | new |
 | `best_rate`, `best_rate_w_lg` | Sm³/d, kg/s | the best rate in oil equivalent and its lift-gas rate (SMP-103): `sol-2` at its date, `nsol-2` at its start | new |
 
@@ -312,8 +313,9 @@ The other groups' columns are float64 unless their row says otherwise.
 | `D` | m | the tubing's inner diameter (SMP-75) | kept |
 | `roughness` (s) | m | `RoughnessFriction.roughness` at the date (SMP-76, SMP-88) | kept |
 | `roughness_start`, `roughness_end` (n) | m | the roughness at the life's start and end, between which it ages (SMP-88) | new |
-| `bean_ratio`, `C_D` | – | the bean's share of the tubing's diameter, and the discharge coefficient (SMP-77) | new |
-| `K_c` | m² | `SimpsonChokeModel.K_c` (SMP-77) | kept |
+| `choke_dp_share` | – | the share $\xi$ of the pressure upstream of the choke that the fully open choke takes at its sizing (SMP-77) | new |
+| `bean_ratio`, `C_D` | – | the fully open bean's share of the tubing's diameter, the bean being sized to the well's rate, and the discharge coefficient (SMP-77) | new |
+| `K_c` | m² | `SimpsonChokeModel.K_c`, the sized choke's (SMP-77) | kept |
 | `injection_md`, `injection_tvd` | m | the operating valve's measured and true vertical depth (`WellProperties.injection_md`; SMP-79) | new |
 | `T_lg` | K | the lift gas's temperature (`BoundaryConditions.T_lg`; SMP-79) | new |
 | `w_lg_max` | kg/s | the lift-gas capacity (SMP-80) | new |
@@ -383,11 +385,11 @@ One row per drawn well, from draw index 0 to the last accepted well, accepted or
 | Column | Type | Meaning |
 |---|---|---|
 | `outcome` | category | `accepted`, why the well was dropped (SMP-106), or `crash` where its generation raised |
-| `not_producible_reason` | category | the best rate's status of a well dropped for it (SMP-103); null otherwise |
+| `not_producible_reason` | category | the best rate's status of a well dropped for it (SMP-103), its choke's sizing's (SMP-77), or `below_start_hurdle` for a platform or subsea well whose design rate lies below its start hurdle (SMP-102); null otherwise |
 | `error` | string | the message of an `invalid_input` or `table_failed` well, or a crash's traceback, the home directory written as `~`; null otherwise |
 | `n_attempts` | int32 | the attempts of its slots; 0 for a well dropped before its slots |
 | `n_several_stable` | int32 | its samples whose root set had more than one stable root (SOL-6) |
-| `best_rate_outcomes` | list of strings | the outcomes of its best-rate solves, one per lift-gas rate (SMP-103; `nsol-2`: at its start) |
+| `best_rate_outcomes` | list of strings | the outcomes of its best-rate solves, one per lift-gas rate (SMP-103; `nsol-2`: at its start), or of its choke's sizing's solves for a well dropped there (SMP-77) |
 | `scan_best_rate` (n) | list of float64 | the life scan's best rates in Sm³/d, up to the point that ends the life (SMP-101); NaN where a point has no operating point |
 | `scan_outcome` (n) | list of strings | the statuses of those points (SMP-101, SMP-103) |
 | `seconds`, `cpu_seconds`, `table_seconds` | float64 | the well's wall and CPU time, and its table build's, in seconds; they vary with the machine |
@@ -396,7 +398,7 @@ A crashed well's row holds its draw index, outcome, error and times only. The we
 
 ### `metadata.json`
 
-The records of SMP-110: `dataset`, `release` (`beta1` for the beta, null for the final datasets), `kind`, `seed`, `n_wells`, `n_slots`, `configuration`, `n_cells`, `backend` (`rust`) and `retry_backend` (null, D-122); `limits` and `producibility` (the floors, the margin, the best rate's lift-gas fractions, the life scan's points and the water cut); `split` (the test share and the strata); `chunk_size`; `tables`, the folder of tables relative to the run's, and `table_build` (the SHA-256 of its `wells.json` and `axes.json`, the draw indices and table wells it covers, and NeqSim's version); `code`, the code that ran the wells, and `assembled_by`, the code that wrote the files, each with its `version` (`datasets.io.code_version`), full `commit` and `dirty`; `lock_sha256`, the SHA-256 of `uv.lock`; `environment`, the versions of Python, numpy and scipy and the machine's architecture that the run had, which the assembly must have too; `created`; `python`, `platform` and `machine`, the assembly's; `counts`, the wells drawn and accepted, the wells by outcome, the slots' attempts by outcome, `samples_off_table` (the samples with a point off their PVT table's grid, PVT-TAB-2), `dead_dates` (n: those that started a lift and those that ended a life) and the CPU seconds; and `files`, each file's rows and SHA-256. The logs' copy adds `companion_of`.
+The records of SMP-110: `dataset`, `release` (`beta1`, `beta2` and so on for a beta, null for the final datasets), `kind`, `seed`, `n_wells`, `n_slots`, `configuration`, `n_cells`, `backend` (`rust`) and `retry_backend` (null, D-122); `limits` and `producibility` (the floors, the margin, the start hurdles, the best rate's lift-gas fractions, the life scan's points and the water cut); `split` (the test share and the strata); `chunk_size`; `tables`, the folder of tables relative to the run's, and `table_build` (the SHA-256 of its `wells.json` and `axes.json`, the draw indices and table wells it covers, and NeqSim's version); `code`, the code that ran the wells, and `assembled_by`, the code that wrote the files, each with its `version` (`datasets.io.code_version`), full `commit` and `dirty`; `lock_sha256`, the SHA-256 of `uv.lock`; `environment`, the versions of Python, numpy and scipy and the machine's architecture that the run had, which the assembly must have too; `created`; `python`, `platform` and `machine`, the assembly's; `counts`, the wells drawn and accepted, the wells by outcome, the slots' attempts by outcome, `samples_off_table` (the samples with a point off their PVT table's grid, PVT-TAB-2), `dead_dates` (n: those that started a lift and those that ended a life) and the CPU seconds; and `files`, each file's rows and SHA-256. The logs' copy adds `companion_of`.
 
 ### Labels and codes
 
@@ -432,7 +434,7 @@ A label is stored as its string, and its code is its position in the list (D-89)
 | `outcome` | redraws | 0 `operating_point`, 1 `no_operating_point`, 2 `solver_failure` |
 | `reason` | redraws | 0 `p_r_le_p_s`, 1 `no_root`, 2 `exception`, 3 `invalid_row`, 4 `incomplete_scan`, 5 `unstable_only` |
 | `outcome` | drawn_wells | 0 `accepted`, 1 `not_producible`, 2 `best_rate_solver_failure`, 3 `invalid_input`, 4 `slot_limit` (s), 5 `redraw_limit`, 6 `solver_failure_limit`, 7 `dead_date` (n), 8 `short_life` (n), 9 `table_failed`, 10 `crash` |
-| `not_producible_reason` | drawn_wells | 0 `water_cut`, 1 `below_floor`, 2 `no_operating_point`, 3 `solver_failure` |
+| `not_producible_reason` | drawn_wells | 0 `water_cut`, 1 `below_floor`, 2 `no_operating_point`, 3 `solver_failure`, 4 `below_start_hurdle` |
 
 Reasons 0 and 1 make an attempt `no_operating_point`, reasons 2 to 5 a `solver_failure` (SMP-104).
 

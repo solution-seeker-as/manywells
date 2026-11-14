@@ -6,11 +6,13 @@ terms of the CC BY-NC 4.0 International Public License.
 Created 10 November 2026
 Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
-The generation of one v2 well (specs/sampling.md, SMP-101 to SMP-106, and the lift that a solve starts, SMP-90 and
-SMP-103): the well's draws and life are mapped to the v2.0.0 configuration and checked, its best rate is solved
-against the economic floor, at its date (sol-2) or along its life (nsol-2: the life scan, which ends the life and may
-start gas lift), and its slots are solved in passes, each attempt without an operating point redrawn, until every
-slot has one or the well reaches a limit. In nsol-2 a dead date, a slot without an operating point at the slot limit,
+The generation of one v2 well (specs/sampling.md, SMP-101 to SMP-106, the choke's sizing, SMP-77, and the lift that a
+solve starts, SMP-90 and SMP-103): a well whose design rate lies below its start hurdle is dropped unsolved
+(SMP-102); else the well's draws and life are mapped to the v2.0.0 configuration and checked, its choke is sized at a
+solve, at its date (sol-2) or its life's start (nsol-2), its best rate is solved against the economic floor, at its
+date (sol-2) or along its life (nsol-2: the life scan, which ends the life and may start gas lift), and its slots are
+solved in passes, each attempt without an operating point redrawn, until every slot has one or the well reaches a
+limit. In nsol-2 a dead date, a slot without an operating point at the slot limit,
 starts the well's lift or ends its life there, and the slots are planned and solved again (SMP-106). Every attempt is
 one solve by the Rust core, which takes no start (SMP-107); no other backend retries it. Nothing here runs many wells
 or writes a dataset.
@@ -20,6 +22,7 @@ A well's result (generate_sol2_well, generate_nsol2_well) is a dict of:
 - `well`: the well's draws and labels. sol-2: the life at the well's date (life.sol2_well), with the lift design and
   `lift_start_rule` `no_natural_flow` where the producibility filter lifted it. nsol-2: the initial-stage draws
   (draws.draw_well), which hold what is fixed for the life. A `table_failed` well's are drawn without its table.
+  Its choke (`K_c`, `d_bean` and `beta`) is the sizing's, None for a well dropped before it or at it.
 - `stations`: the survey, (md, tvd).
 - `table`: a table well's manifest (tables._read_table) without its PVTTableSet, with `status` `ok`, or `failed` with
   the `step` and the `error`; None for a well of another fluid class.
@@ -31,7 +34,8 @@ A well's result (generate_sol2_well, generate_nsol2_well) is a dict of:
   `solver_failure_limit` or `short_life` (nsol-2); `error`, the message of an `invalid_input` or `table_failed` well
   (else None); `best_rate` (Sm3/d of oil equivalent) and `best_rate_w_lg` (kg/s), the best rate and its lift-gas
   rate, NaN without an operating point, and `best_rate_outcomes`, the outcomes of its solves (nsol-2: at the start);
-  `not_producible_reason`, the best rate's status of a well dropped for it (else None). nsol-2 adds `scan`, the life
+  `not_producible_reason`, the best rate's status of a well dropped for it, or `below_start_hurdle` (else None); a
+  well dropped at its choke's sizing has the sizing's status and outcomes. nsol-2 adds `scan`, the life
   scan's points up to the one that ends the life, each a dict of `t` (years), `status`, `best` and `lift_on`;
   `T_end` (years), the end of the life (NaN for a well dropped before the scan ends it), and `T_scan`, the end that
   the scan gave it; `dead_dates`, one dict per dead date that changed the life, of `t` (years), `slots` (the slots
@@ -46,9 +50,10 @@ A well's result (generate_sol2_well, generate_nsol2_well) is a dict of:
 An attempt's record is a flat dict of:
 
 - its inputs (samples._sol2_attempt or samples._nsol2_attempt; a best-rate solve's are the state's, with `p_s_nom`);
-- `draw_index`; `kind`, `best_rate`, `best_rate_lifted` (a sol-2 well's best rate with the filter's lift), `scan` or
-  `slot`; `slot`, j for a slot, -1 for a best-rate solve and -1 - i for the life scan's point i; `attempt`, a for a
-  slot, else the index of the lift-gas rate, whose share of the capacity is `lift_fraction`;
+- `draw_index`; `kind`, `choke_sizing`, `best_rate`, `best_rate_lifted` (a sol-2 well's best rate with the filter's
+  lift), `scan` or `slot`; `slot`, j for a slot, -1 for a sizing or best-rate solve and -1 - i for the life scan's
+  point i; `attempt`, a for a slot, else the index of the lift-gas rate, whose share of the capacity is
+  `lift_fraction`;
 - `outcome` and `reason` (SMP-104), and `error`, an exception's message (else None);
 - `n_roots` and `n_stable`, the sizes of the root set, and `several_stable`; `off_table`, whether a point of the
   operating point lies off its fluid's PVT table (None without an operating point);
@@ -77,6 +82,10 @@ from manywells.solvers.rust import RustRootFinder
 
 _FLOOR = {'platform': 1.6, 'onshore': 1.6, 'subsea': 20.0}  # Sm3/d of oil equivalent, by well type  # spec: SMP-102
 _FLOOR_MARGIN = 0.5  # A well is not produced below this share of its floor  # spec: SMP-102
+# Sm3/d of oil equivalent: a well is drilled only where its design rate reaches its type's start hurdle
+_START_HURDLE = {'platform': 50.0, 'onshore': 0.0, 'subsea': 500.0}  # spec: SMP-102
+# The chokes that the sizing solves a well with, shares of its largest: the second is a bean of half the diameter
+_SIZING_CHOKES = (1.0, 1 / 4)  # spec: SMP-77
 _SLOT_LIMIT, _REDRAW_LIMIT, _SOLVER_FAILURE_LIMIT = 100, 1000, 10  # spec: SMP-106 (D-137)
 _DEAD_DATE_LIMIT = 5  # The dead dates that may start an nsol-2 well's lift or end its life  # spec: SMP-106 (D-142)
 _BEST_RATE_LIFT = (0.0, 0.5, 1.0)  # The best rate's lift-gas rates, shares of the capacity  # spec: SMP-103
@@ -112,10 +121,11 @@ def _solve(wp, bc) -> dict:  # spec: SMP-104
 
     :return: A dict of `outcome`, `reason` and `error`; `n_roots`, `n_stable` and `several_stable`; the search's
         counts `marches`, `non_finite`, `rejected` and `rejected_at_edge` (NaN without a search); `off_table`,
-        whether the operating point leaves its fluid's PVT table (None without one); `t_solve` (s); and `row`, the
-        operating point's features (None without one)
+        whether the operating point leaves its fluid's PVT table (None without one); `t_solve` (s); `row`, the
+        operating point's features (None without one); and `wellhead`, its state at the wellhead, in the state
+        vector's order (None without one)
     """
-    out = dict(outcome=None, reason=None, error=None, **_NO_SEARCH, row=None)
+    out = dict(outcome=None, reason=None, error=None, **_NO_SEARCH, row=None, wellhead=None)
     if not bc.p_r > bc.p_s:  # No admissible state (SOL-1, SOL-2): the well cannot flow, without a solve
         out.update(outcome='no_operating_point', reason='p_r_le_p_s')
         return out
@@ -147,7 +157,7 @@ def _solve(wp, bc) -> dict:  # spec: SMP-104
         out['off_table'] = bool(op.off_table)
         row = _sample_features(op, bc, wp.fluid)
         if _valid_row(row):
-            out.update(outcome='operating_point', row=row)
+            out.update(outcome='operating_point', row=row, wellhead=[float(v) for v in op.x[-7:]])
         else:
             out.update(outcome='solver_failure', reason='invalid_row')
     elif rs.roots:  # A continuous R(p_0) has at least as many stable roots as unstable ones: the search missed one
@@ -161,20 +171,24 @@ def _solve(wp, bc) -> dict:  # spec: SMP-104
     return out
 
 
-def _attempt(builder, inp) -> dict:  # spec: SMP-104
+def _attempt(builder, inp, wellhead=None) -> dict:  # spec: SMP-104
     """The record of an attempt (the module's docstring), without its labels: the inputs inp (mapping.WellBuilder.case)
-    of the well of builder, solved once."""
+    of the well of builder, solved once. A list given as wellhead takes the operating point's state at the wellhead
+    (_solve), or None without an operating point."""
     t0 = time.perf_counter()
     rec = dict(inp)
     try:
         wp, bc = builder.case(inp)
     except ValueError as e:  # The model refuses the inputs: a solver failure
         res = dict(outcome='solver_failure', reason='exception', error=f'build: {e}'[:300], **_NO_SEARCH, row=None)
+        res['wellhead'] = None
         t_build = time.perf_counter() - t0
     else:
         t_build = time.perf_counter() - t0
         res = _solve(wp, bc)
-    row = res.pop('row')
+    row, head = res.pop('row'), res.pop('wellhead')
+    if wellhead is not None:
+        wellhead.append(head)
     rec.update(res, t_build=t_build)
     if row is not None:
         rec.update(row, q_oe=_oil_equivalent(row))
@@ -219,6 +233,64 @@ def _best_rate(builder, state, lifted, w_lg_max, floor, log, base) -> dict:  # s
     else:
         out['status'] = 'no_operating_point'
     return out
+
+
+def _size_choke(builder, state, lifted, w_lg_max, log, base) -> tuple:  # spec: SMP-77
+    """
+    Sizes a well's choke at a state. The well is solved with its largest choke (mapping.WellBuilder.widest_choke),
+    fully open, at the state's nominal downstream pressure, over the best rate's lift-gas rates for a lifted well;
+    where it has no operating point, with the second of _SIZING_CHOKES, a bean of half the diameter. The solve with the
+    most oil equivalent gives the mass rate and the wellhead's state at which the fully open choke takes its drawn
+    share of the pressure upstream of it (mapping.WellBuilder.size_choke), and the choke is at most the one that the
+    well was solved with.
+
+    :param builder: The well's WellBuilder, which takes the choke
+    :param state: The state (life.Life.state's keys), as _best_rate takes it
+    :param lifted: Whether the well is lifted at the state
+    :param w_lg_max: The lift-gas capacity (kg/s)
+    :param log: The well's log, to which the solves' records are added, each with `sizing_choke`, its choke's share
+        of the largest
+    :param base: The labels of the solves' records
+    :return: (status, outcomes): `sized`, or, with the largest choke left on the well, `solver_failure` (no
+        operating point, and a solver failure among the solves) or `no_operating_point`; and the outcomes of the
+        solves with the last choke tried
+    """
+    failed, outcomes = False, []
+    for share in _SIZING_CHOKES:
+        K_c, ops, outcomes = builder.widest_choke(share), [], []
+        for i, f in enumerate(_BEST_RATE_LIFT if lifted else (0.0,)):
+            inp = dict(state, u=1.0, w_lg=f * w_lg_max if lifted else 0.0, lift_on=lifted, p_s=state['p_s_nom'])
+            head = []
+            rec = _attempt(builder, inp, head)
+            rec.update(base, attempt=i, lift_fraction=f, sizing_choke=share)
+            log.append(rec)
+            outcomes.append(rec['outcome'])
+            if rec['outcome'] == 'operating_point':
+                ops.append((rec, head[0]))
+        if ops:
+            top, head = max(ops, key=lambda op: op[0]['q_oe'])
+            builder.size_choke(top['WTOT'], head, state['p_s_nom'], K_c)
+            return 'sized', outcomes
+        failed |= 'solver_failure' in outcomes
+    builder.widest_choke()
+    return ('solver_failure' if failed else 'no_operating_point'), outcomes
+
+
+def _sized_best_rate(builder, state, lifted, w_lg_max, floor, log, base) -> dict:  # spec: SMP-77, SMP-103
+    """A well's choke sized at a state (_size_choke), and its best rate there with it (_best_rate, whose arguments
+    and result these are). A well that the sizing leaves without a choke has the sizing's status and outcomes, and no
+    best rate."""
+    status, outcomes = _size_choke(builder, state, lifted, w_lg_max, log, dict(base, kind='choke_sizing'))
+    if status == 'sized':
+        return _best_rate(builder, state, lifted, w_lg_max, floor, log, base)
+    if builder.w['fluid_type'] in _OILS and state['wlr'] > _WLR_MAX:  # spec: SMP-102
+        status = 'water_cut'
+    return dict(status=status, best=math.nan, best_w_lg=math.nan, outcomes=outcomes)
+
+
+def _below_start_hurdle(w0) -> bool:  # spec: SMP-102
+    """Whether a well's design rate in oil equivalent lies below its type's start hurdle: it is not drilled."""
+    return w0['q_design_oe'] < _START_HURDLE[w0['well_type']]
 
 
 def _solve_slots(k, draw, builder, log, slot_limit_outcome) -> tuple:  # spec: SMP-105, SMP-106
@@ -396,6 +468,9 @@ def generate_sol2_well(seed: int, k: int, tables=None) -> dict:
         info.update(outcome='invalid_input', error=str(e)[:300])
         w = sol2_well(Life(seed, k, fluid=hook)) | dict.fromkeys(_COEF_KEYS, math.nan)  # The draws without the table
         return _result(t_start, w, life.stations, table, info)
+    if _below_start_hurdle(life.w0):  # spec: SMP-102. Not drilled: nothing is solved
+        info.update(outcome='not_producible', not_producible_reason='below_start_hurdle')
+        return _result(t_start, w, life.stations, table, info)
     builder = WellBuilder(life.w0, life.stations, design=life.design, pvt=pvt)
     lifted = w['lift'] == 'gas_lift'
     nominal = _sol2_nominal(w)
@@ -406,11 +481,15 @@ def generate_sol2_well(seed: int, k: int, tables=None) -> dict:
         return _result(t_start, w, life.stations, table, info)
     floor = _FLOOR[w['well_type']]
     base = dict(draw_index=k, kind='best_rate', slot=-1)
-    br = _best_rate(builder, nominal, lifted, w['w_lg_max'] if lifted else 0.0, floor, log, base)
+    # spec: SMP-77. The choke is sized at the well's date, and the best rate is the well's with it
+    br = _sized_best_rate(builder, nominal, lifted, w['w_lg_max'] if lifted else 0.0, floor, log, base)
     if not lifted and life.oil and br['status'] in ('no_operating_point', 'below_floor'):
-        # spec: SMP-103. An oil well that cannot flow naturally takes its life's lift design, as an operator would
+        # spec: SMP-103. An oil well that cannot flow naturally takes its life's lift design, as an operator would,
+        # and its choke is sized again, with the lift
         w, lifted = sol2_well(life, no_natural_flow=True), True
-        br = _best_rate(builder, nominal, lifted, w['w_lg_max'], floor, log, dict(base, kind='best_rate_lifted'))
+        base = dict(base, kind='best_rate_lifted')
+        br = _sized_best_rate(builder, nominal, lifted, w['w_lg_max'], floor, log, base)
+    w.update({key: life.w0[key] for key in ('K_c', 'd_bean', 'beta', 'flags')})  # The sized choke (SMP-77)
     info.update(best_rate=br['best'], best_rate_w_lg=br['best_w_lg'], best_rate_outcomes=br['outcomes'])
     if _dropped_at_best_rate(info, br):
         return _result(t_start, w, life.stations, table, info, log)
@@ -512,6 +591,9 @@ def generate_nsol2_well(seed: int, k: int, tables=None) -> dict:
     builder = WellBuilder(w0, life.stations, design=life.design, pvt=pvt)
     log, info = [], _info(k, **_nsol_info())
     lift_start, rule = life.lift_start, life.lift_start_rule
+    if _below_start_hurdle(w0):  # spec: SMP-102. Not drilled: nothing is solved
+        info.update(outcome='not_producible', not_producible_reason='below_start_hurdle')
+        return _result(t_start, w0, life.stations, table, info, nsol=_life_summary(life, lift_start, rule))
     try:  # spec: SMP-106
         start = dict(life.state(0.0), u=1.0, w_lg=0.0, lift_on=_lift_on(0.0, lift_start), p_s=w0['p_s'])
         check(builder.case(start)[0], V2)
@@ -520,6 +602,13 @@ def generate_nsol2_well(seed: int, k: int, tables=None) -> dict:
         return _result(t_start, w0, life.stations, table, info, nsol=_life_summary(life, lift_start, rule))
     floor = _FLOOR[w0['well_type']]
     w_lg_max = life.design['w_lg_max'] if life.design is not None else 0.0
+    # spec: SMP-77. The choke is sized at the life's start, and is the well's for its life
+    base = dict(draw_index=k, kind='choke_sizing', slot=-1, t=0.0)
+    status, outcomes = _size_choke(builder, life.state(0.0), _lift_on(0.0, lift_start), w_lg_max, log, base)
+    if status != 'sized':
+        info['best_rate_outcomes'] = outcomes
+        _dropped_at_best_rate(info, dict(status=status))
+        return _result(t_start, w0, life.stations, table, info, log, nsol=_life_summary(life, lift_start, rule))
 
     def best_rate_at(i, t, lifted):
         base = dict(draw_index=k, kind='scan', slot=-1 - i, t=t)

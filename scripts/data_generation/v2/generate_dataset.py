@@ -18,11 +18,10 @@ the run's processes cap themselves at --memory-cap:
     (... nsol --n 100 --seed 2027 --processes 6 --out data/pilot-nsol-2 --allow-dirty)
 
 OUT holds tables/ (the table fluids' build), run/ (the run's chunks and settings), and the dataset's folder, named
-with the code's release label (manywells-<kind>-2-beta1/ for the beta, SMP-50), with its companion folder of logs,
-<dataset>-logs/. Every step resumes: a stopped run of
-the script carries on where it stopped. The table wells are drawn for a first guess of the draw indices the run needs
-(--draws, by default 1.5 n rounded up to the chunks); where the run needs more, the tables are extended and the run
-carries on.
+with the code's release label (manywells-<kind>-2-beta2/ for the second beta, SMP-50), with its companion folder of
+logs, <dataset>-logs/. Every step resumes: a stopped run of the script carries on where it stopped. The table wells are
+drawn for a first guess of the draw indices the run needs (--draws, by default 1.5 n rounded up to the chunks); where
+the run needs more, the tables are extended and the run carries on.
 
 NeqSim's build runs in an environment of its own (table_build.py's docstring), twice: the fluids, and, once their GOR
 axes are written, the tables. --neqsim run (the default) launches it, each JVM's process capped at 8 GB of address

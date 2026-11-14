@@ -32,8 +32,10 @@ from manywells.sampling.v2.generate import (
     _FLOOR,
     _FLOOR_MARGIN,
     _REDRAW_LIMIT,
+    _SIZING_CHOKES,
     _SLOT_LIMIT,
     _SOLVER_FAILURE_LIMIT,
+    _START_HURDLE,
     generate_nsol2_well,
     generate_sol2_well,
 )
@@ -60,9 +62,17 @@ def nan_or(a, b) -> bool:
 
 
 # --- Stand-ins ---------------------------------------------------------------------------------------------------------
+def drilled_lives():
+    """The lives of the tests' seed whose wells pass the start hurdle (SMP-102)."""
+    return [lf for lf in drawn_lives() if not generate._below_start_hurdle(lf.w0)]
+
+
 def a_sol2_well(*, oil=None, lifted=None, table=False):
-    """The first life of the tests' seed, and its sol-2 well, with the properties asked for."""
+    """The first life of the tests' seed that passes the start hurdle, and its sol-2 well, with the properties asked
+    for."""
     for lf, w in zip(drawn_lives(), drawn_sol2_wells()):
+        if generate._below_start_hurdle(lf.w0):
+            continue
         if oil is not None and lf.oil != oil:
             continue
         if lifted is not None and (w['lift'] == 'gas_lift') != lifted:
@@ -106,16 +116,22 @@ class StandInFinder:
         return RootSet.of(self.roots)
 
 
+WELLHEAD = [21.0, 4.0, 2.0, 0.6, 25.0, 780.0, 330.0]  # A stand-in state at the wellhead, in the state vector's order
+
+
 def stand_in_attempt(outcome_of):
-    """In place of generate._attempt: outcome_of(inp) gives an attempt's outcome and its oil equivalent (Sm3/d)."""
+    """In place of generate._attempt: outcome_of(inp) gives an attempt's outcome and its oil equivalent (Sm3/d). An
+    operating point has a total mass rate of 5 kg/s, and the stand-in state at the wellhead."""
     calls = []
 
-    def attempt(builder, inp):
+    def attempt(builder, inp, wellhead=None):
         calls.append(inp)
         outcome, q_oe = outcome_of(inp)
         rec = dict(inp, outcome=outcome, reason=None, error=None)
         if outcome == 'operating_point':
-            rec['q_oe'] = q_oe
+            rec.update(q_oe=q_oe, WTOT=5.0)
+        if wellhead is not None:
+            wellhead.append(WELLHEAD if outcome == 'operating_point' else None)
         return rec
 
     return attempt, calls
@@ -522,14 +538,144 @@ def test_no_rule_3_without_a_design_or_for_the_water_cut():
     assert (lift_start, rule, T_end, len(calls)) == (None, None, 2.5, 7)
 
 
+# --- SMP-77: the choke's sizing ---------------------------------------------------------------------------------------
+class StandInBuilder:
+    """In place of a WellBuilder at the sizing: it records the choke that it is given."""
+
+    def __init__(self, fluid_type='black_oil'):
+        self.w, self.choke = dict(fluid_type=fluid_type), None
+
+    def widest_choke(self, share=1.0):
+        self.choke = ('widest', share)
+        return 8.0 * share
+
+    def size_choke(self, w_m, wellhead, p_dn, K_c_most):
+        self.choke = (w_m, wellhead, p_dn, K_c_most)
+
+
+def size_choke(monkeypatch, outcomes, lifted=True):
+    """The sizing with each solve's (outcome, q_oe) given in turn: its result, the builder, the log and the solves'
+    inputs."""
+    it = iter(outcomes)
+    attempt, calls = stand_in_attempt(lambda inp: next(it))
+    monkeypatch.setattr(generate, '_attempt', attempt)
+    builder, log = StandInBuilder(), []
+    state = dict(p_r=200.0, gor=100.0, wlr=0.3, wgr=math.nan, p_s_nom=20.0, h=10.0, roughness=1e-5)
+    out = generate._size_choke(builder, state, lifted, 2.0, log, dict(draw_index=4, kind='choke_sizing'))
+    return out, builder, log, calls
+
+
+def test_the_choke_is_sized_at_the_solve_with_the_most_oil_equivalent(monkeypatch):
+    """SMP-77: the well is solved with its largest choke, fully open, at the nominal downstream pressure and the best
+    rate's lift-gas rates; the choke is sized at the mass rate and the wellhead's state of the solve with the most
+    oil equivalent. Each solve is logged with its labels."""
+    solves = [('operating_point', 3.0), ('operating_point', 5.0), ('no_operating_point', None)]
+    (status, outcomes), builder, log, calls = size_choke(monkeypatch, solves)
+    assert status == 'sized' and outcomes == ['operating_point', 'operating_point', 'no_operating_point']
+    assert builder.choke == (5.0, WELLHEAD, 20.0, 8.0)  # At most the largest choke, which it was solved with
+    assert [(c['u'], c['p_s'], c['w_lg'], c['lift_on']) for c in calls] == [
+        (1.0, 20.0, f * 2.0, True) for f in (0, 0.5, 1)
+    ]
+    assert [(r['draw_index'], r['kind'], r['attempt'], r['lift_fraction'], r['sizing_choke']) for r in log] == [
+        (4, 'choke_sizing', i, f, 1.0) for i, f in enumerate((0.0, 0.5, 1.0))
+    ]
+    (status, _), builder, _, calls = size_choke(monkeypatch, [('operating_point', 2.0)], lifted=False)
+    assert status == 'sized' and len(calls) == 1 and (calls[0]['w_lg'], calls[0]['lift_on']) == (0.0, False)
+
+
+def test_the_sizing_takes_a_smaller_choke_where_the_largest_gives_no_operating_point(monkeypatch):
+    """SMP-77: a well without an operating point with its largest choke is solved with a bean of half the diameter,
+    a quarter of the coefficient; the choke is at most the one that it was solved with."""
+    assert _SIZING_CHOKES == (1.0, 1 / 4)
+    solves = [('solver_failure', None), ('operating_point', 3.0)]
+    (status, outcomes), builder, log, calls = size_choke(monkeypatch, solves, lifted=False)
+    assert status == 'sized' and outcomes == ['operating_point'] and len(calls) == 2
+    assert builder.choke == (5.0, WELLHEAD, 20.0, 8.0 / 4)
+    assert [r['sizing_choke'] for r in log] == [1.0, 1 / 4]
+
+
+@pytest.mark.parametrize(
+    'outcomes, status',
+    [
+        (['no_operating_point'] * 6, 'no_operating_point'),
+        (['no_operating_point', 'solver_failure'] + ['no_operating_point'] * 4, 'solver_failure'),
+    ],
+)
+def test_a_well_without_an_operating_point_at_either_sizing_choke_is_not_sized(monkeypatch, outcomes, status):
+    """SMP-77: the sizing's status is the best rate's, over the solves of both its chokes; its outcomes are the last
+    choke's, and the well is left with its largest choke."""
+    (got, seen), builder, log, _ = size_choke(monkeypatch, [(o, None) for o in outcomes])
+    assert (got, seen) == (status, outcomes[-3:]) and builder.choke == ('widest', 1.0)
+    assert [r['sizing_choke'] for r in log] == [share for share in _SIZING_CHOKES for _ in range(3)]
+
+
+def test_the_best_rate_of_a_sized_well(monkeypatch):
+    """SMP-77, SMP-103: the best rate is the sized well's; a well that the sizing leaves without a choke has the
+    sizing's status and outcomes and no best rate, an oil above the water cut the water cut's."""
+    it = iter(
+        [('operating_point', 3.0)] * 3 + [('operating_point', 2.0), ('operating_point', 4.0), ('operating_point', 1.0)]
+    )
+    attempt, calls = stand_in_attempt(lambda inp: next(it))
+    monkeypatch.setattr(generate, '_attempt', attempt)
+    state = dict(p_r=200.0, gor=100.0, wlr=0.3, wgr=math.nan, p_s_nom=20.0, h=10.0, roughness=1e-5)
+    builder, log = StandInBuilder(), []
+    out = generate._sized_best_rate(builder, state, True, 2.0, 1.6, log, dict(draw_index=4, kind='best_rate'))
+    assert out == dict(best=4.0, best_w_lg=1.0, outcomes=['operating_point'] * 3, status='pass')
+    assert [r['kind'] for r in log] == ['choke_sizing'] * 3 + ['best_rate'] * 3 and builder.choke[0] == 5.0
+
+    for wlr, status in ((0.3, 'no_operating_point'), (0.981, 'water_cut')):
+        attempt, calls = stand_in_attempt(lambda inp: ('no_operating_point', None))
+        monkeypatch.setattr(generate, '_attempt', attempt)
+        out = generate._sized_best_rate(
+            StandInBuilder(), dict(state, wlr=wlr), False, 0.0, 1.6, [], dict(kind='best_rate')
+        )
+        assert out['status'] == status and math.isnan(out['best']) and out['outcomes'] == ['no_operating_point']
+        assert len(calls) == len(_SIZING_CHOKES)  # No best rate is solved
+
+
+# --- SMP-102: the start hurdle ----------------------------------------------------------------------------------------
+def test_the_start_hurdle():
+    """A platform or subsea well, core or tail, is drilled only where its design rate in oil equivalent reaches its
+    type's hurdle; an onshore well has none."""
+    assert _START_HURDLE == {'platform': 50.0, 'onshore': 0.0, 'subsea': 500.0}
+    below = generate._below_start_hurdle
+    assert below(dict(coverage_tail='core', well_type='platform', q_design_oe=49.99))
+    assert not below(dict(coverage_tail='core', well_type='platform', q_design_oe=50.0))
+    assert below(dict(coverage_tail='core', well_type='subsea', q_design_oe=499.0))
+    assert below(dict(coverage_tail='tail', well_type='subsea', q_design_oe=499.0))
+    assert not below(dict(coverage_tail='tail', well_type='subsea', q_design_oe=500.0))
+    assert not below(dict(coverage_tail='core', well_type='onshore', q_design_oe=1e-3))
+
+
+@pytest.mark.parametrize('run', [generate_sol2_well, generate_nsol2_well])
+def test_a_well_below_the_start_hurdle_is_not_solved(monkeypatch, run):
+    """SMP-102: a well whose design rate lies below its hurdle is dropped as not producible, without a solve, with
+    its draws."""
+    no_solve(monkeypatch)
+    lf = next(lf for lf in drawn_lives() if generate._below_start_hurdle(lf.w0) and not is_table(lf))
+    res = run(SEED, lf.k)
+    assert (res['info']['outcome'], res['info']['not_producible_reason']) == ('not_producible', 'below_start_hurdle')
+    assert res['log'] == res['samples'] == [] and res['well']['well'] == lf.k and res['well']['K_c'] is None
+
+
 # --- A sol-2 well -----------------------------------------------------------------------------------------------------
 def by_lift(natural, lifted):
     """An attempt's outcome by whether lift is on: (outcome, q_oe) each."""
     return lambda inp: lifted if inp['lift_on'] else natural
 
 
-def test_a_sol2_wells_best_rate_and_slots(monkeypatch):
-    """The best rate at the nominal state, then the slots' attempts, as samples._sol2_attempt draws them."""
+SIZED = ('K_c', 'd_bean', 'beta')  # What the sizing gives a well's draws (SMP-77)
+
+
+def same_but_the_choke(well, drawn) -> bool:
+    """Whether a generated well's draws are the drawn ones, with a choke that the sizing gave it."""
+    same = all(nan_or(well[key], v) for key, v in drawn.items() if key not in SIZED) and set(well) == set(drawn)
+    return same and 0 < well['K_c'] <= well['K_c_max'] and well['beta'] == well['d_bean'] / well['D']
+
+
+def test_a_sol2_wells_choke_best_rate_and_slots(monkeypatch):
+    """The choke's sizing and the best rate at the nominal state, then the slots' attempts, as samples._sol2_attempt
+    draws them."""
     lf, w = a_sol2_well(oil=True, lifted=True)
     attempt, calls = stand_in_attempt(by_lift(None, ('operating_point', 50.0)))
     monkeypatch.setattr(generate, '_attempt', attempt)
@@ -538,16 +684,18 @@ def test_a_sol2_wells_best_rate_and_slots(monkeypatch):
     assert list(res) == RESULT and list(info) == INFO and res['nsol'] is None and res['table'] is None
     assert (info['outcome'], info['best_rate'], info['best_rate_w_lg']) == ('accepted', 50.0, 0.0)
     assert info['best_rate_outcomes'] == ['operating_point'] * 3
-    assert all(nan_or(res['well'][key], v) for key, v in w.items()) and set(res['well']) == set(w)
+    assert same_but_the_choke(res['well'], w)
+    assert res['well']['K_c'] == WellBuilder(dict(lf.w0), lf.stations).size_choke(5.0, WELLHEAD, w['p_s'])
     assert res['stations'] == lf.stations and all(r['draw_index'] == lf.k for r in res['log'])
     nominal = dict(p_r=w['p_r'], gor=w['R_go'], wlr=w['wlr'], p_s=w['p_s'], h=w['h'], roughness=w['roughness'])
-    for c in calls[:3]:
+    for c in calls[:6]:  # The sizing's solves, then the best rate's
         assert {key: c[key] for key in nominal} == nominal and (c['u'], c['lift_on']) == (1.0, True)
         assert all(nan_or(c[key], w[key]) for key in _COEF_KEYS)
-    assert [c['w_lg'] for c in calls[:3]] == [f * w['w_lg_max'] for f in (0.0, 0.5, 1.0)]
-    for j, c in enumerate(calls[3:]):
+    assert [c['w_lg'] for c in calls[:6]] == [f * w['w_lg_max'] for f in (0.0, 0.5, 1.0)] * 2
+    for j, c in enumerate(calls[6:]):
         assert all(nan_or(c[key], v) for key, v in _sol2_attempt(SEED, w, j).items())
-    assert [r['slot'] for r in res['samples']] == list(range(_N_SLOTS)) and len(res['log']) == 3 + _N_SLOTS
+    assert [r['kind'] for r in res['log'][:6]] == ['choke_sizing'] * 3 + ['best_rate'] * 3
+    assert [r['slot'] for r in res['samples']] == list(range(_N_SLOTS)) and len(res['log']) == 6 + _N_SLOTS
 
 
 def test_the_producibility_filter_lifts_a_natural_oil_well(monkeypatch):
@@ -560,31 +708,35 @@ def test_the_producibility_filter_lifts_a_natural_oil_well(monkeypatch):
     lifted = sol2_well(lf, no_natural_flow=True)
     assert res['info']['outcome'] == 'accepted' and res['info']['best_rate_w_lg'] == 0.0
     assert (res['well']['lift'], res['well']['lift_start_rule']) == ('gas_lift', 'no_natural_flow')
-    assert all(nan_or(res['well'][key], v) for key, v in lifted.items()) and set(res['well']) == set(lifted)
-    kinds = [r['kind'] for r in res['log']]
-    assert kinds == ['best_rate'] + ['best_rate_lifted'] * 3 + ['slot'] * _N_SLOTS
+    assert same_but_the_choke(res['well'], lifted)
+    kinds = [r['kind'] for r in res['log']]  # The natural well's sizing finds no operating point at either choke
+    n = len(_SIZING_CHOKES)
+    assert kinds == ['choke_sizing'] * n + ['choke_sizing'] * 3 + ['best_rate_lifted'] * 3 + ['slot'] * _N_SLOTS
     assert res['info']['best_rate_outcomes'] == ['operating_point'] * 3  # the lifted well's
-    assert all(c['lift_on'] for c in calls[1:]) and calls[4]['w_lg'] == _sol2_attempt(SEED, lifted, 0)['w_lg']
+    assert all(c['lift_on'] for c in calls[n:]) and calls[n + 6]['w_lg'] == _sol2_attempt(SEED, lifted, 0)['w_lg']
 
 
 @pytest.mark.parametrize(
-    'natural, lifted, outcome, reason',
+    'natural, lifted, outcome, reason, solves',
     [
-        (('no_operating_point', None), ('operating_point', 1e-3), 'not_producible', 'below_floor'),
-        (('operating_point', 1e-3), ('no_operating_point', None), 'not_producible', 'no_operating_point'),
-        (('no_operating_point', None), ('solver_failure', None), 'best_rate_solver_failure', 'solver_failure'),
-        (('solver_failure', None), ('operating_point', 50.0), 'best_rate_solver_failure', 'solver_failure'),
+        # The sizing finds no natural flow at its two chokes; lifted, the well is sized and is below the floor
+        (('no_operating_point', None), ('operating_point', 1e-3), 'not_producible', 'below_floor', 2 + 3 + 3),
+        # Sized, the natural well is below the floor; the lifted well's sizing finds no operating point
+        (('operating_point', 1e-3), ('no_operating_point', None), 'not_producible', 'no_operating_point', 1 + 1 + 6),
+        (('no_operating_point', None), ('solver_failure', None), 'best_rate_solver_failure', 'solver_failure', 2 + 6),
+        (('solver_failure', None), ('operating_point', 50.0), 'best_rate_solver_failure', 'solver_failure', 2),
     ],
 )
-def test_a_natural_oil_well_that_does_not_pass(monkeypatch, natural, lifted, outcome, reason):
-    """SMP-103: a natural well's solver failure is not lifted; a lifted well that does not pass is dropped."""
+def test_a_natural_oil_well_that_does_not_pass(monkeypatch, natural, lifted, outcome, reason, solves):
+    """SMP-103, SMP-77: a natural well's solver failure is not lifted; a lifted well that does not pass, at its
+    choke's sizing or at its best rate, is dropped."""
     lf, w = a_sol2_well(oil=True, lifted=False)
     attempt, calls = stand_in_attempt(by_lift(natural, lifted))
     monkeypatch.setattr(generate, '_attempt', attempt)
     res = generate_sol2_well(SEED, lf.k)
     assert (res['info']['outcome'], res['info']['not_producible_reason']) == (outcome, reason)
     assert res['samples'] == [] and all(r['kind'] != 'slot' for r in res['log'])
-    assert len(res['log']) == (1 if natural[0] == 'solver_failure' else 4)
+    assert len(res['log']) == solves
 
 
 def test_a_gas_well_is_not_lifted_by_the_filter(monkeypatch):
@@ -592,7 +744,7 @@ def test_a_gas_well_is_not_lifted_by_the_filter(monkeypatch):
     attempt, calls = stand_in_attempt(by_lift(('no_operating_point', None), ('operating_point', 50.0)))
     monkeypatch.setattr(generate, '_attempt', attempt)
     res = generate_sol2_well(SEED, lf.k)
-    assert (res['info']['outcome'], res['well']['lift'], len(res['log'])) == ('not_producible', 'natural', 1)
+    assert (res['info']['outcome'], res['well']['lift'], len(res['log'])) == ('not_producible', 'natural', 2)
 
 
 # --- An nsol-2 well ---------------------------------------------------------------------------------------------------
@@ -601,7 +753,7 @@ def an_nsol2_life():
     before 0.6 of its life."""
     return next(
         lf
-        for lf in drawn_lives()
+        for lf in drilled_lives()
         if lf.w0['fluid_class'] == 'black_oil'
         and lf.lift_start != 0.0
         and (lf.lift_start is None or lf.lift_start > 0.6 * lf.T_life)
@@ -631,7 +783,10 @@ def test_an_nsol2_wells_scan_lift_and_slots(monkeypatch):
     assert (info['outcome'], info['T_end'], info['best_rate'], info['best_rate_w_lg']) == ('accepted', T, 50.0, 0.0)
     assert [p['t'] for p in info['scan']] == [float(t) for t in dates]
     assert [p['lift_on'] for p in info['scan']] == [i >= i_fail for i in range(21)]
-    scan_calls = [c for c in calls if 'test' not in c]  # The slots' inputs hold their test period
+    assert [r['kind'] for r in res['log'][:2]] == ['choke_sizing', 'scan']  # The choke is sized at the life's start
+    assert res['well']['K_c'] == WellBuilder(dict(lf.w0), lf.stations).size_choke(5.0, WELLHEAD, lf.p_s_nom(0.0))
+    scan_calls = [c for c in calls if 'test' not in c][1:]  # The slots' inputs hold their test period
+    assert all(nan_or(calls[0][key], v) for key, v in scan_calls[0].items()) and set(calls[0]) == set(scan_calls[0])
     assert len(scan_calls) == i_fail + 1 + 3 * (21 - i_fail)  # A lifted point at the three lift-gas rates
     assert [c['w_lg'] for c in scan_calls[: i_fail + 1]] == [0.0] * (i_fail + 1)
     assert [c['w_lg'] / lf.design['w_lg_max'] for c in scan_calls[i_fail + 1 : i_fail + 4]] == [0.0, 0.5, 1.0]
@@ -655,7 +810,7 @@ def test_an_nsol2_well_whose_life_ends_before_its_lift_starts_is_natural(monkeyp
     T = lambda lf: lf.T_life  # noqa: E731
     lf = next(
         lf
-        for lf in drawn_lives()
+        for lf in drilled_lives()
         if lf.lift_start_rule in ('drawn_time', 'static_check')
         and (lf.lift_start * 20 / T(lf)) % 1 > 0.1
         and lf.w0['fluid_class'] not in _TABLE_CLASSES
@@ -687,6 +842,26 @@ def test_an_nsol2_wells_short_life(monkeypatch):
     assert (res['info']['outcome'], res['info']['T_end'], res['nsol']['lift_start']) == ('short_life', 0.0, None)
     assert res['samples'] == [] and math.isnan(res['info']['p_change']) and len(res['info']['scan']) == 2
     assert res['info']['T_scan'] == 0.0 and res['info']['dead_dates'] == []
+
+
+@pytest.mark.parametrize(
+    'outcome, well_outcome, reason',
+    [
+        ('no_operating_point', 'not_producible', 'no_operating_point'),
+        ('solver_failure', 'best_rate_solver_failure', 'solver_failure'),
+    ],
+)
+def test_an_nsol2_well_whose_choke_cannot_be_sized_is_dropped(monkeypatch, outcome, well_outcome, reason):
+    """SMP-77: a well without an operating point at its life's start with its largest choke gets no choke: it is
+    dropped before its life scan, with the sizing's outcomes."""
+    lf = an_nsol2_life()
+    attempt, _ = stand_in_attempt(lambda inp: (outcome, None))
+    monkeypatch.setattr(generate, '_attempt', attempt)
+    res = generate_nsol2_well(SEED, lf.k)
+    info = res['info']
+    assert (info['outcome'], info['not_producible_reason']) == (well_outcome, reason)
+    assert info['best_rate_outcomes'] == [outcome] and info['scan'] == [] and res['samples'] == []
+    assert [r['kind'] for r in res['log']] == ['choke_sizing'] * len(_SIZING_CHOKES) and res['well']['K_c'] is None
 
 
 def test_an_nsol2_life_that_ends_where_its_lift_would_start_is_natural(monkeypatch):
@@ -722,7 +897,7 @@ def a_natural_life(design=True):
     """The first life of the tests' seed that no draw lifts, with a lift design (an oil) or without (a gas well)."""
     return next(
         lf
-        for lf in drawn_lives()
+        for lf in drilled_lives()
         if lf.lift_start is None and (lf.design is not None) == design and lf.w0['fluid_class'] not in _TABLE_CLASSES
     )
 
@@ -846,14 +1021,18 @@ def test_the_dead_date_limit_and_a_life_cut_to_nothing(monkeypatch):
 
 # --- Wells dropped before a solve -------------------------------------------------------------------------------------
 def no_solve(monkeypatch):
-    def attempt(builder, inp):
+    def attempt(builder, inp, wellhead=None):
         raise AssertionError('a well dropped before its solves was solved')
 
     monkeypatch.setattr(generate, '_attempt', attempt)
 
 
+def is_table(lf) -> bool:
+    return lf.w0['fluid_class'] in _TABLE_CLASSES
+
+
 def a_table_well() -> int:
-    return next(lf.k for lf in drawn_lives() if lf.w0['fluid_class'] in _TABLE_CLASSES)
+    return next(lf.k for lf in drawn_lives() if is_table(lf))
 
 
 @pytest.mark.parametrize('kind', ['sol', 'nsol'])
@@ -925,7 +1104,7 @@ def test_a_gor_off_the_tables_axis_at_the_nominal_state_is_invalid_input(monkeyp
     """SMP-106: where the table refuses the GOR of the well's nominal state (nsol-2: its start), the well is
     `invalid_input`, not a crash; its draws are made without the table's coefficients."""
     no_solve(monkeypatch)
-    lf = next(lf for lf in drawn_lives() if lf.w0['fluid_class'] == 'volatile_oil')
+    lf = next(lf for lf in drilled_lives() if lf.w0['fluid_class'] == 'volatile_oil')
 
     def refuse(gor):
         raise ValueError(f"gor {gor} is outside the PVT table's GOR axis, 1.0 to 2.0 Sm3/Sm3")
