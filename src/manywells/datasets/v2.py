@@ -48,7 +48,7 @@ from manywells.slip import HASAN_REGIMES
 from manywells.thermal import ThermalModel
 
 _RELEASE = (
-    'beta1'  # The release label of the datasets that this code generates; None for the final ones  # spec: SMP-50
+    'beta2'  # The release label of the datasets that this code generates; None for the final ones  # spec: SMP-50
 )
 _DATASETS = {kind: f'manywells-{kind}-2' + (f'-{_RELEASE}' if _RELEASE else '') for kind in ('sol', 'nsol')}
 _TABLES = ('wells', 'samples', 'geometry', 'pvt')  # A dataset's tables  # spec: SMP-110
@@ -113,7 +113,7 @@ _CODES = {
     'SWEEP': ('choke', 'lift'),
     'FRBH': ('bubbly', 'dispersed-bubbly', 'slug', 'churn', 'annular'),
     'FRWH': ('bubbly', 'dispersed-bubbly', 'slug', 'churn', 'annular'),
-    'not_producible_reason': ('water_cut', 'below_floor', 'no_operating_point', 'solver_failure'),
+    'not_producible_reason': ('water_cut', 'below_floor', 'no_operating_point', 'solver_failure', 'below_start_hurdle'),
     'reason': _REASONS,
 }
 _OUTCOMES = {  # The outcome's codes: an attempt's in `redraws`, a well's in `drawn_wells`

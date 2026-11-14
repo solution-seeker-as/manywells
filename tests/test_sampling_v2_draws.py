@@ -28,7 +28,18 @@ from manywells.pvt import density_from_api, gas_density_from_sg
 from manywells.pvt.black_oil import BlackOil
 from manywells.pvt.water import water_viscosity
 from manywells.sampling.v2 import draws
-from manywells.sampling.v2.draws import _P_S_MAX, _STAGES, _TUBING, _black_oil, draw_well, _stream
+from manywells.sampling.v2.draws import (
+    _BEAN_MAX,
+    _BETA_MAX,
+    _P_S_MAX,
+    _STAGES,
+    _TUBING,
+    _XI_CHOKE,
+    _black_oil,
+    _size_bean,
+    _stream,
+    draw_well,
+)
 from manywells.sampling.v2.reservoir import _nondarcy, _slant_skin
 from manywells.sampling.v2.survey import _FAMILIES, _survey
 from manywells.sampling.wells import rng_for, sample_well
@@ -63,7 +74,6 @@ FLAGS = {
     'T_r_cap_binds',
     'p_b_lowered_to_black_oil_limit',
     'design_rate_above_tubing_capacity',
-    'bean_capped_at_4_in',
     'lift_not_installed_strong_well',
     'injection_at_packer',
     'injection_raised_to_0.3L',
@@ -259,11 +269,17 @@ def check_well(w, md, tvd):
     assert w['D'] == _TUBING[w['tubing']] and (not oil or w['tubing'] != '9-5/8')
     assert between(w['c_e'], 100, 150) and w['q_design'] > 0 and w['q_cap'] > 0
     assert between(w['roughness'], *((1.5e-6, 1.5e-4) if tail else ROUGHNESS[stage]))
+    # The design rate in oil equivalent (SMP-102): an oil's with its gas, a gas well's gas with its condensate
+    if oil:
+        assert w['q_design_oe'] == pytest.approx(w['q_design'] * (1 + w['R_i'] / 1000), rel=1e-12)
+    else:
+        q_g = w['q_design'] * 1e6 / (1e6 / w['R_i'] + 10)
+        assert w['q_design_oe'] == pytest.approx(q_g / 1000 + q_g / w['R_i'], rel=1e-12)
 
-    # Choke (SMP-77)
-    assert between(w['beta'], 0.15, 0.75 if tail else 0.6) and between(w['c_d'], 0.75, 0.9)
-    assert w['d_bean'] == pytest.approx(w['beta'] * w['D'], rel=1e-12) and w['d_bean'] <= 0.1016
-    assert w['K_c'] == pytest.approx(w['c_d'] * math.pi * w['d_bean'] ** 2 / 4, rel=1e-12)
+    # Choke (SMP-77): its draws and the largest choke; the generation sizes the bean
+    assert between(w['xi_choke'], *_XI_CHOKE) and between(w['c_d'], 0.75, 0.9)
+    assert w['K_c_max'] == pytest.approx(w['c_d'] * math.pi * min(_BETA_MAX * w['D'], _BEAN_MAX) ** 2 / 4, rel=1e-12)
+    assert w['K_c'] is None and w['d_bean'] is None and w['beta'] is None
 
     # Gas lift (SMP-78 to SMP-80): w_lg_max within 0.1 to 3.5 kg/s
     lifted = w['lift'] == 'gas_lift'
@@ -469,6 +485,7 @@ def marginal_failures(wells):
         ('design drawdown', ws, 'delta_d', uniform(0.1, 0.4)),
         ('C of the erosional velocity', ws, 'c_e', uniform(100, 150)),  # SMP-75
         ('discharge coefficient', ws, 'c_d', uniform(0.75, 0.9)),  # SMP-77
+        ("the choke's share", ws, 'xi_choke', log_uniform(*_XI_CHOKE)),
         ('U_t', ws, 'U_t', log_uniform(11, 85)),  # SMP-81
         ('k_e', ws, 'k_e', uniform(1.5, 2.6)),
         ('z, tail', tail, 'z', log_uniform(600, 7000)),
@@ -558,9 +575,23 @@ def test_each_block_has_its_own_generator(wells, monkeypatch):
     assert blocks == BLOCKS.replace('inflow', 'inflow nondarcy').split()  # A gas well's blocks
     assert w['z'] != base['z'] and w['p_i'] != base['p_i']  # The depth, and what follows from it
     unmoved = 'coverage_tail well_type fluid_class drive life_stage geometry_class salinity rho_w p_sep T_sep api'
-    unmoved += ' sg_gas perm h_net skin delta_d perf_share c_e c_d chk_profile U_t k_e'
+    unmoved += ' sg_gas perm h_net skin delta_d perf_share c_e xi_choke c_d chk_profile U_t k_e'
     for key in unmoved.split():
         assert w[key] == base[key], key
+
+
+def test_a_sized_bean_is_at_most_the_wells_largest(wells):
+    """SMP-77: the generation's sizing gives a well its choke coefficient, with the bean of its discharge coefficient;
+    a coefficient above the well's largest gives the largest bean, 0.6 of the tubing's diameter or 4 in."""
+    w = dict(wells[0][0])
+    assert _size_bean(w, 0.5 * w['K_c_max']) == w['K_c'] == 0.5 * w['K_c_max']
+    assert w['K_c'] == pytest.approx(w['c_d'] * math.pi * w['d_bean'] ** 2 / 4, rel=1e-12)
+    assert w['beta'] == pytest.approx(w['d_bean'] / w['D'], rel=1e-12) and w['beta'] < _BETA_MAX
+    assert _size_bean(w, 3.0 * w['K_c_max']) == w['K_c'] == w['K_c_max']
+    assert w['d_bean'] == pytest.approx(min(_BETA_MAX * w['D'], _BEAN_MAX), rel=1e-12)
+    wide = dict(next(w for w, _ in wells if w['tubing'] == '9-5/8'))  # 4 in is less than 0.6 of its bore
+    _size_bean(wide, 1.0)
+    assert wide['d_bean'] == pytest.approx(_BEAN_MAX, rel=1e-12) and wide['beta'] < _BETA_MAX
 
 
 BLOCK_NUMBERS = dict(  # The numbers that each block takes of its generator, for every well (SMP-51)
@@ -658,9 +689,10 @@ STAGE_FREE = (  # The draws that do not depend on the life stage
     'coverage_tail well_type fluid_type fluid_class class_rule drive z d_w L geometry_class geometry_family md md_tvd '
     'theta_max theta_end salinity rho_w p_h p_lith lam p_i pressure_class grad_i T_s G T_r G_eff p_sep T_sep dp_fl api '
     'sg_gas rho_o rho_g R_i p_sat w_kgko c_k perm h_net skin ln_re_rw delta_d drain_length I_ani J_H_over_J_V '
-    'perf_share c_e c_d choke_model chk_profile U_t k_e cp_o cp_w'
+    'perf_share c_e xi_choke c_d choke_model chk_profile U_t k_e cp_o cp_w'
 ).split()
-STAGE_FREE_DESIGN = 'q_design D tubing q_cap beta d_bean K_c'.split()  # The design point is the initial state, p_i
+# The design point is the initial state, p_i
+STAGE_FREE_DESIGN = 'q_design q_design_oe D tubing q_cap K_c_max beta d_bean K_c'.split()
 
 
 def test_a_stage_override_changes_only_what_depends_on_the_stage(wells):
@@ -756,7 +788,8 @@ def test_a_table_fluid_replaces_the_fluid_blocks_values(wells):
     w, st = draw_well(SEED, k, fluid=table)
     assert st == st0 and all(w[key] == value for key, value in table.items())
     assert (w['api'], w['sg_gas']) == (w0['api'], w0['sg_gas'])
-    own_numbers = 'z p_i T_r p_sep T_sep p_s r_p p_r wgr c_k perm h_net skin delta_d perf_share c_e c_d U_t k_e cp_o'
+    own_numbers = 'z p_i T_r p_sep T_sep p_s r_p p_r wgr c_k perm h_net skin delta_d perf_share c_e xi_choke c_d U_t '
+    own_numbers += 'k_e cp_o'
     for key in own_numbers.split():
         assert w[key] == w0[key], key
     assert w['R_go'] == table['R_i'] * (1 + w['c_k'] * max(0.0, 1 - w['p_r'] / table['p_sat'])) != w0['R_go']

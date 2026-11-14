@@ -84,7 +84,7 @@ def test_the_code_and_platform_records():
     env = v2._environment_record()
     assert set(env) == {'python', 'numpy', 'scipy', 'machine'} and env['numpy'] == np.__version__
     assert v2._platform_record()['python'].startswith(env['python'])
-    assert v2._DATASETS == {'sol': 'manywells-sol-2-beta1', 'nsol': 'manywells-nsol-2-beta1'}
+    assert v2._DATASETS == {'sol': 'manywells-sol-2-beta2', 'nsol': 'manywells-nsol-2-beta2'}
 
 
 @pytest.mark.parametrize('name', ['synthetic_eos_oil_gor.csv', 'synthetic_eos_oil_360K.csv'])

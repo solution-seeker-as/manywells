@@ -206,6 +206,7 @@ def _run_settings(kind: str, seed: int, tables=None, chunk_size: int = CHUNK) ->
         ),
         floor=generate._FLOOR,
         floor_margin=generate._FLOOR_MARGIN,
+        start_hurdle=generate._START_HURDLE,
         lift_fractions=list(generate._BEST_RATE_LIFT),
         scan_points=generate._N_SCAN if kind == 'nsol' else None,
         wlr_max=_WLR_MAX,

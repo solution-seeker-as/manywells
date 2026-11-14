@@ -13,6 +13,7 @@ drawn well to the model's inputs in the v2.0.0 configuration (mapping; SMP-111).
 
 import math
 import pathlib
+import types
 
 import numpy as np
 import pytest
@@ -356,7 +357,8 @@ def test_every_drawn_well_maps_to_a_v2_well(wells):
         assert fluid.surface_tension_model == 'oil'
         assert wp.friction == RoughnessFriction(roughness=w['roughness'], correlation='chen')
         assert wp.thermal.h == w['h'] and wp.slip is V2_SLIP
-        assert wp.choke == SimpsonChokeModel(K_c=w['K_c'], chk_profile=w['chk_profile'])
+        # A well whose bean the generation has not sized yet has its largest choke (SMP-77)
+        assert wp.choke == SimpsonChokeModel(K_c=w['K_c_max'], chk_profile=w['chk_profile'])
         if w['inflow'] == 'vogel':
             assert wp.inflow == Vogel(w_l_max=inp['w_l_max'])
         elif w['inflow'] == 'productivity_index':
@@ -367,6 +369,31 @@ def test_every_drawn_well_maps_to_a_v2_well(wells):
         assert wp.injection_md == (w['injection_md'] if lifted else None)
         assert bc.T_lg == (w['T_lg'] if lifted else None)
         assert (bc.p_r, bc.p_s, bc.T_r, bc.T_s, bc.u, bc.w_lg) == (w['p_r'], w['p_s'], w['T_r'], w['T_s'], 1.0, 0.0)
+
+
+def test_a_sized_choke_takes_its_share_at_the_sizing_rate(wells):
+    """SMP-77: fully open, the sized choke passes the sizing's mass rate from the wellhead's state at the pressure
+    upstream of it, p_dn / (1 - xi), down to p_dn, by the model's choke equation (CHK-2, CHK-5). The well's draws take
+    the choke, and a rate that asks for more than the well's largest choke gives the largest."""
+    w, stations = next((dict(w), st) for w, st in wells if w['coverage_tail'] == 'core')
+    builder = WellBuilder(w, stations)
+    xi, A, p_dn = w['xi_choke'], builder.geometry.A, 20.0
+    head = (21.0, 4.0, 2.0, 0.6, 25.0, 780.0, 330.0)  # p, v_g, v_l, alpha, rho_g, rho_l, T
+    at = types.SimpleNamespace(p=p_dn / (1 - xi), v_g=4.0, v_l=2.0, alpha=0.6, rho_g=25.0, rho_l=780.0)
+    rho, phi = builder.choke.density_and_multiplier(at, A)
+    w_m = 0.2 * w['K_c_max'] * math.sqrt(2 * rho / float(phi) * 1e5 * p_dn * xi / (1 - xi))
+    K_c = builder.size_choke(w_m, head, p_dn)
+    assert K_c == pytest.approx(0.2 * w['K_c_max'], rel=1e-12) and w['K_c'] == K_c
+    assert builder.choke == SimpsonChokeModel(K_c=K_c, chk_profile=w['chk_profile'])
+    assert w['d_bean'] == pytest.approx(math.sqrt(4 * K_c / (math.pi * w['c_d'])), rel=1e-12)
+    assert float(builder.choke.mass_flow_rate(1.0, p_dn, at, A)) == pytest.approx(w_m, rel=1e-4)
+    assert builder.size_choke(100 * w_m, head, p_dn) == w['K_c_max'] == builder.choke.K_c
+    assert builder.size_choke(100 * w_m, head, p_dn, 0.25 * w['K_c_max']) == 0.25 * w['K_c_max']  # The sizing's choke
+    sized = WellBuilder(w, stations)  # A well whose draws hold its choke is built with it
+    assert sized.choke == builder.choke
+    assert sized.widest_choke() == w['K_c_max']
+    assert sized.choke == SimpsonChokeModel(K_c=w['K_c_max'], chk_profile=w['chk_profile'])
+    assert sized.widest_choke(1 / 4) == w['K_c_max'] / 4 == sized.choke.K_c
 
 
 def test_an_attempts_lift_and_pvt(wells):

@@ -63,12 +63,17 @@ def same(a, b) -> bool:
 
 # --- Stand-ins -------------------------------------------------------------------------------------------------------
 def _solvable() -> list:
-    return [lf.k for lf in drawn_lives() if lf.w0['fluid_class'] not in _TABLE_CLASSES][:N_TEST_WELLS]
+    """The first wells of the tests' seed that are solved: no table well, and none below its start hurdle (SMP-102)."""
+    solved = lambda w: w['fluid_class'] not in _TABLE_CLASSES and not generate._below_start_hurdle(w)  # noqa: E731
+    return [lf.k for lf in drawn_lives() if solved(lf.w0)][:N_TEST_WELLS]
 
 
-def stand_in_attempt(builder, inp) -> dict:
-    """In place of generate._attempt: every best-rate and scan solve has an operating point. A slot's attempt has one
-    too, but in three wells: one whose attempts at a choke below 0.4 have none (its slots are redrawn), one whose
+WELLHEAD = [21.0, 4.0, 2.0, 0.6, 25.0, 780.0, 330.0]  # A stand-in state at the wellhead, in the state vector's order
+
+
+def stand_in_attempt(builder, inp, wellhead=None) -> dict:
+    """In place of generate._attempt: every sizing, best-rate and scan solve has an operating point, with the stand-in
+    state at the wellhead. A slot's attempt has one too, but in three wells: one whose attempts at a choke below 0.4 have none (its slots are redrawn), one whose
     attempts fail in the solver (it reaches the solver-failure limit) and one whose attempts never flow (a slot
     reaches its limit)."""
     k, slot = builder.w['well'], 'test' in inp or 'p_s_nom' not in inp
@@ -88,6 +93,8 @@ def stand_in_attempt(builder, inp) -> dict:
     if outcome == 'operating_point':
         rec.update({key: 1.0 + inp['u'] for key in FEATURES}, CHOKED=inp['u'] < 0.2, FRBH='bubbly', FRWH='annular')
         rec['q_oe'] = 100.0
+    if wellhead is not None:
+        wellhead.append(WELLHEAD if outcome == 'operating_point' else None)
     return rec
 
 
@@ -309,13 +316,14 @@ def test_another_runs_settings_stop_the_run(monkeypatch, tmp_path):
             runner.run(kind, 5, tmp_path, seed, processes=1, chunk_size=chunk_size, log=lambda line: None)
     settings = runner._run_settings('sol', SEED, None, 10)
     assert (settings['dataset'], settings['configuration'], settings['n_cells'], settings['backend']) == (
-        'manywells-sol-2-beta1',
+        'manywells-sol-2-beta2',
         'v2.0.0',
         100,
         'rust',
     )
-    assert settings['release'] == 'beta1' and settings['environment'] == v2._environment_record()
+    assert settings['release'] == 'beta2' and settings['environment'] == v2._environment_record()
     assert settings['limits'] == dict(slot=100, redraws=1000, solver_failures=10, dead_dates=None)
+    assert settings['start_hurdle'] == generate._START_HURDLE and settings['floor'] == generate._FLOOR
     assert runner._run_settings('nsol', SEED, None, 10)['limits']['dead_dates'] == 5 and settings['n_slots'] == 200
     assert set(settings['code']) == {'version', 'commit', 'dirty'}
     with pytest.raises(ValueError, match='kind'):
@@ -488,7 +496,7 @@ def test_a_samples_case_from_its_rows_is_the_generators(results):
         for r in [r for r in res if r['info']['outcome'] == 'accepted'][:3]:
             k = r['info']['draw_index']
             life = Life(SEED, k)
-            builder = WellBuilder(life.w0, life.stations, design=life.design)
+            builder = WellBuilder(r['well'], life.stations, design=life.design)  # With its sized choke
             ID = int(out['wells'].loc[out['wells']['draw_index'] == k, 'ID'].iloc[0])
             for rec in r['samples'][:3]:
                 wp, bc = sample_case(*sample_rows(tables, ID, rec['slot']))
@@ -513,12 +521,12 @@ def test_a_dataset_written_from_a_run(monkeypatch, tmp_path):
     state = runner.run('sol', 3, tmp_path / 'run', SEED, processes=1, chunk_size=5, log=lambda x: None)
     assert state['complete']
     meta = asm.write_dataset(tmp_path / 'run', tmp_path / 'out', 3, allow_dirty=True)
-    name = 'manywells-sol-2-beta1'  # The datasets that this code generates are the beta's (SMP-50)
+    name = 'manywells-sol-2-beta2'  # The datasets that this code generates are the beta's (SMP-50)
     data = read_dataset(tmp_path / 'out' / name)
     logs = read_dataset(tmp_path / 'out' / f'{name}-logs')
     assert set(data) == {'wells', 'samples', 'geometry', 'pvt', 'metadata'} and data['metadata'] == meta
     assert set(logs) == {'drawn_wells', 'redraws', 'metadata'} and logs['metadata']['companion_of'] == name
-    assert (meta['dataset'], meta['release']) == (name, 'beta1') and meta['environment'] == v2._environment_record()
+    assert (meta['dataset'], meta['release']) == (name, 'beta2') and meta['environment'] == v2._environment_record()
     assert (meta['seed'], meta['n_wells'], meta['configuration'], meta['backend']) == (SEED, 3, 'v2.0.0', 'rust')
     assert meta['limits'] == dict(slot=100, redraws=1000, solver_failures=10, dead_dates=None)
     assert meta['n_slots'] == N_TEST_SLOTS
@@ -532,8 +540,16 @@ def test_a_dataset_written_from_a_run(monkeypatch, tmp_path):
         len(r['log']) for r in list(runner._read_results(tmp_path / 'run'))[: meta['counts']['wells_drawn']]
     )
     settings = json.loads((tmp_path / 'run' / 'settings.json').read_text())
-    for key in ('lift_fractions', 'scan_points', 'wlr_max', 'lock_sha256', 'floor'):  # From the run's settings
+    for key in (
+        'lift_fractions',
+        'scan_points',
+        'wlr_max',
+        'lock_sha256',
+        'floor',
+        'start_hurdle',
+    ):  # The run's settings
         assert settings[key] == (meta['producibility'] | meta)[dict(floor='floor').get(key, key)], key
+    assert meta['producibility']['start_hurdle'] == generate._START_HURDLE
     assert settings['scan_points'] is None and settings['lift_fractions'] == [0.0, 0.5, 1.0]
     dirty = dict(version='2.0.0.dev0 (abc-dirty)', commit='0' * 40, dirty=True)
     monkeypatch.setattr(asm, 'code_record', lambda: dirty)

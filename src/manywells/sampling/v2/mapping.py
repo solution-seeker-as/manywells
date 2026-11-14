@@ -11,6 +11,7 @@ The map from a v2 well's draws and an attempt's inputs to the model's inputs in 
 """
 
 import math
+from types import SimpleNamespace
 
 from manywells.choke import SimpsonChokeModel
 from manywells.configurations import V2_SLIP
@@ -18,9 +19,10 @@ from manywells.friction import RoughnessFriction
 from manywells.geometry import WellGeometry
 from manywells.inflow import Forchheimer, ProductivityIndex, Vogel
 from manywells.pvt.fluid import FluidModel
-from manywells.sampling.v2.draws import _black_oil
+from manywells.sampling.v2.draws import _black_oil, _size_bean
 from manywells.simulator import BoundaryConditions, WellProperties
 from manywells.thermal import ThermalModel
+from manywells.units import CF_BAR
 
 _N_CELLS = 100  # spec: SMP-111
 
@@ -28,7 +30,8 @@ _N_CELLS = 100  # spec: SMP-111
 class WellBuilder:  # spec: SMP-111
     """
     A drawn well's fixed parts (the survey's grid, the PVT model and the choke), and the WellProperties and
-    BoundaryConditions of an attempt.
+    BoundaryConditions of an attempt. A well whose bean is not sized yet (SMP-77) has its largest choke, with which the
+    generation solves it to size the bean (size_choke).
 
     :param w: The well's draws (draws.draw_well)
     :param stations: Its survey, (md, tvd)
@@ -41,7 +44,39 @@ class WellBuilder:  # spec: SMP-111
         self.w, self.design = w, design
         self.geometry = WellGeometry.from_survey(stations[0], stations[1], _N_CELLS, D=w['D'])
         self.pvt = _black_oil(w) if pvt is None else pvt
-        self.choke = SimpsonChokeModel(K_c=w['K_c'], chk_profile=w['chk_profile'])
+        self.choke = None
+        if w['K_c'] is None:
+            self.widest_choke()
+        else:
+            self.choke = SimpsonChokeModel(K_c=w['K_c'], chk_profile=w['chk_profile'])
+
+    def widest_choke(self, share: float = 1.0) -> float:  # spec: SMP-77
+        """Gives the well its largest choke, `K_c_max`, or the given share of it, and returns the choke's
+        coefficient (m2)."""
+        self.choke = SimpsonChokeModel(K_c=share * self.w['K_c_max'], chk_profile=self.w['chk_profile'])
+        return self.choke.K_c
+
+    def size_choke(self, w_m: float, wellhead, p_dn: float, K_c_most: float = math.inf) -> float:  # spec: SMP-77
+        """
+        Sizes the well's choke: fully open, it passes the mass rate w_m at the wellhead's state with the share
+        `xi_choke` of the pressure upstream of it lost across it, down to p_dn, by the model's choke equation (CHK-2
+        with Simpson's density, CHK-5). It is at most K_c_most and the well's largest choke (draws._size_bean), and
+        the well's draws take it.
+
+        :param w_m: Mass rate (kg/s)
+        :param wellhead: The state at the wellhead, (p, v_g, v_l, alpha, rho_g, rho_l, T)
+        :param p_dn: Pressure downstream of the choke (bar)
+        :param K_c_most: The largest coefficient the choke may take (m2): the sizing's own choke
+        :return: The choke's coefficient K_c (m2)
+        """
+        _p, v_g, v_l, alpha, rho_g, rho_l, _T = (float(v) for v in wellhead)
+        s = SimpleNamespace(v_g=v_g, v_l=v_l, alpha=alpha, rho_g=rho_g, rho_l=rho_l)
+        rho, phi = SimpsonChokeModel(K_c=1.0).density_and_multiplier(s, self.geometry.A)
+        xi = self.w['xi_choke']
+        dp = CF_BAR * p_dn * xi / (1 - xi)  # Pa: p_up - p_dn at p_dn = (1 - xi) p_up
+        K_c = _size_bean(self.w, min(w_m / math.sqrt(2 * rho / float(phi) * dp), K_c_most))
+        self.choke = SimpsonChokeModel(K_c=K_c, chk_profile=self.w['chk_profile'])
+        return K_c
 
     def fluid(self, gor, wlr) -> FluidModel:
         """The well's fluid at a gas-oil ratio (Sm3/Sm3) and a water-liquid ratio."""
