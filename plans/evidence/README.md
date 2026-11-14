@@ -370,6 +370,8 @@ The measurements of D-150 to D-153, after the first beta. Results in `../sampler
 
 `choke_sizing_solves.py KIND N RUN_DIR` counts, from a run's well files, the sizing choke that each well was sized with and the sizing's share of the solves.
 
+`choke_share_floor.py KIND N RUN_A RUN_B BETA` compares two runs of the same draws that differ in the draw of the choke's share, over the draws that both have finished, so that a stopped run can be measured: the samples whose choke takes less than 1% and 3% of the wellhead pressure, by opening, the wells with a small drawn share, and the wells accepted in one run only (the lower end of the share, D-150).
+
 `choke_design_point.py BETA [N]` measures an alternative to the sizing at a solve, a bean from the tubing's design point: the design mass rate against the solved fully open rate over the beta's black-oil `nsol-2` wells, and the spread of the share that such a choke would take.
 
 `permeability_reweighting.py BETA [P_HURDLE S_HURDLE]` measures an alternative to the start hurdle, a higher or narrower permeability draw: the beta's `nsol-2` wells weighted by the ratio of the other draw's density to their own, with the effective sample size, the core wells' rates and the share of the wells too strong for their tubing under each draw.

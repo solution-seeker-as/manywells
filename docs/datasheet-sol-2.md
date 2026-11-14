@@ -2,7 +2,7 @@
 
 *Draft, 2026-11-11 (Step R11 of `plans/sampler-redesign-plan.md`; D-94). Release documentation, for Bjarne's sign-off. `[full generation: …]` marks a number that exists only after the full generation, and `[maintainer: …]` a fact for the maintainer to give.*
 
-*A full generation before the final one is a beta (SMP-50): `manywells-sol-2-beta1` was the first, and the code now generates `manywells-sol-2-beta2`, with a choke sized to the well's rate (SMP-77) and a start hurdle (SMP-102), both awaiting Bjarne's ruling (D-150 to D-153). This datasheet is filled for a beta first, and again for the final dataset, which takes the plain name.*
+*A full generation before the final one is a beta (SMP-50): `manywells-sol-2-beta1` was the first, and the code now generates `manywells-sol-2-beta2`, with a choke sized to the well's rate (SMP-77) and a start hurdle (SMP-102), both working assumptions of which Bjarne has taken two values (D-150 to D-153). This datasheet is filled for a beta first, and again for the final dataset, which takes the plain name.*
 
 This datasheet follows Gebru et al. (2021), one section per section of theirs (§3.1 to §3.7), each question in bold and its answer after it. The schema, every column with its unit and type, is in [`datasets.md`](datasets.md), v2 datasets; the procedure that draws the wells and samples is `specs/sampling.md`, SMP-50 to SMP-117. The non-stationary dataset has its own datasheet, [`datasheet-nsol-2.md`](datasheet-nsol-2.md).
 
@@ -74,7 +74,7 @@ The accepted wells are the drawn ones that are produced and reach 200 operating 
 
 **Was any preprocessing, cleaning or labelling of the data done?** No value is changed after its solve. Wells and draws are selected:
 
-- **The start hurdle** (SMP-102). A platform or subsea well whose design rate in oil equivalent lies below its type's start hurdle, 50 and 500 Sm³/d, would not be drilled, and is dropped before any solve.
+- **The start hurdle** (SMP-102). A platform or subsea well whose design rate in oil equivalent lies below its type's start hurdle, 20 and 500 Sm³/d, would not be drilled, and is dropped before any solve.
 - **The producibility filter** (SMP-102, SMP-103). A well whose best rate, at a fully open choke and at three lift-gas rates for a lifted well, is below half its economic floor, or an oil whose WLR is above 0.98, would not be produced and is dropped. A natural oil well that cannot flow first takes its life's lift design (`lift_start_rule` `no_natural_flow`).
 - **Redraws** (SMP-104, SMP-105). A slot's draw without an operating point is drawn again from the slot's own generator until the slot has one.
 - **Limits** (SMP-106). A well is dropped, and the next drawn well takes its place, when a slot needs more than 100 attempts, the well more than 1000 redraws or 10 solver failures, when its inputs fail `configurations.check`, or when its table cannot be built. The drops are reported by group, with no target (SMP-106): [full generation: wells dropped at the limits by fluid class, well type and lift rule; the shift of each drawn input between the drawn and the kept wells]

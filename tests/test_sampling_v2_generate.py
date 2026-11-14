@@ -637,10 +637,10 @@ def test_the_best_rate_of_a_sized_well(monkeypatch):
 def test_the_start_hurdle():
     """A platform or subsea well, core or tail, is drilled only where its design rate in oil equivalent reaches its
     type's hurdle; an onshore well has none."""
-    assert _START_HURDLE == {'platform': 50.0, 'onshore': 0.0, 'subsea': 500.0}
+    assert _START_HURDLE == {'platform': 20.0, 'onshore': 0.0, 'subsea': 500.0}
     below = generate._below_start_hurdle
-    assert below(dict(coverage_tail='core', well_type='platform', q_design_oe=49.99))
-    assert not below(dict(coverage_tail='core', well_type='platform', q_design_oe=50.0))
+    assert below(dict(coverage_tail='core', well_type='platform', q_design_oe=19.99))
+    assert not below(dict(coverage_tail='core', well_type='platform', q_design_oe=20.0))
     assert below(dict(coverage_tail='core', well_type='subsea', q_design_oe=499.0))
     assert below(dict(coverage_tail='tail', well_type='subsea', q_design_oe=499.0))
     assert not below(dict(coverage_tail='tail', well_type='subsea', q_design_oe=500.0))

@@ -83,7 +83,7 @@ from manywells.solvers.rust import RustRootFinder
 _FLOOR = {'platform': 1.6, 'onshore': 1.6, 'subsea': 20.0}  # Sm3/d of oil equivalent, by well type  # spec: SMP-102
 _FLOOR_MARGIN = 0.5  # A well is not produced below this share of its floor  # spec: SMP-102
 # Sm3/d of oil equivalent: a well is drilled only where its design rate reaches its type's start hurdle
-_START_HURDLE = {'platform': 50.0, 'onshore': 0.0, 'subsea': 500.0}  # spec: SMP-102
+_START_HURDLE = {'platform': 20.0, 'onshore': 0.0, 'subsea': 500.0}  # spec: SMP-102
 # The chokes that the sizing solves a well with, shares of its largest: the second is a bean of half the diameter
 _SIZING_CHOKES = (1.0, 1 / 4)  # spec: SMP-77
 _SLOT_LIMIT, _REDRAW_LIMIT, _SOLVER_FAILURE_LIMIT = 100, 1000, 10  # spec: SMP-106 (D-137)
