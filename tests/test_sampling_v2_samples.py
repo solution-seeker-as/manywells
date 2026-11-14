@@ -24,7 +24,7 @@ from manywells.sampling.v2.inflow import _COEF_KEYS
 from manywells.sampling.v2.life import _lift_on
 from manywells.sampling.v2.mapping import WellBuilder
 from manywells.sampling.v2.reservoir import _producing_gor
-from manywells.sampling.v2.samples import _N_SLOTS, _nsol2_attempt, _nsol2_plan, _sol2_attempt
+from manywells.sampling.v2.samples import _LIFT_GAS_ALWAYS_ON, _N_SLOTS, _nsol2_attempt, _nsol2_plan, _sol2_attempt
 from manywells.sampling.wells import rng_for
 
 from .sampling_v2_wells import N_MANY_LIVES, SEED, drawn_lives, drawn_sol2_wells, is_oil
@@ -164,6 +164,24 @@ def test_a_sol2_redraw_draws_the_slot_again(sol2_wells, sol2_attempts):
         assert all(len({inp[key] for inp in tries}) == 4 for key in ('p_s', 'p_r', 'gor'))
         us = [inp['u'] for inp in tries if inp['u'] < 1]
         assert len(set(us)) == len(us) >= 2 and _sol2_attempt(SEED, w, j, 2) == tries[2]
+
+
+def test_a_sol2_well_that_cannot_flow_without_lift_gas(sol2_wells, sol2_attempts):
+    """SMP-94: a lifted well flagged lift_gas_always_on draws no slot without lift gas, at the first attempt or a
+    redraw; the rest of each draw is the unflagged well's, the lift gas's off number being drawn and left unused."""
+    i, w = next((i, w) for i, w in enumerate(sol2_wells) if w['lift'] == 'gas_lift')
+    flagged = dict(w, flags=';'.join([f for f in w['flags'].split(';') if f] + [_LIFT_GAS_ALWAYS_ON]))
+    for a in (0, 1, 7):
+        for j in range(_N_SLOTS):
+            plain = sol2_attempts[i][j] if a == 0 else _sol2_attempt(SEED, w, j, a)
+            inp = _sol2_attempt(SEED, flagged, j, a)
+            assert 0 < inp['w_lg'] <= w['w_lg_max']
+            assert {key: v for key, v in inp.items() if key != 'w_lg'} == {
+                key: v for key, v in plain.items() if key != 'w_lg'
+            }
+            assert plain['w_lg'] in (0.0, inp['w_lg'])
+    off = [inp['w_lg'] == 0 for inp in sol2_attempts[i]]
+    assert 0 < sum(off) < _N_SLOTS  # The unflagged well has slots without lift gas
 
 
 def test_sol2_attempts_map_to_the_model(lives, sol2_wells, sol2_attempts):
