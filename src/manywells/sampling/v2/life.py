@@ -339,7 +339,8 @@ def sol2_well(life, no_natural_flow: bool = False) -> dict:  # spec: SMP-92
         takes its life's lift design, with `lift_start_rule` `no_natural_flow`
     :return: The initial-stage draws (draws.draw_well), with these keys at the date: `life_stage`, the drawn stage,
         and `date` (years); the nominal state `p_r`, `r_p`, `R_go`, `wlr`, [`wgr` and `ogr`], `saturation` and
-        `below_hydrostatic`; `p_s`, the nominal pressure downstream of the choke, and `r_s`; `h` and `roughness`;
+        `below_hydrostatic`; `p_s`, the nominal pressure downstream of the choke, and `r_s`, the separator's factor
+        in it (a tail well's `p_s` is SMP-66's tail draw, with a factor of 1); `h` and `roughness`;
         the inflow's coefficients (inflow._COEF_KEYS), NaN where the inflow model does not use one; `lift`, with the
         design's lift keys where the well is lifted at the date, and `lift_start_rule` (None for a natural well).
         The other keys are the initial-stage draw's, the values derived at its state too (`J`, `q_l_ref`,
@@ -349,8 +350,11 @@ def sol2_well(life, no_natural_flow: bool = False) -> dict:  # spec: SMP-92
     stage, t = _sol2_date(life)
     st = life.state(t)
     p_r = st['p_r']
-    w = dict(w0, life_stage=stage, date=t, p_r=p_r, r_p=p_r / w0['p_i'], R_go=st['gor'], p_s=st['p_s_nom'])
-    w.update(r_s=life.r_s(t), h=st['h'], roughness=st['roughness'], below_hydrostatic=p_r < w0['p_h'])
+    # spec: SMP-92. A tail well takes SMP-66's tail draw of the downstream pressure as drawn: the separator's steps
+    # along the life are the core's, and would leave the tail no high downstream pressure at the end of its life
+    p_s, r_s = (life.p_s_nom(0.0), 1.0) if life._tail else (st['p_s_nom'], life.r_s(t))
+    w = dict(w0, life_stage=stage, date=t, p_r=p_r, r_p=p_r / w0['p_i'], R_go=st['gor'], p_s=p_s)
+    w.update(r_s=r_s, h=st['h'], roughness=st['roughness'], below_hydrostatic=p_r < w0['p_h'])
     w['wlr'] = st['wlr']
     if not life.oil:
         w.update(wgr=st['wgr'], ogr=1e6 / st['gor'])

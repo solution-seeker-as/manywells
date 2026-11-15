@@ -808,6 +808,28 @@ def test_a_table_fluid_replaces_the_fluid_blocks_values(wells):
     assert w['saturation'] == 'undersaturated' and w['R_go'] == w['R_i']
 
 
+def test_a_fluids_redraws(wells):
+    """SMP-115: the redraws of a well's fluid block, for a table well whose built fluid leaves its class. Redraw a is
+    the block drawn from its own generator with the blocks above it as they are, and the well's own draw does not
+    move."""
+    for cls, (lo, hi) in (('volatile_oil', (356, 588)), ('gas_condensate', (588, 8900))):
+        w0 = next(w for w, _ in wells if w['fluid_class'] == cls)
+        k = w0['well']
+        again = draws.fluid_redraws(SEED, k, 4)
+        assert again[:2] == draws.fluid_redraws(SEED, k, 2) and [sorted(d) for d in again] == [sorted(again[0])] * 4
+        assert sorted(again[0]) == ['R_i', 'api', 'p_sat', 'sg_gas']
+        own = {key: w0[key] for key in again[0]}
+        assert len({json.dumps(d, sort_keys=True) for d in [own, *again]}) == 5  # Each is another draw
+        api_lo, api_hi = draws._API[cls]
+        assert all(lo <= d['R_i'] <= hi and api_lo <= d['api'] <= api_hi and d['p_sat'] <= w0['p_i'] for d in again)
+        above, _, _ = draws._above_fluid(SEED, k, None, None)
+        assert all(w0[key] == v or (v != v and w0[key] != w0[key]) for key, v in above.items())  # The blocks above
+        w3 = dict(above)
+        draws._fluid(rng_for(SEED, k, 'v2', 'fluid', 3), w3, SimpleNamespace(flags=[], start=None), None)
+        assert again[2] == {key: w3[key] for key in again[2]}
+        assert draw_well(SEED, k)[0] == w0  # The well's own draw is the block's first, from the block's generator
+
+
 def test_a_drains_liner_takes_the_models_water_viscosity(wells, monkeypatch):
     """SMP-72 (D-119): the liquid in an oil drain's liner takes PVT-WAT-3's water viscosity at T_r: with the water
     ten times as viscous, a wet drain's friction efficiency falls, and a dry drain's stays."""

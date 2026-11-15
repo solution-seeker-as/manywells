@@ -363,7 +363,7 @@ def test_another_runs_settings_stop_the_run(monkeypatch, tmp_path):
         'rust',
     )
     assert settings['release'] == 'beta2' and settings['environment'] == v2._environment_record()
-    assert settings['limits'] == dict(slot=100, redraws=1000, solver_failures=10, dead_dates=None)
+    assert settings['limits'] == dict(slot=100, redraws=3000, solver_failures=10, dead_dates=None)
     assert settings['start_hurdle'] == generate._START_HURDLE and settings['floor'] == generate._FLOOR
     assert settings['strata'] == ['tail', 'platform', 'subsea', 'onshore']
     assert runner._run_settings('nsol', SEED, None, 10)['limits']['dead_dates'] == 5 and settings['n_slots'] == 200
@@ -575,7 +575,7 @@ def test_a_dataset_written_from_a_run(monkeypatch, tmp_path):
     assert (meta['dataset'], meta['release']) == (name, 'beta2') and meta['environment'] == v2._environment_record()
     assert (meta['seed'], meta['n_wells'], meta['configuration'], meta['backend']) == (SEED, 3, 'v2.0.0', 'rust')
     assert meta['quotas'] == dict(tail=1, platform=1, subsea=1, onshore=0)
-    assert meta['limits'] == dict(slot=100, redraws=1000, solver_failures=10, dead_dates=None)
+    assert meta['limits'] == dict(slot=100, redraws=3000, solver_failures=10, dead_dates=None)
     assert meta['n_slots'] == N_TEST_SLOTS
     assert meta['producibility']['floor'] == generate._FLOOR and meta['counts']['wells_accepted'] == 3
     assert meta['files']['samples.parquet']['rows'] == 3 * N_TEST_SLOTS == len(data['samples'])
@@ -671,10 +671,13 @@ def test_a_table_wells_record(monkeypatch):
     """SMP-112, SMP-116: a table well's record holds its draws, its grid, and the composition's seed and source
     from its `composition` generator; a well of another class has none."""
     monkeypatch.setattr(tw, 'draw_well', lambda seed, k: hand_made(k, 'black_oil' if k == 5 else 'gas_condensate'))
+    again = [dict(api=50.0 + a, sg_gas=0.7, p_sat=400.0, R_i=2000.0 * a) for a in range(1, tw._FLUID_REDRAWS + 1)]
+    monkeypatch.setattr(tw, 'fluid_redraws', lambda seed, k, n: again[:n])
     rec = tw._table_well(SEED, 4)
     r = rng_for(SEED, 4, 'v2', 'composition')
     seed, u_source, u_key = int(r.integers(2**63)), r.random(), r.random()
     T_axis, p_top = tb._well_grid(279.9, 401.3, 455.0)
+    redraws = rec.pop('redraws')
     assert rec == dict(
         {key: v for key, v in HAND_MADE.items() if key != 'R_i'},
         R_si=1500.0,
@@ -683,6 +686,20 @@ def test_a_table_wells_record(monkeypatch):
         p_top=float(p_top),
         source=tb._fluid_source('gas_condensate', u_source, u_key),
     )
+    # SMP-115: the fluid's redraws, each with the fluid block drawn again and its own composition seed and source
+    assert len(redraws) == tw._FLUID_REDRAWS == 9
+    for a, (redraw, f) in enumerate(zip(redraws, again), start=1):
+        r = rng_for(SEED, 4, 'v2', 'composition', a)
+        seed_a, u_source, u_key = int(r.integers(2**63)), r.random(), r.random()
+        assert redraw == dict(
+            api=f['api'],
+            sg_gas=f['sg_gas'],
+            p_sat=f['p_sat'],
+            R_si=f['R_i'],
+            composition_seed=seed_a,
+            source=tb._fluid_source('gas_condensate', u_source, u_key),
+        )
+    assert len({d['composition_seed'] for d in redraws} | {seed}) == tw._FLUID_REDRAWS + 1
     assert rec['T_axis'][0] == 260.0 and rec['T_axis'][-1] == 410.0 and rec['p_top'] == 490.0
     assert tw._table_well(SEED, 5) is None
     assert [w['well'] for w in tw._table_wells('sol', SEED, 3, 7)] == [3, 4, 6]

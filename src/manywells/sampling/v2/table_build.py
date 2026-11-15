@@ -16,8 +16,8 @@ The build has four steps (SMP-116), two of them here. ManyWells writes DIR/wells
 draws; build makes each well's fluid (DIR/fluids/kK.json); ManyWells writes DIR/axes.json, each well's GOR axis from
 its life with the fluid's values in it; build, run again, makes each well's table set at the GORs of its axis
 (DIR/kK.csv, which PVTTable.read_csv reads as a PVTTableSet) and its manifest (DIR/kK.json). A well whose step fails
-is written with the status 'failed' and its error; a well whose output exists is skipped, so that a stopped build
-resumes.
+is written with the status 'failed', its step and its error, the step 'class' where none of the well's fluid draws
+gives a fluid of its class; a well whose output exists is skipped, so that a stopped build resumes.
 
 NeqSim needs Java and runs in an environment of its own, outside ManyWells' dependencies. So this module imports only
 the standard library, numpy and pandas, NeqSim where a flash is made, and nothing of ManyWells: there it is run by its
@@ -31,9 +31,12 @@ with the JVM sized to fit the memory cap of each process:
 
 The files. DIR/wells.json holds kind ('sol' or 'nsol'), seed and wells, one record per table well: well (its draw
 index), fluid_class, source ('synthetic' or an example's key), composition_seed, the drawn api, sg_gas, R_si and p_sat,
-p_i, T_r, the separator's p_sep and T_sep, and the grid's T_axis and p_top (_well_grid). DIR/axes.json holds, by draw
+p_i, T_r, the separator's p_sep and T_sep, the grid's T_axis and p_top (_well_grid), and redraws, the fluid's redraws
+(api, sg_gas, R_si, p_sat, composition_seed and source drawn again), which the build takes in their order where a built
+fluid leaves its class (_build_fluid). DIR/axes.json holds, by draw
 index, gors, or error where the axis could not be made. A fluid's record holds its labels, hook (the values that
-replace the fluid block's draws: p_sat, R_i, rho_o, rho_g, and api and sg_gas where they are not the drawn ones) and
+replace the fluid block's draws: p_sat, R_i, rho_o, rho_g, and api and sg_gas where they are not the well's own
+draw's), fluid_redraws and rejected (the draws rejected before the fluid's) and
 stream (the fractions, the composition and the separation, which the tables are made from); a manifest holds the
 fluid's record without the stream, and csv, gors, nodes, n_T, p_top and dropped_pressures.
 """
@@ -531,9 +534,48 @@ def _saturated_at(fl, sep, gor, T, p_i, cls):  # spec: SMP-115
     return None
 
 
+_CLASS_GOR = {'volatile_oil': (356.0, 588.0), 'gas_condensate': (588.0, 8900.0)}  # Sm3/Sm3  # spec: SMP-55
+
+
+class NoFluidOfClass(ValueError):
+    """None of a table well's fluid draws gives a fluid of its class at its reservoir's pressure and temperature."""
+
+
+def _in_class(cls, field) -> bool:  # spec: SMP-115
+    """Whether a built fluid is of the class cls: its GOR as the field reports it (_Flash.field) lies within the
+    class's limits on the initial producing GOR, above the lower and up to the upper (SMP-55). A fluid whose field
+    flash finds no liquid is of neither class."""
+    lo, hi = _CLASS_GOR[cls]
+    return field is not None and lo < field['gor'] <= hi
+
+
 def _build_fluid(w) -> dict:  # spec: SMP-115
     """
-    A table well's fluid, from its record w of wells.json: the example or the synthetic composition, matched; its
+    A table well's fluid, from its record w of wells.json: the first of the well's fluid draws, its own and then its
+    redraws in their order (w['redraws']), whose built fluid (_build_draw) is of the well's class (_in_class). The
+    record adds `fluid_redraws`, the draws rejected before it, and `rejected`, each rejected draw's `saturation_rule`,
+    drawn `R_si` and field GOR (None without field liquid). A redraw's hook holds its `api` and `sg_gas` too, the
+    drawn ones where the fluid is matched to them, since the well's own draw has others.
+
+    :raises NoFluidOfClass: where no draw's fluid is of the class
+    """
+    rejected = []
+    for a, redraw in enumerate([{}] + list(w.get('redraws', []))):
+        draw = w | redraw
+        fluid = _build_draw(draw)
+        if _in_class(w['fluid_class'], fluid['field']):
+            if a > 0:
+                fluid['hook'] = dict(api=draw['api'], sg_gas=draw['sg_gas']) | fluid['hook']
+            return fluid | dict(fluid_redraws=a, rejected=rejected)
+        gor = None if fluid['field'] is None else fluid['field']['gor']
+        rejected.append(dict(saturation_rule=fluid['saturation_rule'], R_si=draw['R_si'], field_gor=gor))
+    raise NoFluidOfClass(f'no fluid of the class {w["fluid_class"]} in {len(rejected)} draws: {rejected}')
+
+
+def _build_draw(w) -> dict:  # spec: SMP-115
+    """
+    The fluid of one draw of a table well, from its record w of wells.json with the draw's values: the example or the
+    synthetic composition, matched; its
     saturation pressure at T_r; and, where that lies above p_i, the GOR moved along the tie line until
     p_sat(T_r) = p_i, in the class's direction (_saturated_at), else the class's phase in equilibrium at (p_i, T_r).
     Returns the fluid's record: the labels,
@@ -759,6 +801,8 @@ def _build_task(task) -> tuple:  # spec: SMP-116
             rec = _build_fluid(w)
         except MemoryError:
             raise  # The process's, not the fluid's: nothing is recorded, and a rerun builds it
+        except NoFluidOfClass as e:  # spec: SMP-115. The reservoir holds no fluid of the well's class: no failure
+            rec = dict(well=k, status='failed', step='class', error=str(e))
         except Exception:  # noqa: BLE001 - a failed fluid is recorded, and its well is not solved
             rec = dict(well=k, status='failed', step='fluid', error=traceback.format_exc()[-1500:])
         rec['seconds'] = rec.get('seconds', {}) | dict(fluid=time.time() - t0)
