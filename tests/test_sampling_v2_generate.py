@@ -416,12 +416,12 @@ def test_the_slot_limit(monkeypatch):
 
 
 def test_the_redraw_limit(monkeypatch):
-    """SMP-106: a well may redraw 1000 times over its slots (D-137); a 1001st redraw drops it."""
-    assert _REDRAW_LIMIT == 1000
-    accepted, result, order = solve_slots(monkeypatch, lambda j, a: 'no_operating_point' if a < 5 else None)
-    assert result == 'accepted' and len(order) == _N_SLOTS + _REDRAW_LIMIT  # 5 redraws for each of 200 slots
-    accepted, result, order = solve_slots(monkeypatch, lambda j, a: 'no_operating_point' if a < 5 or j == 0 else None)
-    assert result == 'redraw_limit' and len(order) == _N_SLOTS + _REDRAW_LIMIT and order[-1] == (_N_SLOTS - 1, 5)
+    """SMP-106: a well may redraw 3000 times over its slots (D-137, D-163); a 3001st redraw drops it."""
+    assert _REDRAW_LIMIT == 3000
+    accepted, result, order = solve_slots(monkeypatch, lambda j, a: 'no_operating_point' if a < 15 else None)
+    assert result == 'accepted' and len(order) == _N_SLOTS + _REDRAW_LIMIT  # 15 redraws for each of 200 slots
+    accepted, result, order = solve_slots(monkeypatch, lambda j, a: 'no_operating_point' if a < 15 or j == 0 else None)
+    assert result == 'redraw_limit' and len(order) == _N_SLOTS + _REDRAW_LIMIT and order[-1] == (_N_SLOTS - 1, 15)
     assert 0 not in accepted and len(accepted) == _N_SLOTS - 1
 
 
@@ -1141,7 +1141,7 @@ def test_a_dead_date_starts_the_lift_of_a_natural_well(monkeypatch):
 
 
 def test_a_dead_date_behind_the_redraw_limit(monkeypatch):
-    """SMP-106 (D-142): more than ten dead slots use the thousand redraws before any has its hundred attempts. The
+    """SMP-106 (D-142): more than thirty dead slots use the 3000 redraws before any has its hundred attempts. The
     earliest slot still open then takes the rest of its attempts: without an operating point it is a dead date, and
     with one the well is dropped at the redraw limit."""
     lf = a_natural_life()

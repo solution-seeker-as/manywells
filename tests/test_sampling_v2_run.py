@@ -363,7 +363,7 @@ def test_another_runs_settings_stop_the_run(monkeypatch, tmp_path):
         'rust',
     )
     assert settings['release'] == 'beta2' and settings['environment'] == v2._environment_record()
-    assert settings['limits'] == dict(slot=100, redraws=1000, solver_failures=10, dead_dates=None)
+    assert settings['limits'] == dict(slot=100, redraws=3000, solver_failures=10, dead_dates=None)
     assert settings['start_hurdle'] == generate._START_HURDLE and settings['floor'] == generate._FLOOR
     assert settings['strata'] == ['tail', 'platform', 'subsea', 'onshore']
     assert runner._run_settings('nsol', SEED, None, 10)['limits']['dead_dates'] == 5 and settings['n_slots'] == 200
@@ -575,7 +575,7 @@ def test_a_dataset_written_from_a_run(monkeypatch, tmp_path):
     assert (meta['dataset'], meta['release']) == (name, 'beta2') and meta['environment'] == v2._environment_record()
     assert (meta['seed'], meta['n_wells'], meta['configuration'], meta['backend']) == (SEED, 3, 'v2.0.0', 'rust')
     assert meta['quotas'] == dict(tail=1, platform=1, subsea=1, onshore=0)
-    assert meta['limits'] == dict(slot=100, redraws=1000, solver_failures=10, dead_dates=None)
+    assert meta['limits'] == dict(slot=100, redraws=3000, solver_failures=10, dead_dates=None)
     assert meta['n_slots'] == N_TEST_SLOTS
     assert meta['producibility']['floor'] == generate._FLOOR and meta['counts']['wells_accepted'] == 3
     assert meta['files']['samples.parquet']['rows'] == 3 * N_TEST_SLOTS == len(data['samples'])

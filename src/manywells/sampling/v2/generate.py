@@ -96,7 +96,7 @@ _EROSIONAL_LOW, _EROSIONAL_STEPS = 0.97, 12  # spec: SMP-77
 _CAP_FLAGS = ('choke_at_erosional_rate', 'erosional_cap_unmet')  # spec: SMP-77
 # The lift block's flags of a lift design (draws._lift): a well's are those of the design that it uses
 _DESIGN_FLAGS = ('injection_at_packer', 'injection_raised_to_0.3L', 'lift_capacity_at_bound')  # spec: SMP-90
-_SLOT_LIMIT, _REDRAW_LIMIT, _SOLVER_FAILURE_LIMIT = 100, 1000, 10  # spec: SMP-106 (D-137)
+_SLOT_LIMIT, _REDRAW_LIMIT, _SOLVER_FAILURE_LIMIT = 100, 3000, 10  # spec: SMP-106 (D-137, D-163)
 _DEAD_DATE_LIMIT = 5  # The dead dates that may start an nsol-2 well's lift or end its life  # spec: SMP-106 (D-142)
 _BEST_RATE_LIFT = (0.0, 0.5, 1.0)  # The best rate's lift-gas rates, shares of the capacity  # spec: SMP-103
 _N_SCAN = 21  # Dates of the life scan  # spec: SMP-101
@@ -404,8 +404,8 @@ def _solve_slots(k, draw, builder, log, slot_limit_outcome) -> tuple:  # spec: S
     The passes over a well's slots: pass a solves attempt a of every slot still without an operating point, in the
     order of the slots, until every slot has one or the well reaches a limit.
 
-    In nsol-2 a well at the redraw limit may hold a dead date that the limit hides, since ten slots without an
-    operating point use the thousand redraws before one of them has its hundred attempts. The earliest slot still
+    In nsol-2 a well at the redraw limit may hold a dead date that the limit hides, since thirty slots without an
+    operating point use the 3000 redraws before one of them has its hundred attempts. The earliest slot still
     open then takes the rest of its attempts: without an operating point it is a dead date, and with one the well is
     at the redraw limit.
 

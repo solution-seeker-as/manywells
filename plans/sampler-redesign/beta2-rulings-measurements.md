@@ -115,3 +115,5 @@ For Bjarne, with D-158 to D-162:
 4. **The schema**: `fluid_redraws` in `wells`, and the reason `no_fluid_of_class` (D-158).
 5. **The flags of the injection depth** follow the capacity's flag to the design in use (D-160), beyond the ruling's one flag.
 6. **The table build's draw indices** for a full generation: about 20,400 and 19,500 by the pilot.
+
+**Ruled by Bjarne, 2026-11-15:** point 1 by a redraw limit of 3000 in place of 1000 (D-163), with no further pilot; the review of the erosional cap that bears on the small openings (D-155) is postponed until after the second beta.

@@ -972,7 +972,7 @@ From D-52 (ruled 2026-11-02), D-80 and D-83 (ruled 2026-11-06, with R4's step ke
 
 ### SMP-106 · Limits and dropped wells
 
-A well is dropped, and the next drawn well of its stratum takes its place (SMP-110), when it passes a limit: a kept well has at most 100 attempts in a slot, 1000 redraws, and 10 solver failures among its slots' attempts. Its outcome is one of:
+A well is dropped, and the next drawn well of its stratum takes its place (SMP-110), when it passes a limit: a kept well has at most 100 attempts in a slot, 3000 redraws, and 10 solver failures among its slots' attempts. Its outcome is one of:
 
 | Outcome | When |
 |---|---|
@@ -982,7 +982,7 @@ A well is dropped, and the next drawn well of its stratum takes its place (SMP-1
 | `not_producible`, `best_rate_solver_failure` | SMP-101, SMP-102 (the start hurdle), SMP-103, SMP-115 (no fluid of its class) |
 | `slot_limit` | a `sol-2` slot without an operating point after 100 attempts |
 | `dead_date` | an `nsol-2` well with a dead date after five dead dates have changed its life (below) |
-| `redraw_limit` | a 1001st redraw would be needed |
+| `redraw_limit` | a 3001st redraw would be needed |
 | `solver_failure_limit` | an 11th solver failure among its slots' attempts |
 | `short_life` | `nsol-2` only: SMP-101, or a life that a dead date cuts to its start |
 
@@ -991,7 +991,7 @@ A well is dropped, and the next drawn well of its stratum takes its place (SMP-1
 - The dead date that counts is the earliest of the pass. Where the well is natural there, has a lift design (SMP-90) and its life goes on after the date, lift starts at the date, with `lift_start_rule` `no_natural_flow` (SMP-90, rule 4).
 - Else, for a lifted well, a well without a lift design, or the life's last date, the life ends at the last earlier date: that date is $T_\text{end}$ (SMP-97). A life that then ends at or before its lift's start is natural (SMP-101), and one with no earlier date is dropped as `short_life`.
 - The well's slots are planned again over the changed life, from the same generators (SMP-97 to SMP-100, SMP-109), and solved again; the limits hold for each pass, and the logs hold the last pass's attempts. A well whose life five dead dates have changed, and that has another, is dropped as `dead_date`.
-- More than ten slots without an operating point use the thousand redraws before one of them has its hundred attempts. At the redraw limit, the earliest slot still without an operating point therefore takes the rest of its attempts: without one it is a dead date, and with one the well is dropped as `redraw_limit`.
+- More than thirty slots without an operating point use the 3000 redraws before one of them has its hundred attempts. At the redraw limit, the earliest slot still without an operating point therefore takes the rest of its attempts: without one it is a dead date, and with one the well is dropped as `redraw_limit`.
 
 **Reported, not targeted.** D-81's target, at most 1% of a class's drawn wells dropped at the limits, and D-83's, at most 0.5% of the `nsol-2` wells as `dead_date`, stood in for acceptance criterion 4, that the limits do not shape the kept wells' distributions, and neither had a derivation. A count is a poor measure of that: in the first 1000 `nsol-2` wells of the generation of 2026-11-11, 2.8% were dead dates, and they were more than half of the oils whose lift the static check starts (`preflight-measurements.md`). The targets are dropped (D-145). Each dataset's datasheet reports instead the wells dropped at the limits by fluid class, well type and lift rule, the dead dates that started a lift or ended a life, with the lives' cuts ($T_\text{end}$ against the scan's end), and the shift of each drawn input between the drawn and the kept wells.
 
@@ -1001,13 +1001,13 @@ A well is dropped, and the next drawn well of its stratum takes its place (SMP-1
 - at most 10% of those in any tenth of a drawn input's values, for an input that 1000 wells or more hold;
 - at most 10% of any group of 100 drawn wells or more, by fluid class, well type, lift rule, tail, and fluid class with lift rule.
 
-The redraw limit stays at 1000. A dataset past a threshold goes back to Bjarne before it is final.
+The redraw limit is 3000, raised from 1000 after the pilot of those rulings (D-163). A dataset past a threshold goes back to Bjarne before it is final.
 
 Nothing else drops a well or a sample: SMP-28's three filters (the choke's spread, the share of choked samples and the variation of `QTOT`), v1's floors on a sample's rate and its counts of failures do not apply to v2, and a small rate stays a sample.
 
-From D-51 (ruled 2026-11-06), D-81, D-82 and D-83 (ruled 2026-11-06, checkpoint H3: kept, judged on R11's pilot), D-55, and D-106 (ruled 2026-11-09, L1: `table_failed` wells count with the drops), D-137, D-142 and D-145 (ruled 2026-11-12), and D-158 and D-162 (Bjarne's rulings of 2026-11-14 on the first beta's analysis). Sources: `sampling-draft.md`, Slots and outcomes, and How the rules meet acceptance criterion 4; `preflight-measurements.md`.
+From D-51 (ruled 2026-11-06), D-81, D-82 and D-83 (ruled 2026-11-06, checkpoint H3: kept, judged on R11's pilot), D-55, and D-106 (ruled 2026-11-09, L1: `table_failed` wells count with the drops), D-137, D-142 and D-145 (ruled 2026-11-12), D-158 and D-162 (Bjarne's rulings of 2026-11-14 on the first beta's analysis), and D-163 (ruled 2026-11-15, on the pilot of those rulings). Sources: `sampling-draft.md`, Slots and outcomes, and How the rules meet acceptance criterion 4; `preflight-measurements.md`.
 
-**Basis:** the limits (1000 redraws let a kept well flow in a sixth of its draws, as the lifted wells of R10's pilots that flow only near their lift capacity do, D-137; five dead dates is a cap on the cost, above the two that the measured wells needed at most, D-142) are a design choice, tolerances of the generation. Starting the lift or ending the life at a dead date is a design choice after operating practice, as SMP-90's rule 3 and SMP-103's filter, in place of dropping the well, which removed a tenth of the oils whose lift starts during their lives (D-142); that a dead date is the well's and not the solver's is the model's own result, since the CasADi backend finds no root at such dates either (`preflight-measurements.md`). Reporting the drops by group, with no target, is a design choice (Bjarne's ruling, D-145); dropping v1's filters is a design choice against distributions shaped by filters (acceptance criterion 4, D-51).
+**Basis:** the limits (3000 redraws cover the 400 to 2800 that the lifted wells of R10's pilots that flow only near their lift capacity needed, D-137, and keep most wells of the first beta's two most selective groups, D-163; five dead dates is a cap on the cost, above the two that the measured wells needed at most, D-142) are a design choice, tolerances of the generation. Starting the lift or ending the life at a dead date is a design choice after operating practice, as SMP-90's rule 3 and SMP-103's filter, in place of dropping the well, which removed a tenth of the oils whose lift starts during their lives (D-142); that a dead date is the well's and not the solver's is the model's own result, since the CasADi backend finds no root at such dates either (`preflight-measurements.md`). Reporting the drops by group, with no target, is a design choice (Bjarne's ruling, D-145); dropping v1's filters is a design choice against distributions shaped by filters (acceptance criterion 4, D-51).
 
 ### SMP-107 · Starts
 
@@ -1269,7 +1269,7 @@ From D-61 (ruled 2026-11-06; $b = 0$ kept, L3 of 2026-11-09) and D-60. Sources: 
 | SMP-103 | The best rate from a fully open choke and three lift-gas rates; lift before a well is dropped, at a `sol-2` well's date and at an `nsol-2` well's start | The generation, and acceptance criterion 2 (D-101, D-161) |
 | SMP-104 | A scan with non-finite points, no root and no rejected sign change counts as no operating point; no retry on the other backend | Acceptance criterion 4, and the constitution's principle 7 |
 | SMP-105 | 200 operating points per well, with redraws from each slot's own generator in passes | The Goals (D-52) and reproducibility |
-| SMP-106 | The limits of 100 attempts, 1000 redraws, 10 solver failures and 5 dead dates | Tolerances of the generation; the drops are reported by group (D-145) |
+| SMP-106 | The limits of 100 attempts, 3000 redraws, 10 solver failures and 5 dead dates | Tolerances of the generation; the drops are reported by group (D-145) |
 | SMP-106 | The thresholds for the final datasets: 2% overall, and 10% in a tenth of an input and in a group | Acceptance criterion 4: the limits do not shape the kept wells (D-162) |
 | SMP-106 | A dead date starts the lift or ends the life | Acceptance criterion 2: a well that an operator would lift, or stop, is not dropped (D-142) |
 | SMP-106 | None of v1's filters | Acceptance criterion 4: no distributions shaped by filters |
