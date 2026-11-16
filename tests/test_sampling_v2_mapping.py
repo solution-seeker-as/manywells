@@ -303,6 +303,19 @@ def test_gas_inflow_scales_with_the_radial_coefficients(gas_wells):
         assert base['forchheimer_a'] > 0
 
 
+def test_gas_inflow_refuses_a_reservoir_gas_below_daks_range(gas_wells):
+    """SMP-117 (D-164): below a pseudo-reduced temperature of 1.05 at T_r, the range of DAK's Newton steps, the
+    black-oil reservoir gas has no Z, and the fit refuses the well with ValueError; there, DAK's Z went negative and
+    the fit raised LinAlgError. Just above it the fit holds."""
+    w = next(w for w in gas_wells if w['fluid_class'] == 'gas_condensate')
+    pvt = _black_oil(w)
+    T_pc = reservoir_gas(w, w['R_go'])[0].pseudo_critical[1]
+    with pytest.raises(ValueError, match="is below 1.05, where DAK's Z is not solved"):
+        _gas_inflow(dict(w, T_r=0.97 * T_pc), pvt, w['p_r'], w['R_go'])
+    coef = _gas_inflow(dict(w, T_r=1.06 * T_pc), pvt, w['p_r'], w['R_go'])
+    assert math.isfinite(coef['forchheimer_a']) and coef['forchheimer_a'] > 0 and coef['forchheimer_b'] >= 0
+
+
 def test_inflow_at_the_drawn_state(wells):
     """An oil's coefficient at its drawn state is the draw's, Vogel's w_l_max or the index k_l by its inflow model;
     a gas well's are the fit's; the others are NaN."""

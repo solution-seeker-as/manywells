@@ -401,3 +401,7 @@ The measurements of D-158 to D-162, the implementation of Bjarne's rulings on th
 `beta1_checks.py report` ends its drops by group with the thresholds for the final datasets (D-162, SMP-106), each with its value and whether it holds, and reports the oils that the producibility filter lifts in `nsol-2` as in `sol-2` (D-161). It runs on a pilot too: where no drawn input has 1000 wells past the filters, the threshold on an input's tenths has no value.
 
 `choke_rates_checks.py` compares a pilot with the beta's wells of the pilot's own draw indices, since a dataset drawn by stratum (D-157) does not hold the first draws. Its check of the overpressured wells is the rates and pressures of the wells that SMP-63 labels overpressured.
+
+## Sampler redesign: the second beta's generation (2026-11-16)
+
+`dak_range.py GEN` measures D-164, the gas inflow's black-oil reservoir gas within DAK's range (SMP-117), on a generation's drawn wells: for every gas or condensate well without a table, its wellstream gas's pseudo-reduced temperature at $T_r$ and whether DAK's Newton steps solve its $Z$ on the pseudo-pressure's grid, by band, the wet and dry gases, whose own inflow the fit is, apart from the records of condensates without their table. It reads the generation's well logs, generated data only, kept outside the repo with the maintainer's generated data. `beta1_checks.py checks` on a generation's `nsol-2` needs an address-space cap of 16 GB, since its `pvt.parquet` holds about 11.6 million rows.

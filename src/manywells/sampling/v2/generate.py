@@ -524,13 +524,18 @@ def _life_summary(life, lift_start, rule) -> dict:
 
 def _table_failed(t_start, seed, k, kind, table) -> dict:  # spec: SMP-106
     """The result of a table well without a usable table: it is not solved, and its draws are made without the
-    table's values."""
+    table's values, the inflow's coefficients with the draws' black oil, or NaN where the model refuses its reservoir
+    gas (SMP-117)."""
     life = Life(seed, k)
     info = _info(k, outcome='table_failed', error=table.get('error'))
     if table.get('step') == 'class':  # spec: SMP-115. Its reservoir holds no fluid of its class: no well
         info.update(outcome='not_producible', not_producible_reason='no_fluid_of_class')
     if kind == 'sol':
-        return _result(t_start, sol2_well(life), life.stations, table, info)
+        try:
+            w = sol2_well(life)
+        except ValueError:  # spec: SMP-117. The model refuses the black oil's reservoir gas
+            w = sol2_well(Life(seed, k, inflow=False))
+        return _result(t_start, w, life.stations, table, info)
     info.update(_nsol_info())
     nsol = _life_summary(life, life.lift_start, life.lift_start_rule)
     return _result(t_start, life.w0, life.stations, table, info, nsol=nsol)
@@ -570,11 +575,12 @@ def generate_sol2_well(seed: int, k: int, tables=None) -> dict:
     hook, pvt = (table['hook'], table['pvt']) if table is not None else (None, None)
     life = Life(seed, k, fluid=hook, pvt=pvt)
     log, info = [], _info(k)
-    try:  # spec: SMP-106. The table refuses a GOR off its axis at the inflow's coefficients of the well's date
+    try:  # spec: SMP-106. The model refuses the inflow's coefficients of the well's date: a GOR off the table's axis,
+        # or a reservoir gas out of DAK's range (SMP-117)
         w = sol2_well(life)
     except ValueError as e:
         info.update(outcome='invalid_input', error=str(e)[:300])
-        w = sol2_well(Life(seed, k, fluid=hook)) | dict.fromkeys(_COEF_KEYS, math.nan)  # The draws without the table
+        w = sol2_well(Life(seed, k, fluid=hook, inflow=False))  # The draws, without the inflow's coefficients
         return _result(t_start, w, life.stations, table, info)
     if _below_start_hurdle(life.w0):  # spec: SMP-102. Not drilled: nothing is solved
         info.update(outcome='not_producible', not_producible_reason='below_start_hurdle')

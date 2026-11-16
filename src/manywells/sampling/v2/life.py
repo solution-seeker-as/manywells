@@ -75,6 +75,8 @@ class Life:
     :param fluid: A table fluid's values, as draws.draw_well takes them, or None
     :param pvt: A table fluid's PVTTableSet, with which the inflow's coefficients are made (SMP-72, SMP-117), or
         None for the well's black oil
+    :param inflow: False for a life whose inflow's coefficients are all NaN, made without the PVT model: the record
+        of a well whose inflow the model refuses (SMP-106)
 
     Attributes:
 
@@ -94,8 +96,8 @@ class Life:
       passes the start to _lift_on and samples._nsol2_plan, or asks sol2_well for the lifted well.
     """
 
-    def __init__(self, seed: int, k: int, fluid: dict | None = None, pvt=None):
-        self.seed, self.k = seed, k
+    def __init__(self, seed: int, k: int, fluid: dict | None = None, pvt=None, inflow: bool = True):
+        self.seed, self.k, self._inflow = seed, k, inflow
         w0, self.stations = draw_well(seed, k, 'initial', fluid=fluid)  # Its stage's state, a core well's start
         self.oil = w0['fluid_type'] in _OILS
         self._tail = w0['coverage_tail'] == 'tail'
@@ -300,8 +302,10 @@ class Life:
         else:
             wlr, wgr = water / (water + 1e6 / R_go), water
             wlr_trend = water_trend / (water_trend + 1e6 / R_trend)
-        if t not in self._coef:
+        if t not in self._coef and self._inflow:
             self._coef[t] = _inflow_at(self.w0, self.pvt, p_r, R_trend, wlr_trend)
+        elif t not in self._coef:  # A life without its inflow
+            self._coef[t] = dict.fromkeys(_COEF_KEYS, math.nan)
         return dict(
             t=t,
             p_r=p_r,

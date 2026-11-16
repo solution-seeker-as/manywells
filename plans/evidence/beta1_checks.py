@@ -20,7 +20,7 @@ from synthetic wells.
 GEN is a generation's folder, which holds the dataset (manywells-<kind>-2-beta1), its logs (the same name with -logs)
 and its run (run/, with the attempt log); OUT is a prefix for the re-solve's files. From the project root, with the
 generator's interpreter (Python, numpy and scipy as in metadata.json, so that the re-solve can be exact), capped:
-(ulimit -v 8000000; OMP_NUM_THREADS=1 MALLOC_ARENA_MAX=2 .venv/bin/python plans/evidence/beta1_checks.py ...).
+(ulimit -v 16000000; OMP_NUM_THREADS=1 MALLOC_ARENA_MAX=2 .venv/bin/python plans/evidence/beta1_checks.py ...).
 """
 
 import argparse

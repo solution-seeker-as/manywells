@@ -8,7 +8,8 @@ Bjarne Grimstad, bjarne.grimstad@solutionseeker.no
 
 The inflow model's coefficients of a v2 well at a reservoir state (specs/sampling.md): an oil well's productivity
 index (SMP-72) with the well's PVT model, and a gas or condensate well's Forchheimer coefficients fitted to its inflow
-in the real-gas pseudo-pressure (SMP-117; Golan and Whitson 1991, Eq. 2.57).
+in the real-gas pseudo-pressure (SMP-117; Golan and Whitson 1991, Eq. 2.57), or ValueError where the model cannot
+give its reservoir gas's Z.
 """
 
 import math
@@ -24,6 +25,7 @@ from manywells.sampling.v2.reservoir import _OILS, _forchheimer, _gas_rate, _j_r
 _COEF_KEYS = ('k_l', 'w_l_max', 'forchheimer_a', 'forchheimer_b')  # The inflow's coefficients, NaN where unused
 _FIT_POINTS = (0.95, 0.9, 0.8, 0.6, 0.4, 0.2)  # p_wf / p_r of the fit, with the absolute open flow  # spec: SMP-117
 _N_PSEUDO = 200  # Pressures of the pseudo-pressure's integral, from 1 bar to p_r  # spec: SMP-117
+_T_PR_MIN = 1.05  # The black-oil reservoir gas's least T_pr at T_r, DAK_NEWTON_STEPS's range  # spec: SMP-117
 
 
 def _inflow_at(w0, pvt, p_r, R_go, wlr) -> dict:  # spec: SMP-72, SMP-111
@@ -105,6 +107,8 @@ def _gas_inflow(w0, pvt, p_r, R_go) -> dict:  # spec: SMP-117
     :param pvt: The well's PVT model: its black oil, or a condensate's PVTTableSet
     :param p_r: Reservoir pressure (bar)
     :param R_go: Producing gas-oil ratio (Sm3/Sm3)
+    :raises ValueError: where the black-oil reservoir gas's pseudo-reduced temperature at T_r is below _T_PR_MIN,
+        where DAK's Z is not solved: a rich wellstream in a cold reservoir, near its pseudo-critical temperature
     """
     T_r = w0['T_r']
     if isinstance(pvt, (PVTTable, PVTTableSet)):
@@ -114,6 +118,12 @@ def _gas_inflow(w0, pvt, p_r, R_go) -> dict:  # spec: SMP-117
         c = _wellstream_factor(w0['api'], R_go)
         rho_ws = (pvt.rho_g + pvt.rho_o / R_go) / c  # The wellstream as a gas at standard conditions
         gas = BlackOil(rho_o=pvt.rho_o, rho_g=rho_ws, gas_law='dak', p_sep=w0['p_sep'], T_sep=w0['T_sep'])
+        t_pr = T_r / gas.pseudo_critical[1]
+        if t_pr < _T_PR_MIN:
+            raise ValueError(
+                f"the reservoir gas's pseudo-reduced temperature {t_pr:.3f} at T_r = {T_r:.1f} K (gas gravity "
+                f"{gas.sg_gas:.3f}) is below {_T_PR_MIN}, where DAK's Z is not solved"
+            )
     p, m, muz_r = _pseudo_pressure(gas, p_r, T_r)
     Z, mu_g = float(gas.z_factor(p_r, T_r)), float(gas.gas_viscosity(p_r, T_r, gas.gas_density(p_r, T_r)))
     a, b = _forchheimer(w0['perm'], w0['h_net'], mu_g, Z, T_r, w0['ln_re_rw'] - 0.75, w0['skin'], w0['D_nondarcy'])

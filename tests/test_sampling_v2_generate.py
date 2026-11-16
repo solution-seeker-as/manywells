@@ -23,7 +23,7 @@ import pytest
 
 from manywells.configurations import V2
 from manywells.datasets import schema
-from manywells.sampling.v2 import generate
+from manywells.sampling.v2 import generate, inflow
 from manywells.sampling.v2 import run as runner
 from manywells.sampling.v2 import table_wells as tw
 from manywells.sampling.v2.generate import (
@@ -1285,6 +1285,34 @@ def test_a_table_well_without_a_usable_table(monkeypatch, tmp_path, kind):
         assert set(res['well']) == set(drawn) and all(nan_or(res['well'][key], v) for key, v in drawn.items())
     else:
         assert math.isnan(res['info']['T_end']) and res['info']['scan'] == [] and res['nsol']['T_life'] > 0
+
+
+def test_a_table_wells_record_without_its_inflow(monkeypatch):
+    """SMP-117 (D-164): where the model refuses the black-oil reservoir gas of a condensate without its table, the
+    well's record has NaN inflow coefficients and its outcome is its table's, not a crash (the second beta's three
+    crashes)."""
+    no_solve(monkeypatch)
+    monkeypatch.setattr(inflow, '_T_PR_MIN', math.inf)  # Every black-oil reservoir gas is refused
+    k = next(lf.k for lf in drawn_lives() if lf.w0['fluid_class'] == 'gas_condensate')
+    res = generate_sol2_well(SEED, k, tables=None)
+    assert res['info']['outcome'] == 'table_failed' and all(math.isnan(res['well'][key]) for key in _COEF_KEYS)
+    drawn = sol2_well(Life(SEED, k, inflow=False))
+    assert set(res['well']) == set(drawn) and all(nan_or(res['well'][key], v) for key, v in drawn.items())
+
+
+@pytest.mark.parametrize('kind', ['sol', 'nsol'])
+def test_a_reservoir_gas_out_of_daks_range_is_invalid_input(monkeypatch, kind):
+    """SMP-106, SMP-117 (D-164): where the model refuses the black-oil reservoir gas of a gas well without a table at
+    its nominal state (nsol-2: its start), the well is `invalid_input`, not a crash; its draws are made without the
+    inflow's coefficients."""
+    no_solve(monkeypatch)
+    monkeypatch.setattr(inflow, '_T_PR_MIN', math.inf)
+    lf = next(lf for lf in drilled_lives() if not lf.oil and not is_table(lf))
+    res = (generate_sol2_well if kind == 'sol' else generate_nsol2_well)(SEED, lf.k)
+    assert res['info']['outcome'] == 'invalid_input' and "where DAK's Z is not solved" in res['info']['error']
+    assert res['log'] == [] and res['well']['well'] == lf.k
+    if kind == 'sol':
+        assert all(math.isnan(res['well'][key]) for key in _COEF_KEYS) and 'date' in res['well']
 
 
 def own_hook(w) -> dict:

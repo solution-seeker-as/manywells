@@ -72,7 +72,8 @@
   - A pilot of the whole pipeline, 400 `sol-2` wells and 300 `nsol-2` wells, with every rule since the first beta. Every accepted table well's fluid is of its class; the quotas and the fluid types' floor hold; the samples whose choke takes less than 1% of the wellhead pressure are 5% and 7%, where the first beta's same wells have 18% and 20%; a third of the samples are at critical flow, with the erosional cap.
   - Open: `nsol-2`'s pilot has 3.2% of its wells past the filters dropped at the limits (10 of 310), above the threshold of 2%, from the sized chokes' small openings and from the oils that D-161 lifts; the readings of the redraw's ruling; the schema.
   - Ruled 2026-11-15: the redraw limit is 3000 (D-163), with no further pilot; D-155's review of the erosional cap is postponed until after the second beta.
-  - Next: the PR's merge; the tables for about 20,400 and 19,500 draw indices; then the next full generation, at his go-ahead.
+  - Merged 2026-11-15 (#55), and the second beta generated from it, 2026-11-15 to 16: `manywells-sol-2-beta2` and `manywells-nsol-2-beta2`, 10,000 wells each from 15,672 and 13,557 draws. Every check at generation holds, and so do D-162's thresholds: 0.41% and 0.70% of the wells past the filters dropped at the limits, at most 3.3% and 7.3% in a tenth of an input, and 4.7% and 6.7% in a group. Three `sol-2` wells crashed in the gas inflow's fit, condensates whose reservoirs hold no fluid of their class; fixed after the run (D-164), which changes no accepted well.
+  - Next: Bjarne's review of the second beta; D-155's review of the erosional cap; the datasheets from the final run (D-149).
 
 This plan replaces v1's sampling procedure for the v2 datasets (`specs/goals.md`, limitation 5: unrealistic sampled wells). It ends with:
 
