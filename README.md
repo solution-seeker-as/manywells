@@ -15,12 +15,12 @@ The simulator has several use cases:
 - Investigate sensitivities of variables of interest
 
 The figure below shows the model of a well and one of its operating points (a), the flow regimes (b), a well's stable
-and unstable solutions (c), and the three use cases: datasets (d), calibration (e) and sensitivity studies (f).
+and unstable solutions (c), and the three use cases: sensitivity studies (d), datasets (e) and calibration (f).
 It is drawn from the simulator's own results by [`scripts/figures/main_figure.py`](scripts/figures/main_figure.py).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/manywells-dark.svg">
-  <img src="docs/manywells.svg" width="100%" alt="Six panels. a: a deviated well from the reservoir to the choke, with the parts of the model (inflow, tubing flow, fluid, trajectory, lift gas, energy balance and choke) and the pressure, temperature and gas volume fraction along it. b: a map of the five flow regimes with the well's path from the bottomhole to the wellhead. c: the well's inflow curve and its tubing and choke curve, which cross at an unstable and a stable solution. d: the trajectories of 80 sampled wells by fluid class. e: a well's oil rate against its choke position, measured, with a first guess and calibrated. f: a well's liquid rate against its lift-gas rate at three reservoir pressures.">
+  <img src="docs/manywells.svg" width="100%" alt="Six panels. a: a deviated well from the reservoir to the choke, with the parts of the model (inflow, tubing flow, fluid, trajectory, lift gas, energy balance and choke) and the pressure, temperature and gas volume fraction along it. b: a map of the five flow regimes with the well's path from the bottomhole to the wellhead. c: the well's inflow curve and its tubing and choke curve, which cross at an unstable and a stable solution. d: a well's liquid rate against its lift-gas rate at three reservoir pressures. e: the trajectories of 80 sampled wells by fluid class. f: a well's oil rate against its choke position, measured, with a first guess and calibrated.">
 </picture>
 
 ## Versions
