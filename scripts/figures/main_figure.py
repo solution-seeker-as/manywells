@@ -17,12 +17,13 @@ The panels:
        grid point, with the well's superficial velocities from the bottomhole to the wellhead.
     c  The same well without lift gas: its inflow curve, and the bottomhole pressure that the tubing and the choke
        need at each liquid rate (solved with FixedFlowRate). The curves cross at the roots that root_set returns.
-    d  The first wells that the v2 sampler draws (specs/sampling.md), each from its own wellhead, by fluid class.
-    e  A calibration of the well to synthetic measurements, as in scripts/sim_examples/calibrate_well.py.
-    f  The well's liquid rate against its lift-gas rate at three reservoir pressures.
+    d  The well's liquid rate against its lift-gas rate at three reservoir pressures.
+    e  The first wells that the v2 sampler draws (specs/sampling.md), each from its own wellhead, by fluid class.
+    f  A calibration of the well to synthetic measurements, as in scripts/sim_examples/calibrate_well.py.
 
-The layout is in millimetres, for a figure of a journal's full page width, and the text is drawn as paths, so that
-the files look the same wherever they are shown. The font is the first of FONTS that is installed.
+Panel a takes the full width. The others are on a grid of three columns under it: b, c and d in a row, then e over
+two columns and f. The layout is in millimetres, for a figure of a journal's full page width, and the text is drawn
+as paths, so that the files look the same wherever they are shown. The font is the first of FONTS that is installed.
 """
 
 import argparse
@@ -48,14 +49,25 @@ from manywells.simulator import BoundaryConditions, SimError, SSDFSimulator, Wel
 from manywells.slip import HASAN_REGIMES, hasan_probabilities
 
 # --- Size, type and colours -------------------------------------------------------------------------------------------
-WIDTH, HEIGHT = 190.0, 147.0  # The figure (mm)
+WIDTH, HEIGHT = 190.0, 207.0  # The figure (mm)
 FONTS = ('Helvetica', 'Arial', 'Nimbus Sans', 'Liberation Sans', 'DejaVu Sans')
 TITLE, LABEL, SMALL = 8.2, 7.0, 6.3  # Font sizes (pt)
+
+# The layout (mm): three rows of panels, the lower two on a grid of three columns
+MARGIN, GUTTER = 3.0, 6.5  # Around the figure, and between two columns
+COLUMN = (WIDTH - 2 * MARGIN - 2 * GUTTER) / 3  # A column's width
+COLUMNS = tuple(MARGIN + k * (COLUMN + GUTTER) for k in range(3))  # The columns' left edges
+ROWS = (3.0, 104.0, 156.0)  # The rows' top edges
+PLOT_X, PLOT_H = (
+    12.0,
+    30.0,
+)  # A plot's left edge in its panel, which leaves room for the y axis's labels, and its height
+PLOT_W = COLUMN - PLOT_X - 1.0  # A plot's width in a panel of one column
 
 # The regimes take five hues of one categorical palette, assigned so that the regimes that share a border on the map
 # of panel b are pairs that are easy to tell apart, also with a colour-vision deficiency; each is named where it is
 # drawn. The fluid classes are ordered, from black oil to dry gas, and take the steps of one hue, as do the reservoir
-# pressures of panel f. The surfaces are GitHub's light and dark page backgrounds.
+# pressures of panel d. The surfaces are GitHub's light and dark page backgrounds.
 THEMES = {
     'light': dict(
         surface='#ffffff',
@@ -91,13 +103,13 @@ THEMES = {
 FLUID_CLASSES = ('black_oil', 'volatile_oil', 'gas_condensate', 'wet_gas', 'dry_gas')
 
 SEED = 1  # Of the sampler's wells and of the calibration's measurements
-N_WELLS = 80  # Panel d: the sampler's first wells
+N_WELLS = 80  # Panel e: the sampler's first wells
 DATASET_WELLS, DATASET_SAMPLES = 10_000, 200  # The v2 datasets' wells and samples per well (specs/goals.md)
 
 
 # --- The example well and the data of each panel ---------------------------------------------------------------------
 def example_well():
-    """The well of panels a, b, c, e and f: a build-and-hold trajectory to 45 degrees, a black oil with water, and
+    """The well of panels a, b, c, d and f: a build-and-hold trajectory to 45 degrees, a black oil with water, and
     lift gas through a valve at 1700 m of measured depth."""
     kickoff, radius, inclination, hold = 600.0, 700.0, math.radians(45.0), 1500.0  # m, m, rad, m
     md, tvd = [0.0, kickoff], [0.0, kickoff]
@@ -183,8 +195,25 @@ def solutions_data(wp, bc) -> dict:
     return dict(rates=rates, p_0=np.array(p_0), roots=roots, p_r=bc.p_r, k_l=wp.inflow.k_l)
 
 
+def lift_data(wp, bc) -> dict:
+    """Panel d: the liquid rate against the lift-gas rate at three reservoir pressures, NaN where the well has no
+    operating point, and the point of panel a's well."""
+    sim = SSDFSimulator(wp, backend='rust')
+    w_lg = np.concatenate([np.linspace(0.0, 1.0, 41), np.linspace(1.1, 4.0, 30)])
+    curves = {}
+    for p_r in (160.0, 145.0, 130.0):
+        rates = []
+        for w in w_lg:
+            try:
+                rates.append(sim.simulate(replace(bc, p_r=p_r, w_lg=float(w))).w_res)
+            except SimError:
+                rates.append(np.nan)
+        curves[p_r] = np.array(rates)
+    return dict(w_lg=w_lg, curves=curves, point=(bc.w_lg, sim.simulate(bc).w_res))
+
+
 def sampled_wells() -> list:
-    """Panel d: the fluid class and the trajectory, (x, tvd) from the wellhead in m, of the sampler's first wells."""
+    """Panel e: the fluid class and the trajectory, (x, tvd) from the wellhead in m, of the sampler's first wells."""
     wells = []
     for k in range(N_WELLS):
         w, (md, tvd) = draw_well(SEED, k)
@@ -195,7 +224,7 @@ def sampled_wells() -> list:
 
 
 def calibration_data(wp, bc) -> dict:
-    """Panel e: the well as its user knows it (a first guess of four parameters), measurements simulated from the
+    """Panel f: the well as its user knows it (a first guess of four parameters), measurements simulated from the
     true well with noise, and the calibrated well, each swept over the choke position. Oil rates in Sm3/d."""
     guess = replace(wp, inflow=ProductivityIndex(k_l=1.5))
     truth = {'K_c': 0.8 * wp.choke.K_c, 'k_l': wp.inflow.k_l, 'roughness': 1.5e-4, 'h': 22.0}
@@ -223,23 +252,6 @@ def calibration_data(wp, bc) -> dict:
     )
 
 
-def lift_data(wp, bc) -> dict:
-    """Panel f: the liquid rate against the lift-gas rate at three reservoir pressures, NaN where the well has no
-    operating point, and the point of panel a's well."""
-    sim = SSDFSimulator(wp, backend='rust')
-    w_lg = np.concatenate([np.linspace(0.0, 1.0, 41), np.linspace(1.1, 4.0, 30)])
-    curves = {}
-    for p_r in (160.0, 145.0, 130.0):
-        rates = []
-        for w in w_lg:
-            try:
-                rates.append(sim.simulate(replace(bc, p_r=p_r, w_lg=float(w))).w_res)
-            except SimError:
-                rates.append(np.nan)
-        curves[p_r] = np.array(rates)
-    return dict(w_lg=w_lg, curves=curves, point=(bc.w_lg, sim.simulate(bc).w_res))
-
-
 def compute() -> dict:
     """The data of every panel."""
     wp, bc = example_well()
@@ -248,9 +260,9 @@ def compute() -> dict:
         profile=profile,
         regime_map=regime_map_data(wp, profile['state_mid']),
         solutions=solutions_data(wp, bc),
+        lift=lift_data(wp, bc),
         wells=sampled_wells(),
         calibration=calibration_data(wp, bc),
-        lift=lift_data(wp, bc),
     )
 
 
@@ -347,20 +359,29 @@ def offset(path, d):
     return path + d * np.column_stack([-t[:, 1], t[:, 0]])
 
 
+def angle(ax, p, q) -> float:
+    """The angle on the page (degrees) of the line from p to q, two points in the axes' data coordinates: the
+    rotation of a label along the line. The axes' limits must be set first."""
+    (x_p, y_p), (x_q, y_q) = ax.transData.transform([p, q])
+    return math.degrees(math.atan2(y_q - y_p, x_q - x_p))
+
+
 # --- Panel a: the well ------------------------------------------------------------------------------------------------
 def draw_model(fig, th, d, x0, y0):
-    """The schematic and the three tracks, in a block of 124 x 92 mm with its top left corner at (x0, y0)."""
+    """The schematic and the three tracks, over the figure's width, with the top left corner at (x0, y0)."""
     panel_title(fig, th, x0, y0 + 3.4, 'a', 'Steady-state drift-flux model of a well')
     ink, ink2, muted = th['ink'], th['ink2'], th['muted']
 
-    # The schematic's axes are in mm from the wellhead, y down, with the well to scale: the ground is `above` mm
-    # below the axes' top, the bottomhole `below` mm above its bottom and the wellhead `left` mm from its left edge
-    w_ax, h_ax, above, below, left = 68.0, 85.0, 17.0, 5.0, 22.0
+    # The schematic's axes are in mm from the wellhead, y down, with the well to scale, `well` mm deep: the ground is
+    # `above` mm below the axes' top, the bottomhole `below` mm above its bottom and the wellhead `left` mm from its
+    # left edge. The callouts are in a column on each side of the well, with their left edges at x_l and x_r.
+    w_ax, well, above, below, left = 92.0, 63.0, 19.0, 5.0, 28.0
     depth = d['tvd'][0]  # m
-    scale = (h_ax - above - below) / depth  # mm per m
-    ax = axes_mm(fig, x0, y0 + 7.0, w_ax, h_ax)
+    scale = well / depth  # mm per m
+    x_l, x_r = 1.0 - left, 24.0
+    ax = axes_mm(fig, x0, y0 + 7.0, w_ax, above + well + below)
     ax.set_xlim(-left, w_ax - left)
-    ax.set_ylim(h_ax - above, -above)
+    ax.set_ylim(well + below, -above)
     ax.axis('off')
     arrow = dict(arrowstyle='-|>', color=ink2, lw=0.8, mutation_scale=5.5, shrinkA=0, shrinkB=0)
 
@@ -380,8 +401,8 @@ def draw_model(fig, th, d, x0, y0):
     y_bottom = depth * scale
     top = y_bottom - 5.5
     ax.add_patch(Rectangle((-left, top), w_ax, below + 5.5, fc=th['reservoir'], ec='none', zorder=0))
-    rng = np.random.default_rng(3)
-    grains = np.column_stack([rng.uniform(-left, w_ax - left, 420), top + rng.uniform(0.3, below + 5.2, 420)])
+    rng, n_grains = np.random.default_rng(3), int(6.2 * w_ax)
+    grains = np.column_stack([rng.uniform(-left, w_ax - left, n_grains), top + rng.uniform(0.3, below + 5.2, n_grains)])
     ax.scatter(grains[:, 0], grains[:, 1], s=0.5, color=th['grain'], linewidths=0, zorder=0.5)
 
     # The ground
@@ -420,7 +441,7 @@ def draw_model(fig, th, d, x0, y0):
     ax.annotate('', (x_end + 5.0, -rise), (x_end - 2.5, -rise), arrowprops=arrow, zorder=4)
     text(x_end + 6.0, -rise + 0.85, r'$p_s$', fontsize=LABEL, color=ink)
     text(x_stem + 2.0, y_handle + 0.4, r'$u$', fontsize=LABEL, color=ink)
-    callout(x_stem + 6.5, -rise - 9.0, 'Choke', ['Bernoulli or Simpson model,', 'subcritical or critical flow'])
+    callout(x_stem + 6.5, -rise - 10.4, 'Choke', ['Bernoulli or Simpson model,', 'subcritical or critical flow'])
 
     # The lift gas: down the outside of the tubing to the valve
     i_valve = d['valve']
@@ -431,35 +452,36 @@ def draw_model(fig, th, d, x0, y0):
     ax.annotate('', lft[i_valve] + 0.3 * out[i_valve], gas[0] - 1.8 * out[i_valve], arrowprops=arrow, zorder=4)
     ax.annotate('', inlet[0] + (5.4, 0.0), inlet[0] + (1.0, 0.0), arrowprops=arrow, zorder=4)
     text(inlet[0, 0] - 0.2, -4.4, r'$w_{lg}$', fontsize=LABEL, color=ink)
-    callout(-21.0, 33.0, 'Lift gas', ['through a valve', 'at any depth'], gas[0] + (-1.0, 0.2), (-6.6, 35.6))
+    callout(x_l, 9.0, 'Lift gas', ['through a valve', 'at any depth'], (gas[-1, 0], 10.9), (x_l + 16.2, 10.9))
+    at = gas[0] - 2.6 * out[i_valve]
+    text(at[0], at[1], 'valve', color=muted, ha='right', va='center')
 
     # Heat to the formation: wavy arrows from the lower side of the tubing, between the reservoir and the valve
     s = np.linspace(0.0, 1.0, 40)
-    waves = (16, 23, 30)
+    waves = (21, 26, 31)
     for i in waves:
         along = np.array([-out[i, 1], out[i, 0]])
         wave = lft[i] - np.outer(0.6 + 3.6 * s, out[i]) + np.outer(0.42 * np.sin(4 * np.pi * s), along)
         ax.plot(wave[:, 0], wave[:, 1], color=ink2, lw=0.65, zorder=3)
         ax.annotate('', wave[-1] - 1.5 * out[i], wave[-1], arrowprops=dict(arrow, mutation_scale=4.5, lw=0.65))
     lines = ['heat exchange with the', 'formation, and friction']
-    callout(-21.0, 46.0, 'Energy balance', lines, lft[waves[1]] - 6.6 * out[waves[1]], (2.6, 50.0))
+    callout(x_l, 47.5, 'Energy balance', lines, lft[waves[1]] - 6.6 * out[waves[1]], (x_l + 23.6, 52.0))
 
     # The inflow: arrows into the bottom of the well, within the reservoir
     for i in (1, 4):
         for wall, sign in ((right, 1.0), (lft, -1.0)):
             ax.annotate('', wall[i] + 0.3 * sign * out[i], wall[i] + 4.2 * sign * out[i], arrowprops=arrow, zorder=4)
-    text(-21.0, y_bottom - 1.3, 'Inflow', fontsize=LABEL, fontweight='bold', color=ink)
-    text(-12.7, y_bottom - 1.3, r'from the reservoir at $p_r$, $T_r$')
-    text(-21.0, y_bottom + 1.45, 'productivity index, Vogel or Forchheimer')
+    text(x_l, y_bottom - 1.3, 'Inflow', fontsize=LABEL, fontweight='bold', color=ink)
+    text(x_l + 8.3, y_bottom - 1.3, r'from the reservoir at $p_r$, $T_r$')
+    text(x_l, y_bottom + 1.45, 'productivity index, Vogel or Forchheimer')
 
     # The parts of the model that are not at one place
     lines = ['gas and liquid (oil and water),', 'slip by flow regime, wall friction']
-    callout(11.0, 6.2, 'Tubing flow', lines, (hw, 5.3), (10.2, 5.3))
-    callout(13.0, 17.4, 'Fluid', ['black oil with dissolved gas,', 'real gas and water,', 'or a PVT table'])
+    callout(x_r, 6.5, 'Tubing flow', lines, (hw, 5.6), (x_r - 0.8, 5.6))
+    callout(x_r, 19.5, 'Fluid', ['black oil with dissolved gas,', 'real gas and water,', 'or a PVT table'])
     i_bend = int(np.argmin(np.abs(d['tvd'] - 850.0)))  # In the build section
-    callout(
-        20.5, 32.6, 'Trajectory', ['vertical or deviated,', 'from a survey'], right[i_bend] + (0.2, 0.0), (19.7, 31.7)
-    )
+    lines = ['vertical or deviated,', 'from a survey']
+    callout(x_r, 35.0, 'Trajectory', lines, right[i_bend] + (0.2, 0.0), (x_r - 0.8, 34.1))
 
     # The regimes' names along the tubing, each at the middle of the points where it is the most probable
     regime = np.array(d['regime'])
@@ -467,29 +489,36 @@ def draw_model(fig, th, d, x0, y0):
         points = np.flatnonzero(regime == name)
         i = int(points[len(points) // 2])
         t = path[min(i + 1, n - 1)] - path[max(i - 1, 0)]
-        angle = math.degrees(math.atan2(t[1], -t[0]))  # Along the tubing, read from the top of the well down
+        rotation = math.degrees(math.atan2(t[1], -t[0]))  # Along the tubing, read from the top of the well down
         at = right[i] + 1.5 * out[i]
         text(
             at[0],
             at[1],
             name.replace('-', ' '),
-            rotation=angle,
+            rotation=rotation,
             rotation_mode='anchor',
             ha='center',
             va='bottom',
             style='italic',
         )
 
-    # The tracks: the operating point against depth (m), on the schematic's scale
-    w_tr, gap, y_name = 13.5, 3.25, 1 + 5.4 / (depth * scale)  # y_name: the names' baseline, in the axes' heights
+    # The tracks: the operating point against depth (m), on the schematic's scale, up to the plots' right edge
+    w_tr, gap = 22.0, 5.0
+    x_tr = WIDTH - MARGIN - 1.0 - 3 * w_tr - 2 * gap
+    name_kw = dict(fontsize=LABEL, color=ink2, va='baseline')
+
+    def name(tr, x, s, ha):
+        """A track's name, with the baselines of its two lines 8.4 and 5.6 mm over the track."""
+        for line, y in zip(s.split('\n'), (8.4, 5.6)):
+            tr.text(x, 1 + y / well, line, transform=tr.transAxes, ha=ha, **name_kw)
+
     tracks = [
         ('Pressure\n(bar)', d['p'], (0, 200), (0, 100, 200)),
         ('Temperature\n(°C)', d['T'], (0, 100), (0, 50, 100)),
         ('Gas volume\nfraction', d['alpha'], (0, 1), (0, 0.5, 1)),
     ]
-    name_kw = dict(fontsize=LABEL, color=ink2, va='bottom', linespacing=1.15)
-    for k, (name, values, lim, xticks) in enumerate(tracks):
-        tr = axes_mm(fig, x0 + w_ax + 9.0 + k * (w_tr + gap), y0 + 7.0 + above, w_tr, depth * scale)
+    for k, (title, values, lim, xticks) in enumerate(tracks):
+        tr = axes_mm(fig, x_tr + k * (w_tr + gap), y0 + 7.0 + above, w_tr, well)
         tr.set_xlim(lim)
         tr.set_ylim(depth, 0.0)
         tr.set_xticks(xticks, [f'{v:g}' for v in xticks])
@@ -503,14 +532,23 @@ def draw_model(fig, th, d, x0, y0):
         ticks[-1].label2.set_ha('right')
         tr.axhline(d['tvd'][i_valve], color=muted, lw=0.6, dashes=(2.2, 1.8), zorder=1.5)
         tr.plot(values, d['tvd'], color=ink, lw=1.15, zorder=3)
-        tr.text(0.5, y_name, name, transform=tr.transAxes, ha='center', **name_kw)
+        name(tr, 0.5, title, 'center')
         if k == 0:
-            tr.text(-1.6 / w_tr, y_name, 'Depth\n(m)', transform=tr.transAxes, ha='right', **name_kw)
+            name(tr, -1.6 / w_tr, 'Depth\n(m)', 'right')
             tr.text(5, d['tvd'][i_valve] - 28, 'valve', fontsize=SMALL, color=muted, va='bottom')
         if k == 1:
-            tr.plot(d['T_formation'], d['tvd'], color=muted, lw=0.8, dashes=(2.2, 1.8), zorder=2)
+            T_f = d['T_formation']  # From the bottomhole, as the depths
+            tr.plot(T_f, d['tvd'], color=muted, lw=0.8, dashes=(2.2, 1.8), zorder=2)
             tr.text(
-                27, 1120, 'formation', fontsize=SMALL, color=muted, rotation=-56, rotation_mode='anchor', ha='center'
+                np.interp(1000.0, d['tvd'][::-1], T_f[::-1]) - 12.0,  # On the line's cold side
+                1000.0,
+                'formation',
+                fontsize=SMALL,
+                color=muted,
+                rotation=angle(tr, (T_f[-1], d['tvd'][-1]), (T_f[0], d['tvd'][0])),
+                rotation_mode='anchor',
+                ha='center',
+                va='center',
             )
         if k == 2:
             tr.fill_betweenx(d['tvd'], 0, values, color=ink, alpha=0.08, lw=0, zorder=1)
@@ -519,7 +557,7 @@ def draw_model(fig, th, d, x0, y0):
 # --- Panel b: the flow regimes ---------------------------------------------------------------------------------------
 def draw_regimes(fig, th, d, profile, x0, y0):
     panel_title(fig, th, x0, y0 + 3.4, 'b', 'Flow regimes')
-    ax = axes_mm(fig, x0 + 11.0, y0 + 6.5, 42.5, 27.0)
+    ax = axes_mm(fig, x0 + PLOT_X, y0 + 7.5, PLOT_W, PLOT_H)
     surface = np.array(to_rgb(th['surface']))
     washes = [surface + th['wash'] * (np.array(to_rgb(th['regimes'][r])) - surface) for r in HASAN_REGIMES]
     image = np.clip(np.tensordot(d['probs'], np.array(washes), axes=(0, 0)), 0.0, 1.0)
@@ -536,7 +574,7 @@ def draw_regimes(fig, th, d, profile, x0, y0):
     names = {'bubbly': (-0.95, -0.55), 'slug': (-0.22, -1.0), 'annular': (1.2, -0.6), 'dispersed bubbly': (-0.62, 0.84)}
     for name, (x, y) in names.items():
         ax.text(x, y, name, **kw)
-    ax.text(1.0, 0.8, 'churn', rotation=40, rotation_mode='anchor', **kw)  # Along its band
+    ax.text(1.0, 0.8, 'churn', rotation=angle(ax, (0.7, 0.5), (1.3, 1.1)), rotation_mode='anchor', **kw)  # On its band
 
     # The well of panel a, from the bottomhole to the wellhead
     x, y = np.log10(profile['v_gs']), np.log10(profile['v_ls'])
@@ -552,7 +590,7 @@ def draw_regimes(fig, th, d, profile, x0, y0):
 # --- Panel c: the solutions ------------------------------------------------------------------------------------------
 def draw_solutions(fig, th, d, x0, y0):
     panel_title(fig, th, x0, y0 + 3.4, 'c', 'Stable and unstable solutions')
-    ax = axes_mm(fig, x0 + 11.0, y0 + 6.5, 42.5, 27.0)
+    ax = axes_mm(fig, x0 + PLOT_X, y0 + 7.5, PLOT_W, PLOT_H)
     plot_axes(ax)
     ax.set_xlim(0, 20)
     ax.set_ylim(133, 182)
@@ -561,11 +599,16 @@ def draw_solutions(fig, th, d, x0, y0):
     ax.set_xlabel('Liquid rate (kg/s)')
     ax.set_ylabel('Bottomhole\npressure (bar)', linespacing=1.15)
     w = np.array([0.0, 20.0])
-    ax.plot(w, d['p_r'] - w / d['k_l'], color=th['muted'], lw=1.3, zorder=2)
+    inflow = d['p_r'] - w / d['k_l']
+    ax.plot(w, inflow, color=th['muted'], lw=1.3, zorder=2)
     ax.plot(d['rates'], d['p_0'], color=th['ink'], lw=1.3, zorder=3)
+    # The curves' names, each over its curve and along it
     kw = dict(fontsize=SMALL, color=th['ink2'], ha='center', va='bottom', rotation_mode='anchor')
-    ax.text(17.6, 144.2, 'inflow', rotation=-16, **kw)
-    ax.text(16.9, 158.3, 'tubing and choke', rotation=29, **kw)
+    ax.text(17.6, np.interp(17.6, w, inflow) + 1.6, 'inflow', rotation=angle(ax, *zip(w, inflow)), **kw)
+    w_name = np.array([15.0, 16.9, 18.8])
+    p_name = np.interp(w_name, d['rates'], d['p_0'])
+    rotation = angle(ax, (w_name[0], p_name[0]), (w_name[2], p_name[2]))
+    ax.text(w_name[1], p_name[1] + 1.6, 'tubing and choke', rotation=rotation, **kw)
     kw = dict(fontsize=SMALL, color=th['ink'])
     for w_res, p_0, label in d['roots']:
         if label == 'stable':
@@ -589,16 +632,53 @@ def draw_solutions(fig, th, d, x0, y0):
     ax.text(0.985, 0.97, 'the well in a\nwithout lift gas', **kw)
 
 
-# --- Panel d: the datasets -------------------------------------------------------------------------------------------
+# --- Panel d: sensitivities ------------------------------------------------------------------------------------------
+def draw_sensitivity(fig, th, d, x0, y0):
+    panel_title(fig, th, x0, y0 + 3.4, 'd', 'Sensitivity studies')
+    ax = axes_mm(fig, x0 + PLOT_X, y0 + 7.5, PLOT_W, PLOT_H)
+    plot_axes(ax)
+    ax.set_xlim(0, 4)
+    ax.set_ylim(0, 22)
+    ax.set_xticks([0, 1, 2, 3, 4])
+    ax.set_yticks([0, 5, 10, 15, 20])
+    ax.set_xlabel('Lift-gas rate (kg/s)')
+    ax.set_ylabel('Liquid rate (kg/s)')
+    for color, rates in zip(th['ramp'], d['curves'].values()):
+        ax.plot(d['w_lg'], rates, color=color, lw=1.4, zorder=3)
+    ax.plot(*d['point'], 'o', ms=6.4, mfc=th['surface'], mec='none', zorder=4)
+    ax.plot(*d['point'], 'o', ms=4.6, mfc=th['ink'], mec=th['surface'], mew=0.6, zorder=5)
+    kw = dict(fontsize=SMALL, color=th['muted'], ha='center', va='center')
+    ax.annotate('the well in a', d['point'], (1.0, 20.6), arrowprops=leader(th, shrinkA=1.0, shrinkB=3.0), **kw)
+    legend = ax.legend(
+        [Line2D([], [], color=c, lw=1.4) for c in th['ramp']],
+        [f'{p_r:.0f} bar' for p_r in d['curves']],
+        title='Reservoir pressure',
+        title_fontsize=SMALL,
+        alignment='left',
+        loc='lower right',
+        bbox_to_anchor=(1.02, -0.02),
+        handlelength=1.2,
+        handletextpad=0.5,
+        labelspacing=0.25,
+        borderpad=0,
+        labelcolor=th['ink2'],
+    )
+    legend.get_title().set_color(th['ink2'])
+
+
+# --- Panel e: the datasets -------------------------------------------------------------------------------------------
 def draw_wells(fig, th, wells, x0, y0):
-    panel_title(fig, th, x0, y0 + 3.4, 'd', 'Datasets of thousands of sampled wells')
-    note = f'{DATASET_WELLS:,} wells × {DATASET_SAMPLES} operating points per dataset; shown are {len(wells)} wells drawn by the sampler'
+    panel_title(fig, th, x0, y0 + 3.4, 'e', 'Datasets of thousands of sampled wells')
+    note = (
+        f'{DATASET_WELLS:,} wells × {DATASET_SAMPLES} operating points per dataset; '
+        f'shown are {len(wells)} wells drawn by the sampler'
+    )
     fig.text((x0 + 4.2) / WIDTH, 1 - (y0 + 7.0) / HEIGHT, note, fontsize=SMALL, color=th['ink2'], va='baseline')
 
-    # The axes are in km, to scale
-    w_ax, h_ax, deepest = 84.0, 27.0, 7.0  # mm, mm, km
+    # The axes are in km, to scale, over two columns
+    w_ax, h_ax, deepest = COLUMN + GUTTER + PLOT_W, PLOT_H, 7.0  # mm, mm, km
     km = deepest / h_ax  # km per mm
-    ax = axes_mm(fig, x0 + 8.5, y0 + 9.5, w_ax, h_ax)
+    ax = axes_mm(fig, x0 + PLOT_X, y0 + 10.0, w_ax, h_ax)
     ax.set_xlim(0.0, w_ax * km)
     ax.set_ylim(deepest, 0.0)
     for side in ('top', 'right', 'bottom'):
@@ -621,7 +701,7 @@ def draw_wells(fig, th, wells, x0, y0):
         [Line2D([], [], color=c, lw=1.6) for c in th['fluids']],
         [c.replace('_', ' ') for c in FLUID_CLASSES],
         loc='upper left',
-        bbox_to_anchor=((x0 + 7.5) / WIDTH, 1 - (y0 + 38.3) / HEIGHT),
+        bbox_to_anchor=((x0 + PLOT_X - 1.0) / WIDTH, 1 - (y0 + 10.0 + h_ax + 1.8) / HEIGHT),
         ncols=len(FLUID_CLASSES),
         handlelength=1.3,
         handletextpad=0.5,
@@ -632,10 +712,10 @@ def draw_wells(fig, th, wells, x0, y0):
     )
 
 
-# --- Panel e: calibration --------------------------------------------------------------------------------------------
+# --- Panel f: calibration --------------------------------------------------------------------------------------------
 def draw_calibration(fig, th, d, x0, y0):
-    panel_title(fig, th, x0, y0 + 3.4, 'e', 'Calibration to data')
-    ax = axes_mm(fig, x0 + 10.0, y0 + 9.5, 30.0, 27.0)
+    panel_title(fig, th, x0, y0 + 3.4, 'f', 'Calibration to data')
+    ax = axes_mm(fig, x0 + PLOT_X, y0 + 10.0, PLOT_W, PLOT_H)  # At the height of panel e's plot
     plot_axes(ax)
     ax.set_xlim(0.1, 1.03)
     ax.set_ylim(0, 1500)
@@ -655,47 +735,13 @@ def draw_calibration(fig, th, d, x0, y0):
         [Line2D([], [], **style) for style in styles.values()],
         list(styles),
         loc='lower right',
-        bbox_to_anchor=(1.03, -0.02),
+        bbox_to_anchor=(1.02, -0.02),
         handlelength=1.2,
         handletextpad=0.5,
         labelspacing=0.25,
         borderpad=0,
         labelcolor=th['ink2'],
     )
-
-
-# --- Panel f: sensitivities ------------------------------------------------------------------------------------------
-def draw_sensitivity(fig, th, d, x0, y0):
-    panel_title(fig, th, x0, y0 + 3.4, 'f', 'Sensitivity studies')
-    ax = axes_mm(fig, x0 + 8.5, y0 + 9.5, 31.5, 27.0)
-    plot_axes(ax)
-    ax.set_xlim(0, 4)
-    ax.set_ylim(0, 22)
-    ax.set_xticks([0, 1, 2, 3, 4])
-    ax.set_yticks([0, 5, 10, 15, 20])
-    ax.set_xlabel('Lift-gas rate (kg/s)')
-    ax.set_ylabel('Liquid rate (kg/s)')
-    for color, rates in zip(th['ramp'], d['curves'].values()):
-        ax.plot(d['w_lg'], rates, color=color, lw=1.4, zorder=3)
-    ax.plot(*d['point'], 'o', ms=6.4, mfc=th['surface'], mec='none', zorder=4)
-    ax.plot(*d['point'], 'o', ms=4.6, mfc=th['ink'], mec=th['surface'], mew=0.6, zorder=5)
-    kw = dict(fontsize=SMALL, color=th['muted'], ha='center', va='center')
-    ax.annotate('the well in a', d['point'], (1.0, 20.6), arrowprops=leader(th, shrinkA=1.0, shrinkB=3.0), **kw)
-    legend = ax.legend(
-        [Line2D([], [], color=c, lw=1.4) for c in th['ramp']],
-        [f'{p_r:.0f} bar' for p_r in d['curves']],
-        title='Reservoir pressure',
-        title_fontsize=SMALL,
-        alignment='left',
-        loc='lower right',
-        bbox_to_anchor=(1.03, -0.02),
-        handlelength=1.2,
-        handletextpad=0.5,
-        labelspacing=0.25,
-        borderpad=0,
-        labelcolor=th['ink2'],
-    )
-    legend.get_title().set_color(th['ink2'])
 
 
 # --- The figure ------------------------------------------------------------------------------------------------------
@@ -704,12 +750,13 @@ def draw(data: dict, theme: str) -> Figure:
     th = THEMES[theme]
     with mpl.rc_context(rc(th)):
         fig = Figure(figsize=(WIDTH / 25.4, HEIGHT / 25.4), facecolor=th['surface'])
-        draw_model(fig, th, data['profile'], 3.0, 3.0)
-        draw_regimes(fig, th, data['regime_map'], data['profile'], 133.0, 3.0)
-        draw_solutions(fig, th, data['solutions'], 133.0, 50.5)
-        draw_wells(fig, th, data['wells'], 3.0, 102.0)
-        draw_calibration(fig, th, data['calibration'], 100.5, 102.0)
-        draw_sensitivity(fig, th, data['lift'], 146.0, 102.0)
+        (x_1, x_2, x_3), (y_1, y_2, y_3) = COLUMNS, ROWS
+        draw_model(fig, th, data['profile'], x_1, y_1)
+        draw_regimes(fig, th, data['regime_map'], data['profile'], x_1, y_2)
+        draw_solutions(fig, th, data['solutions'], x_2, y_2)
+        draw_sensitivity(fig, th, data['lift'], x_3, y_2)
+        draw_wells(fig, th, data['wells'], x_1, y_3)
+        draw_calibration(fig, th, data['calibration'], x_3, y_3)
     return fig
 
 
